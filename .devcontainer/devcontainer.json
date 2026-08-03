@@ -1,0 +1,6 @@
+{
+  "name": "Safewave Command Center",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "postCreateCommand": "npm install -g firebase-tools",
+  "forwardPorts": [5000]
+}
