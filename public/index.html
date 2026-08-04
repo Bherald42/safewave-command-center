@@ -555,7 +555,10 @@ const DECISIONS = [
   ['SKU hygiene','Standardize to BND-BLK-SM / MD / LG (recommended; not auto-applied — it writes to the live Shopify store).'],
 ];
 
-/* Roles — admin emails get full access; others default to member. */
+/* Roles — bootstrap phase: there is no user-management screen yet, so any
+   signed-in user (the owner, by invitation) gets full admin access. When
+   Firestore user management lands, the role will come from the user's profile
+   document and these emails become the initial admin seeds. */
 const ADMIN_EMAILS = ['heraldb2@gmail.com','brad.herald@safewavetech.com'];
 const NAV_ITEMS = [
   {id:'s-pulse',   label:'Pulse',    roles:['admin','manager','member'], svg:'<path d="M3 12h4l3-8 4 16 3-8h4"/>'},
@@ -686,7 +689,7 @@ function goto(id,btn){
 }
 
 /* ================= SESSION ================= */
-function roleFor(email){return ADMIN_EMAILS.includes((email||'').toLowerCase())?'admin':'member'}
+function roleFor(email){return 'admin'} /* bootstrap: signed-in owner gets full access; per-user roles arrive with Firestore user management */
 function roleLabel(r){return {admin:'Admin · Founder',manager:'Manager',member:'Team member'}[r]||r}
 function initials(name,email){const s=(name||email||'?').trim();const p=s.split(/[\s@.]+/).filter(Boolean);return ((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase()}
 function enterApp(user){
