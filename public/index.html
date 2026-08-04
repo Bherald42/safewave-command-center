@@ -474,7 +474,8 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
       <div class="kv"><span>Email sending</span><b id="acc-mail">Not connected</b></div>
       <div class="kv"><span>Session</span><b>Private to you</b></div>
     </div>
-    <button class="btn ghost" style="margin-top:12px" onclick="openMail()">Connect / manage your email</button>
+    <button class="btn ghost" style="margin-top:12px" onclick="openProfile()">Edit profile</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="openMail()">Connect / manage your email</button>
     <button class="btn" id="acc-manage" style="display:none;margin-top:8px" onclick="openUsers()">Manage team &amp; roles</button>
     <button class="btn ghost" style="margin-top:8px" onclick="doSignOut()">Sign out</button>
   </div>
@@ -551,6 +552,23 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
   </div>
 </div>
 
+<div class="sheet" id="sh-profile" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">YOUR PROFILE</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Profile</h1>
+    <p class="sub">Your name &amp; title appear on the emails you send.</p>
+    <input class="field" id="pf-name" placeholder="Full name">
+    <input class="field" id="pf-title" placeholder="Title (e.g. COO)">
+    <input class="field" id="pf-phone" placeholder="Phone (optional)">
+    <button class="btn" onclick="saveProfile()">Save profile</button>
+    <p class="d" style="font-weight:600;color:var(--text);margin:16px 0 6px">Change password</p>
+    <input class="field" id="pf-pass" type="password" placeholder="New password (6+ characters)" autocomplete="new-password">
+    <button class="btn ghost" onclick="changePassword()">Update password</button>
+    <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
 <div class="sheet" id="sh-mail" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
@@ -568,10 +586,6 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
     </div>
     <input class="field" id="mail-smtp" style="margin-top:10px" placeholder="SMTP host (e.g. smtp.gmail.com)">
     <input class="field" id="mail-pass" type="password" placeholder="App password" autocomplete="new-password">
-    <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Your signature <span style="color:var(--faint);font-weight:400">(added to every email)</span></p>
-    <input class="field" id="mail-name" placeholder="Full name (e.g. Brad Herald)">
-    <input class="field" id="mail-title" placeholder="Title (e.g. COO)">
-    <input class="field" id="mail-phone" placeholder="Phone (optional)">
     <button class="btn" onclick="saveMail()">Save &amp; connect</button>
     <button class="btn ghost" style="margin-top:8px" onclick="disconnectMail()">Disconnect</button>
     <div class="note" style="margin-top:10px">Stored privately to your account — only you can read it, used only to send from your address. For Gmail/Outlook, create an <b>app password</b> in your account security settings (not your login password).</div>
@@ -838,17 +852,18 @@ function roleLabel(r){return {superadmin:'Super Admin',admin:'Admin',manager:'Ma
 function hasFirestore(){return typeof firebase!=='undefined'&&firebase.firestore&&!window.__noFirebase}
 function fallbackRole(email){return (email||'').toLowerCase()===SUPER_EMAIL?'superadmin':'admin'}
 async function resolveUser(u){
-  const base={uid:u.uid,name:u.displayName||u.email.split('@')[0],email:u.email};
+  const base={uid:u.uid,name:u.email.split('@')[0],email:u.email,title:'',phone:''};
   if(!hasFirestore())return Object.assign(base,{role:fallbackRole(u.email),fsOff:true});
   try{
     const ref=firebase.firestore().collection('users').doc(u.uid);
     const snap=await ref.get();
     if(!snap.exists){
       const role=(u.email||'').toLowerCase()===SUPER_EMAIL?'superadmin':'member';
-      await ref.set({email:u.email,name:base.name,role:role,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      await ref.set({email:u.email,name:base.name,title:'',phone:'',role:role,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
       return Object.assign(base,{role:role});
     }
-    return Object.assign(base,{role:(snap.data()||{}).role||'member'});
+    const d=snap.data()||{};
+    return Object.assign(base,{role:d.role||'member',name:d.name||base.name,title:d.title||'',phone:d.phone||''});
   }catch(e){
     return Object.assign(base,{role:fallbackRole(u.email),fsOff:true,fsErr:(e&&e.code)||''});
   }
@@ -1189,27 +1204,38 @@ function toggleRecord(id){const SR=window.SpeechRecognition||window.webkitSpeech
   crmRec.onend=()=>{crmRec=null;btn.textContent='● Record call';btn.classList.remove('rec-on')};
   crmRec.start();btn.textContent='■ Stop recording';btn.classList.add('rec-on');toast('Listening… speak your call notes');}
 
+/* ---- User profile: name, title, phone (drives your email signature) + password ---- */
+function openProfile(){const u=CURRENT_USER||{};document.getElementById('pf-name').value=u.name||'';document.getElementById('pf-title').value=u.title||'';document.getElementById('pf-phone').value=u.phone||'';document.getElementById('pf-pass').value='';closeSheets();openSheet('sh-profile')}
+function saveProfile(){if(!hasFirestore()){toast('Enable Firestore to save your profile');return}
+  const name=document.getElementById('pf-name').value.trim(),title=document.getElementById('pf-title').value.trim(),phone=document.getElementById('pf-phone').value.trim();
+  if(!name){toast('Enter your name');return}
+  firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({name:name,title:title,phone:phone},{merge:true}).then(()=>{
+    CURRENT_USER.name=name;CURRENT_USER.title=title;CURRENT_USER.phone=phone;
+    document.getElementById('who-nm').innerHTML=esc(name)+'<small>'+roleLabel(CURRENT_USER.role)+'</small>';
+    document.getElementById('who-av').textContent=initials(name,CURRENT_USER.email);
+    toast('✓ Profile saved');closeSheets()}).catch(e=>toast('Could not save — '+((e&&e.code)||'re-publish your Firestore rules')))}
+function changePassword(){const p=document.getElementById('pf-pass').value;if(!p||p.length<6){toast('Password must be at least 6 characters');return}
+  if(!(fbReady()&&firebase.auth().currentUser)){toast('Password change runs on the live site');return}
+  firebase.auth().currentUser.updatePassword(p).then(()=>{document.getElementById('pf-pass').value='';toast('✓ Password updated')})
+    .catch(e=>{const c=(e&&e.code)||'';if(c.indexOf('recent-login')>=0)toast('For security, sign out and back in, then change your password');else if(c.indexOf('no-password')>=0||c.indexOf('operation-not-allowed')>=0)toast('You sign in with Google — change your password in your Google account');else toast('Could not update — '+(c||''))})}
+
 /* ---- Per-user email: connect your own mailbox, send + log from accounts ---- */
 const SMTP_PRESET={gmail:{smtp:'smtp.gmail.com',port:587},outlook:{smtp:'smtp.office365.com',port:587},ionos:{smtp:'smtp.ionos.com',port:587},other:{smtp:'',port:587}};
 async function loadMail(){if(!hasFirestore()||!CURRENT_USER||!CURRENT_USER.uid)return;try{const d=await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).get();CURRENT_USER.mail=d.exists?d.data():null}catch(e){CURRENT_USER.mail=null}}
 function openMail(){const m=(CURRENT_USER&&CURRENT_USER.mail)||{};
   document.getElementById('mail-email').value=m.email||(CURRENT_USER&&CURRENT_USER.email)||'';
   document.getElementById('mail-smtp').value=m.smtp||'';document.getElementById('mail-pass').value='';
-  document.getElementById('mail-name').value=m.name||(CURRENT_USER&&CURRENT_USER.name)||'';
-  document.getElementById('mail-title').value=m.title||'';
-  document.getElementById('mail-phone').value=m.phone||'';
   document.querySelectorAll('#mail-provider button').forEach(b=>b.classList.toggle('on',b.dataset.v===(m.provider||'')));
   document.getElementById('mail-status').innerHTML=m.email?'<div class="note" style="border-style:solid;border-color:var(--good);margin-bottom:12px"><b style="color:var(--good)">Connected:</b> '+esc(m.email)+'</div>':'';
   closeSheets();openSheet('sh-mail')}
 function mailProvider(v,btn){document.querySelectorAll('#mail-provider button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');const p=SMTP_PRESET[v]||{};if(p.smtp)document.getElementById('mail-smtp').value=p.smtp}
 async function saveMail(){if(!hasFirestore()){toast('Enable Firestore first to save your email connection');return}
   const email=document.getElementById('mail-email').value.trim(),smtp=document.getElementById('mail-smtp').value.trim(),pass=document.getElementById('mail-pass').value;
-  const name=document.getElementById('mail-name').value.trim(),title=document.getElementById('mail-title').value.trim(),phone=document.getElementById('mail-phone').value.trim();
   const pb=document.querySelector('#mail-provider button.on');const prov=pb?pb.dataset.v:'other';
   if(!email||!smtp||!pass){toast('Enter your email, SMTP host and app password');return}
   const port=(SMTP_PRESET[prov]||{}).port||587;
-  try{await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).set({email:email,smtp:smtp,port:port,provider:prov,pass:pass,name:name,title:title,phone:phone,updatedAt:new Date().toISOString()},{merge:true});
-    CURRENT_USER.mail={email:email,smtp:smtp,port:port,provider:prov,name:name,title:title,phone:phone};toast('✓ Email connected — '+email);closeSheets()}
+  try{await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).set({email:email,smtp:smtp,port:port,provider:prov,pass:pass,updatedAt:new Date().toISOString()},{merge:true});
+    CURRENT_USER.mail={email:email,smtp:smtp,port:port,provider:prov};toast('✓ Email connected — '+email);closeSheets()}
   catch(e){toast('Could not save — '+((e&&e.code)||''))}}
 async function disconnectMail(){if(!hasFirestore())return;try{await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).delete();CURRENT_USER.mail=null;toast('Email disconnected');closeSheets()}catch(e){toast('Could not disconnect')}}
 function logAccountEmail(a,to,subject,body){const notes=(a.notes||[]).slice();notes.unshift({user:(CURRENT_USER&&CURRENT_USER.email)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'}),text:'✉️ Email to '+to+(subject?(' — '+subject):'')+': '+body.slice(0,300)});updateAccount(a.id,{notes:notes})}

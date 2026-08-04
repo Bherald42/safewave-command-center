@@ -30,8 +30,11 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.role == (isSuperEmail() ? 'superadmin' : 'member');
 
-      // Only the super admin can change roles (or any profile field).
-      allow update: if isSuper();
+      // A user may edit their own profile (name/title/phone) but NOT their role;
+      // only the super admin can change roles or edit anyone.
+      allow update: if isSuper()
+        || (signedIn() && request.auth.uid == uid
+            && request.resource.data.role == resource.data.role);
 
       allow delete: if false;
     }

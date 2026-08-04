@@ -48,13 +48,21 @@ exports.sendUserEmail = onCall({ region: REGION }, async (request) => {
     auth: { user: creds.email, pass: creds.pass },
   });
 
+  let prof = {};
+  try { const ps = await db.collection("users").doc(request.auth.uid).get(); if (ps.exists) prof = ps.data() || {}; } catch (e) {}
+  const sender = {
+    email: creds.email,
+    name: prof.name || creds.email.split("@")[0],
+    title: prof.title || "",
+    phone: prof.phone || creds.phone || "",
+  };
   try {
     await transport.sendMail({
-      from: `"${(creds.name || "").replace(/"/g, "") || creds.email}" <${creds.email}>`,
+      from: `"${(sender.name || "").replace(/"/g, "")}" <${creds.email}>`,
       to,
       subject: subject || "(no subject)",
-      text: (text || "") + signatureText(creds),
-      html: buildBrandedEmail(text || "", creds),
+      text: (text || "") + signatureText(sender),
+      html: buildBrandedEmail(text || "", sender),
     });
   } catch (e) {
     logger.error("sendUserEmail failed", e && e.message);
@@ -137,7 +145,9 @@ function buildBrandedEmail(body, c) {
   return (
     '<div style="margin:0;padding:24px 0;background:#f4f6f8">' +
       '<div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1a1d22">' +
-        '<div style="background:#0B0C0E;padding:18px 28px"><span style="font-weight:800;font-size:20px;letter-spacing:-.5px;color:#ffffff">Safewave<span style="color:#4FD8EC">.</span></span></div>' +
+        '<div style="background:#ffffff;padding:22px 28px;border-bottom:3px solid #4FD8EC">' +
+          '<img src="https://cdn.shopify.com/s/files/1/0630/9602/9423/files/logo3x.png?v=1646599241" alt="Safewave" width="150" style="display:block;border:0;outline:none;height:auto;max-width:150px">' +
+        "</div>" +
         '<div style="padding:28px 28px 4px 28px">' + bodyHtml + "</div>" +
         '<div style="padding:0 28px 26px 28px"><div style="margin-top:22px;padding-top:16px;border-top:2px solid #4FD8EC">' +
           '<div style="font-weight:700;font-size:15px;color:#0B0C0E">' + name + "</div>" +
