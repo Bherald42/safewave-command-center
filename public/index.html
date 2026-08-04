@@ -124,6 +124,26 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .rolepick button.on{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
 .rolepick button:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
 .rec-on{background:var(--safety-dim)!important;border-color:var(--safety)!important;color:var(--safety)!important}
+/* pipeline board */
+.pipe{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px}
+.pcol{flex:0 0 250px;min-width:250px;background:rgba(255,255,255,.02);border:1px solid transparent;border-radius:14px;padding:9px 9px 4px;transition:background .12s,border-color .12s}
+.pcol.over{background:var(--wave-dim);border-color:var(--wave)}
+.pcol-h{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 6px 9px;border-bottom:2px solid var(--wave);margin-bottom:9px;font-family:var(--font-d);font-weight:600;font-size:12.5px}
+.pcol-body{min-height:30px}
+.pcol-empty{color:var(--faint);font-size:11px;text-align:center;padding:16px 8px;border:1px dashed var(--line);border-radius:10px}
+.pcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--wave);border-radius:11px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .12s,transform .05s}
+.pcard:hover{border-color:#4a5361}
+.pcard:active{transform:scale(.99)}
+.pcard:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
+.pc-top{display:flex;align-items:center;gap:8px}
+.pc-av{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-weight:700;font-size:10.5px;flex-shrink:0}
+.pc-name{font-weight:600;font-size:13.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.pc-sub{color:var(--muted);font-size:11.5px;margin-top:5px;padding-left:34px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;padding-left:34px}
+.mchip{font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--surface-2);color:var(--muted)}
+.mchip.good{background:var(--good-dim);color:var(--good)}
+.mchip.bad{background:var(--safety-dim);color:var(--safety)}
+.mchip.warn{background:var(--amber-dim);color:var(--amber)}
 .note{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:12px 14px;color:var(--faint);font-size:11.5px;line-height:1.55}
 .note b{color:var(--muted)}
 .note .meta{font-size:10.5px;color:var(--faint);margin-bottom:4px;font-family:var(--font-m);letter-spacing:.06em}
@@ -548,6 +568,10 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
     </div>
     <input class="field" id="mail-smtp" style="margin-top:10px" placeholder="SMTP host (e.g. smtp.gmail.com)">
     <input class="field" id="mail-pass" type="password" placeholder="App password" autocomplete="new-password">
+    <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Your signature <span style="color:var(--faint);font-weight:400">(added to every email)</span></p>
+    <input class="field" id="mail-name" placeholder="Full name (e.g. Brad Herald)">
+    <input class="field" id="mail-title" placeholder="Title (e.g. COO)">
+    <input class="field" id="mail-phone" placeholder="Phone (optional)">
     <button class="btn" onclick="saveMail()">Save &amp; connect</button>
     <button class="btn ghost" style="margin-top:8px" onclick="disconnectMail()">Disconnect</button>
     <div class="note" style="margin-top:10px">Stored privately to your account — only you can read it, used only to send from your address. For Gmail/Outlook, create an <b>app password</b> in your account security settings (not your login password).</div>
@@ -1098,14 +1122,42 @@ function renderCrmMain(){const el=document.getElementById('crm-main');if(!el)ret
   if(crmView==='pipeline')el.innerHTML=pipelineHTML(list);
   else if(crmView==='attention')el.innerHTML=listHTML(list.filter(isStale).sort((a,b)=>(lastAct(a)||0)-(lastAct(b)||0)));
   else el.innerHTML=listHTML(list.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')))}
-function cardHTML(a){const stale=isStale(a);const tags=(a.tags||[]).slice(0,3).map(t=>'<span class="pill dim" style="font-size:9px">'+esc(t)+'</span>').join(' ');
-  return '<div class="card tap" tabindex="0" onclick="openAcct(\''+a.id+'\')" style="padding:12px"><div class="row"><div class="grow"><div class="t">'+esc(a.name||'—')+(stale?' <span title="Needs follow-up" style="color:var(--amber)">●</span>':'')+'</div><div class="d">'+[esc(a.owner||'Unassigned'),esc(a.location||a.board||'')].filter(Boolean).join(' · ')+'</div>'+(tags?'<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">'+tags+'</div>':'')+'</div><span class="pill '+STAGEMETA[a.stage||'New']+'">'+esc(a.stage||'New')+'</span></div></div>'}
-function pipelineHTML(list){return '<div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:10px;scrollbar-width:thin">'+STAGES.map(st=>{const items=list.filter(a=>(a.stage||'New')===st);
-  return '<div style="flex:0 0 240px;min-width:240px"><div class="sec-head" style="margin-bottom:8px"><h2 style="font-size:13px">'+st+'</h2><span class="pill '+STAGEMETA[st]+'">'+items.length+'</span></div>'+(items.length?items.map(cardHTML).join(''):'<div style="color:var(--faint);font-size:12px;padding:6px 2px">—</div>')+'</div>'}).join('')+'</div>'}
-function listHTML(list){return list.length?list.map(cardHTML).join(''):'<div class="empty"><div class="d">No accounts match these filters.</div></div>'}
+const STAGECOLOR={New:'#8791A0',Contacted:'#F2B04E',Engaged:'#4FD8EC',Meeting:'#7AC6FF',Proposal:'#54D9A0',Won:'#54D9A0',Lost:'#5A616B'};
+const AVCOLORS=['#4FD8EC','#54D9A0','#F2B04E','#A78BFA','#FF9F7A','#7AC6FF','#E5A3E0','#7BE0C3'];
+function displayName(a){let n=(a.name||'').trim();
+  if(/^https?:\/\//i.test(n)||/^www\./i.test(n)){try{const u=new URL(/^https?:/i.test(n)?n:'https://'+n);return u.hostname.replace(/^www\./,'')}catch(e){return n.replace(/^https?:\/\//i,'').replace(/^www\./,'').replace(/\/.*$/,'')}}
+  return n||'—'}
+function acctColor(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return AVCOLORS[h%AVCOLORS.length]}
+function acctInitials(s){s=(s||'?').replace(/^https?:\/\//i,'').replace(/^www\./,'');const p=s.split(/[\s.\-\/_]+/).filter(Boolean);return ((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase()}
+function ageShort(la){const h=(Date.now()-la)/36e5,d=h/24;if(h<24)return Math.max(1,Math.round(h))+'h';if(d<14)return Math.round(d)+'d';if(d<60)return Math.round(d/7)+'w';return Math.round(d/30)+'mo'}
+let dragId=null;
+function dragStart(e,id){dragId=id;try{e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move'}catch(_){}}
+function dragEnd(){dragId=null;document.querySelectorAll('.pcol.over').forEach(c=>c.classList.remove('over'))}
+function dragOver(e,el){e.preventDefault();el.classList.add('over')}
+function dragLeave(el){el.classList.remove('over')}
+function dropTo(e,stage,el){e.preventDefault();if(el)el.classList.remove('over');const id=dragId||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));if(!id)return;const a=CRMA.find(x=>x.id===id);if(a&&(a.stage||'New')!==stage){updateAccount(id,{stage:stage});renderCrmMain();toast('✓ '+displayName(a)+' → '+stage)}dragId=null}
+function cardHTML(a,showStage){
+  const stale=isStale(a),nm=displayName(a),col=acctColor(nm),la=lastAct(a),m=a.metrics||{};
+  const chips=[];
+  if(m.mrr)chips.push('<span class="mchip good">$'+m.mrr+'/mo</span>');
+  if(m.billingStatus)chips.push('<span class="mchip'+(m.billingStatus==='Past due'||m.billingStatus==='Churned'?' bad':'')+'">'+esc(m.billingStatus)+'</span>');
+  (a.tags||[]).slice(0,2).forEach(t=>chips.push('<span class="mchip">'+esc(t)+'</span>'));
+  if(la)chips.push('<span class="mchip'+(stale?' warn':'')+'">'+ageShort(la)+'</span>');
+  else if(stale)chips.push('<span class="mchip warn">no activity</span>');
+  const right=showStage?'<span class="pill '+STAGEMETA[a.stage||'New']+'" style="margin-left:auto;flex-shrink:0">'+esc(a.stage||'New')+'</span>':(stale?'<span style="margin-left:auto;color:var(--amber);font-size:14px">●</span>':'');
+  return '<div class="pcard" draggable="true" tabindex="0" onclick="openAcct(\''+a.id+'\')" ondragstart="dragStart(event,\''+a.id+'\')" ondragend="dragEnd()" style="border-left-color:'+col+'">'
+    +'<div class="pc-top"><span class="pc-av" style="background:'+col+'22;color:'+col+'">'+esc(acctInitials(nm))+'</span><div class="pc-name">'+esc(nm)+'</div>'+right+'</div>'
+    +'<div class="pc-sub">'+[esc(a.owner||'Unassigned'),esc(a.location||'')].filter(Boolean).join(' · ')+'</div>'
+    +(chips.length?'<div class="pc-chips">'+chips.join('')+'</div>':'')+'</div>'}
+function pipelineHTML(list){return '<div class="pipe">'+STAGES.map(st=>{const items=list.filter(a=>(a.stage||'New')===st);
+  const mrr=items.reduce((s,a)=>s+(a.metrics&&a.metrics.mrr?Number(a.metrics.mrr):0),0);
+  return '<div class="pcol" ondragover="dragOver(event,this)" ondragleave="dragLeave(this)" ondrop="dropTo(event,\''+st+'\',this)">'
+    +'<div class="pcol-h" style="border-color:'+STAGECOLOR[st]+'"><span>'+st+(mrr?' · $'+mrr+'/mo':'')+'</span><span class="pill '+STAGEMETA[st]+'">'+items.length+'</span></div>'
+    +'<div class="pcol-body">'+(items.length?items.map(a=>cardHTML(a,false)).join(''):'<div class="pcol-empty">Drop here</div>')+'</div></div>'}).join('')+'</div>'}
+function listHTML(list){return list.length?list.map(a=>cardHTML(a,true)).join(''):'<div class="empty"><div class="d">No accounts match these filters.</div></div>'}
 function openAcct(id){const a=CRMA.find(x=>x.id===id);if(!a)return;acctId=id;
   document.getElementById('ac-seg').textContent=a.board||'';
-  document.getElementById('ac-name').textContent=a.name||'—';
+  document.getElementById('ac-name').textContent=displayName(a);
   document.getElementById('ac-stage').innerHTML=STAGES.map(s=>'<button data-v="'+s+'" class="'+((a.stage||'New')===s?'on':'')+'" onclick="setStage(\''+id+'\',\''+s+'\',this)">'+s+'</button>').join('');
   document.getElementById('ac-owner').value=a.owner==='Unassigned'?'':(a.owner||'');
   renderTags(a);
@@ -1143,17 +1195,21 @@ async function loadMail(){if(!hasFirestore()||!CURRENT_USER||!CURRENT_USER.uid)r
 function openMail(){const m=(CURRENT_USER&&CURRENT_USER.mail)||{};
   document.getElementById('mail-email').value=m.email||(CURRENT_USER&&CURRENT_USER.email)||'';
   document.getElementById('mail-smtp').value=m.smtp||'';document.getElementById('mail-pass').value='';
+  document.getElementById('mail-name').value=m.name||(CURRENT_USER&&CURRENT_USER.name)||'';
+  document.getElementById('mail-title').value=m.title||'';
+  document.getElementById('mail-phone').value=m.phone||'';
   document.querySelectorAll('#mail-provider button').forEach(b=>b.classList.toggle('on',b.dataset.v===(m.provider||'')));
   document.getElementById('mail-status').innerHTML=m.email?'<div class="note" style="border-style:solid;border-color:var(--good);margin-bottom:12px"><b style="color:var(--good)">Connected:</b> '+esc(m.email)+'</div>':'';
   closeSheets();openSheet('sh-mail')}
 function mailProvider(v,btn){document.querySelectorAll('#mail-provider button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');const p=SMTP_PRESET[v]||{};if(p.smtp)document.getElementById('mail-smtp').value=p.smtp}
 async function saveMail(){if(!hasFirestore()){toast('Enable Firestore first to save your email connection');return}
   const email=document.getElementById('mail-email').value.trim(),smtp=document.getElementById('mail-smtp').value.trim(),pass=document.getElementById('mail-pass').value;
+  const name=document.getElementById('mail-name').value.trim(),title=document.getElementById('mail-title').value.trim(),phone=document.getElementById('mail-phone').value.trim();
   const pb=document.querySelector('#mail-provider button.on');const prov=pb?pb.dataset.v:'other';
   if(!email||!smtp||!pass){toast('Enter your email, SMTP host and app password');return}
   const port=(SMTP_PRESET[prov]||{}).port||587;
-  try{await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).set({email:email,smtp:smtp,port:port,provider:prov,pass:pass,updatedAt:new Date().toISOString()},{merge:true});
-    CURRENT_USER.mail={email:email,smtp:smtp,port:port,provider:prov};toast('✓ Email connected — '+email);closeSheets()}
+  try{await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).set({email:email,smtp:smtp,port:port,provider:prov,pass:pass,name:name,title:title,phone:phone,updatedAt:new Date().toISOString()},{merge:true});
+    CURRENT_USER.mail={email:email,smtp:smtp,port:port,provider:prov,name:name,title:title,phone:phone};toast('✓ Email connected — '+email);closeSheets()}
   catch(e){toast('Could not save — '+((e&&e.code)||''))}}
 async function disconnectMail(){if(!hasFirestore())return;try{await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).delete();CURRENT_USER.mail=null;toast('Email disconnected');closeSheets()}catch(e){toast('Could not disconnect')}}
 function logAccountEmail(a,to,subject,body){const notes=(a.notes||[]).slice();notes.unshift({user:(CURRENT_USER&&CURRENT_USER.email)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'}),text:'✉️ Email to '+to+(subject?(' — '+subject):'')+': '+body.slice(0,300)});updateAccount(a.id,{notes:notes})}
