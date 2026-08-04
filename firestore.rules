@@ -35,5 +35,11 @@ service cloud.firestore {
 
       allow delete: if false;
     }
+
+    // Shared CRM — every signed-in teammate can read and edit accounts
+    // (the whole team sees who is reaching out to whom).
+    match /crm_accounts/{id} {
+      allow read, write: if signedIn();
+    }
   }
 }

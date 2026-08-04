@@ -2,3 +2,7 @@ node_modules/
 .firebase/
 firebase-debug.log
 .env
+
+# customer PII — never commit to the public repo
+public/crm-seed.js
+crm-accounts.json
