@@ -547,6 +547,7 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
 <script src="/__/firebase/init.js?useEmulator=false" onerror="window.__noFirebase=true"></script>
 <script src="crm-seed.js" onerror="window.CRM_SEED=window.CRM_SEED||null"></script>
 
@@ -753,7 +754,7 @@ function enterApp(user){
   document.getElementById('acc-email').textContent=user.email;
   document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
-  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();renderSupport();loadCRM();
+  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();syncTickets();loadCRM();
   goto('s-pulse');
 }
 function showLogin(){document.getElementById('app').style.display='none';document.getElementById('login').hidden=false}
@@ -814,9 +815,29 @@ window.addEventListener('load',()=>{
 const TK_KEY='sw_tickets_v1';
 const SEV={safety:{label:'SAFETY',pill:'safety',rank:0,sla:2},high:{label:'HIGH',pill:'amber',rank:1,sla:8},medium:{label:'MEDIUM',pill:'wave',rank:2,sla:24},low:{label:'LOW',pill:'dim',rank:3,sla:72}};
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function loadTickets(){try{return JSON.parse(localStorage.getItem(TK_KEY)||'[]')}catch(e){return[]}}
-function saveTickets(a){try{localStorage.setItem(TK_KEY,JSON.stringify(a))}catch(e){}}
-function updTicket(id,fn){const a=loadTickets();const t=a.find(x=>x.id===id);if(t){fn(t);saveTickets(a)}return t}
+let TKTS=[], tktSource='local';
+function lsTickets(){try{return JSON.parse(localStorage.getItem(TK_KEY)||'[]')}catch(e){return[]}}
+function loadTickets(){return TKTS}
+async function syncTickets(){
+  if(hasFirestore()){try{const s=await firebase.firestore().collection('tickets').get();TKTS=s.docs.map(d=>Object.assign({id:d.id},d.data()));tktSource='firestore'}catch(e){TKTS=lsTickets();tktSource='local'}}
+  else{TKTS=lsTickets();tktSource='local'}
+  renderSupport();
+}
+function persistTicket(t){
+  if(tktSource==='firestore'&&hasFirestore()){firebase.firestore().collection('tickets').doc(t.id).set(t,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+  else{const a=lsTickets();const i=a.findIndex(x=>x.id===t.id);if(i>=0)a[i]=t;else a.unshift(t);try{localStorage.setItem(TK_KEY,JSON.stringify(a))}catch(e){}}
+}
+function updTicket(id,fn){const t=TKTS.find(x=>x.id===id);if(t){fn(t);persistTicket(t)}return t}
+function backendReady(){return hasFirestore()&&!!firebase.functions}
+async function sendTicketReply(id){
+  const t=TKTS.find(x=>x.id===id);if(!t)return;
+  const ta=document.getElementById('tkv-reply');const text=(ta&&ta.value||'').trim();
+  if(!text){toast('Write a reply first');return}
+  if(!t.email){toast('No email address on this ticket');return}
+  if(!backendReady()){window.location.href='mailto:'+encodeURIComponent(t.email)+'?subject='+encodeURIComponent('Re: '+(t.title||''))+'&body='+encodeURIComponent(text);return}
+  try{await firebase.functions().httpsCallable('sendReply')({to:t.email,subject:'Re: '+(t.title||''),text:text,ticketId:t.id});toast('✓ Reply sent from sales@');updTicket(id,x=>x.status='answered');closeSheets();renderSupport()}
+  catch(e){toast('Send failed — '+((e&&e.message)||'is the backend deployed?'))}
+}
 function ageStr(iso){const ms=Date.now()-new Date(iso).getTime();const h=ms/3.6e6;if(h<1)return Math.max(1,Math.round(ms/6e4))+'m ago';if(h<24)return Math.round(h)+'h ago';return Math.round(h/24)+'d ago'}
 function slaLeft(t){return SEV[t.sev].sla-(Date.now()-new Date(t.created).getTime())/3.6e6}
 function pickVal(id){const b=document.querySelector('#'+id+' button.on');return b?b.dataset.v:''}
@@ -826,7 +847,7 @@ function saveTicket(){
   const title=document.getElementById('tk-title').value.trim();
   if(!title){toast('Give the ticket a short title');return}
   const t={id:'TK-'+Date.now().toString(36).toUpperCase().slice(-5),title:title,customer:document.getElementById('tk-customer').value.trim(),channel:pickVal('tk-channel'),product:pickVal('tk-product'),sev:pickVal('tk-sev')||'medium',desc:document.getElementById('tk-desc').value.trim(),status:'open',created:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'you'};
-  const all=loadTickets();all.unshift(t);saveTickets(all);closeSheets();renderSupport();
+  TKTS.unshift(t);persistTicket(t);closeSheets();renderSupport();
   toast('✓ Ticket '+t.id+' created — '+SEV[t.sev].label+' · '+t.channel)
 }
 function ticketCard(t){const s=SEV[t.sev];const breach=t.status==='open'&&slaLeft(t)<0;const meta=[t.channel,t.product,t.customer].filter(Boolean).map(esc).join(' · ');
@@ -846,7 +867,9 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
   document.getElementById('tkv-title').textContent=t.title;
   const p=document.getElementById('tkv-pill');p.className='pill '+SEV[t.sev].pill;p.textContent=SEV[t.sev].label;
   document.getElementById('tkv-body').innerHTML=kv('Ticket',t.id)+kv('Channel',esc(t.channel))+kv('Product',esc(t.product))+kv('Customer',esc(t.customer||'—'))+kv('Opened',ageStr(t.created)+' · '+esc(t.by||'—'))+kv('SLA target',SEV[t.sev].sla+'h')+(t.desc?'<div class="note" style="margin-top:8px">'+esc(t.desc)+'</div>':'');
-  document.getElementById('tkv-actions').innerHTML=t.status==='open'?'<button class="btn" onclick="promoteTicket(\''+id+'\')">Promote to Build</button><button class="btn ghost" style="margin-top:8px" onclick="resolveTicket(\''+id+'\')">Mark resolved</button>':'<button class="btn ghost" onclick="reopenTicket(\''+id+'\')">Reopen</button>';
+  let acts=t.status==='open'?'<button class="btn" onclick="promoteTicket(\''+id+'\')">Promote to Build</button><button class="btn ghost" style="margin-top:8px" onclick="resolveTicket(\''+id+'\')">Mark resolved</button>':'<button class="btn ghost" onclick="reopenTicket(\''+id+'\')">Reopen</button>';
+  if(t.email)acts+='<textarea class="field" id="tkv-reply" placeholder="Reply to '+esc(t.customer||t.email)+'…" style="min-height:72px;margin-top:12px;font-family:var(--font-b)"></textarea><button class="btn" onclick="sendTicketReply(\''+id+'\')">'+(backendReady()?'Send reply from sales@':'Reply (opens mail app)')+'</button>';
+  document.getElementById('tkv-actions').innerHTML=acts;
   openSheet('sh-ticket')
 }
 function resolveTicket(id){updTicket(id,t=>t.status='closed');closeSheets();renderSupport();toast('✓ '+id+' resolved')}
