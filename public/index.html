@@ -454,7 +454,8 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
       <div class="kv"><span>Signed in</span><b id="acc-since">now</b></div>
       <div class="kv"><span>Session</span><b>Private to you</b></div>
     </div>
-    <button class="btn" id="acc-manage" style="display:none;margin-top:12px" onclick="openUsers()">Manage team &amp; roles</button>
+    <button class="btn ghost" style="margin-top:12px" onclick="openMail()">Connect / manage your email</button>
+    <button class="btn" id="acc-manage" style="display:none;margin-top:8px" onclick="openUsers()">Manage team &amp; roles</button>
     <button class="btn ghost" style="margin-top:8px" onclick="doSignOut()">Sign out</button>
   </div>
 </div>
@@ -493,6 +494,43 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
   </div>
 </div>
 
+<div class="sheet" id="sh-mail" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">YOUR EMAIL</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Connect your email</h1>
+    <p class="sub">Send and log emails to accounts from your own address. Use an <b>app password</b> if your provider offers one — safer than your main password.</p>
+    <div id="mail-status"></div>
+    <input class="field" id="mail-email" type="email" placeholder="you@company.com" autocomplete="off">
+    <p class="d" style="font-weight:600;color:var(--text);margin-bottom:6px">Provider</p>
+    <div class="rolepick" id="mail-provider">
+      <button data-v="gmail" onclick="mailProvider('gmail',this)">Gmail</button>
+      <button data-v="outlook" onclick="mailProvider('outlook',this)">Outlook</button>
+      <button data-v="ionos" onclick="mailProvider('ionos',this)">IONOS</button>
+      <button data-v="other" onclick="mailProvider('other',this)">Other</button>
+    </div>
+    <input class="field" id="mail-smtp" style="margin-top:10px" placeholder="SMTP host (e.g. smtp.gmail.com)">
+    <input class="field" id="mail-pass" type="password" placeholder="App password" autocomplete="new-password">
+    <button class="btn" onclick="saveMail()">Save &amp; connect</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="disconnectMail()">Disconnect</button>
+    <div class="note" style="margin-top:10px">Stored privately to your account — only you can read it, used only to send from your address. For Gmail/Outlook, create an <b>app password</b> in your account security settings (not your login password).</div>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-compose" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">NEW EMAIL</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Email <span id="cmp-to"></span></h1>
+    <p class="sub" id="cmp-hint"></p>
+    <input class="field" id="cmp-subject" placeholder="Subject">
+    <textarea class="field" id="cmp-body" placeholder="Write your message…" style="min-height:150px;resize:vertical;font-family:var(--font-b)"></textarea>
+    <button class="btn" onclick="sendAccountEmail()">Send email</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
 <div class="sheet" id="sh-users" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
@@ -516,6 +554,7 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
     <p class="d" style="font-weight:600;color:var(--text);margin-top:12px">Tags</p>
     <div id="ac-tags" style="display:flex;gap:5px;flex-wrap:wrap;margin:6px 0"></div>
     <div class="searchbar" style="margin-bottom:12px"><input id="ac-tag-input" placeholder="Add a tag (e.g. hot, ASL, K-12, VR)" onkeydown="if(event.key==='Enter'){event.preventDefault();addTag(acctId)}"></div>
+    <button class="btn" id="ac-email" style="margin-bottom:8px">✉️ Email this account</button>
     <button class="btn ghost" id="ac-dash" style="margin-bottom:12px">Link client dashboard</button>
     <div class="card" id="ac-body" style="margin-bottom:14px"></div>
     <div class="sec-head"><h2>Activity</h2></div>
@@ -754,7 +793,7 @@ function enterApp(user){
   document.getElementById('acc-email').textContent=user.email;
   document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
-  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();syncTickets();loadCRM();
+  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();syncTickets();loadCRM();loadMail();
   goto('s-pulse');
 }
 function showLogin(){document.getElementById('app').style.display='none';document.getElementById('login').hidden=false}
@@ -835,8 +874,9 @@ async function sendTicketReply(id){
   if(!text){toast('Write a reply first');return}
   if(!t.email){toast('No email address on this ticket');return}
   if(!backendReady()){window.location.href='mailto:'+encodeURIComponent(t.email)+'?subject='+encodeURIComponent('Re: '+(t.title||''))+'&body='+encodeURIComponent(text);return}
-  try{await firebase.functions().httpsCallable('sendReply')({to:t.email,subject:'Re: '+(t.title||''),text:text,ticketId:t.id});toast('✓ Reply sent from sales@');updTicket(id,x=>x.status='answered');closeSheets();renderSupport()}
-  catch(e){toast('Send failed — '+((e&&e.message)||'is the backend deployed?'))}
+  if(!(CURRENT_USER.mail&&CURRENT_USER.mail.email)){toast('Connect your email first (Account → Connect email)');return}
+  try{await firebase.functions().httpsCallable('sendUserEmail')({to:t.email,subject:'Re: '+(t.title||''),text:text,ticketId:t.id});toast('✓ Reply sent from '+CURRENT_USER.mail.email);updTicket(id,x=>x.status='answered');closeSheets();renderSupport()}
+  catch(e){toast('Send failed — '+((e&&e.message)||'check Connect email'))}
 }
 function ageStr(iso){const ms=Date.now()-new Date(iso).getTime();const h=ms/3.6e6;if(h<1)return Math.max(1,Math.round(ms/6e4))+'m ago';if(h<24)return Math.round(h)+'h ago';return Math.round(h/24)+'d ago'}
 function slaLeft(t){return SEV[t.sev].sla-(Date.now()-new Date(t.created).getTime())/3.6e6}
@@ -998,6 +1038,7 @@ function openAcct(id){const a=CRMA.find(x=>x.id===id);if(!a)return;acctId=id;
   document.getElementById('ac-body').innerHTML=rows.map(x=>'<div class="kv"><span>'+esc(x[0])+'</span><b>'+linkify(x[1])+'</b></div>').join('')||'<div class="d">No further details.</div>';
   const dash=document.getElementById('ac-dash');dash.textContent=a.dashboardUrl?'Open client dashboard ↗':'Link client dashboard';
   dash.onclick=()=>{if(a.dashboardUrl){window.open(a.dashboardUrl,'_blank','noopener')}else{const u=prompt('Paste this client\'s Safewave dashboard link (temporary — the live device feed connects next):');if(u){updateAccount(id,{dashboardUrl:u});toast('✓ Dashboard linked');dash.textContent='Open client dashboard ↗'}}};
+  const eb=document.getElementById('ac-email');if(a.email){eb.style.display='block';eb.onclick=openCompose}else{eb.style.display='none'}
   renderNotes(a);document.getElementById('note-input').value='';
   openSheet('sh-acct')}
 function setStage(id,s,btn){updateAccount(id,{stage:s});btn.closest('.rolepick').querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderCrmMain();toast('✓ Moved to '+s)}
@@ -1017,6 +1058,37 @@ function toggleRecord(id){const SR=window.SpeechRecognition||window.webkitSpeech
   crmRec.onerror=()=>{toast('Mic error — check the browser\'s microphone permission')};
   crmRec.onend=()=>{crmRec=null;btn.textContent='● Record call';btn.classList.remove('rec-on')};
   crmRec.start();btn.textContent='■ Stop recording';btn.classList.add('rec-on');toast('Listening… speak your call notes');}
+
+/* ---- Per-user email: connect your own mailbox, send + log from accounts ---- */
+const SMTP_PRESET={gmail:{smtp:'smtp.gmail.com',port:587},outlook:{smtp:'smtp.office365.com',port:587},ionos:{smtp:'smtp.ionos.com',port:587},other:{smtp:'',port:587}};
+async function loadMail(){if(!hasFirestore()||!CURRENT_USER||!CURRENT_USER.uid)return;try{const d=await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).get();CURRENT_USER.mail=d.exists?d.data():null}catch(e){CURRENT_USER.mail=null}}
+function openMail(){const m=(CURRENT_USER&&CURRENT_USER.mail)||{};
+  document.getElementById('mail-email').value=m.email||(CURRENT_USER&&CURRENT_USER.email)||'';
+  document.getElementById('mail-smtp').value=m.smtp||'';document.getElementById('mail-pass').value='';
+  document.querySelectorAll('#mail-provider button').forEach(b=>b.classList.toggle('on',b.dataset.v===(m.provider||'')));
+  document.getElementById('mail-status').innerHTML=m.email?'<div class="note" style="border-style:solid;border-color:var(--good);margin-bottom:12px"><b style="color:var(--good)">Connected:</b> '+esc(m.email)+'</div>':'';
+  closeSheets();openSheet('sh-mail')}
+function mailProvider(v,btn){document.querySelectorAll('#mail-provider button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');const p=SMTP_PRESET[v]||{};if(p.smtp)document.getElementById('mail-smtp').value=p.smtp}
+async function saveMail(){if(!hasFirestore()){toast('Enable Firestore first to save your email connection');return}
+  const email=document.getElementById('mail-email').value.trim(),smtp=document.getElementById('mail-smtp').value.trim(),pass=document.getElementById('mail-pass').value;
+  const pb=document.querySelector('#mail-provider button.on');const prov=pb?pb.dataset.v:'other';
+  if(!email||!smtp||!pass){toast('Enter your email, SMTP host and app password');return}
+  const port=(SMTP_PRESET[prov]||{}).port||587;
+  try{await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).set({email:email,smtp:smtp,port:port,provider:prov,pass:pass,updatedAt:new Date().toISOString()},{merge:true});
+    CURRENT_USER.mail={email:email,smtp:smtp,port:port,provider:prov};toast('✓ Email connected — '+email);closeSheets()}
+  catch(e){toast('Could not save — '+((e&&e.code)||''))}}
+async function disconnectMail(){if(!hasFirestore())return;try{await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).delete();CURRENT_USER.mail=null;toast('Email disconnected');closeSheets()}catch(e){toast('Could not disconnect')}}
+function logAccountEmail(a,to,subject,body){const notes=(a.notes||[]).slice();notes.unshift({user:(CURRENT_USER&&CURRENT_USER.email)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'}),text:'✉️ Email to '+to+(subject?(' — '+subject):'')+': '+body.slice(0,300)});updateAccount(a.id,{notes:notes})}
+function openCompose(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;if(!a.email){toast('No email address on this account');return}
+  document.getElementById('cmp-to').textContent=a.email;document.getElementById('cmp-subject').value='';document.getElementById('cmp-body').value='';
+  document.getElementById('cmp-hint').textContent=(CURRENT_USER.mail&&CURRENT_USER.mail.email)?('Sends from your address: '+CURRENT_USER.mail.email):'Not connected — this opens your mail app. Connect your email in Account for in-app send.';
+  closeSheets();openSheet('sh-compose')}
+async function sendAccountEmail(){const a=CRMA.find(x=>x.id===acctId);if(!a||!a.email)return;
+  const subject=document.getElementById('cmp-subject').value.trim(),body=document.getElementById('cmp-body').value.trim();
+  if(!body){toast('Write a message first');return}
+  if(!backendReady()||!(CURRENT_USER.mail&&CURRENT_USER.mail.email)){window.location.href='mailto:'+encodeURIComponent(a.email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);logAccountEmail(a,a.email,subject,body);closeSheets();renderCrmMain();toast('Opened your mail app · logged to the account');return}
+  try{await firebase.functions().httpsCallable('sendUserEmail')({to:a.email,subject:subject,text:body,accountId:a.id});toast('✓ Sent from '+CURRENT_USER.mail.email);closeSheets();loadCRM()}
+  catch(e){toast('Send failed — '+((e&&e.message)||'check Connect email'))}}
 
 /* ================= TRIAGE ENGINE (real, testable) ================= */
 const SafewaveTriage=(function(){

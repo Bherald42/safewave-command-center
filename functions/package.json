@@ -11,8 +11,6 @@
   "dependencies": {
     "firebase-admin": "^12.6.0",
     "firebase-functions": "^6.1.0",
-    "imapflow": "^1.0.164",
-    "mailparser": "^3.7.1",
     "nodemailer": "^6.9.15"
   },
   "private": true
