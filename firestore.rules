@@ -52,5 +52,11 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if false; // server (Admin SDK) only
     }
+
+    // Per-user email credentials — readable/writable ONLY by their owner.
+    // No other teammate can read them; the backend uses the Admin SDK to send.
+    match /mail_credentials/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
   }
 }
