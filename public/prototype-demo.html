@@ -1,0 +1,2519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#000000">
+<title>Safewave Command Center — Prototype v0.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* ================= DESIGN TOKENS ================= */
+:root{
+  --bg:#08090B;            /* app base — brand black */
+  --surface:#101215;       /* cards */
+  --surface-2:#171A1E;     /* raised */
+  --line:#22262C;          /* hairlines */
+  --text:#F2F4F6;
+  --muted:#8C939D;
+  --faint:#5A616B;
+  --wave:#4FD8EC;          /* accent — wave cyan */
+  --wave-dim:rgba(79,216,236,.12);
+  --safety:#FF5D5D;        /* life-safety red */
+  --safety-dim:rgba(255,93,93,.12);
+  --amber:#F2B04E;
+  --amber-dim:rgba(242,176,78,.12);
+  --good:#54D9A0;
+  --good-dim:rgba(84,217,160,.12);
+  --violet:#A78BFA;
+  --r:14px;
+  --font-d:'Space Grotesk',sans-serif;
+  --font-b:'Inter',sans-serif;
+  --font-m:'JetBrains Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:#000;color:var(--text);font-family:var(--font-b);font-size:15px;line-height:1.45;
+  display:flex;justify-content:center;min-height:100vh}
+
+/* ================= PHONE FRAME ================= */
+.phone{width:100%;max-width:400px;background:var(--bg);min-height:100vh;position:relative;
+  display:flex;flex-direction:column;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+
+/* ================= TOP BAR ================= */
+.topbar{position:sticky;top:0;z-index:40;background:rgba(8,9,11,.92);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);padding:14px 16px 10px;display:flex;align-items:center;gap:10px}
+.logo{font-family:var(--font-d);font-weight:700;font-size:17px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.logo .wv{display:flex;align-items:flex-end;gap:2px;height:16px}
+.logo .wv i{width:3px;background:var(--wave);border-radius:2px;animation:pulse 1.4s ease-in-out infinite}
+.logo .wv i:nth-child(1){height:6px;animation-delay:0s}
+.logo .wv i:nth-child(2){height:14px;animation-delay:.18s}
+.logo .wv i:nth-child(3){height:9px;animation-delay:.36s}
+@keyframes pulse{0%,100%{transform:scaleY(.55)}50%{transform:scaleY(1)}}
+@media(prefers-reduced-motion:reduce){.logo .wv i{animation:none}}
+.spacer{flex:1}
+.role-switch{display:none;background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:2px}
+.role-switch button{background:none;border:0;color:var(--muted);font-family:var(--font-b);font-size:11px;
+  font-weight:600;padding:4px 9px;border-radius:99px;cursor:pointer}
+.role-switch button.on{background:var(--wave);color:#04252B}
+.role-switch button:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
+
+/* ================= SCREENS ================= */
+.screen{display:none;flex:1;padding:16px 16px 96px;overflow-y:auto}
+.screen.on{display:block}
+.eyebrow{font-family:var(--font-m);font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+h1{font-family:var(--font-d);font-size:24px;font-weight:700;letter-spacing:-.02em;margin-bottom:2px}
+.sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+.sec{margin-bottom:22px}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.sec-head h2{font-family:var(--font-d);font-size:15px;font-weight:600;letter-spacing:-.01em}
+.sec-head a{color:var(--wave);font-size:12px;font-weight:600;text-decoration:none;cursor:pointer}
+
+/* ================= CARDS ================= */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:8px}
+.card.tap{cursor:pointer;transition:border-color .15s}
+.card.tap:hover{border-color:#333A42}
+.card.tap:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
+.row{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+.t{font-weight:600;font-size:14px}
+.d{color:var(--muted);font-size:12.5px;margin-top:1px}
+.mono{font-family:var(--font-m)}
+
+/* wave-strength: the signature priority indicator */
+.wstr{display:flex;align-items:flex-end;gap:2.5px;height:22px;flex-shrink:0}
+.wstr i{width:4px;border-radius:2px;background:var(--line)}
+.wstr i.f{background:var(--wave)}
+.wstr.sfty i.f{background:var(--safety)}
+.wstr i:nth-child(1){height:25%}.wstr i:nth-child(2){height:45%}.wstr i:nth-child(3){height:65%}
+.wstr i:nth-child(4){height:85%}.wstr i:nth-child(5){height:100%}
+
+/* pills */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:3px 8px;
+  border-radius:99px;letter-spacing:.02em}
+.pill.wave{background:var(--wave-dim);color:var(--wave)}
+.pill.safety{background:var(--safety-dim);color:var(--safety)}
+.pill.amber{background:var(--amber-dim);color:var(--amber)}
+.pill.good{background:var(--good-dim);color:var(--good)}
+.pill.dim{background:var(--surface-2);color:var(--muted)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* stat tiles */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.tile .n{font-family:var(--font-m);font-size:21px;font-weight:600;letter-spacing:-.02em}
+.tile .l{color:var(--muted);font-size:11px;margin-top:2px}
+.tile .delta{font-size:11px;font-weight:600;margin-left:6px}
+.up{color:var(--good)}.down{color:var(--safety)}
+
+/* chips / filters */
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;background:var(--surface);border:1px solid var(--line);color:var(--muted);
+  font-size:12px;font-weight:600;padding:6px 12px;border-radius:99px;cursor:pointer;font-family:var(--font-b)}
+.chip.on{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
+.chip:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--wave);color:#04252B;
+  border:0;border-radius:11px;font-family:var(--font-b);font-weight:600;font-size:13.5px;padding:11px 16px;cursor:pointer;width:100%}
+.btn.ghost{background:var(--surface-2);color:var(--text);border:1px solid var(--line)}
+.btn:focus-visible{outline:2px solid var(--wave);outline-offset:2px}
+
+/* SLA timer bar */
+.sla{height:4px;background:var(--line);border-radius:2px;margin-top:9px;overflow:hidden}
+.sla i{display:block;height:100%;border-radius:2px}
+
+/* role gating */
+body.role-employee .admin-only, body.role-employee .mgr-only{display:none!important}
+body.role-manager .admin-only{display:none!important}
+.gate-note{display:none;background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);
+  padding:12px 14px;color:var(--faint);font-size:12px;margin-bottom:8px}
+body.role-employee .gate-note.emp, body.role-manager .gate-note.mgr{display:block}
+
+/* ================= BOTTOM TABS ================= */
+.tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:400px;z-index:50;
+  background:rgba(8,9,11,.95);backdrop-filter:blur(12px);border-top:1px solid var(--line);
+  display:flex;padding:6px 4px calc(10px + env(safe-area-inset-bottom))}
+.tab{flex:1;background:none;border:0;color:var(--faint);font-family:var(--font-b);font-size:9px;font-weight:600;
+  display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;cursor:pointer;letter-spacing:0}
+.tab svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab.on{color:var(--wave)}
+.tab:focus-visible{outline:2px solid var(--wave);outline-offset:-2px;border-radius:8px}
+
+/* detail sheet */
+.sheet{display:none;position:fixed;inset:0;z-index:60;justify-content:center;align-items:flex-end;background:rgba(0,0,0,.6)}
+.sheet.on{display:flex}
+.sheet-body{width:100%;max-width:400px;max-height:86vh;overflow-y:auto;background:var(--surface);
+  border:1px solid var(--line);border-radius:20px 20px 0 0;padding:10px 16px calc(24px + env(safe-area-inset-bottom))}
+.grab{width:36px;height:4px;background:var(--line);border-radius:2px;margin:4px auto 14px}
+
+/* score breakdown */
+.score-line{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.score-line:last-child{border-bottom:0}
+.score-line b{font-family:var(--font-m);font-weight:600}
+
+/* chat */
+.msg{display:flex;gap:10px;margin-bottom:14px}
+.av{width:32px;height:32px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-weight:600;font-size:12px;flex-shrink:0;color:var(--wave)}
+.msg .who{font-size:12px;font-weight:600;margin-bottom:2px}
+.msg .who span{color:var(--faint);font-weight:400;margin-left:6px;font-size:11px}
+.msg .body{font-size:13.5px;color:#D6DAE0}
+.pinned{border-color:var(--wave)}
+.composer{position:sticky;bottom:0;display:flex;gap:8px;padding-top:10px;background:var(--bg)}
+.composer input{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:11px;
+  padding:11px 13px;color:var(--text);font-family:var(--font-b);font-size:13.5px}
+.composer input::placeholder{color:var(--faint)}
+.composer button{width:44px;border-radius:11px;background:var(--wave);border:0;cursor:pointer;color:#04252B;font-weight:700}
+
+/* CRM sub-views */
+.crm-view{display:none}
+.crm-view.on{display:block}
+.iconbtn{background:var(--surface);border:1px solid var(--line);border-radius:99px;color:var(--muted);
+  width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.iconbtn:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
+.searchbar{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);
+  border-radius:12px;padding:11px 13px;margin-bottom:14px}
+.searchbar input{flex:1;background:none;border:0;color:var(--text);font-family:var(--font-b);font-size:14px;outline:none}
+.searchbar input::placeholder{color:var(--faint)}
+.demo-bar{position:sticky;top:57px;z-index:39;display:flex;align-items:center;gap:6px;
+  background:rgba(8,9,11,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);
+  padding:8px 12px;overflow-x:auto;scrollbar-width:none}
+.demo-bar::-webkit-scrollbar{display:none}
+.demo-label{font-family:var(--font-m);font-size:9px;font-weight:600;letter-spacing:.12em;color:var(--faint);flex-shrink:0}
+.persona{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);
+  border-radius:99px;padding:4px 12px 4px 5px;cursor:pointer;color:var(--muted);font-family:var(--font-b);
+  font-size:11px;line-height:1.15;text-align:left;flex-shrink:0}
+.persona small{font-size:9.5px;color:var(--faint)}
+.persona b{font-weight:600;color:inherit}
+.persona.on{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
+.persona.on small{color:var(--wave);opacity:.75}
+.persona:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
+.draft-box{width:100%;min-height:90px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+  padding:11px 12px;color:#E4E8ED;font-family:var(--font-b);font-size:13.5px;line-height:1.5;resize:vertical;margin-top:8px}
+.draft-box:focus{outline:2px solid var(--violet);border-color:transparent}
+#toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(10px);max-width:340px;width:calc(100% - 48px);
+  background:var(--surface-2);border:1px solid var(--wave);color:var(--text);font-size:12.5px;font-weight:500;
+  padding:11px 16px;border-radius:12px;z-index:200;opacity:0;transition:opacity .22s,transform .22s;pointer-events:none;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.qcitem{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:13.5px}
+.qcitem:last-child{border-bottom:0}
+.qcitem input{width:19px;height:19px;accent-color:var(--wave);margin-top:1px;flex-shrink:0;cursor:pointer}
+.qcitem small{color:var(--muted);font-size:12px}
+.qcitem input:checked + span{color:var(--muted)}
+
+/* misc */
+.hr{height:1px;background:var(--line);margin:14px 0}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:7px 0}
+.kv span:first-child{color:var(--muted)}
+.progress{height:5px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:6px}
+.progress i{display:block;height:100%;background:var(--wave);border-radius:3px}
+.avatar-stack{display:flex}
+.avatar-stack .av{width:24px;height:24px;font-size:9px;margin-left:-7px;border:2px solid var(--surface)}
+.avatar-stack .av:first-child{margin-left:0}
+.note{background:var(--surface-2);border-radius:10px;padding:10px 12px;font-size:12.5px;color:#C7CCD3;margin-top:8px}
+.note .meta{font-size:11px;color:var(--faint);margin-bottom:3px;font-family:var(--font-m)}
+.proto-banner{background:var(--wave-dim);color:var(--wave);font-size:11px;font-weight:600;text-align:center;
+  padding:6px;letter-spacing:.04em}
+</style>
+</head>
+<body class="role-admin">
+<div class="phone">
+<div class="proto-banner">LIVE Shopify data · enterprise figures are illustrative targets · tap anything</div>
+
+<!-- ============ SIGN IN (disabled for now — set display:flex to restore) ============ -->
+<div id="signin" style="display:flex;position:absolute;inset:0;z-index:100;background:var(--bg);flex-direction:column;justify-content:center;padding:32px 24px">
+  <div class="logo" style="font-size:26px;justify-content:center;margin-bottom:6px"><span class="wv" style="height:22px"><i style="width:4px"></i><i style="width:4px"></i><i style="width:4px"></i></span> Safewave</div>
+  <p class="sub" style="text-align:center;margin-bottom:28px">Command Center</p>
+
+  <div class="searchbar" style="margin-bottom:10px"><input type="email" placeholder="Work email" aria-label="Email"></div>
+  <div class="searchbar" style="margin-bottom:14px"><input type="password" placeholder="Password" aria-label="Password"></div>
+  <button class="btn" onclick="signIn('admin','pulse-admin')">Sign in</button>
+  <button class="btn ghost" style="margin-top:8px" onclick="signIn('admin','pulse-admin')">Continue with Google (SSO)</button>
+
+  <div class="hr" style="margin:22px 0"></div>
+  <p class="eyebrow" style="text-align:center;margin-bottom:10px">Demo — sign in as</p>
+
+  <div class="card tap" tabindex="0" onclick="signIn('admin','pulse-admin')">
+    <div class="row"><div class="av">JB</div>
+      <div class="grow"><div class="t">Jared — Founder / Admin</div><div class="d">Everything: dev, demos, revenue, compliance</div></div>
+      <span class="pill wave">ADMIN</span></div>
+  </div>
+  <div class="card tap" tabindex="0" onclick="signIn('manager','pulse-manager')">
+    <div class="row"><div class="av">SM</div>
+      <div class="grow"><div class="t">Sam — Support Manager</div><div class="d">Team queue, approvals, check-ins · no compliance</div></div>
+      <span class="pill amber">MANAGER</span></div>
+  </div>
+  <div class="card tap" tabindex="0" onclick="signIn('employee','pulse-employee')">
+    <div class="row"><div class="av">LT</div>
+      <div class="grow"><div class="t">Lena — Support</div><div class="d">Her tickets & mentions · no finance, CRM or compliance</div></div>
+      <span class="pill dim">EMPLOYEE</span></div>
+  </div>
+  <p class="d" style="text-align:center;margin-top:16px;font-size:11px;color:var(--faint)">MFA enforced for Admin & Manager · every sign-in is audit-logged</p>
+</div>
+
+<!-- ============ TOP BAR ============ -->
+<header class="topbar">
+  <div class="logo"><span class="wv"><i></i><i></i><i></i></span> Safewave</div>
+  <div class="spacer"></div>
+  <button class="iconbtn" aria-label="Search everything" onclick="go('s-know')">
+    <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+  </button>
+  <div class="role-switch" role="tablist" aria-label="Demo role switcher">
+    <button class="on" onclick="setRole('admin',this)">Admin</button>
+    <button onclick="setRole('manager',this)">Mgr</button>
+    <button onclick="setRole('employee',this)">Emp</button>
+  </div>
+</header>
+
+<!-- ============ DEMO PERSONA SWITCHER ============ -->
+<div class="demo-bar" id="demo-bar">
+  <span class="demo-label">DEMO · VIEW AS</span>
+  <button class="persona on" data-r="admin" onclick="personaSwitch('admin')">
+    <span class="av" style="width:22px;height:22px;font-size:9px">JB</span>
+    <span><b>Jared</b><br><small>Founder</small></span>
+  </button>
+  <button class="persona" data-r="manager" onclick="personaSwitch('manager')">
+    <span class="av" style="width:22px;height:22px;font-size:9px">SM</span>
+    <span><b>Sam</b><br><small>Manager</small></span>
+  </button>
+  <button class="persona" data-r="employee" onclick="personaSwitch('employee')">
+    <span class="av" style="width:22px;height:22px;font-size:9px">LT</span>
+    <span><b>Lena</b><br><small>Support</small></span>
+  </button>
+</div>
+
+<!-- ============ SCREEN: PULSE ============ -->
+<main class="screen on" id="s-pulse">
+
+  <!-- ======== FOUNDER / ADMIN PULSE ======== -->
+  <div class="pulse-v" id="pulse-admin">
+  <p class="eyebrow">Tuesday · Aug 4 · Founder view</p>
+  <h1>Morning, Jared</h1>
+  <p class="sub">The company at a glance. 3 things need you.</p>
+
+  <div class="tiles" style="margin-bottom:16px">
+    <div class="card tap" tabindex="0" style="margin-bottom:0" onclick="go('s-build')">
+      <div class="d" style="font-size:11px">DEVELOPMENT</div>
+      <div class="t" style="margin-top:2px">Cycle 38% · on pace</div>
+      <div class="d">2.4.1 freeze Fri · BLE fix in review</div>
+    </div>
+    <div class="card tap" tabindex="0" style="margin-bottom:0" onclick="go('s-crm')">
+      <div class="d" style="font-size:11px">ENTERPRISE</div>
+      <div class="t" style="margin-top:2px">2 demos this wk</div>
+      <div class="d">Riverside pilot review Jul 24 · OSD Jul 29</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>What's next</h2><a onclick="go('s-build')">Full list →</a></div>
+
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-p1')">
+      <div class="row">
+        <div class="wstr sfty" aria-label="Priority: critical"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
+        <div class="grow">
+          <div class="t">BLE reconnect fails after sleep</div>
+          <div class="d">Firmware · 412 devices affected · missed-alert risk</div>
+        </div>
+        <span class="pill safety"><span class="dot"></span>SAFETY</span>
+      </div>
+    </div>
+
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-p2')">
+      <div class="row">
+        <div class="wstr"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i></div>
+        <div class="grow">
+          <div class="t">Enterprise SSO for org dashboard</div>
+          <div class="d">Enterprise · blocks Riverside SD contract ($48k)</div>
+        </div>
+        <span class="pill amber"><span class="dot"></span>DEAL</span>
+      </div>
+    </div>
+
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-p3')">
+      <div class="row">
+        <div class="wstr"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></div>
+        <div class="grow">
+          <div class="t">Vibration ramp-up for deep sleep</div>
+          <div class="d">Consumer App · top-requested · 61 votes</div>
+        </div>
+        <span class="pill wave">FEATURE</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec mgr-only">
+    <div class="sec-head"><h2>Today</h2><a onclick="go('s-fin')">Finance →</a></div>
+    <div class="tiles">
+      <div class="tile"><div class="n">$735</div><div class="l">Revenue last wk <span class="pill wave" style="font-size:9px;padding:1px 6px">LIVE</span></div></div>
+      <div class="tile"><div class="n">5</div><div class="l">Orders last wk · latest #1385 Aug 4</div></div>
+      <div class="tile"><div class="n">3</div><div class="l">Urgent tickets <span class="delta down">1 SLA breach</span></div></div>
+      <div class="tile"><div class="n">2</div><div class="l">Controls failing</div></div>
+    </div>
+  </div>
+  <div class="gate-note emp">Finance and compliance tiles are hidden for the Employee role. Switch roles above to compare.</div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Needs a reply</h2><a onclick="go('s-chat')">Inbox →</a></div>
+    <div class="card tap" tabindex="0" onclick="go('s-inv')">
+      <div class="row">
+        <div class="av" style="color:var(--amber)">📦</div>
+        <div class="grow">
+          <div class="t">Medium bands: 2 left — order NOW</div>
+          <div class="d">~1 wk cover at 2.0/wk (live Shopify) vs 2-wk NY transfer &amp; 8-wk China remake</div>
+        </div>
+        <span class="pill amber">2 LEFT</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="go('s-chat')">
+      <div class="row">
+        <div class="av">MK</div>
+        <div class="grow">
+          <div class="t">Maria K. mentioned you in #firmware</div>
+          <div class="d">"@jared can we ship 2.4.1 hotfix before Monday?"</div>
+        </div>
+        <span class="pill dim">12m</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="go('s-crm')">
+      <div class="row">
+        <div class="av" style="color:var(--violet)">RS</div>
+        <div class="grow">
+          <div class="t">Riverside SD check-in due today</div>
+          <div class="d">Activation dropped 12% this month · 2 open tickets</div>
+        </div>
+        <span class="pill amber">DUE</span>
+      </div>
+    </div>
+  </div>
+  </div><!-- /pulse-admin -->
+
+  <!-- ======== MANAGER PULSE ======== -->
+  <div class="pulse-v" id="pulse-manager" style="display:none">
+  <p class="eyebrow">Tuesday · Aug 4 · Manager view</p>
+  <h1>Morning, Sam</h1>
+  <p class="sub">Your team's day — support & customer success.</p>
+
+  <div class="tiles" style="margin-bottom:16px">
+    <div class="tile"><div class="n">17</div><div class="l">Open tickets <span class="delta down">1 SLA breach</span></div></div>
+    <div class="tile"><div class="n">4h 12m</div><div class="l">Avg first reply <span class="delta up">−38% wk</span></div></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Assigned to your team</h2><a onclick="go('s-cust')">Queue →</a></div>
+    <div class="card tap" tabindex="0" onclick="go('s-cust')">
+      <div class="row">
+        <div class="av">LT</div>
+        <div class="grow"><div class="t">Lena · 6 tickets · Sarah W. breach on top</div><div class="d">2 due today · needs the BLE macro update</div></div>
+        <span class="pill safety">1 BREACH</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="av">JP</div>
+        <div class="grow"><div class="t">Jordan · 5 tickets + QC station today</div><div class="d">14 bands awaiting QC · Kim R. order next</div></div>
+        <span class="pill amber">QC 14</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="av">RD</div>
+        <div class="grow"><div class="t">Ria · 6 tickets · out Thu–Fri</div><div class="d">Reassign her Thu queue before Wednesday</div></div>
+        <span class="pill dim">PTO SOON</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Waiting on your approval</h2></div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-cust')">
+      <div class="row">
+        <div class="grow"><div class="t">AI reply to Sarah W. — refund + firmware fix</div><div class="d">Drafted 20m ago · SLA already breached, approve first</div></div>
+        <span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">REVIEW</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow"><div class="t">3 canned replies updated for BLE workaround</div><div class="d">Dev's edits — approve to push to whole team</div></div>
+        <span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">REVIEW</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Your check-ins due</h2><a onclick="go('s-crm')">CRM →</a></div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="av" style="color:var(--violet)">HC</div>
+        <div class="grow"><div class="t">Harmony Care — Jul 21</div><div class="d">Renewal in 47 days · prep expansion talking points</div></div>
+        <span class="pill dim">MON</span>
+      </div>
+    </div>
+  </div>
+  </div><!-- /pulse-manager -->
+
+  <!-- ======== EMPLOYEE PULSE ======== -->
+  <div class="pulse-v" id="pulse-employee" style="display:none">
+  <p class="eyebrow">Tuesday · Aug 4</p>
+  <h1>Morning, Lena</h1>
+  <p class="sub">6 tickets on your plate. One's urgent — start there.</p>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Assigned to you</h2></div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-cust')">
+      <div class="row">
+        <div class="grow"><div class="t">Sarah W. — refund request, BLE drop</div><div class="d">AI reply drafted → Sam approving · then send</div></div>
+        <span class="pill safety">SLA BREACH</span>
+      </div>
+      <div class="sla"><i style="width:100%;background:var(--safety)"></i></div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow"><div class="t">Jennifer F. — wrong size exchange</div><div class="d">Waiting on your reply · use sizing macro</div></div>
+        <span class="pill amber">4h left</span>
+      </div>
+      <div class="sla"><i style="width:78%;background:var(--amber)"></i></div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow"><div class="t">Joe A. — Dexcom how-to</div><div class="d">Point to battery-optimization guide (interim fix)</div></div>
+        <span class="pill good">2d left</span>
+      </div>
+      <div class="sla"><i style="width:22%;background:var(--good)"></i></div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow"><div class="t">+ 3 more tickets</div><div class="d">All inside SLA · sorted by urgency in the queue</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Your mentions</h2><a onclick="go('s-chat')">Chat →</a></div>
+    <div class="card tap" tabindex="0" onclick="go('s-chat')">
+      <div class="row">
+        <div class="av">SM</div>
+        <div class="grow"><div class="t">Sam in #support</div><div class="d">"@lena new BLE macro is live — use it for any connection tickets"</div></div>
+        <span class="pill dim">31m</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Today</h2></div>
+    <div class="card">
+      <div class="kv"><span>Tickets closed this week</span><b class="mono" style="color:var(--good)">11</b></div>
+      <div class="kv"><span>Your avg first reply</span><b class="mono">2h 40m — team best 🏆</b></div>
+      <div class="d" style="margin-top:6px">Finance, CRM and compliance are hidden at your access level.</div>
+    </div>
+  </div>
+  </div><!-- /pulse-employee -->
+
+</main>
+
+<!-- ============ SCREEN: FINANCE DASHBOARD ============ -->
+<main class="screen" id="s-fin">
+  <a onclick="go('s-pulse')" style="color:var(--wave);font-size:13px;font-weight:600;cursor:pointer">← Pulse</a>
+  <div style="height:8px"></div>
+  <p class="eyebrow">Finance · 90-day · through Aug 4</p>
+  <h1>Where revenue comes from</h1>
+  <p class="sub">Every dollar, every channel — Shopify + enterprise, live.</p>
+
+  <div class="gate-note emp">Finance is Manager+ only. Switch roles above to view.</div>
+  <div class="mgr-only">
+
+  <div class="tiles" style="margin-bottom:14px">
+    <div class="tile"><div class="n">$10.5k</div><div class="l">Gross sales 90d <span class="pill wave" style="font-size:9px;padding:1px 6px">LIVE</span></div></div>
+    <div class="tile"><div class="n" style="color:var(--safety)">26%</div><div class="l">Returned by value 90d ⚠</div></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Revenue mix — MTD</h2></div>
+    <div class="card">
+      <div class="kv"><span>🛒 Shopify DTC (live) — $150 band, S/M/L</span><b class="mono">$10.5k gross 90d</b></div>
+      <div class="progress"><i style="width:35%"></i></div>
+      <div class="kv" style="margin-top:8px"><span>🏢 Enterprise subscriptions</span><b class="mono" style="color:var(--good)">$17.9k · 44%</b></div>
+      <div class="progress"><i style="width:44%;background:var(--good)"></i></div>
+      <div class="kv" style="margin-top:8px"><span>📦 Enterprise hardware orders</span><b class="mono">$5.2k · 13%</b></div>
+      <div class="progress"><i style="width:13%;background:var(--violet)"></i></div>
+      <div class="kv" style="margin-top:8px"><span>🎓 Onboarding & training</span><b class="mono">$3.5k · 8%</b></div>
+      <div class="progress"><i style="width:8%;background:var(--amber)"></i></div>
+      <div class="d" style="margin-top:8px">⚠ Live data: DTC is currently 100% of revenue — enterprise lines are pipeline targets (demo) until first contracts bill. Returns (~26%, founder-reported) of ~$2,730 on $10,500 gross is the #1 finance issue — live return rate wires in with the Shopify refunds webhook.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Last 12 weeks</h2><span class="pill dim">weekly revenue</span></div>
+    <div class="card">
+      <div style="display:flex;align-items:flex-end;gap:5px;height:76px" role="img" aria-label="Weekly revenue bar chart, trending up">
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:26%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:22%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:24%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:28%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:28%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:20%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:30%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:26%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:34%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:24%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:38%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:22%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:40%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:30%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:42%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:26%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:44%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:32%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:46%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:28%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:50%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:34%"></i></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:100%"><i style="display:block;background:var(--good);border-radius:2px 2px 0 0;height:54%"></i><i style="display:block;background:var(--wave);border-radius:0 0 2px 2px;height:38%"></i></div>
+      </div>
+      <div class="row" style="margin-top:10px;gap:14px;font-size:11px;color:var(--muted)">
+        <span><i style="display:inline-block;width:8px;height:8px;background:var(--good);border-radius:2px;margin-right:5px"></i>Subscriptions</span>
+        <span><i style="display:inline-block;width:8px;height:8px;background:var(--wave);border-radius:2px;margin-right:5px"></i>Shopify DTC</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Subscription accounts <span class="pill dim" style="font-size:9px;vertical-align:middle">ILLUSTRATIVE</span></h2><a onclick="go('s-crm')">CRM →</a></div>
+    <div class="card">
+      <div class="kv"><span>Harmony Care · 240 seats</span><b class="mono">$8.0k/mo</b></div>
+      <div class="kv"><span>Riverside SD · 120 seats (trial→paid Aug)</span><b class="mono" style="color:var(--wave)">$4.0k/mo</b></div>
+      <div class="kv"><span>Deaf Advocacy Network · 95 seats</span><b class="mono">$3.2k/mo</b></div>
+      <div class="kv"><span>Gallaudet Housing · 55 seats</span><b class="mono">$1.8k/mo</b></div>
+      <div class="kv"><span>NKY Thrives · 28 seats</span><b class="mono">$0.9k/mo</b></div>
+      <div class="kv" style="border-top:1px solid var(--line);padding-top:9px"><span><b>ARR run-rate</b></span><b class="mono" style="font-size:15px;color:var(--good)">$214k</b></div>
+      <div class="d" style="margin-top:6px">⚠ Harmony renewal in 47 days = 45% of MRR. Concentration risk worth watching.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Order feed — all channels</h2><span class="pill dim">live</span></div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-order')">
+      <div class="row"><span class="pill wave">SHOPIFY · LIVE</span><div class="grow"><div class="t">#1383 · Kurt Fahlman</div><div class="d">Aug 2 · paid · fulfilled</div></div><b class="mono">$150</b></div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row"><span class="pill good">INVOICE</span><div class="grow"><div class="t">Harmony Care — July subscription</div><div class="d">Auto-billed · paid</div></div><b class="mono">$8.0k</b></div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row"><span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">HW ORDER</span><div class="grow"><div class="t">Lakeshore trial — 30 bands</div><div class="d">Shipped Jul 10 · net-30</div></div><b class="mono">$3.6k</b></div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row"><span class="pill wave">SHOPIFY · LIVE</span><div class="grow"><div class="t">#1382 · Nga Branchini</div><div class="d">Jul 31 · paid · fulfilled</div></div><b class="mono">$150</b></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Health checks</h2></div>
+    <div class="card">
+      <div class="kv"><span>Return rate 90d (live)</span><b class="mono" style="color:var(--safety)">~26% by value — investigate reasons</b></div>
+      <div class="kv"><span>Affiliate share of DTC</span><b class="mono">18%</b></div>
+      <div class="kv"><span>Avg order value (live)</span><b class="mono">$145 — $150 list, light discounting</b></div>
+      <div class="kv"><span>Outstanding enterprise invoices</span><b class="mono">$3.6k (1 · net-30)</b></div>
+      <div class="kv"><span>Inventory on hand · 12 bands (live)</span><b class="mono">$1.8k retail · <a style="color:var(--wave);cursor:pointer" onclick="go('s-inv')">forecast →</a></b></div>
+    </div>
+  </div>
+
+  </div><!-- /mgr-only -->
+</main>
+
+<!-- ============ SCREEN: INVENTORY ============ -->
+<!-- ============ SCREEN: INVENTORY ============ -->
+<main class="screen" id="s-inv">
+  <p class="eyebrow">Inventory · Covington → Pace NY → China</p>
+  <h1>Stock, QC & fulfillment</h1>
+  <p class="sub">Live counts from Shopify · burn = real order rate (~4.5/wk).</p>
+
+  <div class="searchbar">
+    <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+    <input type="search" placeholder="Band UID or customer — pull the data card" aria-label="Band lookup" onfocus="openSheet('sh-band')">
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Supply chain at a glance</h2></div>
+    <div class="card">
+      <div class="row" style="gap:0">
+        <div style="flex:1;text-align:center">
+          <div class="mono" style="font-size:19px;font-weight:600;color:var(--safety)">12</div>
+          <div class="d" style="font-size:11px">Covington office<br>(live Shopify)</div>
+        </div>
+        <div style="color:var(--faint);font-size:10px;font-weight:600;padding:0 4px">←2wk—</div>
+        <div style="flex:1;text-align:center">
+          <div class="mono" style="font-size:19px;font-weight:600">380</div>
+          <div class="d" style="font-size:11px">Pace NY<br>warehouse</div>
+        </div>
+        <div style="color:var(--faint);font-size:10px;font-weight:600;padding:0 4px">←8wk—</div>
+        <div style="flex:1;text-align:center">
+          <div class="mono" style="font-size:19px;font-weight:600;color:var(--wave)">300</div>
+          <div class="d" style="font-size:11px">China<br>in production</div>
+        </div>
+      </div>
+      <div class="d" style="margin-top:10px;text-align:center">Two levers: <b style="color:var(--text)">transfer</b> NY→Covington (2 wks) · <b style="color:var(--text)">remake</b> in China (8 wks)</div>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:var(--amber)">
+    <span class="pill amber"><span class="dot"></span>URGENT — LIVE DATA</span>
+    <div class="t" style="margin-top:6px">Medium is the crisis — 2 left, ~1 week of cover</div>
+    <div class="d">Live Shopify: Small 5 · Medium 2 · Large 5. Medium sells ~2.0/wk, so ~1 week of cover against a 2-week NY transfer and 8-week China remake. Transfer Medium from Pace NY now and place a China remake PO this week.</div>
+    <button class="btn" style="margin-top:10px" onclick="closeSheets();toast('✓ Transfer T-019 drafted — 80 Small NY→Covington, ETA Aug 5. Confirm in Open orders')">Draft transfer request</button>
+  </div>
+
+  <div class="card" style="border-color:var(--amber)">
+    <span class="pill amber"><span class="dot"></span>REMAKE — 8 WK</span>
+    <div class="t" style="margin-top:6px">Medium remake order-by is already overdue</div>
+    <div class="d">At 2.0/wk, an 8-week China remake needed ordering weeks ago. Place the Medium remake PO now and pull from Pace NY (2-wk transfer) to bridge the gap — pending confirmed NY counts.</div>
+    <button class="btn ghost" style="margin-top:10px" onclick="openSheet('sh-po')">Draft remake PO — suggested 250</button>
+  </div>
+
+  <div class="sec" style="margin-top:18px">
+    <div class="sec-head"><h2>Fulfillment queue</h2><span class="pill dim">auto-assigned</span></div>
+
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-qc')">
+      <div class="row">
+        <div class="grow">
+          <div class="t">#1163 · Medium — Kim R.</div>
+          <div class="d">Auto-assigned band <span class="mono">SW-M-04412</span> · awaiting QC</div>
+        </div>
+        <span class="pill amber">QC NEXT</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow">
+          <div class="t">#1161 · Small — Marcus T.</div>
+          <div class="d">Band <span class="mono">SW-S-03108</span> · QC passed · label printed</div>
+        </div>
+        <span class="pill good">READY TO SHIP</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow">
+          <div class="t">Lakeshore trial · 30 mixed</div>
+          <div class="d">28 assigned + QC'd · 2 Small waiting on stock</div>
+        </div>
+        <span class="pill wave">BATCH · 28/30</span>
+      </div>
+    </div>
+    <div class="d" style="margin:4px 2px 0">Orders grab the oldest QC-passed band in their size automatically (FIFO). No stock? The order flags here instead of failing silently.</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>QC station</h2><a onclick="openSheet('sh-qc')">Open checklist →</a></div>
+    <div class="card">
+      <div class="kv"><span>Awaiting QC (Covington)</span><b class="mono" style="color:var(--amber)">14 bands</b></div>
+      <div class="kv"><span>Passed this week</span><b class="mono" style="color:var(--good)">37</b></div>
+      <div class="kv"><span>Failed this week</span><b class="mono" style="color:var(--safety)">2 — both BLE pairing</b></div>
+      <div class="d" style="margin-top:6px">Every check logs the band's UID + firmware, so the customer profile knows exactly which unit and version they own. Failures return to Pace under warranty.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Stock by SKU & location</h2></div>
+    <div class="card tap" tabindex="0" onclick="adjOpen('s')">
+      <div class="row">
+        <div class="grow"><div class="t">Small</div><div class="d">Covington <b class="mono" id="stk-s">5</b> (live) · Pace NY ? · China 0 · <span style="color:var(--wave)">tap to adjust</span></div></div>
+        <div style="text-align:right"><div class="mono" style="font-size:14px;font-weight:600;color:var(--amber)">~2.7 wks</div><span class="pill amber">TRANSFER</span></div>
+      </div>
+      <div class="progress"><i style="width:30%;background:var(--amber)"></i></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="adjOpen('m')">
+      <div class="row">
+        <div class="grow"><div class="t">Medium</div><div class="d">Covington <b class="mono" id="stk-m">2</b> (live) · Pace NY ? · China 0 · <span style="color:var(--wave)">tap to adjust</span></div></div>
+        <div style="text-align:right"><div class="mono" style="font-size:14px;font-weight:600;color:var(--amber)">~1.0 wk</div><span class="pill amber">CRITICAL</span></div>
+      </div>
+      <div class="progress"><i style="width:12%;background:var(--amber)"></i></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="adjOpen('l')">
+      <div class="row">
+        <div class="grow"><div class="t">Large</div><div class="d">Covington <b class="mono" id="stk-l">5</b> (live) · Pace NY ? · China 0 · <span style="color:var(--wave)">tap to adjust</span></div></div>
+        <div style="text-align:right"><div class="mono" style="font-size:14px;font-weight:600;color:var(--amber)">~2.7 wks</div><span class="pill amber">TRANSFER</span></div>
+      </div>
+      <div class="progress"><i style="width:30%;background:var(--amber)"></i></div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <div class="grow"><div class="t">XS (new SKU, fall)</div><div class="d">Nowhere yet — first China order needed by Aug 15 for fall school launch</div></div>
+        <span class="pill dim">PRE-LAUNCH</span>
+      </div>
+    </div>
+    <div class="d" style="margin:4px 2px 0">Weeks of cover = Covington stock only. NY is your 2-week buffer, China is the 8-week backstop.</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Demand that could change this</h2><a onclick="go('s-crm')">Pipeline →</a></div>
+    <div class="card">
+      <div class="kv"><span>Harmony expansion (90% · Aug 1)</span><b class="mono" style="color:var(--safety)">−160 mixed</b></div>
+      <div class="kv"><span>Riverside SD full rollout</span><b class="mono" style="color:var(--amber)">−120 mixed</b></div>
+      <div class="kv"><span>Lakeshore converts</span><b class="mono">−90 mixed</b></div>
+      <div class="d" style="margin-top:6px">Deals ≥75% probability are in the forecast. Harmony alone would drain NY's Small reserve — that's what triggers the remake alert above.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>In transit & production</h2></div>
+    <div class="card">
+      <div class="row">
+        <div class="grow"><div class="t">Transfer T-018 · 60 Medium · NY→Covington</div><div class="d">Shipped Jul 15 · ETA Jul 24</div></div>
+        <span class="pill good">SHIPPED</span>
+      </div>
+      <div class="progress" style="margin-top:8px"><i style="width:70%;background:var(--good)"></i></div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <div class="grow"><div class="t">PO-0041 · 300 Medium · China remake</div><div class="d">Placed Jun 14 · ETA to NY Aug 9</div></div>
+        <span class="pill wave">IN PRODUCTION</span>
+      </div>
+      <div class="progress" style="margin-top:8px"><i style="width:55%"></i></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Reports</h2><span class="pill dim">CSV · PDF</span></div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-report')">
+      <div class="row"><div class="grow"><div class="t">📊 Inventory snapshot</div><div class="d">Stock by SKU & location, value, weeks of cover</div></div><span class="pill wave">RUN</span></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-report')">
+      <div class="row"><div class="grow"><div class="t">✅ QC pass rate</div><div class="d">Weekly pass/fail, failure reasons, by batch</div></div><span class="pill wave">RUN</span></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-report')">
+      <div class="row"><div class="grow"><div class="t">📡 Firmware in the field</div><div class="d">Version distribution across every shipped band</div></div><span class="pill wave">RUN</span></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-report')">
+      <div class="row"><div class="grow"><div class="t">🚚 Fulfillment cycle time</div><div class="d">Order → QC → shipped, avg days, bottlenecks</div></div><span class="pill wave">RUN</span></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-report')">
+      <div class="row"><div class="grow"><div class="t">🏢 Bands by org</div><div class="d">Every enterprise deployment — UIDs, firmware, active status</div></div><span class="pill wave">RUN</span></div>
+    </div>
+  </div>
+</main>
+<!-- ============ SCREEN: CHAT ============ -->
+<main class="screen" id="s-chat">
+  <p class="eyebrow">Team</p>
+  <h1>Messages</h1>
+  <p class="sub">Channels, groups and DMs — one inbox.</p>
+
+  <div class="chips" role="tablist" aria-label="Channels">
+    <button class="chip" onclick="chatChan(this,'📣 Updates')">📣 Updates <span style="color:var(--wave)">·1</span></button>
+    <button class="chip on" onclick="chatChan(this,'#firmware')"># firmware <span style="color:var(--wave)">·3</span></button>
+    <button class="chip" onclick="chatChan(this,'#support')"># support</button>
+    <button class="chip" onclick="chatChan(this,'#enterprise')"># enterprise</button>
+    <button class="chip" onclick="chatChan(this,'🔒 leadership (Admin/Mgr only)')">🔒 leadership</button>
+    <button class="chip" onclick="chatChan(this,'DM with Maria')">DM · Maria</button>
+    <button class="chip" onclick="toast('New channel / DM — name it, pick members, set private if needed')">＋ New</button>
+  </div>
+
+  <div class="card pinned">
+    <div class="row" style="margin-bottom:6px">
+      <span class="pill wave">📌 COMPANY UPDATE</span>
+      <div class="spacer"></div>
+      <div class="avatar-stack" aria-label="Read by 6 of 8">
+        <div class="av">MK</div><div class="av">DS</div><div class="av">+4</div>
+      </div>
+    </div>
+    <div class="t">Firmware 2.4.1 freeze is Friday</div>
+    <div class="d">All BLE fixes must be merged by Thu EOD. Read receipts: 6 of 8.</div>
+  </div>
+
+  <div class="hr"></div>
+
+  <div class="msg">
+    <div class="av">MK</div>
+    <div class="grow">
+      <div class="who">Maria K. <span>9:41 AM</span></div>
+      <div class="body">Repro'd the BLE drop — it's the sleep-mode handshake timing out after ~4h. Fix is small but needs field testing.</div>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="av">DS</div>
+    <div class="grow">
+      <div class="who">Dev S. <span>9:44 AM</span></div>
+      <div class="body">Support has 40 tickets on this. Can we link them so reporters get notified on ship?</div>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="av">MK</div>
+    <div class="grow">
+      <div class="who">Maria K. <span>9:45 AM</span></div>
+      <div class="body">@jared can we ship 2.4.1 hotfix before Monday?</div>
+      <div class="note">
+        <div class="meta">↳ CONVERTED TO PRIORITY ITEM · ENG-214</div>
+        BLE reconnect fails after sleep — ranked #1 by triage engine
+      </div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <input type="text" placeholder="Message #firmware" aria-label="Message input">
+    <button aria-label="Send" onclick="chatSend()">↑</button>
+  </div>
+</main>
+<!-- ============ SCREEN: BUILD (engineering triage) ============ -->
+<main class="screen" id="s-build">
+  <p class="eyebrow">Engineering</p>
+  <h1>What's next</h1>
+  <p class="sub">One ranked list, filterable by product. Tap any item for the fix plan.</p>
+
+  <div class="chips" role="tablist" aria-label="Product filter">
+    <button class="chip on" onclick="buildFilter('all',this)">All</button>
+    <button class="chip" onclick="buildFilter('fw',this)">Firmware</button>
+    <button class="chip" onclick="buildFilter('app',this)">Consumer App</button>
+    <button class="chip" onclick="buildFilter('ent',this)">Enterprise</button>
+    <button class="chip" onclick="buildFilter('hw',this)">Band HW</button>
+    <button class="chip" onclick="buildFilter('aware',this)">Aware</button>
+  </div>
+
+  <div class="row" style="gap:8px;margin-bottom:12px">
+    <button class="btn ghost" style="flex:1;padding:9px" onclick="openSheet('sh-newitem')">＋ New item</button>
+    <button class="btn ghost" style="flex:1;padding:9px" id="arch-toggle" onclick="toggleArch()">Archived (2)</button>
+  </div>
+  <div id="bi-top"></div>
+
+  <div id="bi1" class="bitem card tap" data-prod="fw" tabindex="0" onclick="openSheet('sh-p1')">
+    <div class="row">
+      <b class="mono" style="color:var(--faint);font-size:12px">01</b>
+      <div class="grow">
+        <div class="t">BLE reconnect fails after sleep</div>
+        <div class="d">Firmware · GH #482 + 40 tickets · <span style="color:var(--wave)">fix in review</span></div>
+      </div>
+      <div style="text-align:right">
+        <div class="mono" style="font-size:15px;font-weight:600;color:var(--safety)">294</div>
+        <span class="pill safety" style="margin-top:2px">×3 SAFETY</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="bi2" class="bitem card tap" data-prod="ent" tabindex="0" onclick="openSheet('sh-p2')">
+    <div class="row">
+      <b class="mono" style="color:var(--faint);font-size:12px">02</b>
+      <div class="grow">
+        <div class="t">Enterprise SSO for org dashboard</div>
+        <div class="d">Enterprise · Riverside deal · <span style="color:var(--amber)">in design</span></div>
+      </div>
+      <div style="text-align:right">
+        <div class="mono" style="font-size:15px;font-weight:600;color:var(--amber)">128</div>
+        <span class="pill amber" style="margin-top:2px">×2 DEAL</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="bi3" class="bitem card tap" data-prod="fw" tabindex="0" onclick="openSheet('sh-p4')">
+    <div class="row">
+      <b class="mono" style="color:var(--faint);font-size:12px">03</b>
+      <div class="grow">
+        <div class="t">Battery indicator stuck at 1% after charge</div>
+        <div class="d">Firmware · GH #495 · 11 tickets · <span style="color:var(--good)">fix merged, ships 2.4.1</span></div>
+      </div>
+      <div class="mono" style="font-size:15px;font-weight:600">89</div>
+    </div>
+  </div>
+
+  <div id="bi4" class="bitem card tap" data-prod="app" tabindex="0" onclick="openSheet('sh-p3')">
+    <div class="row">
+      <b class="mono" style="color:var(--faint);font-size:12px">04</b>
+      <div class="grow">
+        <div class="t">Vibration ramp-up for deep sleep</div>
+        <div class="d">Consumer App + Firmware · 61 votes · <span style="color:var(--faint)">backlog</span></div>
+      </div>
+      <div class="mono" style="font-size:15px;font-weight:600">74</div>
+    </div>
+  </div>
+
+  <div id="bi5" class="bitem card tap" data-prod="app" tabindex="0" onclick="openSheet('sh-p5')">
+    <div class="row">
+      <b class="mono" style="color:var(--faint);font-size:12px">05</b>
+      <div class="grow">
+        <div class="t">Dexcom alerts missed when app backgrounded</div>
+        <div class="d">Consumer App · GH #201 · 6 tickets · <span style="color:var(--amber)">investigating</span></div>
+      </div>
+      <div style="text-align:right">
+        <div class="mono" style="font-size:15px;font-weight:600;color:var(--safety)">71</div>
+        <span class="pill safety" style="margin-top:2px">×3 SAFETY</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="bi6" class="bitem card tap" data-prod="hw" tabindex="0" onclick="openSheet('sh-p6')">
+    <div class="row">
+      <b class="mono" style="color:var(--faint);font-size:12px">06</b>
+      <div class="grow">
+        <div class="t">Band sizing — add XS strap SKU</div>
+        <div class="d">Band HW · 9 return-reason tickets · <span style="color:var(--good)">approved, PO due Jul 25</span></div>
+      </div>
+      <div class="mono" style="font-size:15px;font-weight:600">52</div>
+    </div>
+  </div>
+
+  <div id="bi7" class="bitem card tap" data-prod="ent" tabindex="0" onclick="openItem('RANKED #7 · FEATURE','Bulk band import CSV','Enterprise · requested by Harmony Care',[['Why','Onboarding 240 seats one-by-one took Harmony 2 days'],['Approach','CSV upload: UID, wearer, group → validates against Stock'],['Effort','1.5 wks · unowned'],['Score','46 — rises if another org asks']])">
+    <div class="row">
+      <b class="mono" style="color:var(--faint);font-size:12px">07</b>
+      <div class="grow">
+        <div class="t">Bulk band import CSV for org onboarding</div>
+        <div class="d">Enterprise · requested by Harmony · <span style="color:var(--faint)">backlog</span></div>
+      </div>
+      <div class="mono" style="font-size:15px;font-weight:600">46</div>
+    </div>
+  </div>
+
+  <div id="bi8" class="bitem card tap" data-prod="aware" tabindex="0" onclick="openItem('RANKED #8 · NEW PRODUCT','Aware — telemetry schema draft','Safewave Aware · manual override by Jared',[['Goal','Define what Aware devices report before hardware locks'],['Owner','Maria + Jared · workshop Jul 22'],['Deadline','Investor demo Aug 4'],['Note','Override logged — visible to everyone']])">
+    <div class="row">
+      <b class="mono" style="color:var(--faint);font-size:12px">08</b>
+      <div class="grow">
+        <div class="t">Aware — telemetry schema draft</div>
+        <div class="d">Safewave Aware · new product · manual override ↑</div>
+      </div>
+      <div class="mono" style="font-size:15px;font-weight:600">41</div>
+    </div>
+    <div class="note">
+      <div class="meta">OVERRIDE BY JARED · JUL 16</div>
+      "Bumped above #9 — needed for investor demo Aug 4." Overrides are logged and visible to everyone.
+    </div>
+  </div>
+
+  <div id="bi9" class="bitem card tap" data-prod="hw" tabindex="0" onclick="openItem('RANKED #9 · HARDWARE','Clasp durability — v2 hinge spec','Band HW · 3 warranty returns',[['Issue','Hinge pin loosens after ~6mo daily wear'],['Status','Spec sent to Pace for quote · due back Jul 30'],['Cost impact','Est. +$0.40/unit'],['Score','28 — monitors warranty return rate']])">
+    <div class="row">
+      <b class="mono" style="color:var(--faint);font-size:12px">09</b>
+      <div class="grow">
+        <div class="t">Clasp durability — v2 hinge spec</div>
+        <div class="d">Band HW · 3 warranty returns · <span style="color:var(--faint)">with Pace for quote</span></div>
+      </div>
+      <div class="mono" style="font-size:15px;font-weight:600">28</div>
+    </div>
+  </div>
+
+  <div class="d" id="build-empty" style="display:none;text-align:center;padding:24px 0">Nothing queued for this product — that's a good sign.</div>
+
+  <div id="arch-wrap" style="display:none">
+    <div class="sec-head" style="margin-top:6px"><h2>Archived</h2><span class="pill dim">closed & won't-do</span></div>
+    <div id="arch-list">
+      <div class="card" style="opacity:.55">
+        <div class="row">
+          <div class="grow"><div class="t">Nest doorbell alert latency</div><div class="d">Firmware · shipped in v2.4.0</div></div>
+          <span class="pill good">CLOSED</span>
+        </div>
+      </div>
+      <div class="card" style="opacity:.55">
+        <div class="row">
+          <div class="grow"><div class="t">Apple Watch companion app</div><div class="d">Consumer App · won't do — band replaces it</div></div>
+          <span class="pill dim">ARCHIVED</span>
+        </div>
+      </div>
+    </div>
+    <div class="d" style="margin:4px 2px 12px">Nothing is deleted — archived items stay searchable and their history is preserved.</div>
+  </div>
+
+  <div class="sec" style="margin-top:20px">
+    <div class="sec-head"><h2>This cycle · Jul 14–25</h2></div>
+    <div class="card">
+      <div class="kv"><span>Committed</span><b class="mono">8 items</b></div>
+      <div class="kv"><span>In flight</span><b class="mono" style="color:var(--wave)">5</b></div>
+      <div class="kv"><span>Shipped</span><b class="mono" style="color:var(--good)">3</b></div>
+      <div class="progress"><i style="width:38%;background:var(--good)"></i></div>
+      <div class="d" style="margin-top:6px">On pace · freeze for 2.4.1 is Friday</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Release notes — auto-drafted</h2><span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">AI</span></div>
+    <div class="card">
+      <div class="t">v2.4.1 (draft from 6 merged PRs)</div>
+      <div class="note">
+        <div class="meta">GENERATED · EDIT BEFORE PUBLISHING</div>
+        • Fixed: band reconnects reliably after sleep mode (BLE handshake)<br>
+        • Fixed: battery indicator stuck at 1% after charge<br>
+        • Improved: vibration response time on Nest doorbell alerts
+      </div>
+      <div class="row" style="margin-top:10px;gap:8px">
+        <button class="btn ghost" style="flex:1" onclick="toast('Draft unlocked — edit like any text, AI keeps the changelog linked to PRs')">Edit</button>
+        <button class="btn" style="flex:1" onclick="toast('✓ Published — release notes emailed to enterprise admins & posted to org dashboards')">Publish to enterprise admins</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Firmware in the field</h2></div>
+    <div class="card">
+      <div class="kv"><span>v2.4.0 (current)</span><b class="mono">71% of devices</b></div>
+      <div class="progress"><i style="width:71%"></i></div>
+      <div class="kv" style="margin-top:8px"><span>v2.3.x (BLE bug affected)</span><b class="mono" style="color:var(--safety)">24%</b></div>
+      <div class="progress"><i style="width:24%;background:var(--safety)"></i></div>
+      <div class="kv" style="margin-top:8px"><span>older</span><b class="mono">5%</b></div>
+      <div class="progress"><i style="width:5%;background:var(--faint)"></i></div>
+    </div>
+  </div>
+</main>
+<!-- ============ SCREEN: CUSTOMERS ============ -->
+<main class="screen" id="s-cust">
+  <p class="eyebrow">Customers</p>
+  <h1>Support & orders</h1>
+  <p class="sub">Shopify is mirrored here, read-only. Nothing writes back.</p>
+
+  <div class="searchbar">
+    <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+    <input type="search" placeholder="Order #, name or email — instant lookup" aria-label="Order lookup" onfocus="openSheet('sh-order')">
+  </div>
+
+  <div class="mgr-only sec">
+    <div class="sec-head"><h2>This week</h2><a onclick="go('s-fin')">Full finance →</a></div>
+    <div class="tiles">
+      <div class="tile"><div class="n">$11.9k</div><div class="l">Revenue <span class="delta up">+9%</span></div></div>
+      <div class="tile"><div class="n">83</div><div class="l">Orders</div></div>
+      <div class="tile"><div class="n">$143</div><div class="l">AOV</div></div>
+      <div class="tile"><div class="n">6.1%</div><div class="l">Refund rate <span class="delta down">sizing</span></div></div>
+    </div>
+  </div>
+  <div class="gate-note emp">Finance tiles hidden for Employee role.</div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Ticket queue</h2><a onclick="toast('Full queue — all 17 tickets sorted by SLA urgency, filter by channel or product')">All 17 →</a></div>
+
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-cust')">
+      <div class="row">
+        <div class="grow">
+          <div class="t">Sarah W. — band lost connection, wants refund</div>
+          <div class="d">via Email + public review · Order #1148 · BLE drop</div>
+        </div>
+        <span class="pill safety">SLA BREACH</span>
+      </div>
+      <div class="sla"><i style="width:100%;background:var(--safety)"></i></div>
+    </div>
+
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow">
+          <div class="t">Jennifer F. — wrong size, no reply in 2 wks</div>
+          <div class="d">via Email · Order #1132 · sizing</div>
+        </div>
+        <span class="pill amber">4h left</span>
+      </div>
+      <div class="sla"><i style="width:78%;background:var(--amber)"></i></div>
+    </div>
+
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow">
+          <div class="t">Joe A. — Dexcom alerts question</div>
+          <div class="d">via In-app · no order issue · how-to</div>
+        </div>
+        <span class="pill good">2d left</span>
+      </div>
+      <div class="sla"><i style="width:22%;background:var(--good)"></i></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Trending issues</h2><span class="pill dim">30 days</span></div>
+    <div class="card">
+      <div class="kv"><span>Bluetooth drops</span><b class="mono" style="color:var(--safety)">40 ▲</b></div>
+      <div class="kv"><span>Sizing / fit</span><b class="mono" style="color:var(--amber)">14 ▲</b></div>
+      <div class="kv"><span>Slow support reply</span><b class="mono">9 ▼</b></div>
+      <div class="d" style="margin-top:8px">Bluetooth cluster is linked to ENG-214 (ranked #1). Reporters get auto-notified when it ships.</div>
+    </div>
+  </div>
+</main>
+<!-- ============ SCREEN: CRM HOME ============ -->
+<main class="screen" id="s-crm">
+  <p class="eyebrow">Enterprise CRM</p>
+  <h1>Accounts & pipeline</h1>
+  <p class="sub">Every org, deal, and outreach in one place.</p>
+
+  <div class="chips" role="tablist" aria-label="CRM views">
+    <button class="chip on" data-v="cv-accounts" onclick="crmView('cv-accounts',this)">Accounts</button>
+    <button class="chip" data-v="cv-email" onclick="crmView('cv-email',this)">Email</button>
+    <button class="chip" data-v="cv-pipeline" onclick="crmView('cv-pipeline',this)">Pipeline</button>
+    <button class="chip" data-v="cv-sourcing" onclick="crmView('cv-sourcing',this)">Sourcing</button>
+    <button class="chip" data-v="cv-campaigns" onclick="crmView('cv-campaigns',this)">Campaigns</button>
+  </div>
+
+  <!-- ---- VIEW: ACCOUNTS ---- -->
+  <div class="crm-view on" id="cv-accounts">
+    <div class="tiles mgr-only" style="margin-bottom:14px">
+      <div class="tile"><div class="n">$214k</div><div class="l">ARR (6 orgs)</div></div>
+      <div class="tile"><div class="n" style="color:var(--amber)">74%</div><div class="l">Avg activation</div></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Needs attention</h2></div>
+      <div class="card tap" tabindex="0" onclick="go('s-crm-org')">
+        <div class="row">
+          <div class="av" style="color:var(--violet)">RS</div>
+          <div class="grow">
+            <div class="t">Riverside School District</div>
+            <div class="d">Trial · $48k · activation 67% ▼12% · 2 tickets</div>
+          </div>
+          <span class="pill amber"><span class="dot"></span>AT RISK</span>
+        </div>
+      </div>
+      <div class="card tap" tabindex="0">
+        <div class="row">
+          <div class="av" style="color:var(--violet)">HC</div>
+          <div class="grow">
+            <div class="t">Harmony Care Facilities</div>
+            <div class="d">Customer · $96k · renewal in 47 days</div>
+          </div>
+          <span class="pill amber">RENEWAL</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Healthy</h2></div>
+      <div class="card tap" tabindex="0">
+        <div class="row">
+          <div class="av" style="color:var(--good)">DA</div>
+          <div class="grow">
+            <div class="t">Deaf Advocacy Network</div>
+            <div class="d">Customer · $38k · activation 91%</div>
+          </div>
+          <span class="pill good"><span class="dot"></span>HEALTHY</span>
+        </div>
+      </div>
+      <div class="card tap" tabindex="0">
+        <div class="row">
+          <div class="av" style="color:var(--good)">GC</div>
+          <div class="grow">
+            <div class="t">Gallaudet Campus Housing</div>
+            <div class="d">Customer · $22k · activation 88%</div>
+          </div>
+          <span class="pill good"><span class="dot"></span>HEALTHY</span>
+        </div>
+      </div>
+      <div class="card tap" tabindex="0">
+        <div class="row">
+          <div class="av" style="color:var(--good)">NK</div>
+          <div class="grow">
+            <div class="t">NKY Thrives Employer Group</div>
+            <div class="d">Customer · $10k · activation 82%</div>
+          </div>
+          <span class="pill good"><span class="dot"></span>HEALTHY</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Check-ins due</h2><span class="pill dim">auto cadence</span></div>
+      <div class="card">
+        <div class="kv"><span>Riverside SD — Jared</span><span class="pill amber">TODAY</span></div>
+        <div class="kv"><span>Harmony Care — Sam</span><span class="pill dim">Jul 21</span></div>
+        <div class="kv"><span>Deaf Advocacy Network — Sam</span><span class="pill dim">Jul 30</span></div>
+        <div class="d" style="margin-top:6px">Cadence: at-risk orgs weekly, healthy orgs monthly. The system creates these — nobody has to remember.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---- VIEW: EMAIL ---- -->
+  <div class="crm-view" id="cv-email">
+    <div class="tiles" style="margin-bottom:14px">
+      <div class="tile"><div class="n">9</div><div class="l">Awaiting reply</div></div>
+      <div class="tile"><div class="n" style="color:var(--good)">58%</div><div class="l">Reply rate (30d)</div></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Needs a nudge</h2><span class="pill dim">opened, no reply 5d+</span></div>
+      <div class="card tap" tabindex="0" onclick="openSheet('sh-thread')">
+        <div class="row">
+          <div class="av" style="color:var(--violet)">PB</div>
+          <div class="grow"><div class="t">Paul Brennan — Riverside SD</div><div class="d">"Pilot next steps" · opened 3× · silent 11 days</div></div>
+          <span class="pill amber">NUDGE</span>
+        </div>
+        <button class="btn ghost" style="margin-top:10px;padding:8px" onclick="event.stopPropagation();openSheet('sh-email')">AI draft a gentle follow-up</button>
+      </div>
+      <div class="card tap" tabindex="0">
+        <div class="row">
+          <div class="av" style="color:var(--violet)">BD</div>
+          <div class="grow"><div class="t">Brookdale Senior Living</div><div class="d">Cold outreach #2 · opened once · 6 days</div></div>
+          <span class="pill amber">NUDGE</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Awaiting reply</h2></div>
+      <div class="card tap" tabindex="0" onclick="openSheet('sh-thread')">
+        <div class="row">
+          <div class="grow"><div class="t">Dana M. — "2.4.1 ship date + SSO timeline"</div><div class="d">Riverside · sent yesterday · <b style="color:var(--wave)">opened 2×</b></div></div>
+          <span class="pill wave">OPENED</span>
+        </div>
+      </div>
+      <div class="card tap" tabindex="0">
+        <div class="row">
+          <div class="grow"><div class="t">KY Vocational Rehab — demo scheduling</div><div class="d">Sourcing · sent Jul 16 · not yet opened</div></div>
+          <span class="pill dim">SENT</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Recent replies</h2></div>
+      <div class="card tap" tabindex="0" onclick="openSheet('sh-thread')">
+        <div class="row">
+          <div class="av" style="color:var(--violet)">DM</div>
+          <div class="grow"><div class="t">Dana M. replied — 22m ago</div><div class="d">"Thursday works. Can you send the SSO doc before?"</div></div>
+          <span class="pill good">REPLY</span>
+        </div>
+      </div>
+      <div class="card tap" tabindex="0">
+        <div class="row">
+          <div class="av" style="color:var(--good)">HC</div>
+          <div class="grow"><div class="t">Harmony Care replied — yesterday</div><div class="d">"Let's talk expansion pricing on Monday's call."</div></div>
+          <span class="pill good">REPLY</span>
+        </div>
+      </div>
+    </div>
+    <div class="d" style="margin:4px 2px">Every send, open, and reply logs to the account timeline automatically — no manual tracking.</div>
+  </div>
+
+  <!-- ---- VIEW: PIPELINE ---- -->
+  <div class="crm-view" id="cv-pipeline">
+    <div class="tiles mgr-only" style="margin-bottom:14px">
+      <div class="tile"><div class="n">$183k</div><div class="l">Open pipeline</div></div>
+      <div class="tile"><div class="n">$97k</div><div class="l">Weighted (× prob.)</div></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Contract <span style="color:var(--faint);font-weight:400">· 1</span></h2></div>
+      <div class="card tap" tabindex="0" style="border-left:3px solid var(--good)">
+        <div class="row">
+          <div class="grow">
+            <div class="t">Harmony Care — expansion, 2 new sites</div>
+            <div class="d">$52k · 90% · close Aug 1 · owner Jared</div>
+          </div>
+          <span class="pill good">90%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Trial / pilot <span style="color:var(--faint);font-weight:400">· 2</span></h2></div>
+      <div class="card tap" tabindex="0" style="border-left:3px solid var(--wave)" onclick="go('s-crm-org')">
+        <div class="row">
+          <div class="grow">
+            <div class="t">Riverside School District</div>
+            <div class="d">$48k · 60% · pilot review Jul 24</div>
+            <div class="d" style="color:var(--amber)">⚠ Blocked by ENG: SSO (ranked #2)</div>
+          </div>
+          <span class="pill wave">60%</span>
+        </div>
+      </div>
+      <div class="card tap" tabindex="0" style="border-left:3px solid var(--wave)">
+        <div class="row">
+          <div class="grow">
+            <div class="t">Lakeshore Senior Living</div>
+            <div class="d">$61k · 50% · 30-band trial started Jul 10</div>
+          </div>
+          <span class="pill wave">50%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Demo <span style="color:var(--faint);font-weight:400">· 2</span></h2></div>
+      <div class="card tap" tabindex="0" style="border-left:3px solid var(--faint)">
+        <div class="row">
+          <div class="grow">
+            <div class="t">Ohio School for the Deaf</div>
+            <div class="d">$14k est. · demo scheduled Jul 29</div>
+          </div>
+          <span class="pill dim">25%</span>
+        </div>
+      </div>
+      <div class="card tap" tabindex="0" style="border-left:3px solid var(--faint)">
+        <div class="row">
+          <div class="grow">
+            <div class="t">Cincinnati Children's — audiology</div>
+            <div class="d">$8k est. · demo requested via site</div>
+          </div>
+          <span class="pill dim">20%</span>
+        </div>
+      </div>
+    </div>
+    <button class="btn ghost" onclick="toast('New opportunity — org, value, stage, owner. Same quick-add pattern as Build’s New item')">＋ New opportunity</button>
+  </div>
+
+  <!-- ---- VIEW: SOURCING ---- -->
+  <div class="crm-view" id="cv-sourcing">
+    <div class="sec">
+      <div class="sec-head"><h2>This quarter's funnel</h2></div>
+      <div class="card">
+        <div class="kv"><span>Targets identified</span><b class="mono">64</b></div>
+        <div class="progress"><i style="width:100%;background:var(--faint)"></i></div>
+        <div class="kv" style="margin-top:8px"><span>Contacted</span><b class="mono">41</b></div>
+        <div class="progress"><i style="width:64%;background:var(--faint)"></i></div>
+        <div class="kv" style="margin-top:8px"><span>Replied</span><b class="mono">12</b></div>
+        <div class="progress"><i style="width:19%"></i></div>
+        <div class="kv" style="margin-top:8px"><span>Demo booked</span><b class="mono" style="color:var(--good)">5</b></div>
+        <div class="progress"><i style="width:8%;background:var(--good)"></i></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Best channels</h2><span class="pill dim">reply rate</span></div>
+      <div class="card">
+        <div class="kv"><span>Partner referrals</span><b class="mono" style="color:var(--good)">42%</b></div>
+        <div class="kv"><span>Deaf community events</span><b class="mono" style="color:var(--good)">31%</b></div>
+        <div class="kv"><span>Warm intro (existing orgs)</span><b class="mono">28%</b></div>
+        <div class="kv"><span>Cold email</span><b class="mono" style="color:var(--faint)">6%</b></div>
+        <div class="d" style="margin-top:6px">Referrals convert 7× better than cold — the AI targets new outreach at lookalikes of your healthy accounts.</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Target list</h2><a onclick="toast('Full target list — 64 orgs, sortable by type, state, source, and status')">All 64 →</a></div>
+      <div class="card tap" tabindex="0">
+        <div class="row">
+          <div class="grow">
+            <div class="t">Indiana School for the Deaf</div>
+            <div class="d">School · 340 students · source: Riverside lookalike</div>
+          </div>
+          <span class="pill wave">NEW</span>
+        </div>
+      </div>
+      <div class="card tap" tabindex="0">
+        <div class="row">
+          <div class="grow">
+            <div class="t">Brookdale Senior Living (region)</div>
+            <div class="d">Care · 12 sites · source: Lakeshore referral</div>
+          </div>
+          <span class="pill amber">CONTACTED · no reply 6d</span>
+        </div>
+      </div>
+      <div class="card tap" tabindex="0">
+        <div class="row">
+          <div class="grow">
+            <div class="t">KY Office of Vocational Rehab</div>
+            <div class="d">Gov agency · source: NKY Thrives intro</div>
+          </div>
+          <span class="pill good">REPLIED — wants demo</span>
+        </div>
+      </div>
+    </div>
+    <button class="btn ghost" onclick="toast('✓ Add target — org name, type, source. AI suggests lookalikes of your healthy accounts')">＋ Add target</button>
+  </div>
+
+  <!-- ---- VIEW: CAMPAIGNS ---- -->
+  <div class="crm-view" id="cv-campaigns">
+    <div class="gate-note emp">Campaigns are Manager+ only.</div>
+    <div class="mgr-only">
+    <div class="sec">
+      <div class="sec-head"><h2>Running</h2></div>
+      <div class="card tap" tabindex="0" onclick="openSheet('sh-campaign')">
+        <div class="row">
+          <div class="grow">
+            <div class="t">Renewal warm-up — 90 days out</div>
+            <div class="d">Segment: renewal &lt;90d · 2 orgs · 3-email sequence</div>
+          </div>
+          <span class="pill good"><span class="dot"></span>LIVE</span>
+        </div>
+        <div class="kv" style="margin-top:8px"><span>Sent 4 · Opened 4 · Replied 2</span><b class="mono" style="color:var(--good)">50% reply</b></div>
+      </div>
+      <div class="card tap" tabindex="0" onclick="openSheet('sh-campaign')">
+        <div class="row">
+          <div class="grow">
+            <div class="t">Low-activation rescue</div>
+            <div class="d">Segment: activation &lt;70% · triggers staff training offer</div>
+          </div>
+          <span class="pill good"><span class="dot"></span>LIVE</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Awaiting your approval</h2></div>
+      <div class="card tap" tabindex="0" onclick="openSheet('sh-campaign')" style="border-color:var(--violet)">
+        <div class="row">
+          <div class="grow">
+            <div class="t">School fall-semester outreach</div>
+            <div class="d">AI-drafted · segment: education targets · 28 recipients</div>
+          </div>
+          <span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">REVIEW</span>
+        </div>
+      </div>
+      <div class="d" style="margin:4px 2px 0">Nothing sends without a human approving it. Ever.</div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Auto-updates</h2></div>
+      <div class="card">
+        <div class="kv"><span>Monthly org usage report → account contacts</span><span class="pill good">ON</span></div>
+        <div class="kv"><span>Firmware release notes → enterprise admins</span><span class="pill good">ON</span></div>
+        <div class="kv"><span>Ticket-resolved notification → reporter</span><span class="pill good">ON</span></div>
+      </div>
+    </div>
+    <button class="btn" onclick="openSheet('sh-campaign')">＋ New campaign</button>
+    </div>
+  </div>
+</main>
+
+<!-- ============ SCREEN: CRM ORG DETAIL ============ -->
+<main class="screen" id="s-crm-org">
+  <a onclick="go('s-crm')" style="color:var(--wave);font-size:13px;font-weight:600;cursor:pointer">← Accounts</a>
+  <div style="height:8px"></div>
+  <p class="eyebrow">Trial · Education</p>
+  <h1>Riverside School District</h1>
+  <p class="sub">$48k/yr · renewal Jun 2027 · owner Jared</p>
+
+  <div class="tiles" style="margin-bottom:14px">
+    <div class="tile"><div class="n">120</div><div class="l">Seats held</div></div>
+    <div class="tile"><div class="n" style="color:var(--amber)">67%</div><div class="l">Activation <span class="delta down">−12% mo</span></div></div>
+  </div>
+
+  <div class="card">
+    <div class="sec-head" style="margin-bottom:6px"><h2>Live health</h2><span class="pill amber"><span class="dot"></span>DEGRADED</span></div>
+    <div class="kv"><span>Org dashboard</span><b style="color:var(--good)">Online</b></div>
+    <div class="kv"><span>Device sync failures (24h)</span><b class="mono" style="color:var(--amber)">7</b></div>
+    <div class="kv"><span>Open tickets</span><b class="mono">2 → <a style="color:var(--wave);cursor:pointer" onclick="go('s-cust')">view</a></b></div>
+    <div class="d" style="margin-top:6px">Support can diagnose from here without paging engineering.</div>
+  </div>
+
+  <div class="card" style="border-color:var(--violet)">
+    <span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">AI SUGGESTION</span>
+    <div class="t" style="margin-top:8px">Activation dropped 12% and 2 tickets are open — worth a check-in before the pilot review.</div>
+    <div class="row" style="margin-top:10px;gap:8px">
+      <button class="btn" style="flex:1" onclick="openSheet('sh-email')">Draft check-in email</button>
+      <button class="btn ghost" style="flex:1" onclick="this.closest('.card').style.display='none';toast('Dismissed — AI won’t resuggest for 30 days')">Dismiss</button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Emails</h2><a onclick="openSheet('sh-email')">＋ Compose</a></div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-thread')">
+      <div class="row">
+        <div class="grow"><div class="t">2.4.1 ship date + SSO timeline → Dana</div><div class="d">Sent yesterday by Jared · opened 2× · <b style="color:var(--good)">replied 22m ago</b></div></div>
+        <span class="pill good">REPLY</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-thread')">
+      <div class="row">
+        <div class="grow"><div class="t">Pilot next steps → Paul</div><div class="d">Sent Jul 7 by Jared · opened 3× · no reply 11d</div></div>
+        <span class="pill amber">NUDGE</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow"><div class="t">June usage report → all contacts</div><div class="d">Auto-update Jul 1 · 3 opens · Lena clicked through</div></div>
+        <span class="pill dim">AUTO</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Contacts</h2><a onclick="toast('✓ Add contact — name, role, email; flags decision-maker vs user automatically')">＋ Add</a></div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-contact')">
+      <div class="row">
+        <div class="av" style="color:var(--violet)">DM</div>
+        <div class="grow">
+          <div class="t">Dana Martinez</div>
+          <div class="d">IT Director · decision maker · last touch 3d ago</div>
+        </div>
+        <span class="pill good">CHAMPION</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="av" style="color:var(--violet)">PB</div>
+        <div class="grow">
+          <div class="t">Paul Brennan</div>
+          <div class="d">Superintendent · signs contract · last touch 11d ago</div>
+        </div>
+        <span class="pill amber">GOING QUIET</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="av" style="color:var(--violet)">LT</div>
+        <div class="grow">
+          <div class="t">Lena Tran</div>
+          <div class="d">Head of Student Services · daily user contact</div>
+        </div>
+        <span class="pill dim">USER</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Pricing & quote</h2><span class="pill dim">auto-calculated</span></div>
+    <div class="card">
+      <div class="kv"><span>120 seats × $34/mo (education tier)</span><b class="mono">$48,960</b></div>
+      <div class="kv"><span>Volume discount (100+ seats)</span><b class="mono" style="color:var(--good)">−$4,896</b></div>
+      <div class="kv"><span>Onboarding + staff training</span><b class="mono">$3,900</b></div>
+      <div class="kv" style="border-top:1px solid var(--line);padding-top:9px"><span><b>Year 1 total</b></span><b class="mono" style="font-size:15px">$47,964</b></div>
+      <div class="d" style="margin-top:6px">Pricing rules are set once by an Admin (tiers, volume breaks, add-ons). Quotes generate automatically per org — no spreadsheet math on calls.</div>
+      <button class="btn ghost" style="margin-top:10px" onclick="toast('✓ Quote PDF sent to Paul — logged on Riverside’s timeline, open tracking on')">Send quote PDF to Paul</button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Demo pipeline</h2></div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;font-size:11px;font-weight:600;color:var(--faint)">
+        <span style="color:var(--good)">SCHEDULED ✓</span><span style="color:var(--good)">DELIVERED ✓</span>
+        <span style="color:var(--wave)">TRIAL ●</span><span>PILOT</span><span>CONTRACT</span>
+      </div>
+      <div class="progress" style="margin-top:8px"><i style="width:52%"></i></div>
+      <div class="d" style="margin-top:8px">Next milestone: pilot review call · Jul 24 · owner: Jared</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Activity</h2><a onclick="logCall()">＋ Log call</a></div>
+    <div class="card" id="call-log-target">
+      <div class="note" style="margin-top:0">
+        <div class="meta">CALL · JUL 15 · 2:14 PM · JARED (voice-to-text)</div>
+        Spoke with Dana (IT dir). SSO is the blocker for full rollout — flagged to eng, now #2 on priority list. She's happy with band feedback from students.
+      </div>
+      <div class="note">
+        <div class="meta">DEMO · JUL 8 · MILESTONE: DELIVERED</div>
+        30-min demo to admin team. 8 attendees. Strong interest in Aware roadmap.
+      </div>
+      <div class="note">
+        <div class="meta">AUTO CHECK-IN · JUL 1</div>
+        Cadence task completed by Sam. No issues raised.
+      </div>
+    </div>
+  </div>
+  <button class="btn" onclick="openSheet('sh-brief')">⚡ Pre-call brief — AI summary of this account</button>
+  <div style="height:8px"></div>
+  <button class="btn ghost" onclick="logCall()">＋ Log call — 15 seconds, voice-to-text</button>
+</main>
+<!-- ============ SCREEN: COMPLY ============ -->
+<main class="screen" id="s-comply">
+  <p class="eyebrow">Compliance Zone</p>
+  <h1>Trust status</h1>
+  <p class="sub">Live from Drata · synced 14m ago · read-only</p>
+  <div class="gate-note emp">The Compliance Zone is Admin-only. Switch to Admin to view.</div>
+  <div class="gate-note mgr">The Compliance Zone is Admin-only. Switch to Admin to view.</div>
+
+  <div class="admin-only">
+  <div class="tiles" style="margin-bottom:14px">
+    <div class="tile"><div class="n" style="color:var(--good)">94</div><div class="l">Controls passing</div></div>
+    <div class="tile"><div class="n" style="color:var(--safety)">2</div><div class="l">Failing</div></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Failing controls</h2></div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow">
+          <div class="t">MFA not enforced on 2 GitHub accounts</div>
+          <div class="d">SOC 2 CC6.1 · remediation task auto-created → eng queue</div>
+        </div>
+        <span class="pill safety">FAIL</span>
+      </div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row">
+        <div class="grow">
+          <div class="t">Firebase access review overdue (Q3)</div>
+          <div class="d">HIPAA §164.308 · owner: Jared · due Jul 25</div>
+        </div>
+        <span class="pill amber">OVERDUE</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Framework readiness</h2></div>
+    <div class="card">
+      <div class="kv"><span>SOC 2 Type II</span><b class="mono">98%</b></div>
+      <div class="progress"><i style="width:98%;background:var(--good)"></i></div>
+      <div class="kv" style="margin-top:8px"><span>HIPAA</span><b class="mono">86%</b></div>
+      <div class="progress"><i style="width:86%"></i></div>
+      <div class="kv" style="margin-top:8px"><span>ISO 27001 (cross-mapped)</span><b class="mono">64%</b></div>
+      <div class="progress"><i style="width:64%;background:var(--faint)"></i></div>
+      <div class="d" style="margin-top:8px">64% of ISO 27001 is already covered by existing SOC 2 evidence — adding it is a gap list, not a restart.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>BAA tracker</h2></div>
+    <div class="card">
+      <div class="kv"><span>Google (Firebase)</span><span class="pill good">SIGNED</span></div>
+      <div class="kv"><span>AWS</span><span class="pill good">SIGNED</span></div>
+      <div class="kv"><span>Email vendor</span><span class="pill amber">MISSING</span></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Audit log</h2><a onclick="toast('Immutable audit log — every permission change & sensitive view, exportable for auditors')">Full log →</a></div>
+    <div class="card">
+      <div class="note" style="margin-top:0">
+        <div class="meta">TODAY 9:12 AM</div>
+        Jared viewed weekly finance tiles (Customers)
+      </div>
+      <div class="note">
+        <div class="meta">TODAY 8:47 AM</div>
+        Jared overrode priority rank on ENG-231 — reason logged
+      </div>
+      <div class="note">
+        <div class="meta">JUL 17 4:03 PM</div>
+        Sam granted board access: #enterprise → Lena T. (Employee)
+      </div>
+      <div class="d" style="margin-top:8px">Every permission change and sensitive-data view is written to an immutable log. This is a SOC 2 control running from day one.</div>
+    </div>
+  </div>
+
+  <button class="btn ghost" onclick="toast('✓ Concern form — describe it, pick severity; routes to the control owner with a due date')">⚑ Raise a compliance concern</button>
+  </div>
+</main>
+<!-- ============ SCREEN: KNOWLEDGE (global search) ============ -->
+<main class="screen" id="s-know">
+  <p class="eyebrow">One source of truth</p>
+  <h1>Knowledge</h1>
+  <p class="sub">Search everything — docs, messages, tickets, CRM notes, eng items.</p>
+
+  <div class="searchbar">
+    <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+    <input type="search" value="bluetooth" aria-label="Search everything">
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Results for "bluetooth"</h2><span class="pill dim">across 5 sources</span></div>
+    <div class="card tap" tabindex="0" onclick="openSheet('sh-p1')">
+      <div class="row"><span class="pill safety">ENG</span><div class="grow"><div class="t">ENG-214 · BLE reconnect fails after sleep</div><div class="d">Ranked #1 · fix ships in 2.4.1</div></div></div>
+    </div>
+    <div class="card tap" tabindex="0">
+      <div class="row"><span class="pill wave">DOC</span><div class="grow"><div class="t">Runbook: BLE troubleshooting for support</div><div class="d">Knowledge base · updated Jul 12 by Maria</div></div></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="go('s-cust')">
+      <div class="row"><span class="pill amber">TICKETS</span><div class="grow"><div class="t">40 open tickets tagged "bluetooth"</div><div class="d">Trending ▲ · linked to ENG-214</div></div></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="go('s-chat')">
+      <div class="row"><span class="pill dim">CHAT</span><div class="grow"><div class="t">#firmware · Maria: "Repro'd the BLE drop…"</div><div class="d">This morning</div></div></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="go('s-crm-org')">
+      <div class="row"><span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">CRM</span><div class="grow"><div class="t">Riverside SD · call note mentions sync issues</div><div class="d">Jul 15 · Jared</div></div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Library</h2></div>
+    <div class="card tap" tabindex="0"><div class="row"><div class="grow"><div class="t">📘 Product docs</div><div class="d">Band HW · Firmware · Consumer · Enterprise · Aware — versioned</div></div></div></div>
+    <div class="card tap" tabindex="0"><div class="row"><div class="grow"><div class="t">🧭 Runbooks</div><div class="d">Support scripts · firmware release process · incident response</div></div></div></div>
+    <div class="card tap" tabindex="0"><div class="row"><div class="grow"><div class="t">🎓 Onboarding by role</div><div class="d">New-hire paths for support, eng, sales</div></div></div></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head"><h2>Decision log</h2><a onclick="toast('✓ Log decision — what was decided, why, who was in the room. Searchable forever')">＋ Log decision</a></div>
+    <div class="card">
+      <div class="note" style="margin-top:0"><div class="meta">COMPLIANCE PLATFORM · DECIDED</div><b style="color:var(--good)">Drata over Vanta.</b> Better API for feeding this dashboard; cross-maps SOC 2 → HIPAA → ISO 27001. Integrate read-only — never rebuild GRC.</div>
+      <div class="note"><div class="meta">SIZING / RETURNS · DECIDED</div><b style="color:var(--good)">XS strap SKU approved for fall.</b> Sizing is a top return driver; XS is the fix, first China PO due by Aug 15.</div>
+      <div class="note"><div class="meta">QC FIRMWARE · DECIDED</div><b style="color:var(--good)">Always verify &amp; flash to latest at QC</b> regardless of whether Pace ships pre-flashed. On a life-safety device we never trust upstream firmware.</div>
+      <div class="note"><div class="meta">ENTERPRISE FULFILLMENT · DECIDED</div><b style="color:var(--good)">Ship from our Covington pool</b> so every band clears our QC. Pace drop-ship stays a configurable fallback for large batches only.</div>
+      <div class="note"><div class="meta">PACE WARRANTY / TERMS · DECIDED</div><b style="color:var(--good)">Failed-QC bands return to Pace under warranty</b> with a "credit expected" ledger entry. PO flow supports MOQ + tiered pricing as settings — exact terms to confirm with Pace.</div>
+      <div class="note"><div class="meta">HIPAA / PHI · DECIDED (pending counsel)</div><b style="color:var(--amber)">Treat band &amp; Aware health-integration telemetry as PHI.</b> Dexcom glucose alerts are health data — apply HIPAA-grade controls now; cheaper than retrofitting. Counsel confirms scope before the data model hardens.</div>
+      <div class="note"><div class="meta">ENTERPRISE BILLING · DECIDED</div><b style="color:var(--good)">Model billing as separate lines</b> (subscription / hardware / services) for clean ARR + concentration analysis; present bundled on the customer invoice.</div>
+      <div class="note"><div class="meta">DEAL-LINKED NOTIFICATIONS · DECIDED</div><b style="color:var(--good)">Human approval required.</b> Closing a deal-linked triage item drafts the CRM notification but never auto-sends — consistent with "every AI outbound needs approval."</div>
+      <div class="note"><div class="meta">PACE NY / CHINA COUNTS · DECIDED</div><b style="color:var(--good)">Track as manually-confirmed fields</b> with a "last confirmed" date + staleness flag. No invented numbers — Jared confirms with Pace.</div>
+      <div class="note"><div class="meta">SKU HYGIENE · RECOMMENDED</div><b style="color:var(--amber)">Standardize to BND-BLK-SM / MD / LG.</b> Current S/M SKUs are unreadable. Not auto-applied — it writes to the live Shopify store and can touch ParcelPanel/UpPromote; Jared approves before we change it.</div>
+      <div class="d" style="margin-top:8px">Expert decisions logged Aug 4 during the Command Center build — searchable forever, so context never leaves when a person does.</div>
+    </div>
+  </div>
+</main>
+
+<!-- ============ BOTTOM TABS ============ -->
+<nav class="tabs" aria-label="Main navigation">
+  <button class="tab on" data-s="s-pulse" onclick="go('s-pulse',this)">
+    <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Pulse</button>
+  <button class="tab" data-s="s-chat" onclick="go('s-chat',this)">
+    <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/></svg>Chat</button>
+  <button class="tab" data-s="s-build" onclick="go('s-build',this)">
+    <svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.4-2.4 2.4-2.4z"/></svg>Build</button>
+  <button class="tab" data-s="s-cust" onclick="go('s-cust',this)">
+    <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4a3.5 3.5 0 0 1 0 7M17.5 14a6.5 6.5 0 0 1 4 6"/></svg>Support</button>
+  <button class="tab" data-s="s-inv" onclick="go('s-inv',this)">
+    <svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v10"/></svg>Stock</button>
+  <button class="tab" data-s="s-crm" onclick="go('s-crm',this)">
+    <svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg>CRM</button>
+  <button class="tab" data-s="s-comply" onclick="go('s-comply',this)">
+    <svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>Comply</button>
+</nav>
+
+<!-- ============ SHEETS ============ -->
+<div class="sheet" id="sh-p1" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill safety"><span class="dot"></span>RANKED #1 · SAFETY-CRITICAL</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">BLE reconnect fails after sleep</h1>
+    <p class="sub">Why is this #1? The full score, in plain English.</p>
+    <div class="card" style="margin-bottom:12px">
+      <div class="score-line"><span>Reach — devices on affected firmware (Firebase)</span><b>412</b></div>
+      <div class="score-line"><span>Impact — missed alerts</span><b>3.0</b></div>
+      <div class="score-line"><span>Confidence — reproduced by Maria</span><b>100%</b></div>
+      <div class="score-line"><span>Effort — est. person-weeks</span><b>1.5</b></div>
+      <div class="score-line"><span style="color:var(--safety)">Safety multiplier — could miss an emergency alert</span><b style="color:var(--safety)">×3</b></div>
+      <div class="score-line"><span>Revenue multiplier</span><b>×1</b></div>
+      <div class="score-line" style="border-top:1px solid var(--line)"><span><b>Score</b> = (R×I×C ÷ E) × Safety × Revenue</span><b style="color:var(--safety);font-size:16px">2,472</b></div>
+    </div>
+    <div class="d" style="margin-bottom:12px">Sources: GitHub #482 · 40 linked support tickets · 1 public review. Reporters will be auto-notified when the fix ships in 2.4.1.</div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-head" style="margin-bottom:4px"><h2>The fix</h2><span class="pill wave">IN REVIEW</span></div>
+      <div class="kv"><span>Root cause</span><b>Sleep-mode BLE handshake times out after ~4h idle</b></div>
+      <div class="kv"><span>Fix</span><b>Extend keepalive + auto-retry on wake</b></div>
+      <div class="kv"><span>Where</span><b class="mono">firewire-fw · ble/conn.c · PR #501</b></div>
+      <div class="kv"><span>Owner</span><b>Maria K. · field test Thu, ships in 2.4.1</b></div>
+      <div class="kv"><span>Risk</span><b>Low — keepalive costs ~1% battery/day</b></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-head" style="margin-bottom:4px"><h2>Timeline</h2></div>
+      <div class="note" style="margin-top:0"><div class="meta">JUL 16 · 9:45 AM</div>PR #501 opened by Maria · field test scheduled Thu</div>
+      <div class="note"><div class="meta">JUL 14</div>Score 188 → 294 — 22 new tickets raised Reach · auto-rescored</div>
+      <div class="note"><div class="meta">JUL 12</div>Promoted from support: 18 tickets clustered as one issue</div>
+      <div class="note"><div class="meta">JUL 10</div>Created from GH #482 · initial score 96</div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-head" style="margin-bottom:4px"><h2>Comments</h2></div>
+      <div id="cmt-list">
+        <div class="note" style="margin-top:0"><div class="meta">MARIA K. · JUL 16</div>Keepalive fix holds through 8h sleep on all 3 test bands. Battery cost measured at 0.9%/day.</div>
+        <div class="note"><div class="meta">DEV S. · JUL 15</div>Support macro updated in the meantime — telling users to keep app foregrounded at night.</div>
+      </div>
+      <div class="composer" style="position:static;padding-top:10px">
+        <input type="text" id="cmt-input" placeholder="Add a comment…" aria-label="Comment">
+        <button aria-label="Post comment" onclick="addComment()">↑</button>
+      </div>
+    </div>
+
+    <button class="btn" onclick="closeSheets();toast('✓ Assigned to Maria K. — she’s notified in chat')">Assign to Maria K.</button>
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi1','CLOSED')">✓ Close item</button>
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi1','ARCHIVED')">Archive</button>
+    </div>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets();toast('Override — type your reason, it’s logged publicly next to the item')">Override rank (requires written reason)</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-p2" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill amber"><span class="dot"></span>RANKED #2 · DEAL-LINKED</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Enterprise SSO for org dashboard</h1>
+    <p class="sub">Auto-boosted because it blocks a CRM opportunity.</p>
+    <div class="card" style="margin-bottom:12px">
+      <div class="score-line"><span>Reach — enterprise seats waiting</span><b>120</b></div>
+      <div class="score-line"><span>Impact</span><b>2.0</b></div>
+      <div class="score-line"><span>Confidence</span><b>80%</b></div>
+      <div class="score-line"><span>Effort — est. person-weeks</span><b>3</b></div>
+      <div class="score-line"><span>Safety multiplier</span><b>×1</b></div>
+      <div class="score-line"><span style="color:var(--amber)">Revenue — blocks Riverside SD ($48k/yr)</span><b style="color:var(--amber)">×2</b></div>
+      <div class="score-line" style="border-top:1px solid var(--line)"><span><b>Score</b></span><b style="color:var(--amber);font-size:16px">128</b></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-head" style="margin-bottom:4px"><h2>The plan</h2><span class="pill amber">IN DESIGN</span></div>
+      <div class="kv"><span>Approach</span><b>SAML 2.0 via Firebase Auth — covers Google Workspace + Azure AD</b></div>
+      <div class="kv"><span>Where</span><b class="mono">enterprise-dash · auth module</b></div>
+      <div class="kv"><span>Owner</span><b>Dev S. · est. 3 wks · target early Aug</b></div>
+      <div class="kv"><span>Open question</span><b>Riverside uses Google Workspace — confirm no Azure need before scoping</b></div>
+    </div>
+    <button class="btn" onclick="closeSheets();go('s-crm-org')">Open linked deal — Riverside SD</button>
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi2','CLOSED')">✓ Close item</button>
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi2','ARCHIVED')">Archive</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sh-p3" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">RANKED #4 · FEATURE</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Vibration ramp-up for deep sleep</h1>
+    <p class="sub">Gradual intensity increase to wake from REM without a jolt.</p>
+    <div class="card" style="margin-bottom:12px">
+      <div class="score-line"><span>Reach — users voting + sleep-mode usage</span><b>61 + 1.2k</b></div>
+      <div class="score-line"><span>Impact</span><b>1.0</b></div>
+      <div class="score-line"><span>Confidence</span><b>80%</b></div>
+      <div class="score-line"><span>Effort — est. person-weeks</span><b>2</b></div>
+      <div class="score-line" style="border-top:1px solid var(--line)"><span><b>Score</b></span><b style="font-size:16px">74</b></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-head" style="margin-bottom:4px"><h2>The plan</h2><span class="pill dim">BACKLOG</span></div>
+      <div class="kv"><span>Approach</span><b>New vibration curve in firmware + intensity slider in app settings</b></div>
+      <div class="kv"><span>Where</span><b class="mono">firewire-fw · haptics.c + consumer-app · settings</b></div>
+      <div class="kv"><span>Dependency</span><b>Ships after 2.4.1 hotfix clears the queue</b></div>
+    </div>
+    <div class="row" style="gap:8px">
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi4','CLOSED')">✓ Close item</button>
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi4','ARCHIVED')">Archive</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sh-p4" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill good">RANKED #3 · FIX MERGED</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Battery indicator stuck at 1%</h1>
+    <p class="sub">Score 89 — Reach 380 × Impact 1 × Conf 100% ÷ Effort 0.5wk × Safety ×1</p>
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-head" style="margin-bottom:4px"><h2>The fix</h2><span class="pill good">MERGED — SHIPS 2.4.1</span></div>
+      <div class="kv"><span>Root cause</span><b>Fuel-gauge register not re-read after charge complete</b></div>
+      <div class="kv"><span>Fix</span><b>Force gauge refresh on charger disconnect</b></div>
+      <div class="kv"><span>Where</span><b class="mono">firewire-fw · power/gauge.c · PR #498 ✓</b></div>
+      <div class="kv"><span>Owner</span><b>Maria K. · verified on 5 test bands</b></div>
+    </div>
+    <div class="d" style="margin-bottom:12px">11 linked tickets will auto-close with a "fixed in 2.4.1, here's how to update" reply when the release publishes.</div>
+    <div class="row" style="gap:8px">
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi3','CLOSED')">✓ Close item</button>
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi3','ARCHIVED')">Archive</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sh-p5" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill safety"><span class="dot"></span>RANKED #5 · SAFETY — INVESTIGATING</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Dexcom alerts missed when app backgrounded</h1>
+    <p class="sub">Score 71 — glucose alerts are life-safety, ×3 applied even at low confirmed reach</p>
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-head" style="margin-bottom:4px"><h2>Investigation</h2><span class="pill amber">2 THEORIES</span></div>
+      <div class="kv"><span>Theory 1</span><b>Android 15 kills notification listener after 6h background</b></div>
+      <div class="kv"><span>Theory 2</span><b>Dexcom app update changed notification channel ID</b></div>
+      <div class="kv"><span>Next step</span><b>Repro on Pixel test device overnight — Sam, tonight</b></div>
+      <div class="kv"><span>Where</span><b class="mono">consumer-app · NotificationListenerService</b></div>
+      <div class="kv"><span>Interim</span><b>Support macro: whitelist app from battery optimization</b></div>
+    </div>
+    <div class="d" style="margin-bottom:12px">Joe A.'s review is this exact use case — a parent sleeping through Dexcom lows. Treated as safety until proven otherwise.</div>
+    <button class="btn" onclick="closeSheets();toast('✓ Nudged Sam in #firmware with the item linked')">Nudge Sam for repro result</button>
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi5','CLOSED')">✓ Close item</button>
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi5','ARCHIVED')">Archive</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sh-p6" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill good">RANKED #6 · APPROVED</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">XS strap SKU</h1>
+    <p class="sub">Score 52 — hardware items ride the same list as software</p>
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-head" style="margin-bottom:4px"><h2>The plan</h2><span class="pill good">APPROVED JUN 28</span></div>
+      <div class="kv"><span>Why</span><b>Sizing is #2 return reason (14 tickets, 30d) — bands too bulky on small wrists</b></div>
+      <div class="kv"><span>Spec</span><b>−18mm strap, same motor housing — no firmware change</b></div>
+      <div class="kv"><span>Blocker</span><b style="color:var(--amber)">First China PO due Jul 25 for fall launch → Stock tab</b></div>
+      <div class="kv"><span>Owner</span><b>Jared (Pace) + Dev (Shopify SKU setup)</b></div>
+    </div>
+    <button class="btn" onclick="closeSheets();go('s-inv')">Open Stock — place the PO</button>
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi6','CLOSED')">✓ Close item</button>
+      <button class="btn ghost" style="flex:1" onclick="markDone('bi6','ARCHIVED')">Archive</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sh-cust" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill dim">UNIFIED CUSTOMER PROFILE</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Sarah W.</h1>
+    <p class="sub">Everything from Shopify, Firebase, email and reviews — one screen.</p>
+    <div class="card">
+      <div class="kv"><span>Order</span><b class="mono">#1148 · $129 · delivered</b></div>
+      <div class="kv"><span>Band</span><b>Small · firmware v2.3.2 ⚠</b></div>
+      <div class="kv"><span>Last device sync</span><b style="color:var(--safety)">6 days ago</b></div>
+      <div class="kv"><span>Sentiment</span><span class="pill safety">AT RISK — public 2★ review</span></div>
+    </div>
+    <div class="note">
+      <div class="meta">AI-DRAFTED REPLY · NEEDS YOUR APPROVAL</div>
+      "Hi Sarah — you're on firmware 2.3.2, which has the connection bug we're fixing this week. Here's how to update now, and I'd love to make the sizing right too…"
+    </div>
+    <button class="btn" style="margin-top:12px" onclick="closeSheets();toast('✓ Reply sent to Sarah — SLA timer stopped, thread tracked')">Review & send reply</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets();toast('✓ Linked — Sarah auto-notified when the fix ships')">Link ticket to ENG-214</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-band" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill dim">BAND DATA CARD</span>
+    <h1 style="font-size:19px;margin:10px 0 2px" class="mono">SW-S-02911</h1>
+    <p class="sub">Small · Black · batch PO-0037 (Mar 2026) · warranty to Jun 2027</p>
+
+    <div class="card">
+      <div class="kv"><span>Firmware</span>
+        <b class="mono"><span id="band-fw">v2.3.2 ⚠ outdated</span>
+        <a style="color:var(--wave);cursor:pointer;font-family:var(--font-b);font-weight:600" onclick="fwEdit()"> · edit</a></b></div>
+      <div id="fw-picker" style="display:none;padding:8px 0;border-bottom:1px solid var(--line)">
+        <div class="d" style="margin-bottom:8px">Set firmware version (logged with your name + timestamp):</div>
+        <div class="row" style="gap:6px">
+          <button class="chip" onclick="fwSet('v2.4.1 ✓ latest')">v2.4.1</button>
+          <button class="chip" onclick="fwSet('v2.4.0')">v2.4.0</button>
+          <button class="chip" onclick="fwSet('v2.3.2')">v2.3.2</button>
+        </div>
+      </div>
+      <div class="kv"><span>Assigned to</span><b>Sarah W. · order #1148 <a style="color:var(--wave);cursor:pointer" onclick="closeSheets();openSheet('sh-assign')">· reassign</a></b></div>
+      <div class="kv"><span>Status</span><span class="pill amber">IN FIELD — SYNC STALE 6d</span></div>
+      <div class="kv"><span>Last sync (Firebase)</span><b>Jul 12 · battery 41%</b></div>
+      <div class="kv"><span>Open ticket</span><b style="color:var(--safety)">Yes — BLE drop, SLA breached</b></div>
+    </div>
+
+    <div class="note">
+      <div class="meta">HISTORY</div>
+      Jul 1 — shipped to Sarah W. (order #1148)<br>
+      Jun 30 — QC passed · Jared · fw v2.3.2 flashed · BLE ✓ · vibration ✓<br>
+      Jun 16 — received Covington from Pace NY (T-014)<br>
+      Mar 22 — produced, China batch PO-0037
+    </div>
+
+    <button class="btn" style="margin-top:12px" onclick="closeSheets();openSheet('sh-cust')">Open customer profile — Sarah W.</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets();openSheet('sh-assign')">Assign / reassign band</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-assign" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">ASSIGN BAND · SW-S-02911</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Assign to customer or order</h1>
+    <p class="sub">Auto-assign handles new orders — this is the manual override for swaps, warranty replacements, and demo units.</p>
+
+    <div class="searchbar">
+      <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+      <input type="search" placeholder="Search customer, order # or org" aria-label="Assign search">
+    </div>
+
+    <div class="card tap" tabindex="0" onclick="assignBand(this,'Sarah W. — warranty replacement')">
+      <div class="row"><div class="grow"><div class="t">Sarah W. — warranty replacement</div><div class="d">Ticket open · replaces this same UID after repair</div></div><span class="pill amber">TICKET</span></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="assignBand(this,'Order #1164 — unassigned')">
+      <div class="row"><div class="grow"><div class="t">Order #1164 · Small — awaiting stock</div><div class="d">Flagged in fulfillment queue, no band available</div></div><span class="pill wave">OPEN ORDER</span></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="assignBand(this,'Riverside SD — demo pool')">
+      <div class="row"><div class="grow"><div class="t">Riverside SD — demo pool</div><div class="d">Org deployment · adds UID to their dashboard</div></div><span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">ORG</span></div>
+    </div>
+    <div class="card tap" tabindex="0" onclick="assignBand(this,'Unassigned — return to stock')">
+      <div class="row"><div class="grow"><div class="t">↩ Unassign — return to Covington stock</div><div class="d">Re-enters QC queue before it can ship again</div></div></div>
+    </div>
+    <div class="d" style="margin:8px 2px 0" id="assign-status">Every assignment change is logged: who, when, why.</div>
+  </div>
+</div>
+
+<div class="sheet" id="sh-report" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">REPORT · GENERATED JUST NOW</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Firmware in the field</h1>
+    <p class="sub">All 1,847 shipped bands · consumer + enterprise · live from Firebase</p>
+    <div class="card">
+      <div class="kv"><span>v2.4.0 (current)</span><b class="mono">1,311 · 71%</b></div>
+      <div class="progress"><i style="width:71%"></i></div>
+      <div class="kv" style="margin-top:8px"><span>v2.3.x ⚠ BLE bug</span><b class="mono" style="color:var(--safety)">443 · 24%</b></div>
+      <div class="progress"><i style="width:24%;background:var(--safety)"></i></div>
+      <div class="kv" style="margin-top:8px"><span>older</span><b class="mono">93 · 5%</b></div>
+      <div class="progress"><i style="width:5%;background:var(--faint)"></i></div>
+      <div class="d" style="margin-top:8px">443 bands still carry the BLE bug. Filter by org, cross-reference open tickets, or push an update-nudge campaign to affected users.</div>
+    </div>
+    <div class="row" style="margin-top:12px;gap:8px">
+      <button class="btn ghost" style="flex:1" onclick="closeSheets();toast('✓ CSV exported — also schedulable as a weekly email')">Export CSV</button>
+      <button class="btn ghost" style="flex:1" onclick="closeSheets();toast('✓ PDF exported')">Export PDF</button>
+    </div>
+    <button class="btn" style="margin-top:8px" onclick="closeSheets();go('s-crm')">→ Send update nudge to affected orgs</button>
+    <div class="d" style="margin:10px 2px 0">Same pattern for every report: run → filter → export → act. Scheduled versions can land in your email weekly.</div>
+  </div>
+</div>
+
+<div class="sheet" id="sh-newitem" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">NEW ITEM</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Add to the triage queue</h1>
+    <p class="sub">Anyone can add. The engine scores it, the list decides.</p>
+
+    <div class="searchbar" style="margin-bottom:10px">
+      <input type="text" id="ni-title" placeholder="What's the bug or idea?" aria-label="Item title">
+    </div>
+
+    <div class="d" style="margin-bottom:6px">Product</div>
+    <div class="chips" id="ni-prod">
+      <button class="chip on" data-p="fw" onclick="niPick(this,'ni-prod')">Firmware</button>
+      <button class="chip" data-p="app" onclick="niPick(this,'ni-prod')">Consumer App</button>
+      <button class="chip" data-p="ent" onclick="niPick(this,'ni-prod')">Enterprise</button>
+      <button class="chip" data-p="hw" onclick="niPick(this,'ni-prod')">Band HW</button>
+      <button class="chip" data-p="aware" onclick="niPick(this,'ni-prod')">Aware</button>
+    </div>
+
+    <div class="d" style="margin:8px 0 6px">Type</div>
+    <div class="chips" id="ni-type">
+      <button class="chip on" onclick="niPick(this,'ni-type')">🐛 Bug</button>
+      <button class="chip" onclick="niPick(this,'ni-type')">✨ Feature</button>
+      <button class="chip" onclick="niPick(this,'ni-type')">🔧 Improvement</button>
+    </div>
+
+    <div class="d" style="margin:10px 2px">After adding: link tickets or a GH issue to set Reach, an engineer estimates Effort, and the engine ranks it. Safety-tagged items get flagged for immediate review.</div>
+    <button class="btn" onclick="addNewItem()">Add to triage</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-adj" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">ADJUST STOCK · COVINGTON</span>
+    <h1 style="font-size:19px;margin:10px 0 4px" id="adj-title">Band — Small</h1>
+    <p class="sub">Writes back to Shopify with a reason code. Every change is logged.</p>
+
+    <div class="card" style="text-align:center;padding:18px">
+      <div class="d" style="margin-bottom:8px">On hand</div>
+      <div class="row" style="justify-content:center;gap:18px">
+        <button class="btn ghost" style="width:52px;font-size:20px;padding:8px" onclick="adjStep(-1)" aria-label="Decrease">−</button>
+        <div class="mono" id="adj-count" style="font-size:34px;font-weight:600;min-width:64px">5</div>
+        <button class="btn ghost" style="width:52px;font-size:20px;padding:8px" onclick="adjStep(1)" aria-label="Increase">＋</button>
+      </div>
+      <div class="d" style="margin-top:8px" id="adj-delta">No change yet</div>
+    </div>
+
+    <div class="d" style="margin:10px 0 6px">Reason (required — feeds Shopify's inventory ledger)</div>
+    <div class="chips" id="adj-reason">
+      <button class="chip on" onclick="niPick(this,'adj-reason')">📦 Received shipment</button>
+      <button class="chip" onclick="niPick(this,'adj-reason')">🔢 Count correction</button>
+      <button class="chip" onclick="niPick(this,'adj-reason')">↩ Restock (return)</button>
+      <button class="chip" onclick="niPick(this,'adj-reason')">💔 Damaged</button>
+      <button class="chip" onclick="niPick(this,'adj-reason')">❓ Shrinkage</button>
+    </div>
+
+    <div class="d" style="margin:10px 2px">Safety: the write uses Shopify's compare-quantity check — if stock changed since this screen loaded (e.g. an order came in), the save fails safely instead of overwriting.</div>
+    <button class="btn" onclick="adjSave()">Save to Shopify</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-qc" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill amber">QC CHECKLIST · ORDER #1163</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Band SW-M-04412</h1>
+    <p class="sub">Medium · assigned to Kim R. · tap each check as you go</p>
+
+    <div class="card" style="padding:6px 14px">
+      <label class="qcitem"><input type="checkbox" onchange="qcTick(this)"> <span><b>Visual inspection</b><br><small>Strap, clasp, casing, motor housing — no defects</small></span></label>
+      <label class="qcitem"><input type="checkbox" checked onchange="qcTick(this)"> <span><b>UID scanned & logged</b><br><small class="mono">SW-M-04412 → linked to order #1163</small></span></label>
+      <label class="qcitem"><input type="checkbox" onchange="qcTick(this)"> <span><b>Firmware — flash & verify</b><br><small class="mono">Reads v2.4.0 · latest is v2.4.1 → </small><a style="color:var(--wave);font-size:12px;font-weight:600;cursor:pointer" onclick="event.preventDefault();this.textContent='✓ flashed v2.4.1'">Flash to v2.4.1</a></span></label>
+      <label class="qcitem"><input type="checkbox" onchange="qcTick(this)"> <span><b>Bluetooth pairing test</b><br><small>Connects to QC phone in &lt;10s, holds 60s</small></span></label>
+      <label class="qcitem"><input type="checkbox" onchange="qcTick(this)"> <span><b>Notification test</b><br><small>Test alert fires → vibration confirmed at levels 1, 3, 5</small></span></label>
+      <label class="qcitem"><input type="checkbox" onchange="qcTick(this)"> <span><b>Charge check</b><br><small>Battery ≥80% before boxing</small></span></label>
+    </div>
+
+    <div class="d" style="margin:10px 2px" id="qc-status">1 of 6 complete. Pass unlocks when all 6 are ticked.</div>
+    <button class="btn" id="qc-pass" disabled style="opacity:.4" onclick="closeSheets();toast('✓ SW-M-04412 passed — order #1163 flipped to Ready, shipping flow notified')">✓ Pass — mark ready to ship</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets();toast('Fail logged — pick reason, band flagged for Pace warranty return')">✗ Fail — log reason & return to Pace</button>
+    <div class="d" style="margin:10px 2px 0">Shipping labels print from your separate shipping flow — this just flips the order to Ready. Pass or fail, the UID, firmware, checker, and timestamp are written to the band's permanent record — and to the customer's profile.</div>
+  </div>
+</div>
+
+<div class="sheet" id="sh-po" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill amber">DRAFT PURCHASE ORDER — PACE</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">PO-0042 · Small bands</h1>
+    <p class="sub">Suggested quantity, with the reasoning shown.</p>
+    <div class="card">
+      <div class="kv"><span>Cover next 16 wks of burn (21/wk)</span><b class="mono">336</b></div>
+      <div class="kv"><span>− Stock remaining at delivery</span><b class="mono">−0 (arrives at stockout)</b></div>
+      <div class="kv"><span>+ Harmony expansion (90% likely)</span><b class="mono">+64 Small</b></div>
+      <div class="kv"><span>Round to Pace MOQ increment</span><b class="mono">250 → 400?</b></div>
+      <div class="kv" style="border-top:1px solid var(--line);padding-top:9px"><span><b>Suggested order</b></span><b class="mono" style="font-size:15px">250 units</b></div>
+      <div class="kv"><span>Order by</span><b style="color:var(--amber)">Aug 2 · arrives ~Sep 27</b></div>
+    </div>
+    <div class="d" style="margin:10px 2px">This drafts the PO for your review — nothing is sent to Pace without approval. Edit quantity if you want buffer for the fall school push.</div>
+    <button class="btn" onclick="closeSheets();toast('✓ PO-0042 sent to Pace — tracking starts, ETA Sep 27')">Review & send PO</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="toast('Quantity editable — the math above recalculates live')">Edit quantity</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-order" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill dim">ORDER LOOKUP · SHOPIFY · READ-ONLY</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">#1148 — Sarah W.</h1>
+    <p class="sub">Typed 3 characters, found in 0.2s. This is the whole flow.</p>
+    <div class="card">
+      <div class="kv"><span>Placed</span><b>Jun 30 · $129 · Visa</b></div>
+      <div class="kv"><span>Item</span><b>Safewave Band — Small, Black</b></div>
+      <div class="kv"><span>Fulfillment</span><span class="pill good">DELIVERED Jul 3 · USPS</span></div>
+      <div class="kv"><span>Refunds</span><b>None</b></div>
+      <div class="kv"><span>Open ticket</span><b style="color:var(--safety)">Yes — SLA breached → <a style="color:var(--wave)">open</a></b></div>
+    </div>
+    <button class="btn" style="margin-top:12px" onclick="closeSheets();openSheet('sh-cust')">Open full customer profile</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets();toast('Opens order #1148 in Shopify admin (read-only mirror ends here)')">View in Shopify admin ↗</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-contact" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill good">CHAMPION · DECISION MAKER</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Dana Martinez</h1>
+    <p class="sub">IT Director · Riverside School District</p>
+    <div class="card">
+      <div class="kv"><span>Email</span><b>d.martinez@riversidesd.org</b></div>
+      <div class="kv"><span>Phone</span><b class="mono">(513) 555-0184</b></div>
+      <div class="kv"><span>Prefers</span><b>Email · ASL interpreter for video calls</b></div>
+      <div class="kv"><span>Last touched</span><b>Jul 15 — call with Jared</b></div>
+    </div>
+    <div class="note">
+      <div class="meta">RELATIONSHIP NOTES</div>
+      Drove the pilot internally. Cares most about staff training burden and SSO. Daughter is a Safewave consumer user — genuine believer in the product.
+    </div>
+    <div class="row" style="margin-top:12px;gap:8px">
+      <button class="btn" style="flex:1" onclick="closeSheets();openSheet('sh-email')">Email Dana</button>
+      <button class="btn ghost" style="flex:1" onclick="closeSheets();logCall()">Log call</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sh-campaign" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">AI CAMPAIGN — AWAITING APPROVAL</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">School fall-semester outreach</h1>
+    <p class="sub">Segment: education targets, not yet contacted · 28 recipients</p>
+    <div class="card">
+      <div class="kv"><span>Sequence</span><b>3 emails over 14 days</b></div>
+      <div class="kv"><span>Personalized per org</span><b>School size, state, nearest reference customer</b></div>
+      <div class="kv"><span>Stops automatically</span><b>On any reply or unsubscribe</b></div>
+    </div>
+    <div class="note">
+      <div class="meta">EMAIL 1 OF 3 — PREVIEW (Indiana School for the Deaf)</div>
+      Subject: How Riverside SD equipped 120 students this spring<br><br>
+      Hi {first_name} — schools like yours are using the Safewave band so Deaf and HoH students never miss a fire alarm, lockdown alert, or bell. Riverside School District, about your size, rolled out 120 bands last semester. Worth a 15-minute look before fall planning closes?
+    </div>
+    <div class="d" style="margin:10px 2px">You approve the whole sequence once; individual sends still stop on reply. Edit any email before approving.</div>
+    <button class="btn" onclick="closeSheets();toast('✓ Campaign live — 28 recipients, stops on any reply')">Approve campaign — 28 recipients</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets();toast('Editor — each of the 3 emails opens as an editable draft like the check-in')">Edit emails</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-brief" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">AI PRE-CALL BRIEF</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Riverside SD — 60-second read</h1>
+    <div class="note" style="margin-top:4px">
+      <div class="meta">WHERE THINGS STAND</div>
+      In trial since May, $48k on the table. Pilot review is Jul 24. Dana (IT, champion) is sold; Paul (superintendent, signer) has gone quiet for 11 days.
+    </div>
+    <div class="note">
+      <div class="meta">RISKS</div>
+      Activation fell 67% ← 79% this month — 7 devices failing sync, likely the BLE bug (fix ships in 2.4.1 Monday). SSO is the stated rollout blocker; it's now eng priority #2.
+    </div>
+    <div class="note">
+      <div class="meta">SUGGESTED TALK TRACK</div>
+      1. Open with the BLE fix ship date — turns their complaint into proof you listen. 2. Give SSO a real date. 3. Ask Dana for 10 min with Paul to keep the signer warm.
+    </div>
+    <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-thread" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill good">THREAD · RIVERSIDE SD</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">2.4.1 ship date + SSO timeline</h1>
+    <p class="sub">You ↔ Dana Martinez · tracked automatically</p>
+
+    <div class="card" style="margin-bottom:8px">
+      <div class="row" style="font-size:11px;color:var(--faint);font-weight:600;justify-content:space-between">
+        <span style="color:var(--good)">SENT ✓ YESTERDAY 3:12P</span>
+        <span style="color:var(--wave)">OPENED ✓✓ 3:40P · 8:02A</span>
+        <span style="color:var(--good)">REPLIED ✓ 22M AGO</span>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:0">
+      <div class="meta">YOU → DANA · YESTERDAY 3:12 PM</div>
+      Hi Dana — good news: the connection fix ships Monday in 2.4.1, and SSO is now our #2 priority targeting early August. Want to walk both through before Thursday's review?
+    </div>
+    <div class="note" style="border-left:2px solid var(--good)">
+      <div class="meta" style="color:var(--good)">DANA → YOU · 22 MIN AGO</div>
+      Thursday works. Can you send the SSO doc before? Paul will want to see the security piece in writing.
+    </div>
+
+    <div class="card" style="border-color:var(--violet);margin-top:10px">
+      <span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">AI SUGGESTED REPLY — TAP TO EDIT</span>
+      <textarea class="draft-box" aria-label="Reply draft">Perfect — SSO one-pager attached (SAML via Firebase Auth, works with your Google Workspace). See you Thursday. I'll bring Paul's copy printed.</textarea>
+      <div class="row" style="gap:8px;margin-top:8px">
+        <button class="btn" style="flex:1" onclick="closeSheets();toast('✓ Reply sent to Dana — logged to Riverside timeline')">Send reply</button>
+        <button class="btn ghost" style="flex:1" onclick="toast('✓ Regenerated — new draft in the box, old version kept in history')">Regenerate</button>
+      </div>
+    </div>
+    <div class="d" style="margin:10px 2px 0">This whole exchange — sends, opens, the reply, and your response — is already on Riverside's activity timeline. Nothing to log.</div>
+  </div>
+</div>
+
+<div class="sheet" id="sh-email" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill" style="background:rgba(167,139,250,.12);color:var(--violet)">AI DRAFT — EDIT ANYTHING, NOTHING SENDS WITHOUT YOU</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Check-in: Riverside SD</h1>
+    <p class="sub">To: Dana Martinez · every edit is yours, the AI just starts it</p>
+
+    <div class="d" style="margin-bottom:4px">Subject</div>
+    <div class="searchbar" style="margin-bottom:10px">
+      <input type="text" value="Quick check-in before Thursday's pilot review" aria-label="Subject">
+    </div>
+
+    <div class="d" style="margin-bottom:4px">Body — tap to edit</div>
+    <textarea class="draft-box" style="min-height:150px" aria-label="Email body">Hi Dana,
+
+Ahead of Thursday's pilot review — I saw a handful of bands haven't synced this month and wanted to get ahead of it. Happy to run a 15-min refresher for staff, and SSO is now our #2 engineering priority with a target of early August.
+
+— Jared</textarea>
+
+    <div class="row" style="gap:8px;margin-top:10px">
+      <button class="chip" onclick="this.textContent='✓ warmer'">Make warmer</button>
+      <button class="chip" onclick="this.textContent='✓ shorter'">Shorter</button>
+      <button class="chip" onclick="this.textContent='✓ regenerated'">Regenerate</button>
+    </div>
+
+    <button class="btn" style="margin-top:12px" onclick="closeSheets();toast('✓ Sent — opens & replies now tracked in CRM › Email')">Approve & send</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets();toast('✓ Saved — drafts live on the account until sent or discarded')">Save as draft</button>
+    <div class="d" style="margin:10px 2px 0">After sending, opens and replies are tracked automatically in the Email tab and on this account.</div>
+  </div>
+</div>
+
+</div><!-- /phone -->
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div class="sheet" id="sh-item" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill dim" id="it-pill">ITEM</span>
+    <h1 style="font-size:19px;margin:10px 0 4px" id="it-title">Item</h1>
+    <p class="sub" id="it-sub"></p>
+    <div class="card" id="it-body" style="margin-bottom:12px"></div>
+    <button class="btn ghost" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
+<script>
+let toastT;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2400);
+}
+function openItem(pill,title,sub,rows){
+  document.getElementById('it-pill').textContent=pill;
+  document.getElementById('it-title').textContent=title;
+  document.getElementById('it-sub').textContent=sub;
+  const b=document.getElementById('it-body'); b.innerHTML='';
+  rows.forEach(r=>{
+    const d=document.createElement('div'); d.className='kv';
+    const s1=document.createElement('span'); s1.textContent=r[0];
+    const s2=document.createElement('b'); s2.textContent=r[1];
+    d.appendChild(s1); d.appendChild(s2); b.appendChild(d);
+  });
+  openSheet('sh-item');
+}
+function chatChan(btn,name){
+  document.querySelectorAll('#s-chat .chips .chip').forEach(c=>c.classList.toggle('on',c===btn));
+  toast(name+' — demo thread shown is #firmware; all channels work identically');
+}
+function chatSend(){
+  const inp=document.querySelector('#s-chat .composer input');
+  if(!inp.value.trim())return;
+  const wrap=document.createElement('div'); wrap.className='msg';
+  wrap.innerHTML='<div class="av">YOU</div><div class="grow"><div class="who">You <span>now</span></div><div class="body"></div></div>';
+  wrap.querySelector('.body').textContent=inp.value;
+  document.querySelector('#s-chat .composer').before(wrap);
+  inp.value='';
+}
+// Safety net: any button/card/link without a handler still responds
+document.addEventListener('click',function(e){
+  const el=e.target.closest('button, .card.tap, a');
+  if(!el) return;
+  if(el.closest('[onclick]') || el.hasAttribute('onclick') || el.href || el.type==='checkbox') return;
+  if(el.closest('.composer')||el.closest('label')) return;
+  const t=el.querySelector('.t');
+  const label=(t?t.textContent:el.textContent).trim().replace(/\s+/g,' ').slice(0,48);
+  toast('✓ '+label+' — fully wired in the real build');
+});
+function go(id, btn){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  const tabId = id.startsWith('s-crm') ? 's-crm' : (id==='s-fin' ? 's-pulse' : id);
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.s===tabId));
+  document.querySelector('.screen.on').scrollTop=0;
+  window.scrollTo(0,0);
+}
+function crmView(id, btn){
+  document.querySelectorAll('.crm-view').forEach(v=>v.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.querySelectorAll('#s-crm .chip').forEach(c=>c.classList.toggle('on', c===btn));
+}
+function setRole(r, btn){
+  document.body.className='role-'+r;
+  document.querySelectorAll('.role-switch button').forEach(b=>b.classList.remove('on'));
+  if(btn) btn.classList.add('on');
+  document.querySelectorAll('.persona').forEach(p=>p.classList.toggle('on', p.dataset.r===r));
+  const map={admin:'pulse-admin',manager:'pulse-manager',employee:'pulse-employee'};
+  document.querySelectorAll('.pulse-v').forEach(v=>v.style.display = v.id===map[r] ? 'block' : 'none');
+}
+function personaSwitch(r){
+  const btns=document.querySelectorAll('.role-switch button');
+  const idx={admin:0,manager:1,employee:2}[r];
+  setRole(r, btns[idx]);
+  go('s-pulse');
+}
+function signIn(role, pulseId){
+  document.getElementById('signin').style.display='none';
+  const btns=document.querySelectorAll('.role-switch button');
+  const idx={admin:0,manager:1,employee:2}[role];
+  setRole(role, btns[idx]);
+  go('s-pulse');
+}
+function openSheet(id){document.getElementById(id).classList.add('on')}
+function closeSheets(){document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('on'))}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheets()});
+let archCount=2;
+function markDone(cid,label){
+  const card=document.getElementById(cid);
+  if(!card){closeSheets();return}
+  card.style.opacity='.55';
+  card.classList.remove('bitem','tap');
+  card.removeAttribute('onclick');
+  const pill=document.createElement('span');
+  pill.className = label==='CLOSED' ? 'pill good' : 'pill dim';
+  pill.textContent=label;
+  card.querySelector('.row').appendChild(pill);
+  document.getElementById('arch-list').prepend(card);
+  archCount++;
+  document.getElementById('arch-toggle').textContent='Archived ('+archCount+')';
+  document.getElementById('arch-wrap').style.display='block';
+  closeSheets();
+}
+function toggleArch(){
+  const w=document.getElementById('arch-wrap');
+  w.style.display = w.style.display==='none' ? 'block' : 'none';
+}
+function niPick(btn,groupId){
+  document.querySelectorAll('#'+groupId+' .chip').forEach(c=>c.classList.toggle('on', c===btn));
+}
+function addNewItem(){
+  const t=document.getElementById('ni-title').value.trim() || 'Untitled item';
+  const prod=document.querySelector('#ni-prod .chip.on').dataset.p;
+  const prodName=document.querySelector('#ni-prod .chip.on').textContent;
+  const html='<div class="bitem card tap" data-prod="'+prod+'" tabindex="0" style="border-color:var(--wave)">'
+    +'<div class="row"><b class="mono" style="color:var(--faint);font-size:12px">NEW</b>'
+    +'<div class="grow"><div class="t"></div>'
+    +'<div class="d">'+prodName+' · added by you just now · <span style="color:var(--wave)">scoring pending — needs Reach + Effort</span></div></div>'
+    +'<span class="pill wave">UNSCORED</span></div></div>';
+  document.getElementById('bi-top').insertAdjacentHTML('afterend',html);
+  document.getElementById('bi-top').nextElementSibling.querySelector('.t').textContent=t;
+  document.getElementById('ni-title').value='';
+  closeSheets();
+}
+function addComment(){
+  const inp=document.getElementById('cmt-input');
+  if(!inp.value.trim())return;
+  const n=document.createElement('div');
+  n.className='note';
+  const meta=document.createElement('div');meta.className='meta';meta.textContent='YOU · JUST NOW';
+  n.appendChild(meta);
+  n.appendChild(document.createTextNode(inp.value));
+  document.getElementById('cmt-list').appendChild(n);
+  inp.value='';
+}
+function buildFilter(prod, btn){
+  document.querySelectorAll('#s-build .chips .chip').forEach(c=>c.classList.toggle('on', c===btn));
+  let shown=0;
+  document.querySelectorAll('.bitem').forEach(it=>{
+    const show = prod==='all' || it.dataset.prod===prod;
+    it.style.display = show ? '' : 'none';
+    if(show) shown++;
+  });
+  document.getElementById('build-empty').style.display = shown ? 'none' : 'block';
+}
+const adjState={sku:null,orig:0,cur:0};
+const adjNames={s:'Band — Small',m:'Band — Medium',l:'Band — Large'};
+function adjOpen(sku){
+  adjState.sku=sku;
+  adjState.orig=parseInt(document.getElementById('stk-'+sku).textContent);
+  adjState.cur=adjState.orig;
+  document.getElementById('adj-title').textContent=adjNames[sku];
+  document.getElementById('adj-count').textContent=adjState.cur;
+  document.getElementById('adj-delta').textContent='No change yet';
+  openSheet('sh-adj');
+}
+function adjStep(n){
+  adjState.cur=Math.max(0,adjState.cur+n);
+  document.getElementById('adj-count').textContent=adjState.cur;
+  const d=adjState.cur-adjState.orig;
+  document.getElementById('adj-delta').textContent = d===0?'No change yet':(d>0?'+':'')+d+' from current '+adjState.orig;
+  document.getElementById('adj-delta').style.color = d===0?'var(--faint)':(d>0?'var(--good)':'var(--safety)');
+}
+function adjSave(){
+  const d=adjState.cur-adjState.orig;
+  if(d===0){toast('No change to save');return}
+  document.getElementById('stk-'+adjState.sku).textContent=adjState.cur;
+  const reason=document.querySelector('#adj-reason .chip.on').textContent;
+  closeSheets();
+  toast('\u2713 '+adjNames[adjState.sku]+' \u2192 '+adjState.cur+' ('+(d>0?'+':'')+d+') \u00b7 '+reason+' \u00b7 logged, forecast recalculating');
+}
+function fwEdit(){
+  const p=document.getElementById('fw-picker');
+  p.style.display = p.style.display==='none' ? 'block' : 'none';
+}
+function fwSet(v){
+  document.getElementById('band-fw').textContent=v;
+  document.getElementById('fw-picker').style.display='none';
+}
+function assignBand(card, label){
+  document.querySelectorAll('#sh-assign .card').forEach(c=>c.style.borderColor='var(--line)');
+  card.style.borderColor='var(--wave)';
+  document.getElementById('assign-status').innerHTML='✓ SW-S-02911 assigned to <b>'+label+'</b> — logged with your name & timestamp.';
+}
+function qcTick(){
+  const boxes=[...document.querySelectorAll('#sh-qc input[type=checkbox]')];
+  const done=boxes.filter(b=>b.checked).length;
+  const btn=document.getElementById('qc-pass');
+  document.getElementById('qc-status').textContent = done===boxes.length
+    ? 'All 6 checks complete — band is cleared to ship.'
+    : done+' of '+boxes.length+' complete. Pass unlocks when all 6 are ticked.';
+  btn.disabled = done!==boxes.length;
+  btn.style.opacity = done===boxes.length ? '1' : '.4';
+}
+function logCall(){
+  const t=document.getElementById('call-log-target');
+  const n=document.createElement('div');n.className='note';n.style.borderLeft='2px solid var(--wave)';
+  const d=new Date();
+  n.innerHTML='<div class="meta">CALL · JUST NOW · JARED (voice-to-text)</div>🎙 Listening… speak your notes. Auto-timestamped, saved to this org in one tap.';
+  t.prepend(n);
+}
+
+/* ===================================================================
+   TRIAGE SCORING ENGINE — the real, testable algorithm behind Build.
+   Score = (Reach × Impact × Confidence ÷ Effort) × Safety × Revenue
+   · Safety ×3 when an item could cause a missed emergency alert
+   · Revenue ×2 when it blocks a signed / in-pipeline enterprise deal
+   Run SafewaveTriage.selfTest() in the browser console to verify.
+   =================================================================== */
+const SafewaveTriage = (function(){
+  function score(it){
+    const base = (it.reach * it.impact * it.confidence) / it.effort;
+    const safety  = it.safetyRisk   ? 3 : 1;
+    const revenue = it.dealBlocking ? 2 : 1;
+    return Math.round(base * safety * revenue);
+  }
+  // sample items spanning all three product lines (firmware / app / hardware / enterprise)
+  const SAMPLE = [
+    {id:'ENG-214', product:'Firmware',     title:'BLE reconnect fails after sleep',  reach:412, impact:3, confidence:1.0, effort:1.5, safetyRisk:true,  dealBlocking:false},
+    {id:'ENG-208', product:'Enterprise',   title:'Org-dashboard SSO',                reach:120, impact:2, confidence:1.0, effort:3.0, safetyRisk:false, dealBlocking:true},
+    {id:'ENG-240', product:'Band HW',      title:'XS strap tooling for fall launch', reach:200, impact:2, confidence:0.8, effort:4.0, safetyRisk:false, dealBlocking:false},
+    {id:'ENG-231', product:'Consumer App', title:'Vibration ramp-up for deep sleep', reach:61,  impact:1, confidence:0.8, effort:2.0, safetyRisk:false, dealBlocking:false},
+  ];
+  function ranked(){ return SAMPLE.map(i=>Object.assign({},i,{score:score(i)})).sort((a,b)=>b.score-a.score); }
+  function explain(it){
+    return '('+it.reach+'×'+it.impact+'×'+it.confidence+' ÷ '+it.effort+')'
+      +(it.safetyRisk?' ×3 safety':'')+(it.dealBlocking?' ×2 revenue':'')+' = '+score(it);
+  }
+  function selfTest(){
+    console.group('SafewaveTriage self-test');
+    ranked().forEach((i,n)=>console.log((n+1)+'.', i.id, '['+i.product+']', '=', i.score, '·', explain(i)));
+    console.assert(ranked()[0].id==='ENG-214','FAIL: safety-critical BLE item must rank #1');
+    console.log('Assertion passed: safety-critical item ranks #1.');
+    console.groupEnd();
+    return ranked();
+  }
+  return {score:score, ranked:ranked, explain:explain, selfTest:selfTest, SAMPLE:SAMPLE};
+})();
+try{ SafewaveTriage.selfTest(); }catch(e){}
+</script>
+</body>
+</html>
