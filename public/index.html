@@ -247,7 +247,7 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
     <button class="iconbtn" aria-label="Search everything" onclick="goto('s-know')">
       <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
     </button>
-    <button class="who" onclick="openSheet('sh-account')" aria-label="Account">
+    <button class="who" onclick="openAccountPanel()" aria-label="Account">
       <span class="av" id="who-av">–</span>
       <span class="nm" id="who-nm">…<small id="who-role"></small></span>
     </button>
@@ -451,7 +451,7 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
     <p class="sub" id="acc-email"></p>
     <div class="card">
       <div class="kv"><span>Role</span><b id="acc-role">—</b></div>
-      <div class="kv"><span>Signed in</span><b id="acc-since">now</b></div>
+      <div class="kv"><span>Email sending</span><b id="acc-mail">Not connected</b></div>
       <div class="kv"><span>Session</span><b>Private to you</b></div>
     </div>
     <button class="btn ghost" style="margin-top:12px" onclick="openMail()">Connect / manage your email</button>
@@ -797,6 +797,7 @@ function enterApp(user){
   goto('s-pulse');
 }
 function showLogin(){document.getElementById('app').style.display='none';document.getElementById('login').hidden=false}
+function openAccountPanel(){const m=CURRENT_USER&&CURRENT_USER.mail;const el=document.getElementById('acc-mail');if(el){el.textContent=m&&m.email?m.email:'Not connected';el.style.color=m&&m.email?'var(--good)':'var(--faint)'}openSheet('sh-account')}
 
 /* ================= AUTH ================= */
 let MODE='signin';
