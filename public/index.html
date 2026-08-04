@@ -317,16 +317,26 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
     <main class="screen" id="s-support">
       <p class="eyebrow">Support</p>
       <h1>Tickets &amp; customers</h1>
-      <p class="sub">One queue from email, Shopify and in-app — once connected.</p>
+      <p class="sub">Your live queue. Add tickets now; automatic capture from the app &amp; email connects next.</p>
+
+      <button class="btn" style="margin-bottom:18px" onclick="openAddTicket()">＋ Add ticket</button>
+
+      <div class="sec">
+        <div class="sec-head"><h2>Open queue</h2><span class="pill dim" id="ticket-count">0 open</span></div>
+        <div id="ticket-list"></div>
+      </div>
+
+      <div class="sec" id="ticket-resolved-sec" style="display:none">
+        <div class="sec-head"><h2>Resolved</h2><a id="resolved-toggle" onclick="toggleResolved()">Show</a></div>
+        <div id="ticket-resolved" style="display:none"></div>
+      </div>
+
       <div class="sec">
         <div class="sec-head"><h2>Live customer signal</h2><span class="pill good"><span class="dot"></span>SHOPIFY</span></div>
         <div id="support-orders"></div>
       </div>
-      <div class="empty">
-        <div class="ico">📥</div>
-        <div class="t">Ticketing isn't connected yet</div>
-        <div class="d">Connect your support inbox (Gmail/Outlook) and Shopify webhooks and tickets land here — auto-triaged, SLA-timed, promotable into Build.</div>
-      </div>
+
+      <div class="note">Tickets are saved on this device for now. Next: automatic capture from the app's Firebase (the in-app report button) and the sales@ inbox, so tickets land here on their own — auto-triaged, SLA-timed, promotable into Build.</div>
     </main>
 
     <!-- BUILD -->
@@ -440,6 +450,51 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
       <div class="kv"><span>Session</span><b>Private to you</b></div>
     </div>
     <button class="btn ghost" style="margin-top:12px" onclick="doSignOut()">Sign out</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-add" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">NEW TICKET</span>
+    <h1 style="font-size:20px;margin:11px 0 12px">Add a ticket</h1>
+    <input class="field" id="tk-title" placeholder="What's the issue? (short title)">
+    <input class="field" id="tk-customer" placeholder="Customer name or email (optional)">
+    <p class="d" style="font-weight:600;color:var(--text);margin:2px 0 6px">Channel</p>
+    <div class="reason" id="tk-channel" data-def="In-app">
+      <button data-v="In-app" class="on">In-app report</button>
+      <button data-v="Email">Email (sales@)</button>
+      <button data-v="Shopify">Shopify / review</button>
+      <button data-v="Phone">Phone / other</button>
+    </div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:8px 0 6px">Product</p>
+    <div class="reason" id="tk-product" data-def="Band">
+      <button data-v="Band" class="on">Band hardware</button>
+      <button data-v="App">Mobile app</button>
+      <button data-v="Firmware">Firmware</button>
+      <button data-v="Other">Other</button>
+    </div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:8px 0 6px">Severity</p>
+    <div class="reason" id="tk-sev" data-def="medium">
+      <button data-v="safety">Safety — missed alert</button>
+      <button data-v="high">High</button>
+      <button data-v="medium" class="on">Medium</button>
+      <button data-v="low">Low</button>
+    </div>
+    <textarea class="field" id="tk-desc" placeholder="Details (optional)" style="min-height:80px;resize:vertical;font-family:var(--font-b)"></textarea>
+    <button class="btn" onclick="saveTicket()">Create ticket</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-ticket" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill dim" id="tkv-pill">TICKET</span>
+    <h1 style="font-size:20px;margin:11px 0 10px" id="tkv-title">—</h1>
+    <div class="card" id="tkv-body" style="margin-bottom:12px"></div>
+    <div id="tkv-actions"></div>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Close</button>
   </div>
 </div>
 
@@ -558,17 +613,16 @@ function renderOrders(q){
     wrap.appendChild(c);
   });
 }
-let editIdx=-1,editVal=0,editReason=null;
-function openEdit(i){editIdx=i;editVal=SHOP.sizes[i].onHand;editReason=null;
+let editIdx=-1,editVal=0;
+function openEdit(i){editIdx=i;editVal=SHOP.sizes[i].onHand;
   document.getElementById('e-title').textContent=SHOP.sizes[i].size;document.getElementById('e-val').textContent=editVal;
   document.getElementById('e-delta').textContent='';document.querySelectorAll('#e-reason button').forEach(b=>b.classList.remove('on'));openSheet('sh-edit')}
 function bump(n){editVal=Math.max(0,editVal+n);document.getElementById('e-val').textContent=editVal;
   const d=editVal-SHOP.sizes[editIdx].onHand,el=document.getElementById('e-delta');
   el.textContent=d===0?'no change':(d>0?'+'+d:d)+' vs on hand ('+SHOP.sizes[editIdx].onHand+')';el.style.color=d>0?'var(--good)':d<0?'var(--amber)':'var(--faint)'}
-document.getElementById('e-reason').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;document.querySelectorAll('#e-reason button').forEach(x=>x.classList.remove('on'));b.classList.add('on');editReason=b.dataset.r});
-function saveEdit(){const d=editVal-SHOP.sizes[editIdx].onHand;if(d!==0&&!editReason){toast('Pick a reason code — every stock change is logged');return}
+function saveEdit(){const d=editVal-SHOP.sizes[editIdx].onHand;const rEl=document.querySelector('#e-reason button.on');const reason=rEl?rEl.dataset.r:null;if(d!==0&&!reason){toast('Pick a reason code — every stock change is logged');return}
   SHOP.sizes[editIdx].onHand=editVal;closeSheets();renderStock();
-  toast('✓ '+SHOP.sizes[editIdx].size+' set to '+editVal+(d?' ('+(editReason||'')+')':'')+' — local override, syncs to Shopify post-launch')}
+  toast('✓ '+SHOP.sizes[editIdx].size+' set to '+editVal+(d?' ('+reason+')':'')+' — local override, syncs to Shopify post-launch')}
 function openWhy(i){const s=SHOP.sizes[i],w=weeksCover(s);
   document.getElementById('w-title').textContent=s.size+' band';
   document.getElementById('w-body').innerHTML=kv('Available to sell',avail(s)+' units')+kv('Sales rate (6-wk avg)',s.burn.toFixed(1)+' / week')+kv('Weeks of cover',w.toFixed(1)+' wk')+kv('Reorder point',reorderPoint(s)+' units')+kv('Projected stockout',fmtDate(stockoutDate(s)))+kv('Transfer order-by (2 wk)',fmtDate(orderByDate(s,LEAD.transferWeeks)))+kv('Remake order-by (8 wk)',fmtDate(orderByDate(s,LEAD.remakeWeeks)));
@@ -632,10 +686,7 @@ function enterApp(user){
   document.getElementById('acc-name').textContent=user.name||user.email.split('@')[0];
   document.getElementById('acc-email').textContent=user.email;
   document.getElementById('acc-role').textContent=roleLabel(user.role);
-  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();
-  // support orders mirror
-  const so=document.getElementById('support-orders');
-  so.innerHTML=SHOP.orders.slice(0,3).map(o=>'<div class="card"><div class="row"><div class="grow"><div class="t">'+o.n+' · '+o.name+'</div><div class="d">'+o.date+' · '+o.ful.toLowerCase()+'</div></div><span class="pill '+(o.ful==='FULFILLED'?'good':'amber')+'">'+o.ful+'</span></div></div>').join('');
+  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();renderSupport();
   goto('s-pulse');
 }
 function showLogin(){document.getElementById('app').style.display='none';document.getElementById('login').hidden=false}
@@ -692,6 +743,49 @@ window.addEventListener('load',()=>{
   }
 });
 
+/* ================= SUPPORT TICKETS (interim: saved on this device) ================= */
+const TK_KEY='sw_tickets_v1';
+const SEV={safety:{label:'SAFETY',pill:'safety',rank:0,sla:2},high:{label:'HIGH',pill:'amber',rank:1,sla:8},medium:{label:'MEDIUM',pill:'wave',rank:2,sla:24},low:{label:'LOW',pill:'dim',rank:3,sla:72}};
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function loadTickets(){try{return JSON.parse(localStorage.getItem(TK_KEY)||'[]')}catch(e){return[]}}
+function saveTickets(a){try{localStorage.setItem(TK_KEY,JSON.stringify(a))}catch(e){}}
+function updTicket(id,fn){const a=loadTickets();const t=a.find(x=>x.id===id);if(t){fn(t);saveTickets(a)}return t}
+function ageStr(iso){const ms=Date.now()-new Date(iso).getTime();const h=ms/3.6e6;if(h<1)return Math.max(1,Math.round(ms/6e4))+'m ago';if(h<24)return Math.round(h)+'h ago';return Math.round(h/24)+'d ago'}
+function slaLeft(t){return SEV[t.sev].sla-(Date.now()-new Date(t.created).getTime())/3.6e6}
+function pickVal(id){const b=document.querySelector('#'+id+' button.on');return b?b.dataset.v:''}
+function resetGroup(id){const g=document.getElementById(id);g.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===g.dataset.def))}
+function openAddTicket(){document.getElementById('tk-title').value='';document.getElementById('tk-customer').value='';document.getElementById('tk-desc').value='';['tk-channel','tk-product','tk-sev'].forEach(resetGroup);openSheet('sh-add')}
+function saveTicket(){
+  const title=document.getElementById('tk-title').value.trim();
+  if(!title){toast('Give the ticket a short title');return}
+  const t={id:'TK-'+Date.now().toString(36).toUpperCase().slice(-5),title:title,customer:document.getElementById('tk-customer').value.trim(),channel:pickVal('tk-channel'),product:pickVal('tk-product'),sev:pickVal('tk-sev')||'medium',desc:document.getElementById('tk-desc').value.trim(),status:'open',created:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'you'};
+  const all=loadTickets();all.unshift(t);saveTickets(all);closeSheets();renderSupport();
+  toast('✓ Ticket '+t.id+' created — '+SEV[t.sev].label+' · '+t.channel)
+}
+function ticketCard(t){const s=SEV[t.sev];const breach=t.status==='open'&&slaLeft(t)<0;const meta=[t.channel,t.product,t.customer].filter(Boolean).map(esc).join(' · ');
+  return '<div class="card tap" tabindex="0" onclick="openTicket(\''+t.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(t.title)+'</div><div class="d">'+t.id+' · '+meta+' · '+ageStr(t.created)+(breach?' · <span style="color:var(--amber)">SLA past</span>':'')+'</div></div><span class="pill '+s.pill+'">'+s.label+'</span></div></div>'}
+function renderSupport(){
+  const all=loadTickets();
+  const open=all.filter(t=>t.status==='open').sort((a,b)=>SEV[a.sev].rank-SEV[b.sev].rank||new Date(a.created)-new Date(b.created));
+  const resolved=all.filter(t=>t.status==='closed');
+  document.getElementById('ticket-count').textContent=open.length+' open';
+  document.getElementById('ticket-list').innerHTML=open.length?open.map(ticketCard).join(''):'<div class="empty"><div class="ico">✓</div><div class="t">No open tickets</div><div class="d">Tap “＋ Add ticket” to log one. Automatic capture from the app &amp; sales@ inbox connects next.</div></div>';
+  const rsec=document.getElementById('ticket-resolved-sec');
+  if(resolved.length){rsec.style.display='block';document.getElementById('ticket-resolved').innerHTML=resolved.map(ticketCard).join('')}else rsec.style.display='none';
+  document.getElementById('support-orders').innerHTML=SHOP.orders.slice(0,3).map(o=>'<div class="card"><div class="row"><div class="grow"><div class="t">'+o.n+' · '+o.name+'</div><div class="d">'+o.date+' · '+o.ful.toLowerCase()+'</div></div><span class="pill '+(o.ful==='FULFILLED'?'good':'amber')+'">'+o.ful+'</span></div></div>').join('')
+}
+function toggleResolved(){const r=document.getElementById('ticket-resolved');const on=r.style.display!=='none';r.style.display=on?'none':'block';document.getElementById('resolved-toggle').textContent=on?'Show':'Hide'}
+function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
+  document.getElementById('tkv-title').textContent=t.title;
+  const p=document.getElementById('tkv-pill');p.className='pill '+SEV[t.sev].pill;p.textContent=SEV[t.sev].label;
+  document.getElementById('tkv-body').innerHTML=kv('Ticket',t.id)+kv('Channel',esc(t.channel))+kv('Product',esc(t.product))+kv('Customer',esc(t.customer||'—'))+kv('Opened',ageStr(t.created)+' · '+esc(t.by||'—'))+kv('SLA target',SEV[t.sev].sla+'h')+(t.desc?'<div class="note" style="margin-top:8px">'+esc(t.desc)+'</div>':'');
+  document.getElementById('tkv-actions').innerHTML=t.status==='open'?'<button class="btn" onclick="promoteTicket(\''+id+'\')">Promote to Build</button><button class="btn ghost" style="margin-top:8px" onclick="resolveTicket(\''+id+'\')">Mark resolved</button>':'<button class="btn ghost" onclick="reopenTicket(\''+id+'\')">Reopen</button>';
+  openSheet('sh-ticket')
+}
+function resolveTicket(id){updTicket(id,t=>t.status='closed');closeSheets();renderSupport();toast('✓ '+id+' resolved')}
+function reopenTicket(id){updTicket(id,t=>t.status='open');closeSheets();renderSupport();toast(id+' reopened')}
+function promoteTicket(id){closeSheets();toast('✓ '+id+' flagged for Build — becomes a ranked engineering item once the triage feed is wired')}
+
 /* ================= TRIAGE ENGINE (real, testable) ================= */
 const SafewaveTriage=(function(){
   function score(it){const base=(it.reach*it.impact*it.confidence)/it.effort;return Math.round(base*(it.safetyRisk?3:1)*(it.dealBlocking?2:1))}
@@ -711,6 +805,7 @@ try{SafewaveTriage.selfTest()}catch(e){}
 function openSheet(id){document.getElementById(id).classList.add('on')}
 function closeSheets(){document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('on'))}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheets()});
+document.addEventListener('click',e=>{const b=e.target.closest('.reason button');if(!b)return;const g=b.closest('.reason');g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
 let toastT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2600)}
 document.getElementById('email').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('pass').focus()});
 document.getElementById('pass').addEventListener('keydown',e=>{if(e.key==='Enter')doEmailAuth()});
