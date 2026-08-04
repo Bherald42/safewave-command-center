@@ -494,6 +494,43 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
   </div>
 </div>
 
+<div class="sheet" id="sh-addacct" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">NEW ACCOUNT</span>
+    <h1 style="font-size:20px;margin:11px 0 12px">Add an account</h1>
+    <input class="field" id="na-name" placeholder="Account / company name">
+    <input class="field" id="na-contact" placeholder="Primary contact name">
+    <input class="field" id="na-email" type="email" placeholder="Email">
+    <input class="field" id="na-phone" placeholder="Phone">
+    <input class="field" id="na-location" placeholder="Location / state">
+    <input class="field" id="na-owner" placeholder="Owner (rep)">
+    <p class="d" style="font-weight:600;color:var(--text);margin-bottom:6px">Stage</p>
+    <div class="rolepick" id="na-stage"></div>
+    <button class="btn" style="margin-top:14px" onclick="saveNewAccount()">Create account</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-metrics" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">COMPANY METRICS</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Edit metrics</h1>
+    <p class="sub">Enter manually for now — these auto-fill from the live Safewave dashboard once this company is linked.</p>
+    <input class="field" id="m-bands" type="number" inputmode="numeric" placeholder="Bands online">
+    <input class="field" id="m-users" type="number" inputmode="numeric" placeholder="Active users">
+    <input class="field" id="m-mrr" type="number" inputmode="numeric" placeholder="MRR ($ / month)">
+    <p class="d" style="font-weight:600;color:var(--text);margin-bottom:6px">Billing status</p>
+    <div class="rolepick" id="m-billing">
+      <button data-v="Active">Active</button><button data-v="Trial">Trial</button><button data-v="Past due">Past due</button><button data-v="Churned">Churned</button>
+    </div>
+    <input class="field" id="m-invoices" type="number" inputmode="numeric" placeholder="Open invoices" style="margin-top:10px">
+    <button class="btn" onclick="saveMetrics()">Save</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
 <div class="sheet" id="sh-mail" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
@@ -553,9 +590,19 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
     <input class="field" id="ac-owner" style="margin:6px 0 0" onchange="saveOwner(acctId)" placeholder="Unassigned">
     <p class="d" style="font-weight:600;color:var(--text);margin-top:12px">Tags</p>
     <div id="ac-tags" style="display:flex;gap:5px;flex-wrap:wrap;margin:6px 0"></div>
-    <div class="searchbar" style="margin-bottom:12px"><input id="ac-tag-input" placeholder="Add a tag (e.g. hot, ASL, K-12, VR)" onkeydown="if(event.key==='Enter'){event.preventDefault();addTag(acctId)}"></div>
-    <button class="btn" id="ac-email" style="margin-bottom:8px">✉️ Email this account</button>
-    <button class="btn ghost" id="ac-dash" style="margin-bottom:12px">Link client dashboard</button>
+    <div class="searchbar" style="margin-bottom:16px"><input id="ac-tag-input" placeholder="Add a tag (e.g. hot, ASL, K-12, VR)" onkeydown="if(event.key==='Enter'){event.preventDefault();addTag(acctId)}"></div>
+
+    <div class="sec-head" style="margin-top:4px"><h2>Company dashboard</h2><a onclick="openMetrics(acctId)">Edit</a></div>
+    <div class="tiles" id="ac-metrics" style="margin-bottom:8px"></div>
+    <button class="btn ghost" id="ac-dash" style="margin-bottom:6px">Link Safewave dashboard</button>
+    <div class="note" style="margin-bottom:18px">Live stats — bands online, user management, recurring billing &amp; invoices — go live when this company's Safewave dashboard is linked. Share that repo and I'll wire the real feed.</div>
+
+    <div class="sec-head"><h2>Contacts</h2></div>
+    <div id="ac-contacts" style="margin-bottom:8px"></div>
+    <div class="row" style="gap:6px;margin-bottom:6px"><input class="field" id="ac-c-name" placeholder="Name" style="margin:0;flex:1"><input class="field" id="ac-c-email" placeholder="Email" style="margin:0;flex:1"></div>
+    <button class="btn ghost" style="margin-bottom:18px" onclick="addContact(acctId)">＋ Add contact</button>
+
+    <button class="btn" id="ac-email" style="margin-bottom:12px">✉️ Email this account</button>
     <div class="card" id="ac-body" style="margin-bottom:14px"></div>
     <div class="sec-head"><h2>Activity</h2></div>
     <div id="ac-notes"></div>
@@ -963,7 +1010,34 @@ function pDate(s){if(!s)return null;s=(''+s).trim();
   const d=Date.parse(s);return isNaN(d)?null:d}
 function lastAct(a){let ds=[];(a.notes||[]).forEach(n=>{const d=pDate(n.at);if(d)ds.push(d)});const dd=pDate(a.date);if(dd)ds.push(dd);return ds.length?Math.max.apply(null,ds):null}
 function isStale(a){if(a.stage==='Won'||a.stage==='Lost')return false;const la=lastAct(a);return la==null||(Date.now()-la)/864e5>STALE_DAYS}
-function localSeed(){let base=(window.CRM_SEED||[]).map(a=>Object.assign({},a));try{const ov=JSON.parse(localStorage.getItem('sw_crm_edits')||'{}');base.forEach(a=>{if(ov[a.id])Object.assign(a,ov[a.id])})}catch(e){}return base}
+function localSeed(){let base=(window.CRM_SEED||[]).map(a=>Object.assign({},a));try{const nw=JSON.parse(localStorage.getItem('sw_crm_new')||'[]');base=nw.concat(base)}catch(e){}try{const ov=JSON.parse(localStorage.getItem('sw_crm_edits')||'{}');base.forEach(a=>{if(ov[a.id])Object.assign(a,ov[a.id])})}catch(e){}return base}
+/* ---- add account, contacts, company metrics ---- */
+function openAddAcct(){['na-name','na-contact','na-email','na-phone','na-location','na-owner'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});document.getElementById('na-stage').innerHTML=STAGES.map(s=>'<button data-v="'+s+'" class="'+(s==='New'?'on':'')+'">'+s+'</button>').join('');closeSheets();openSheet('sh-addacct')}
+function saveNewAccount(){const name=document.getElementById('na-name').value.trim();if(!name){toast('Enter an account name');return}
+  const sb=document.querySelector('#na-stage button.on');
+  const rec={id:'c'+Date.now().toString(36),board:'Added',name:name,contact:document.getElementById('na-contact').value.trim(),owner:document.getElementById('na-owner').value.trim()||'Unassigned',email:document.getElementById('na-email').value.trim(),phone:document.getElementById('na-phone').value.trim(),location:document.getElementById('na-location').value.trim(),stage:sb?sb.dataset.v:'New',status:'',tags:[],notes:[],contacts:[],extra:{}};
+  addAccount(rec);closeSheets();crmSeg='all';crmQ='';renderCRM();toast('✓ Account added — '+name)}
+function addAccount(rec){CRMA.unshift(rec);
+  if(crmSource==='firestore'&&hasFirestore()){firebase.firestore().collection('crm_accounts').doc(rec.id).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+  else{try{const nw=JSON.parse(localStorage.getItem('sw_crm_new')||'[]');nw.unshift(rec);localStorage.setItem('sw_crm_new',JSON.stringify(nw))}catch(e){}}}
+function renderMetrics(a){const m=a.metrics||{};
+  const tiles=[['Bands online',m.bandsOnline],['Active users',m.activeUsers],['MRR',(m.mrr!=null&&m.mrr!=='')?('$'+m.mrr):''],['Billing',m.billingStatus],['Open invoices',m.openInvoices]];
+  document.getElementById('ac-metrics').innerHTML=tiles.map(t=>'<div class="tile"><div class="n">'+((t[1]!=null&&t[1]!=='')?esc(String(t[1])):'—')+'</div><div class="l">'+t[0]+'</div></div>').join('')}
+function openMetrics(id){const a=CRMA.find(x=>x.id===id);if(!a)return;const m=a.metrics||{};
+  document.getElementById('m-bands').value=m.bandsOnline!=null?m.bandsOnline:'';document.getElementById('m-users').value=m.activeUsers!=null?m.activeUsers:'';
+  document.getElementById('m-mrr').value=m.mrr!=null?m.mrr:'';document.getElementById('m-invoices').value=m.openInvoices!=null?m.openInvoices:'';
+  document.querySelectorAll('#m-billing button').forEach(b=>b.classList.toggle('on',b.dataset.v===(m.billingStatus||'')));
+  openSheet('sh-metrics')}
+function num(id){const v=document.getElementById(id).value.trim();return v===''?null:Number(v)}
+function saveMetrics(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;const bb=document.querySelector('#m-billing button.on');
+  const metrics={bandsOnline:num('m-bands'),activeUsers:num('m-users'),mrr:num('m-mrr'),openInvoices:num('m-invoices'),billingStatus:bb?bb.dataset.v:''};
+  updateAccount(acctId,{metrics:metrics});renderMetrics(a);document.getElementById('sh-metrics').classList.remove('on');toast('✓ Metrics saved')}
+function renderContacts(a){const cs=a.contacts||[];
+  document.getElementById('ac-contacts').innerHTML=cs.length?cs.map((c,i)=>'<div class="card" style="padding:10px"><div class="row"><div class="grow"><div class="t">'+esc(c.name||'—')+(c.title?' · '+esc(c.title):'')+'</div><div class="d">'+[esc(c.email),esc(c.phone)].filter(Boolean).join(' · ')+'</div></div><a onclick="rmContact(\''+a.id+'\','+i+')" style="color:var(--faint);cursor:pointer;padding:0 4px">✕</a></div></div>').join(''):'<div class="d" style="color:var(--faint)">No extra contacts yet.</div>'}
+function addContact(id){const a=CRMA.find(x=>x.id===id);if(!a)return;const name=document.getElementById('ac-c-name').value.trim();if(!name){toast('Enter a contact name');return}
+  const cs=(a.contacts||[]).slice();cs.push({name:name,email:document.getElementById('ac-c-email').value.trim()});updateAccount(id,{contacts:cs});
+  document.getElementById('ac-c-name').value='';document.getElementById('ac-c-email').value='';renderContacts(a);toast('✓ Contact added')}
+function rmContact(id,i){const a=CRMA.find(x=>x.id===id);if(!a)return;const cs=(a.contacts||[]).slice();cs.splice(i,1);updateAccount(id,{contacts:cs});renderContacts(a)}
 async function loadCRM(){
   crmReady=false;renderCRM();
   if(hasFirestore()){
@@ -998,7 +1072,7 @@ function crmFiltered(){return CRMA.filter(a=>{
 function crmEmpty(){const admin=CURRENT_USER&&(CURRENT_USER.role==='superadmin'||CURRENT_USER.role==='admin');
   return '<div class="empty"><div class="ico">🏢</div><div class="t">Pipeline is empty</div><div class="d">'
     +(admin?'Load your accounts once to populate the shared workspace for the whole team. They save to your private cloud (Firestore), not the public web.':'No accounts yet — an admin loads them once, then everyone sees the pipeline.')+'</div>'
-    +(admin?'<input type="file" id="seed-file" accept="application/json,.json" style="display:none" onchange="loadSeedFile(this)"><button class="btn" style="max-width:320px;margin:14px auto 0" onclick="document.getElementById(\'seed-file\').click()">Load accounts (one-time)</button>':'')
+    +(admin?'<input type="file" id="seed-file" accept="application/json,.json" style="display:none" onchange="loadSeedFile(this)"><button class="btn" style="max-width:320px;margin:14px auto 0" onclick="document.getElementById(\'seed-file\').click()">Load accounts (one-time)</button><button class="btn ghost" style="max-width:320px;margin:10px auto 0" onclick="openAddAcct()">＋ Add an account manually</button>':'')
     +'</div>'}
 function viewBtn(v,l){return '<button class="chip'+(crmView===v?' on':'')+'" onclick="crmView=\''+v+'\';renderCRM()">'+l+'</button>'}
 function sel(label,cur,opts,varn){return '<select onchange="'+varn+'=this.value;renderCrmMain()" style="flex-shrink:0;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:99px;padding:7px 12px;font-family:var(--font-b);font-size:12px;font-weight:600">'
@@ -1016,6 +1090,7 @@ function renderCRM(){
   body.innerHTML='<div class="chips">'+viewBtn('pipeline','Pipeline')+viewBtn('list','List')+viewBtn('attention','Follow-up · '+stale)+'</div>'
     +'<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input type="search" placeholder="Search accounts, owners, locations" value="'+esc(crmQ)+'" oninput="crmQ=this.value;renderCrmMain()"></div>'
     +'<div class="chips">'+sel('Owner',crmOwner,owners,'crmOwner')+sel('List',crmBoard,boards,'crmBoard')+(tags.length?sel('Tag',crmTag,tags,'crmTag'):'')+'</div>'
+    +'<button class="btn ghost" style="margin-bottom:14px" onclick="openAddAcct()">＋ Add account</button>'
     +'<div id="crm-main"></div>';
   renderCrmMain();
 }
@@ -1040,6 +1115,8 @@ function openAcct(id){const a=CRMA.find(x=>x.id===id);if(!a)return;acctId=id;
   const dash=document.getElementById('ac-dash');dash.textContent=a.dashboardUrl?'Open client dashboard ↗':'Link client dashboard';
   dash.onclick=()=>{if(a.dashboardUrl){window.open(a.dashboardUrl,'_blank','noopener')}else{const u=prompt('Paste this client\'s Safewave dashboard link (temporary — the live device feed connects next):');if(u){updateAccount(id,{dashboardUrl:u});toast('✓ Dashboard linked');dash.textContent='Open client dashboard ↗'}}};
   const eb=document.getElementById('ac-email');if(a.email){eb.style.display='block';eb.onclick=openCompose}else{eb.style.display='none'}
+  renderMetrics(a);renderContacts(a);
+  const cn=document.getElementById('ac-c-name');if(cn)cn.value='';const ce=document.getElementById('ac-c-email');if(ce)ce.value='';
   renderNotes(a);document.getElementById('note-input').value='';
   openSheet('sh-acct')}
 function setStage(id,s,btn){updateAccount(id,{stage:s});btn.closest('.rolepick').querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderCrmMain();toast('✓ Moved to '+s)}
@@ -1111,6 +1188,7 @@ function openSheet(id){document.getElementById(id).classList.add('on')}
 function closeSheets(){document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('on'))}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheets()});
 document.addEventListener('click',e=>{const b=e.target.closest('.reason button');if(!b)return;const g=b.closest('.reason');g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
+document.addEventListener('click',e=>{const b=e.target.closest('.rolepick button');if(!b)return;const g=b.closest('.rolepick');g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
 let toastT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2600)}
 document.getElementById('email').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('pass').focus()});
 document.getElementById('pass').addEventListener('keydown',e=>{if(e.key==='Enter')doEmailAuth()});
