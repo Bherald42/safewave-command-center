@@ -1,9 +1,15 @@
 name: Deploy Cloud Functions
 
-# Manual only — run from the Actions tab ("Run workflow") after the one-time
-# backend setup (Blaze plan + IONOS_PASSWORD secret + service-account roles).
-# Kept separate from hosting so it can never affect the live site deploy.
+# Auto-deploys the Cloud Functions whenever functions code changes on main,
+# and can still be run manually from the Actions tab. Kept separate from the
+# hosting workflow so it can never affect the live site deploy.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'firebase.json'
+      - '.github/workflows/deploy-functions.yml'
   workflow_dispatch:
 
 jobs:
