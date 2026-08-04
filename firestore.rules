@@ -1,0 +1,39 @@
+rules_version = '2';
+// Safewave Command Center — Firestore security rules.
+// Paste these into: Firebase console → Build → Firestore Database → Rules → Publish.
+// Enforces role-based access server-side: only the super admin can change roles,
+// and nobody can self-promote past "member".
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isSuper() {
+      return signedIn() && myRole() == 'superadmin';
+    }
+    // The verified email on the auth token — the only email allowed to seed the super admin.
+    function isSuperEmail() {
+      return signedIn() && request.auth.token.email == 'brad.herald@safewavetech.com';
+    }
+
+    match /users/{uid} {
+      // Any signed-in teammate can read the roster (needed for the manage-team screen).
+      allow read: if signedIn();
+
+      // A user may create only their own profile, and only with role "member"
+      // unless they are the verified super-admin email (which seeds "superadmin").
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == (isSuperEmail() ? 'superadmin' : 'member');
+
+      // Only the super admin can change roles (or any profile field).
+      allow update: if isSuper();
+
+      allow delete: if false;
+    }
+  }
+}
