@@ -1,0 +1,26 @@
+name: Deploy Cloud Functions
+
+# Manual only — run from the Actions tab ("Run workflow") after the one-time
+# backend setup (Blaze plan + IONOS_PASSWORD secret + service-account roles).
+# Kept separate from hosting so it can never affect the live site deploy.
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy_functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install function dependencies
+        run: npm ci --prefix functions || npm install --prefix functions
+      - name: Write service account
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/sa.json"
+      - name: Deploy functions
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          npm install -g firebase-tools
+          firebase deploy --only functions --project safewave-command-center --non-interactive

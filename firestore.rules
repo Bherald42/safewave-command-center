@@ -41,5 +41,16 @@ service cloud.firestore {
     match /crm_accounts/{id} {
       allow read, write: if signedIn();
     }
+
+    // Support tickets — shared queue (email-ingested + manually added).
+    match /tickets/{id} {
+      allow read, write: if signedIn();
+    }
+
+    // Overdue/needs-attention summary, written by the scanOverdue function.
+    match /nudges/{id} {
+      allow read: if signedIn();
+      allow write: if false; // server (Admin SDK) only
+    }
   }
 }
