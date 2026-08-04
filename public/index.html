@@ -119,6 +119,10 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .chip{flex-shrink:0;background:var(--surface);border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:600;padding:7px 13px;border-radius:99px;cursor:pointer;font-family:var(--font-b)}
 .chip.on{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
 .chip:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
+.rolepick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.rolepick button{background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font-family:var(--font-b);font-size:11.5px;font-weight:600;padding:7px 11px;border-radius:9px;cursor:pointer}
+.rolepick button.on{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
+.rolepick button:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
 .note{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:12px 14px;color:var(--faint);font-size:11.5px;line-height:1.55}
 .note b{color:var(--muted)}
 .note .meta{font-size:10.5px;color:var(--faint);margin-bottom:4px;font-family:var(--font-m);letter-spacing:.06em}
@@ -450,7 +454,8 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
       <div class="kv"><span>Signed in</span><b id="acc-since">now</b></div>
       <div class="kv"><span>Session</span><b>Private to you</b></div>
     </div>
-    <button class="btn ghost" style="margin-top:12px" onclick="doSignOut()">Sign out</button>
+    <button class="btn" id="acc-manage" style="display:none;margin-top:12px" onclick="openUsers()">Manage team &amp; roles</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="doSignOut()">Sign out</button>
   </div>
 </div>
 
@@ -488,6 +493,17 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
   </div>
 </div>
 
+<div class="sheet" id="sh-users" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">TEAM &amp; ROLES</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Manage team</h1>
+    <p class="sub">The super admin can change anyone's role. A change takes effect on that person's next sign-in.</p>
+    <div id="users-body"></div>
+    <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
 <div class="sheet" id="sh-acct" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
@@ -515,6 +531,7 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 <!-- Firebase (auto-configured by Firebase Hosting on the live domain) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="/__/firebase/init.js?useEmulator=false" onerror="window.__noFirebase=true"></script>
 
 <script>
@@ -555,11 +572,11 @@ const DECISIONS = [
   ['SKU hygiene','Standardize to BND-BLK-SM / MD / LG (recommended; not auto-applied — it writes to the live Shopify store).'],
 ];
 
-/* Roles — bootstrap phase: there is no user-management screen yet, so any
-   signed-in user (the owner, by invitation) gets full admin access. When
-   Firestore user management lands, the role will come from the user's profile
-   document and these emails become the initial admin seeds. */
-const ADMIN_EMAILS = ['heraldb2@gmail.com','brad.herald@safewavetech.com'];
+/* Roles — stored per user in Firestore (users/{uid}.role). The super admin can
+   change anyone's role; security rules enforce it server-side. If Firestore
+   isn't enabled yet, the app falls back to owner-admin so nobody is locked out. */
+const SUPER_EMAIL = 'brad.herald@safewavetech.com';
+const ROLES = ['member','manager','admin','superadmin'];
 const NAV_ITEMS = [
   {id:'s-pulse',   label:'Pulse',    roles:['admin','manager','member'], svg:'<path d="M3 12h4l3-8 4 16 3-8h4"/>'},
   {id:'s-stock',   label:'Stock',    roles:['admin','manager','member'], svg:'<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v10"/>'},
@@ -674,7 +691,7 @@ function renderDecisions(){
 let CURRENT_USER=null;
 function buildNav(role){
   const nav=document.getElementById('nav');nav.innerHTML='';
-  NAV_ITEMS.filter(n=>n.roles.includes(role)).forEach((n,idx)=>{
+  NAV_ITEMS.filter(n=>n.roles.includes(navRole(role))).forEach((n,idx)=>{
     const b=document.createElement('button');b.className='tab'+(idx===0?' on':'');b.dataset.s=n.id;
     b.onclick=()=>goto(n.id,b);
     b.innerHTML='<svg viewBox="0 0 24 24">'+n.svg+'</svg>'+n.label;
@@ -689,8 +706,26 @@ function goto(id,btn){
 }
 
 /* ================= SESSION ================= */
-function roleFor(email){return 'admin'} /* bootstrap: signed-in owner gets full access; per-user roles arrive with Firestore user management */
-function roleLabel(r){return {admin:'Admin · Founder',manager:'Manager',member:'Team member'}[r]||r}
+function navRole(r){return r==='superadmin'?'admin':r}
+function roleLabel(r){return {superadmin:'Super Admin',admin:'Admin',manager:'Manager',member:'Team member'}[r]||r}
+function hasFirestore(){return typeof firebase!=='undefined'&&firebase.firestore&&!window.__noFirebase}
+function fallbackRole(email){return (email||'').toLowerCase()===SUPER_EMAIL?'superadmin':'admin'}
+async function resolveUser(u){
+  const base={uid:u.uid,name:u.displayName||u.email.split('@')[0],email:u.email};
+  if(!hasFirestore())return Object.assign(base,{role:fallbackRole(u.email),fsOff:true});
+  try{
+    const ref=firebase.firestore().collection('users').doc(u.uid);
+    const snap=await ref.get();
+    if(!snap.exists){
+      const role=(u.email||'').toLowerCase()===SUPER_EMAIL?'superadmin':'member';
+      await ref.set({email:u.email,name:base.name,role:role,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      return Object.assign(base,{role:role});
+    }
+    return Object.assign(base,{role:(snap.data()||{}).role||'member'});
+  }catch(e){
+    return Object.assign(base,{role:fallbackRole(u.email),fsOff:true,fsErr:(e&&e.code)||''});
+  }
+}
 function initials(name,email){const s=(name||email||'?').trim();const p=s.split(/[\s@.]+/).filter(Boolean);return ((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase()}
 function enterApp(user){
   CURRENT_USER=user;
@@ -700,7 +735,8 @@ function enterApp(user){
   document.getElementById('who-nm').innerHTML=(user.name||user.email.split('@')[0])+'<small>'+roleLabel(user.role)+'</small>';
   document.getElementById('acc-name').textContent=user.name||user.email.split('@')[0];
   document.getElementById('acc-email').textContent=user.email;
-  document.getElementById('acc-role').textContent=roleLabel(user.role);
+  document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
+  document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
   buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();renderSupport();loadCRM();renderCRM();
   goto('s-pulse');
 }
@@ -743,8 +779,8 @@ function prettyAuthErr(err){
 }
 window.addEventListener('load',()=>{
   if(fbReady()){
-    firebase.auth().onAuthStateChanged(u=>{
-      if(u){enterApp({name:u.displayName||u.email.split('@')[0],email:u.email,role:roleFor(u.email)});}
+    firebase.auth().onAuthStateChanged(async u=>{
+      if(u){ try{ enterApp(await resolveUser(u)); }catch(e){ enterApp({uid:u.uid,name:u.email.split('@')[0],email:u.email,role:fallbackRole(u.email),fsOff:true}); } }
       else{showLogin();}
     });
   }else{
@@ -800,6 +836,37 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
 function resolveTicket(id){updTicket(id,t=>t.status='closed');closeSheets();renderSupport();toast('✓ '+id+' resolved')}
 function reopenTicket(id){updTicket(id,t=>t.status='open');closeSheets();renderSupport();toast(id+' reopened')}
 function promoteTicket(id){closeSheets();toast('✓ '+id+' flagged for Build — becomes a ranked engineering item once the triage feed is wired')}
+
+/* ================= TEAM & ROLES (Firestore users/{uid}) ================= */
+function fsSetupNote(code){return '<div class="note"><b>Team management needs Firestore turned on.</b><br>Firebase console → Build → <b>Firestore Database</b> → Create database (production mode), then publish the security rules provided. It\'s free at this scale.'+(code?'<br><span style="color:var(--amber)">('+esc(code)+')</span>':'')+'</div>'}
+function openUsers(){
+  const body=document.getElementById('users-body');
+  body.innerHTML='<div class="d">Loading…</div>';
+  openSheet('sh-users');
+  if(!hasFirestore()){body.innerHTML=fsSetupNote();return}
+  firebase.firestore().collection('users').get().then(qs=>{
+    const canEdit=CURRENT_USER.role==='superadmin';
+    let html='';
+    qs.forEach(doc=>{
+      const u=doc.data()||{},uid=doc.id,me=uid===CURRENT_USER.uid;
+      html+='<div class="card"><div class="t">'+esc(u.name||u.email||uid)+(me?' (you)':'')+'</div><div class="d">'+esc(u.email||'')+'</div>';
+      if(canEdit&&!me){
+        html+='<div class="rolepick" data-uid="'+uid+'">'+ROLES.map(r=>'<button data-v="'+r+'" class="'+(u.role===r?'on':'')+'" onclick="setUserRole(\''+uid+'\',\''+r+'\',this)">'+roleLabel(r)+'</button>').join('')+'</div>';
+      }else{
+        html+='<div class="d" style="margin-top:6px">Role: <b>'+roleLabel(u.role||'member')+'</b>'+(me?' — you can\'t change your own role':'')+'</div>';
+      }
+      html+='</div>';
+    });
+    body.innerHTML=html||'<div class="d">No teammates yet — they appear here after their first sign-in.</div>';
+  }).catch(e=>{body.innerHTML=fsSetupNote((e&&e.code)||'permission-denied')});
+}
+function setUserRole(uid,role,btn){
+  if(CURRENT_USER.role!=='superadmin'){toast('Only the super admin can change roles');return}
+  firebase.firestore().collection('users').doc(uid).update({role:role}).then(()=>{
+    const g=btn.closest('.rolepick');g.querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+    toast('✓ Role set to '+roleLabel(role)+' — applies on their next sign-in');
+  }).catch(e=>toast('Could not update — '+((e&&e.code)||'check Firestore rules')));
+}
 
 /* ================= CRM (imported from Monday.com, stored on this device only) ================= */
 const CRM_KEY='sw_crm_v1';
