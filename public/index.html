@@ -114,6 +114,11 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .searchbar{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px}
 .searchbar input{flex:1;background:none;border:0;color:var(--text);font-family:var(--font-b);font-size:14.5px;outline:none}
 .searchbar input::placeholder{color:var(--faint)}
+.chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;background:var(--surface);border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:600;padding:7px 13px;border-radius:99px;cursor:pointer;font-family:var(--font-b)}
+.chip.on{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
+.chip:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
 .note{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:12px 14px;color:var(--faint);font-size:11.5px;line-height:1.55}
 .note b{color:var(--muted)}
 .note .meta{font-size:10.5px;color:var(--faint);margin-bottom:4px;font-family:var(--font-m);letter-spacing:.06em}
@@ -362,15 +367,11 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 
     <!-- CRM -->
     <main class="screen" id="s-crm">
-      <p class="eyebrow">CRM · enterprise</p>
+      <p class="eyebrow">CRM · enterprise &amp; partners</p>
       <h1>Accounts &amp; pipeline</h1>
-      <p class="sub">Organizations → contacts → opportunities → deployed seats.</p>
-      <div class="empty">
-        <div class="ico">🏢</div>
-        <div class="t">No enterprise accounts yet</div>
-        <div class="d">Enterprise is your pipeline target — today revenue is 100% Shopify DTC. Add your first organization to start tracking contacts, demos and seats.</div>
-        <button class="btn" onclick="toast('Add-account flow lands with the CRM build — organization, contacts, opportunity, owner')">＋ Add first account</button>
-      </div>
+      <p class="sub" id="crm-sub">Organizations, contacts and outreach.</p>
+      <input type="file" id="crm-file" accept=".xlsx" multiple style="display:none" onchange="onCrmFiles(this)">
+      <div id="crm-body"></div>
     </main>
 
     <!-- COMPLY -->
@@ -484,6 +485,17 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
     <textarea class="field" id="tk-desc" placeholder="Details (optional)" style="min-height:80px;resize:vertical;font-family:var(--font-b)"></textarea>
     <button class="btn" onclick="saveTicket()">Create ticket</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-acct" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill dim" id="ac-seg">SEGMENT</span>
+    <div class="row" style="margin:11px 0 4px;gap:8px"><h1 style="font-size:20px;flex:1" id="ac-name">—</h1><span class="pill dim" id="ac-status">—</span></div>
+    <div class="card" id="ac-body" style="margin:8px 0 12px"></div>
+    <div id="ac-notes"></div>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Close</button>
   </div>
 </div>
 
@@ -686,7 +698,7 @@ function enterApp(user){
   document.getElementById('acc-name').textContent=user.name||user.email.split('@')[0];
   document.getElementById('acc-email').textContent=user.email;
   document.getElementById('acc-role').textContent=roleLabel(user.role);
-  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();renderSupport();
+  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();renderSupport();loadCRM();renderCRM();
   goto('s-pulse');
 }
 function showLogin(){document.getElementById('app').style.display='none';document.getElementById('login').hidden=false}
@@ -785,6 +797,106 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
 function resolveTicket(id){updTicket(id,t=>t.status='closed');closeSheets();renderSupport();toast('✓ '+id+' resolved')}
 function reopenTicket(id){updTicket(id,t=>t.status='open');closeSheets();renderSupport();toast(id+' reopened')}
 function promoteTicket(id){closeSheets();toast('✓ '+id+' flagged for Build — becomes a ranked engineering item once the triage feed is wired')}
+
+/* ================= CRM (imported from Monday.com, stored on this device only) ================= */
+const CRM_KEY='sw_crm_v1';
+let CRM=null, crmSeg='all', crmQ='';
+function loadCRM(){try{CRM=JSON.parse(localStorage.getItem(CRM_KEY)||'null')}catch(e){CRM=null}}
+function crmPill(s){s=(s||'').toLowerCase();
+  if(/done|added|approved|customer|purchas|closed|won/.test(s))return'good';
+  if(/demo|meeting|invoice|lending|working|trial|pilot|call|sent/.test(s))return'wave';
+  if(/not interest|not approved|declin|lost|dead|no /.test(s))return'dim';
+  return'amber'}
+function linkify(v){v=v||'';if(/@/.test(v)&&!/\s/.test(v))return '<a href="mailto:'+esc(v)+'" style="color:var(--wave)">'+esc(v)+'</a>';
+  if(!/\s/.test(v)&&/^https?:|\.(com|org|gov|net|edu|io)/i.test(v)){const u=/^https?:/.test(v)?v:'https://'+v;return '<a href="'+esc(u)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(v)+'</a>'}
+  return esc(v)}
+function crmCard(r,seg){return '<div class="card tap" tabindex="0" onclick="openAcct('+seg+',\''+r.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(r.name||'—')+'</div><div class="d">'+[esc(r.contact),esc(r.email),esc(r.location)].filter(Boolean).join(' · ')+(r.notes&&r.notes.length?' · '+r.notes.length+' note'+(r.notes.length>1?'s':''):'')+'</div></div><span class="pill '+crmPill(r.status)+'">'+esc(r.status||'—')+'</span></div></div>'}
+function crmRecs(){let a=[];if(!CRM)return a;
+  if(crmSeg==='all')CRM.segments.forEach((s,si)=>s.records.forEach(r=>a.push({r:r,seg:si})));
+  else CRM.segments[crmSeg].records.forEach(r=>a.push({r:r,seg:crmSeg}));
+  const q=crmQ.trim().toLowerCase();
+  if(q)a=a.filter(x=>[x.r.name,x.r.email,x.r.contact,x.r.company,x.r.location].some(v=>(v||'').toLowerCase().includes(q)));
+  return a}
+function crmListHTML(){const a=crmRecs();return a.length?a.map(x=>crmCard(x.r,x.seg)).join(''):'<div class="empty"><div class="d">No matches.</div></div>'}
+function renderCRMList(){const el=document.getElementById('crm-list');if(el)el.innerHTML=crmListHTML()}
+function crmSetSeg(v){crmSeg=v;renderCRM()}
+function crmEmpty(){return '<div class="empty"><div class="ico">🏢</div><div class="t">Bring your CRM over from Monday.com</div><div class="d">Import your board exports (.xlsx) — accounts, contacts, statuses and notes land here, private to this browser. Nothing is uploaded to the web.</div><button class="btn" style="max-width:320px;margin:14px auto 0" onclick="document.getElementById(\'crm-file\').click()">Import Monday.com boards (.xlsx)</button></div>'}
+function renderCRM(){
+  const body=document.getElementById('crm-body');if(!body)return;
+  if(!CRM||!CRM.segments||!CRM.segments.length){document.getElementById('crm-sub').textContent='Import your Monday.com boards to get started.';body.innerHTML=crmEmpty();return}
+  const total=CRM.segments.reduce((a,s)=>a+s.count,0);
+  document.getElementById('crm-sub').textContent=total+' accounts · '+CRM.segments.length+' boards · imported '+ageStr(CRM.importedAt);
+  const chips='<button class="chip'+(crmSeg==='all'?' on':'')+'" onclick="crmSetSeg(\'all\')">All · '+total+'</button>'
+    +CRM.segments.map((s,i)=>'<button class="chip'+(crmSeg===i?' on':'')+'" onclick="crmSetSeg('+i+')">'+esc(s.board)+' · '+s.count+'</button>').join('');
+  body.innerHTML='<div class="chips" role="tablist" aria-label="Segments">'+chips+'</div>'
+    +'<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input type="search" placeholder="Search accounts" value="'+esc(crmQ)+'" oninput="crmQ=this.value;renderCRMList()"></div>'
+    +'<div class="sec-head"><h2>'+(crmSeg==='all'?'All accounts':esc(CRM.segments[crmSeg].board))+'</h2><a onclick="document.getElementById(\'crm-file\').click()">Re-import</a></div>'
+    +'<div id="crm-list">'+crmListHTML()+'</div>'
+    +'<div class="note" style="margin-top:14px">Stored only in this browser for now — not on the web. Secure multi-device sync behind your login is the next step.</div>'}
+function openAcct(seg,id){
+  const S=CRM.segments[seg];const r=S.records.find(x=>x.id===id);if(!r)return;
+  document.getElementById('ac-seg').textContent=S.board;
+  document.getElementById('ac-name').textContent=r.name||'—';
+  const p=document.getElementById('ac-status');p.className='pill '+crmPill(r.status);p.textContent=r.status||'—';
+  const rows=[['Contact',r.contact],['Title',r.title],['Company',r.company],['Email',r.email],['Phone',r.phone],['Location',r.location],['Website',r.website]].filter(x=>x[1]);
+  const shown={'Name':1,'First and Last Name':1,'Contact Name':1,'Person':1,'Owner':1,'Position/Title':1,'Company':1,'Email':1,'Phone':1,'Location':1,'State/Scope?':1,'Company Website':1,'Status':1,'Step':1,'Subitems':1};
+  Object.keys(r.extra||{}).forEach(k=>{if(!shown[k])rows.push([k,r.extra[k]])});
+  document.getElementById('ac-body').innerHTML=rows.map(x=>'<div class="kv"><span>'+esc(x[0])+'</span><b>'+linkify(x[1])+'</b></div>').join('')||'<div class="d">No further details.</div>';
+  const notes=r.notes||[];
+  document.getElementById('ac-notes').innerHTML=notes.length?'<div class="sec-head" style="margin-bottom:6px"><h2>Activity · '+notes.length+'</h2></div>'+notes.map(n=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([n.user,n.at].filter(Boolean).join(' · '))+'</div>'+esc(n.text||'')+'</div>').join(''):'';
+  openSheet('sh-acct')}
+
+/* ---- Monday.com .xlsx importer (client-side; PII never leaves the device) ---- */
+function loadSheetJS(cb){if(window.XLSX)return cb();const s=document.createElement('script');s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';s.onload=cb;s.onerror=()=>toast('Couldn\'t load the spreadsheet reader — check your connection and retry');document.head.appendChild(s)}
+function _n(v){return String(v==null?'':v).replace(/\s+/g,' ').trim()}
+function parseBoard(wb){
+  const ISID=/^\d{5,}$/;
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+  const board=_n(rows[0]&&rows[0][0])||'Board';
+  let hi=-1;for(let i=0;i<Math.min(8,rows.length);i++){const c=_n(rows[i][0]).toLowerCase();if(c==='name'||c==='first and last name'){hi=i;break}}
+  if(hi<0)hi=2;
+  const headers=(rows[hi]||[]).map(_n);
+  const idc=headers.findIndex(h=>/^item id/i.test(h));
+  const findc=(...ns)=>{for(const n of ns){const j=headers.findIndex(h=>h.toLowerCase()===n.toLowerCase());if(j>=0)return j}return -1};
+  const get=(row,...ns)=>{const j=findc(...ns);return j>=0?_n(row[j]):''};
+  const notes={};
+  if(wb.SheetNames[1]){
+    const ur=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[1]],{header:1,defval:'',raw:false});
+    const uh=(ur[1]||[]).map(_n);const uc=n=>uh.findIndex(h=>h.toLowerCase()===n.toLowerCase());
+    const ji=uc('Item ID'),ju=uc('User'),ja=uc('Created At'),jt=uc('Update Content');
+    for(let k=2;k<ur.length;k++){const iid=ji>=0?_n(ur[k][ji]):'';if(ISID.test(iid))(notes[iid]=notes[iid]||[]).push({user:ju>=0?_n(ur[k][ju]):'',at:ja>=0?_n(ur[k][ja]):'',text:jt>=0?_n(ur[k][jt]):''})}
+  }
+  const recs=[];let group='';
+  for(let k=hi+1;k<rows.length;k++){
+    const row=rows[k]||[];const idv=idc>=0?_n(row[idc]):'';
+    if(!ISID.test(idv)){const ne=row.filter(c=>_n(c));if(ne.length===1&&_n(row[0]))group=_n(row[0]);continue}
+    const extra={};headers.forEach((h,j)=>{if(h&&!/^item id/i.test(h)&&_n(row[j]))extra[h]=_n(row[j])});
+    recs.push({id:idv,group:group,name:get(row,'Name','First and Last Name'),contact:get(row,'Contact Name','Person','Owner'),title:get(row,'Position/Title'),company:get(row,'Company'),status:get(row,'Status','Step')||group,email:get(row,'Email'),phone:get(row,'Phone'),location:get(row,'Location','State/Scope?'),website:get(row,'Company Website'),extra:extra,notes:notes[idv]||[]});
+  }
+  return {board:board,count:recs.length,records:recs}}
+function onCrmFiles(input){
+  const files=[].slice.call(input.files);if(!files.length)return;
+  toast('Reading '+files.length+' board'+(files.length>1?'s':'')+'…');
+  loadSheetJS(()=>{
+    const segs=[];let done=0;
+    files.forEach(file=>{
+      const rd=new FileReader();
+      rd.onload=e=>{try{const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});const b=parseBoard(wb);if(b.count)segs.push(b)}catch(err){toast('Couldn\'t read '+file.name)}if(++done===files.length)finishCrmImport(segs)};
+      rd.onerror=()=>{if(++done===files.length)finishCrmImport(segs)};
+      rd.readAsArrayBuffer(file);
+    });
+  });
+  input.value='';
+}
+function finishCrmImport(segs){
+  segs.sort((a,b)=>b.count-a.count);
+  const total=segs.reduce((a,s)=>a+s.count,0);
+  if(!total){toast('No accounts found — pick your Monday.com board exports (.xlsx)');return}
+  CRM={importedAt:new Date().toISOString(),segments:segs};
+  try{localStorage.setItem(CRM_KEY,JSON.stringify(CRM))}catch(e){toast('Imported, but too large to save on this device')}
+  crmSeg='all';crmQ='';renderCRM();
+  toast('✓ Imported '+total+' accounts across '+segs.length+' boards')}
 
 /* ================= TRIAGE ENGINE (real, testable) ================= */
 const SafewaveTriage=(function(){
