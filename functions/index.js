@@ -49,7 +49,13 @@ exports.sendUserEmail = onCall({ region: REGION }, async (request) => {
   });
 
   try {
-    await transport.sendMail({ from: creds.email, to, subject: subject || "(no subject)", text });
+    await transport.sendMail({
+      from: `"${(creds.name || "").replace(/"/g, "") || creds.email}" <${creds.email}>`,
+      to,
+      subject: subject || "(no subject)",
+      text: (text || "") + signatureText(creds),
+      html: buildBrandedEmail(text || "", creds),
+    });
   } catch (e) {
     logger.error("sendUserEmail failed", e && e.message);
     throw new HttpsError("internal", "Send failed — check your email address and app password in Connect email.");
@@ -111,6 +117,38 @@ exports.scanOverdue = onSchedule({ schedule: "every day 13:00", region: REGION }
 });
 
 /* helpers */
+function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function signatureText(c) {
+  let s = "\n\n--\n" + (c.name || c.email);
+  s += c.title ? "\n" + c.title + " · Safewave Technology" : "\nSafewave Technology";
+  if (c.phone) s += "\n" + c.phone;
+  s += "\n" + c.email + "\nsafewavetech.com";
+  return s;
+}
+function buildBrandedEmail(body, c) {
+  const name = esc(c.name || c.email);
+  const bodyHtml = esc(body).replace(/\n/g, "<br>");
+  const titleLine = c.title ? esc(c.title) + " &nbsp;·&nbsp; Safewave Technology" : "Safewave Technology";
+  const contact = [
+    c.phone ? esc(c.phone) : "",
+    '<a href="mailto:' + esc(c.email) + '" style="color:#0aa5bd;text-decoration:none">' + esc(c.email) + "</a>",
+    '<a href="https://safewavetech.com" style="color:#0aa5bd;text-decoration:none">safewavetech.com</a>',
+  ].filter(Boolean).join(" &nbsp;·&nbsp; ");
+  return (
+    '<div style="margin:0;padding:24px 0;background:#f4f6f8">' +
+      '<div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1a1d22">' +
+        '<div style="background:#0B0C0E;padding:18px 28px"><span style="font-weight:800;font-size:20px;letter-spacing:-.5px;color:#ffffff">Safewave<span style="color:#4FD8EC">.</span></span></div>' +
+        '<div style="padding:28px 28px 4px 28px">' + bodyHtml + "</div>" +
+        '<div style="padding:0 28px 26px 28px"><div style="margin-top:22px;padding-top:16px;border-top:2px solid #4FD8EC">' +
+          '<div style="font-weight:700;font-size:15px;color:#0B0C0E">' + name + "</div>" +
+          '<div style="font-size:13px;color:#555">' + titleLine + "</div>" +
+          '<div style="font-size:12px;color:#888;margin-top:6px">' + contact + "</div>" +
+        "</div></div>" +
+        '<div style="background:#f4f6f8;padding:14px 28px;font-size:11px;color:#9aa2ab">Safewave Technology — vibration alerts for the Deaf &amp; hard-of-hearing. <a href="https://safewavetech.com" style="color:#9aa2ab">safewavetech.com</a></div>' +
+      "</div>" +
+    "</div>"
+  );
+}
 function pDate(s) { if (!s) return null; const d = Date.parse(s); return isNaN(d) ? null : d; }
 function lastActivity(a) {
   const ds = [];
