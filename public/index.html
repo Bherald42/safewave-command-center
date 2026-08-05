@@ -307,6 +307,10 @@ input[type=date]{color-scheme:dark}
 .crm-rail{display:flex;flex-direction:column;gap:20px;min-width:0}
 .crm-surface{min-width:0}
 .crm-surface .surf-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.row-stage{appearance:none;-webkit-appearance:none;border:0;font-family:var(--font-b);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:99px;padding:4px 9px;cursor:pointer;max-width:120px}
+#crm-queue{display:none;position:fixed;inset:0;z-index:150;background:rgba(13,27,36,.5);backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:16px}
+#crm-queue.on{display:flex}
+.q-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 64px rgba(0,0,0,.28);max-width:460px;width:100%;padding:22px}
 .screen{display:none;padding:20px 16px 30px}
 .screen.on{display:block}
 
@@ -878,6 +882,9 @@ input[type=date]{color-scheme:dark}
 
 <!-- Lightbox for viewing an attached screenshot -->
 <div id="shot-view" onclick="this.style.display='none'"><img id="shot-view-img" alt="screenshot"></div>
+
+<!-- CRM guided "Start working" queue -->
+<div id="crm-queue" onclick="if(event.target===this)queueClose(false)"><div class="q-card" id="q-card"></div></div>
 
 <div class="sheet" id="sh-users" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
@@ -2455,7 +2462,9 @@ function renderHubInner(){const f=crmFollowups();
   html+='<div id="hub-sections"><div class="crm-home">';
   // LEFT rail — Today + saved views
   html+='<div class="crm-rail">';
+    const qn=f.overdue.length+f.soon.length;
     html+='<div><div class="sec-head" style="margin-top:2px"><h2>Today</h2>'+(f.overdue.length?'<span class="pill amber">'+f.overdue.length+' overdue</span>':(f.soon.length?'<span class="pill wave">'+f.soon.length+' due</span>':'<span class="pill good">clear</span>'))+'</div>';
+    if(qn)html+='<button class="btn" style="width:100%;margin-bottom:12px" onclick="startQueue()">▶ Start working · '+qn+'</button>';
     if(f.overdue.length||f.soon.length){
       if(f.overdue.length){html+='<div class="pulse-sub-h">Overdue · '+f.overdue.length+'</div>'+f.overdue.slice(0,6).map(x=>followRow(x.a)).join('');if(f.overdue.length>6)html+='<div class="d" style="color:var(--faint);margin:2px 0 6px">+'+(f.overdue.length-6)+' more</div>'}
       if(f.soon.length){html+='<div class="pulse-sub-h">Due soon · '+f.soon.length+'</div>'+f.soon.slice(0,6).map(x=>followRow(x.a)).join('')}
@@ -2502,8 +2511,33 @@ function crmRow(a,showStage){const nm=displayName(a),col=acctColor(nm);const dm=
   let rt='';
   if(dm&&dm.label)rt+='<span class="pill '+(dm.overdue||dm.soon?'amber':'dim')+'">'+esc(dm.label)+'</span>';
   else if(stale)rt+='<span class="pill amber" title="No recent activity">stale</span>';
-  if(showStage)rt+='<span class="pill '+STAGEMETA[a.stage||'New']+'">'+esc(a.stage||'New')+'</span>';
+  if(showStage)rt+=rowStageSelect(a);
   return '<div class="crow tap" tabindex="0" onclick="openAcct(\''+a.id+'\')"><span class="crow-av" style="background:'+col+'22;color:'+col+'">'+esc(acctInitials(nm))+'</span><div class="crow-main"><div class="crow-nm">'+esc(nm)+'</div><div class="crow-sub">'+esc(meta)+'</div></div><div class="crow-right">'+rt+'</div></div>';}
+function rowStageSelect(a){const cur=a.stage||'New';const cls={dim:'var(--faint-bg,rgba(0,0,0,.06))'};
+  return '<select class="row-stage pill '+STAGEMETA[cur]+'" title="Change stage" onclick="event.stopPropagation()" onchange="quickStage(event,\''+a.id+'\')">'+STAGES.map(s=>'<option'+(s===cur?' selected':'')+'>'+s+'</option>').join('')+'</select>';}
+function crmRerenderMain(){if(crmDrill){renderDrillMain();return}if(crmView==='hub'){const el=document.getElementById('crm-home-main');if(el)el.innerHTML=homeSurfaceHTML();return}renderCrmMain();}
+function quickStage(e,id){e.stopPropagation();const v=e.target.value;const a=CRMA.find(x=>x.id===id);updateAccount(id,{stage:v});crmRerenderMain();refreshPulse();toast('✓ '+displayName(a)+' → '+v)}
+/* Guided "Start working" queue — walk your follow-ups one at a time */
+let queueIds=[],queueIdx=0;
+function startQueue(){const f=crmFollowups();queueIds=f.overdue.concat(f.soon).map(x=>x.a.id);if(!queueIds.length){toast('Nothing in your queue 🎉');return}queueIdx=0;document.getElementById('crm-queue').classList.add('on');queueRender()}
+function queueRender(){const card=document.getElementById('q-card');if(!card)return;
+  if(queueIdx>=queueIds.length){queueClose(true);return}
+  const a=CRMA.find(x=>x.id===queueIds[queueIdx]);if(!a){queueIdx++;return queueRender()}
+  const nm=displayName(a),dm=a.dueAt?dueMeta(dayMs(a.dueAt)):null;const note=(a.notes&&a.notes[0])?a.notes[0].text:'';
+  card.innerHTML='<div class="row" style="align-items:center"><span class="pill dim">'+(queueIdx+1)+' of '+queueIds.length+'</span>'+(dm&&dm.label?'<span class="pill '+(dm.overdue?'amber':'wave')+'" style="margin-left:auto">'+esc(dm.label)+'</span>':'')+'</div>'
+    +'<h1 style="font-size:22px;margin:12px 0 3px">'+esc(nm)+'</h1>'
+    +'<div class="d" style="margin-bottom:12px">'+[esc(a.owner&&a.owner!=='Unassigned'?a.owner:'Unassigned'),esc(a.stage||'New'),esc(a.location||'')].filter(Boolean).join(' · ')+'</div>'
+    +'<div class="card" style="margin:0"><div class="d" style="font-weight:600;color:var(--text);margin-bottom:2px">Next step</div><div>'+(a.nextStep?esc(a.nextStep):'<span style="color:var(--faint)">No next step set</span>')+'</div></div>'
+    +(note?'<div class="note" style="margin-top:8px">'+esc(note.slice(0,200))+'</div>':'')
+    +'<div class="row" style="gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn" style="flex:1;min-width:130px" onclick="queueDone()">✓ Done</button><button class="btn ghost" style="flex:1;min-width:120px" onclick="queueSnooze()">😴 Snooze 3d</button></div>'
+    +'<div class="row" style="gap:8px;margin-top:8px"><button class="btn ghost" style="flex:1" onclick="queueOpenAcct()">Open account</button><button class="btn ghost" style="flex:1" onclick="queueSkip()">Skip →</button></div>'
+    +'<button class="btn ghost" style="margin-top:8px;width:100%" onclick="queueClose(false)">Close</button>';}
+function queueNext(){queueIdx++;if(queueIdx>=queueIds.length)queueClose(true);else queueRender()}
+function queueDone(){const a=CRMA.find(x=>x.id===queueIds[queueIdx]);if(a){const notes=(a.notes||[]).slice();notes.unshift({user:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'}),text:'✓ Followed up'+(a.nextStep?': '+a.nextStep:'')});updateAccount(a.id,{dueAt:'',nextStep:'',notes:notes})}queueNext()}
+function queueSnooze(){const a=CRMA.find(x=>x.id===queueIds[queueIdx]);if(a)updateAccount(a.id,{dueAt:ymd(new Date(todayMs()+3*864e5))});queueNext()}
+function queueSkip(){queueNext()}
+function queueOpenAcct(){const id=queueIds[queueIdx];queueClose(false);openAcct(id)}
+function queueClose(done){document.getElementById('crm-queue').classList.remove('on');renderCRM();refreshPulse();if(done)toast('✓ Queue clear — nice work 🎉')}
 function groupedHTML(list){let html='',any=false;
   STAGES.forEach(st=>{const items=list.filter(a=>(a.stage||'New')===st);if(!items.length)return;any=true;
     const open=(st in crmExpanded)?crmExpanded[st]:(items.length<=12);
