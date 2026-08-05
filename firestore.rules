@@ -78,6 +78,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Purchase orders (Pace transfers / China production) — shared ops.
+    match /purchase_orders/{id} {
+      allow read, write: if signedIn();
+    }
+
     // Per-band identity (serial + lifecycle history) and the returns queue.
     match /bands/{serial} {
       allow read, write: if signedIn();
