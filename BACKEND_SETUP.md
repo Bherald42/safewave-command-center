@@ -40,10 +40,37 @@ replies send in-app from each user's own connected address.
 | Function | Trigger | Purpose |
 |---|---|---|
 | `sendUserEmail` | called from the app | Send from the signed-in user's mailbox; log to the account/ticket |
-| `scanOverdue` | daily | Flag stale accounts + SLA-breached tickets into `nudges/summary` |
+| `sourceProspects` | called from the app | Source new commercial contacts from Google Places for the CRM Prospector |
+| `runCampaigns` | daily 15:00 UTC | Send the next due step of every active outreach campaign, personalised per account + use case |
+| `scanOverdue` | daily 13:00 UTC | Flag stale accounts + SLA-breached tickets into `nudges/summary` |
+
+## Prospector — Google Places API key
+The CRM **Prospector** sources real businesses (audiology clinics, senior-living,
+schools, VR agencies) with name, address, phone and website. It needs a Google
+Places API key:
+
+1. In Google Cloud Console → **APIs & Services**, enable the **Places API (New)**.
+2. Create an API key (restrict it to the Places API).
+3. Put it where the function can read it — either:
+   - add a line to `functions/.env`:  `PLACES_API_KEY=your_key_here`  (Cloud
+     Functions v2 loads `.env` automatically), **or**
+   - set it on the deployed service's environment.
+4. Redeploy functions.
+
+Until the key is set, the Prospector shows a clear "add your key" message instead
+of failing. The key lives only on the server — never in the client bundle.
+
+## Campaigns — automated outreach
+`runCampaigns` sends each account's next due campaign step from the campaign
+owner's connected mailbox (so activate a campaign only after connecting email).
+Steps are personalised with `{{firstName}}`, `{{company}}`, `{{city}}` and carry
+the Safewave use-case pitch. Enrollment/step state lives on each `crm_accounts`
+doc under `campaign`; campaigns live in the `campaigns` collection.
 
 ## Notes
-- Nothing sends autonomously — every email is a human clicking Send.
+- Support-ticket replies and account emails are human-initiated. **Campaign
+  emails send automatically** once a campaign is activated and accounts are
+  enrolled — pause the campaign to stop sends.
 - Users should use an **app password** (Gmail/Outlook/IONOS all offer one), not
   their main login password.
 - Future hardening: OAuth mailbox connect (Gmail/Microsoft) and encrypting

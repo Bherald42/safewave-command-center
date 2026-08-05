@@ -131,6 +131,25 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .pcol-h{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 6px 9px;border-bottom:2px solid var(--wave);margin-bottom:9px;font-family:var(--font-d);font-weight:600;font-size:12.5px}
 .pcol-body{min-height:30px}
 .pcol-empty{color:var(--faint);font-size:11px;text-align:center;padding:16px 8px;border:1px dashed var(--line);border-radius:10px}
+.acct-hd{display:flex;gap:14px;align-items:center;margin-bottom:16px}
+.acct-av{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-weight:700;font-size:19px;flex-shrink:0}
+.acct-title{font-family:var(--font-d);font-size:22px;font-weight:600;letter-spacing:-.01em;line-height:1.15;overflow-wrap:anywhere;margin-top:5px}
+.acct-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.acct-actions .btn{flex:1;min-width:130px}
+.acct-grid{display:grid;grid-template-columns:1fr;gap:14px}
+.acct-col{display:flex;flex-direction:column;gap:14px}
+.acct-col .card{margin-bottom:0}
+@media(min-width:820px){.acct-grid{grid-template-columns:1fr 1fr;align-items:start}}
+.frow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.frow .field{margin:0}
+.frow .fr-label,.frow .fr-name,.frow .fr-role{flex:1;min-width:60px}
+.frow .fr-lbl{flex:1;font-size:13px;color:var(--muted);font-weight:600}
+.frow #fp-cash,.frow #fp-customers,.frow #fp-mrr,.frow #fp-growth,.frow #fp-horizon{flex:1;max-width:200px}
+.frow .fr-x{color:var(--faint);cursor:pointer;padding:0 4px;flex-shrink:0;text-decoration:none}
+.frow select.fr-type{-webkit-appearance:none;appearance:none}
+.tile.tap{cursor:pointer;transition:border-color .12s}
+.tile.tap:hover{border-color:#4a5361}
+.tile.tap:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
 .pcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--wave);border-radius:11px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .12s,transform .05s}
 .pcard:hover{border-color:#4a5361}
 .pcard:active{transform:scale(.99)}
@@ -281,26 +300,28 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
     <main class="screen on" id="s-pulse">
       <p class="eyebrow" id="pulse-date">Today</p>
       <h1 id="pulse-hi">Welcome</h1>
-      <p class="sub" id="pulse-sub">Your live view of Safewave.</p>
+      <p class="sub" id="pulse-sub">Your command center.</p>
 
-      <div class="sec" id="pulse-money">
-        <div class="tiles">
-          <div class="tile"><div class="n" id="k-rev">—</div><div class="l">Revenue · last full wk <span class="pill wave" style="font-size:9px;padding:1px 6px">LIVE</span></div></div>
-          <div class="tile"><div class="n" id="k-ord">—</div><div class="l" id="k-ord-l">Orders · last full wk</div></div>
-          <div class="tile"><div class="n" id="k-gross">—</div><div class="l">Gross · 90 days <span class="pill wave" style="font-size:9px;padding:1px 6px">LIVE</span></div></div>
-          <div class="tile"><div class="n" id="k-aov">—</div><div class="l">Avg order value · 90d</div></div>
-        </div>
-      </div>
+      <div class="tiles" id="pulse-kpis" style="margin-bottom:18px"></div>
 
       <div class="sec">
-        <div class="sec-head"><h2>Needs attention</h2></div>
+        <div class="sec-head"><h2>Your action items</h2><span class="pill dim" id="pulse-actcount"></span></div>
         <div id="pulse-attn"></div>
       </div>
 
       <div class="sec">
-        <div class="sec-head"><h2>Connect to light up the rest</h2></div>
-        <div class="note"><b>Live today:</b> Shopify (orders, revenue, stock). Everything below fills in as each integration is connected — no placeholder numbers are shown until then.</div>
+        <div class="sec-head"><h2>Across the business</h2></div>
+        <div class="tiles" id="pulse-roll"></div>
       </div>
+
+    </main>
+
+    <!-- FINANCIALS (restricted) -->
+    <main class="screen" id="s-finance">
+      <p class="eyebrow">Financials · restricted</p>
+      <h1>Financials</h1>
+      <p class="sub" id="fin-sub">Cashflow, projections, P&amp;L, budget &amp; payroll.</p>
+      <div id="fin-body"></div>
     </main>
 
     <!-- STOCK -->
@@ -392,8 +413,8 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 
     <!-- CRM -->
     <main class="screen" id="s-crm">
-      <p class="eyebrow">CRM · enterprise sales</p>
-      <h1>Pipeline</h1>
+      <p class="eyebrow">CRM · commercial clients</p>
+      <h1 id="crm-h1">Command center</h1>
       <p class="sub" id="crm-sub">Loading…</p>
       <div id="crm-body"></div>
     </main>
@@ -617,40 +638,14 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
   </div>
 </div>
 
-<div class="sheet" id="sh-acct" onclick="if(event.target===this)closeSheets()">
+<div class="sheet" id="sh-enroll" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
-    <span class="pill dim" id="ac-seg"></span>
-    <h1 style="font-size:20px;margin:9px 0 12px" id="ac-name">—</h1>
-    <p class="d" style="font-weight:600;color:var(--text);margin-bottom:2px">Stage</p>
-    <div class="rolepick" id="ac-stage"></div>
-    <p class="d" style="font-weight:600;color:var(--text);margin-top:14px">Owner</p>
-    <input class="field" id="ac-owner" style="margin:6px 0 0" onchange="saveOwner(acctId)" placeholder="Unassigned">
-    <p class="d" style="font-weight:600;color:var(--text);margin-top:12px">Tags</p>
-    <div id="ac-tags" style="display:flex;gap:5px;flex-wrap:wrap;margin:6px 0"></div>
-    <div class="searchbar" style="margin-bottom:16px"><input id="ac-tag-input" placeholder="Add a tag (e.g. hot, ASL, K-12, VR)" onkeydown="if(event.key==='Enter'){event.preventDefault();addTag(acctId)}"></div>
-
-    <div class="sec-head" style="margin-top:4px"><h2>Company dashboard</h2><a onclick="openMetrics(acctId)">Edit</a></div>
-    <div class="tiles" id="ac-metrics" style="margin-bottom:8px"></div>
-    <button class="btn ghost" id="ac-dash" style="margin-bottom:6px">Link Safewave dashboard</button>
-    <div class="note" style="margin-bottom:18px">Live stats — bands online, user management, recurring billing &amp; invoices — go live when this company's Safewave dashboard is linked. Share that repo and I'll wire the real feed.</div>
-
-    <div class="sec-head"><h2>Contacts</h2></div>
-    <div id="ac-contacts" style="margin-bottom:8px"></div>
-    <div class="row" style="gap:6px;margin-bottom:6px"><input class="field" id="ac-c-name" placeholder="Name" style="margin:0;flex:1"><input class="field" id="ac-c-email" placeholder="Email" style="margin:0;flex:1"></div>
-    <button class="btn ghost" style="margin-bottom:18px" onclick="addContact(acctId)">＋ Add contact</button>
-
-    <button class="btn" id="ac-email" style="margin-bottom:12px">✉️ Email this account</button>
-    <div class="card" id="ac-body" style="margin-bottom:14px"></div>
-    <div class="sec-head"><h2>Activity</h2></div>
-    <div id="ac-notes"></div>
-    <textarea class="field" id="note-input" placeholder="Add a call note…" style="min-height:72px;resize:vertical;font-family:var(--font-b);margin-top:10px"></textarea>
-    <div class="row" style="gap:8px">
-      <button class="btn" style="flex:1" onclick="addNote(acctId)">Save note</button>
-      <button class="btn ghost" id="rec-btn" style="flex:1" onclick="toggleRecord(acctId)">● Record call</button>
-    </div>
-    <div class="note" style="margin-top:10px">Recording transcribes the call live in your browser into the note above — review, then Save. AI summary and the live client-device feed connect next.</div>
-    <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
+    <span class="pill wave">CAMPAIGN</span>
+    <h1 style="font-size:19px;margin:10px 0 4px">Enroll in a campaign</h1>
+    <p class="d" style="margin-bottom:14px">Adds this account to an automated outreach sequence. The next step sends from your connected mailbox on the daily run.</p>
+    <div id="enroll-list"></div>
+    <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Cancel</button>
   </div>
 </div>
 
@@ -803,37 +798,69 @@ function openWhy(i){const s=SHOP.sizes[i],w=weeksCover(s);
 function kv(k,v){return '<div class="kv"><span>'+k+'</span><b>'+v+'</b></div>'}
 
 /* ================= PULSE ================= */
+/* Safewave product telemetry — lights up when the enterprise dashboard is linked. */
+const SAFEWAVE={totalUsers:null,online:null};
+function refreshPulse(){if(CURRENT_USER)renderPulse(CURRENT_USER)}
+function ptile(v,l,badge,to){const inner='<div class="n">'+(v==null?'—':esc(String(v)))+'</div><div class="l">'+esc(l)+(badge?' <span class="pill '+(badge==='LIVE'?'wave':'amber')+'" style="font-size:9px;padding:1px 6px">'+(badge==='LIVE'?'LIVE':'LINK')+'</span>':'')+'</div>';
+  return to?'<div class="tile tap" tabindex="0" onclick="goto(\''+to+'\')">'+inner+'</div>':'<div class="tile">'+inner+'</div>'}
 function renderPulse(user){
   const first=(user.name||'there').split(' ')[0];
   document.getElementById('pulse-hi').textContent='Welcome, '+first;
   document.getElementById('pulse-date').textContent=SNAPSHOT_DATE.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
-  const money=document.getElementById('pulse-money');
-  money.style.display=(user.role==='admin'||user.role==='manager')?'block':'none';
-  document.getElementById('k-rev').textContent=SHOP.lastWeekRev;
-  document.getElementById('k-ord').textContent=SHOP.lastWeekOrders;
-  document.getElementById('k-ord-l').textContent='Orders · latest '+SHOP.orders[0].n;
-  document.getElementById('k-gross').textContent=SHOP.grosse90||SHOP.gross90;
-  document.getElementById('k-aov').textContent=SHOP.aov;
-  // needs attention — real only
+  const canMoney=(user.role==='admin'||user.role==='manager'||user.role==='superadmin');
+  // top-line KPIs
+  document.getElementById('pulse-kpis').innerHTML=
+    ptile(SAFEWAVE.totalUsers,'Total users',SAFEWAVE.totalUsers==null?'LINK':'LIVE')
+    +ptile(SAFEWAVE.online,'Users online',SAFEWAVE.online==null?'LINK':'LIVE')
+    +(canMoney?ptile(SHOP.lastWeekRev,'Revenue · last wk','LIVE'):ptile(totalAvail(),'Bands available',null,'s-stock'))
+    +ptile(SHOP.lastWeekOrders,'New orders · wk','LIVE','s-stock');
+  // action items — real signals, personalised where possible
+  const items=[];
   const crit=SHOP.sizes.filter(s=>statusOf(s).key==='crit').sort((a,b)=>weeksCover(a)-weeksCover(b))[0];
+  if(crit){const days=Math.round(weeksCover(crit)*7);items.push(['s-stock','amber',avail(crit)+' LEFT',crit.size+' bands: '+avail(crit)+' left — order now','~'+days+' days cover at '+crit.burn.toFixed(1)+'/wk (live Shopify)'])}
   const unfilled=SHOP.orders.filter(o=>o.ful==='UNFULFILLED');
-  const attn=document.getElementById('pulse-attn');attn.innerHTML='';
-  if(crit){const days=Math.round(weeksCover(crit)*7);
-    attn.innerHTML+='<div class="card tap" tabindex="0" onclick="goto(\'s-stock\')"><div class="row"><div class="grow"><div class="t">'+crit.size+' bands: '+avail(crit)+' left — order now</div><div class="d">~'+days+' days cover at '+crit.burn.toFixed(1)+'/wk (live Shopify)</div></div><span class="pill amber">'+avail(crit)+' LEFT</span></div></div>';}
-  if(unfilled.length){
-    attn.innerHTML+='<div class="card tap" tabindex="0" onclick="goto(\'s-stock\')"><div class="row"><div class="grow"><div class="t">'+unfilled.length+' order'+(unfilled.length>1?'s':'')+' awaiting fulfilment</div><div class="d">'+unfilled.map(o=>o.n).join(', ')+' · paid, not shipped</div></div><span class="pill wave">TO SHIP</span></div></div>';}
-  if(!attn.innerHTML)attn.innerHTML='<div class="empty"><div class="ico">✓</div><div class="t">Nothing urgent from live data</div><div class="d">Stock is healthy and orders are shipped. That\'s a good sign.</div></div>';
+  if(unfilled.length)items.push(['s-stock','wave','TO SHIP',unfilled.length+' order'+(unfilled.length>1?'s':'')+' awaiting fulfilment',unfilled.map(o=>o.n).join(', ')+' · paid, not shipped']);
+  if(!(user.mail&&user.mail.email))items.push(['__mail','amber','SET UP','Connect your email','Send from your address and power outreach campaigns — Account → Connect email']);
+  // CRM follow-ups owned by me
+  const mine=(CRMA||[]).filter(a=>isStale(a)&&(a.owner||'')&&user.name&&(a.owner||'').toLowerCase().includes((user.name||'').split(' ')[0].toLowerCase()));
+  if(mine.length)items.push(['s-crm','amber',mine.length+' STALE','Follow up with '+mine.length+' of your accounts','No activity in 30+ days — '+mine.slice(0,3).map(a=>displayName(a)).join(', ')+(mine.length>3?'…':'')]);
+  // open tickets breaching SLA
+  const breached=(typeof TKTS!=='undefined'?TKTS:[]).filter(t=>t.status==='open'&&(SEV[t.sev].sla-(Date.now()-new Date(t.created).getTime())/3.6e6)<0);
+  if(breached.length)items.push(['s-support','amber',breached.length+' SLA','Support tickets past SLA',breached.slice(0,3).map(t=>t.title).join(', ')]);
+  const attn=document.getElementById('pulse-attn');
+  attn.innerHTML=items.length?items.map(it=>'<div class="card tap" tabindex="0" onclick="'+(it[0]==='__mail'?'openAccountPanel()':'goto(\''+it[0]+'\')')+'"><div class="row"><div class="grow"><div class="t">'+esc(it[3])+'</div><div class="d">'+esc(it[4])+'</div></div><span class="pill '+it[1]+'">'+esc(it[2])+'</span></div></div>').join('')
+    :'<div class="empty"><div class="ico">✓</div><div class="t">You\'re clear</div><div class="d">Nothing urgent right now — stock is healthy, orders are shipping, and your accounts are up to date.</div></div>';
+  document.getElementById('pulse-actcount').textContent=items.length?items.length+' to do':'clear';
+  // across the business rollups
+  const total=(CRMA||[]).length,stale=(CRMA||[]).filter(isStale).length,outreach=(CRMA||[]).filter(a=>a.campaign&&a.campaign.status==='active').length;
+  const openTk=(typeof TKTS!=='undefined'?TKTS:[]).filter(t=>t.status==='open').length;
+  const top=(function(){try{return SafewaveTriage.ranked()[0]}catch(e){return null}})();
+  let roll=
+    rtile('s-stock',totalAvail()+' bands',crit?'Stock · '+crit.size+' critical':'Stock · healthy',crit?'amber':'good')
+    +rtile('s-crm',total+' accounts',stale+' follow-up · '+outreach+' in outreach',stale?'amber':'wave')
+    +rtile('s-support',openTk+' open',openTk?'Support tickets':'Support · all clear',openTk?'wave':'good');
+  if(user.role==='admin'||user.role==='manager')roll+=rtile('s-build',top?top.id:'Build',top?'Top: '+top.title:'Project triage','wave');
+  if(user.role==='admin')roll+=rtile('s-comply','SOC 2 + HIPAA','Comply · Drata','dim');
+  if(financeAllowed()&&financeData){const b=financeBurn(),net=financeMRR()-b.total;roll+=rtile('s-finance',fmtMoney(net)+'/mo',net>=0?'Financials · net positive':'Financials · burn',net>=0?'good':'amber')}
+  document.getElementById('pulse-roll').innerHTML=roll;
 }
+function rtile(to,n,l,pill){return '<div class="tile tap" tabindex="0" onclick="goto(\''+to+'\')"><div class="n" style="font-size:17px">'+esc(n)+'</div><div class="l"><span class="pill '+pill+'" style="font-size:9px;padding:1px 6px">•</span> '+esc(l)+'</div></div>'}
 function renderDecisions(){
   document.getElementById('decision-log').innerHTML=DECISIONS.map(d=>'<div class="note" style="margin-top:8px"><div class="meta">'+d[0].toUpperCase()+'</div>'+d[1]+'</div>').join('')+'<div class="d" style="margin-top:10px">Real calls made during the build — searchable forever, so context never leaves when a person does.</div>';
 }
 
 /* ================= NAV / ROUTER ================= */
 let CURRENT_USER=null;
+const FINANCE_NAV={id:'s-finance',label:'Financials',roles:[],svg:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>'};
+let FINANCE_EMAILS=[];
+function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;if(u.role==='superadmin')return true;return FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase())}
 function buildNav(role){
   const nav=document.getElementById('nav');nav.innerHTML='';
-  NAV_ITEMS.filter(n=>n.roles.includes(navRole(role))).forEach((n,idx)=>{
-    const b=document.createElement('button');b.className='tab'+(idx===0?' on':'');b.dataset.s=n.id;
+  const items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(role)));
+  if(financeAllowed())items.splice(1,0,FINANCE_NAV);
+  const current=document.querySelector('.screen.on');const curId=current?current.id:'s-pulse';
+  items.forEach((n)=>{
+    const b=document.createElement('button');b.className='tab'+(n.id===curId?' on':'');b.dataset.s=n.id;
     b.onclick=()=>goto(n.id,b);
     b.innerHTML='<svg viewBox="0 0 24 24">'+n.svg+'</svg>'+n.label;
     nav.appendChild(b);
@@ -844,6 +871,8 @@ function goto(id,btn){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));el.classList.add('on');
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===id));
   window.scrollTo(0,0);closeSheets();
+  if(id==='s-finance')renderFinance();
+  if(id==='s-crm')renderCRM();
 }
 
 /* ================= SESSION ================= */
@@ -879,7 +908,8 @@ function enterApp(user){
   document.getElementById('acc-email').textContent=user.email;
   document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
-  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();syncTickets();loadCRM();loadMail();
+  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
+  loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
 function showLogin(){document.getElementById('app').style.display='none';document.getElementById('login').hidden=false}
@@ -947,7 +977,7 @@ function loadTickets(){return TKTS}
 async function syncTickets(){
   if(hasFirestore()){try{const s=await firebase.firestore().collection('tickets').get();TKTS=s.docs.map(d=>Object.assign({id:d.id},d.data()));tktSource='firestore'}catch(e){TKTS=lsTickets();tktSource='local'}}
   else{TKTS=lsTickets();tktSource='local'}
-  renderSupport();
+  renderSupport();refreshPulse();
 }
 function persistTicket(t){
   if(tktSource==='firestore'&&hasFirestore()){firebase.firestore().collection('tickets').doc(t.id).set(t,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
@@ -1094,7 +1124,7 @@ async function loadCRM(){
       crmSource=CRMA.length && !snap.empty ?'firestore':'local';
     }catch(e){CRMA=localSeed();crmSource='local'}
   }else{CRMA=localSeed();crmSource='local'}
-  crmReady=true;renderCRM();
+  crmReady=true;renderCRM();refreshPulse();
 }
 function loadSeedFile(input){const f=input.files&&input.files[0];if(!f)return;const rd=new FileReader();rd.onload=e=>{try{const data=JSON.parse(e.target.result);window.CRM_SEED=Array.isArray(data)?data:(data.segments?[].concat.apply([],data.segments.map(s=>s.records||[])):[]);if(!window.CRM_SEED.length){toast('No accounts found in that file');return}toast('Loaded '+window.CRM_SEED.length+' accounts — saving to the shared workspace…');loadCRM();}catch(err){toast('That doesn\'t look like the accounts file (.json)')}};rd.readAsText(f);input.value='';}
 function updateAccount(id,patch){
@@ -1117,16 +1147,35 @@ function viewBtn(v,l){return '<button class="chip'+(crmView===v?' on':'')+'" onc
 function sel(label,cur,opts,varn){return '<select onchange="'+varn+'=this.value;renderCrmMain()" style="flex-shrink:0;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:99px;padding:7px 12px;font-family:var(--font-b);font-size:12px;font-weight:600">'
   +'<option value="all"'+(cur==='all'?' selected':'')+'>'+label+': All</option>'
   +opts.map(o=>'<option'+(cur===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>'}
+/* ---- CRM top-level router: Pipeline · Campaigns · Prospect · Account ---- */
+let crmTab='pipeline';
+function crmGoTab(t){crmTab=t;if(t!=='account')acctId=null;campMode='list';renderCRM()}
+function backToPipeline(){crmTab='pipeline';acctId=null;renderCRM()}
+function crmTabsHTML(){
+  const tab=(id,l,ic)=>'<button class="chip'+(crmTab===id?' on':'')+'" onclick="crmGoTab(\''+id+'\')">'+ic+' '+l+'</button>';
+  return '<div class="chips" style="margin-bottom:16px">'+tab('pipeline','Pipeline','▦')+tab('campaigns','Campaigns','🚀')+tab('prospect','Prospect','🔎')+'</div>';
+}
 function renderCRM(){
   const body=document.getElementById('crm-body');if(!body)return;
-  if(!crmReady){body.innerHTML='<div class="d" style="padding:16px">Loading pipeline…</div>';return}
-  if(!CRMA.length){document.getElementById('crm-sub').textContent='No accounts yet.';body.innerHTML=crmEmpty();return}
+  const h1=document.getElementById('crm-h1');
+  if(!crmReady){body.innerHTML='<div class="d" style="padding:16px">Loading…</div>';return}
+  if(crmTab==='account'){body.innerHTML='';renderAccountView(body);return}
+  if(h1)h1.textContent=crmTab==='campaigns'?'Campaigns':crmTab==='prospect'?'Prospector':'Pipeline';
+  body.innerHTML=crmTabsHTML()+'<div id="crm-view"></div>';
+  const v=document.getElementById('crm-view');
+  if(crmTab==='campaigns')renderCampaigns(v);
+  else if(crmTab==='prospect')renderProspect(v);
+  else renderPipelineView(v);
+}
+function renderPipelineView(v){
+  if(!CRMA.length){document.getElementById('crm-sub').textContent='No accounts yet.';v.innerHTML=crmEmpty();return}
   const total=CRMA.length,won=CRMA.filter(a=>a.stage==='Won').length,stale=CRMA.filter(isStale).length;
+  const enrolled=CRMA.filter(a=>a.campaign&&a.campaign.status==='active').length;
   const owners=Array.from(new Set(CRMA.map(a=>a.owner||'Unassigned'))).sort();
   const boards=Array.from(new Set(CRMA.map(a=>a.board))).sort();
   const tags=Array.from(new Set([].concat.apply([],CRMA.map(a=>a.tags||[])))).sort();
-  document.getElementById('crm-sub').innerHTML=total+' accounts · '+won+' won · <span style="color:var(--amber)">'+stale+' need follow-up</span>'+(crmSource==='local'?' · <span style="color:var(--faint)">local preview</span>':' · <span style="color:var(--good)">shared</span>');
-  body.innerHTML='<div class="chips">'+viewBtn('pipeline','Pipeline')+viewBtn('list','List')+viewBtn('attention','Follow-up · '+stale)+'</div>'
+  document.getElementById('crm-sub').innerHTML=total+' accounts · '+won+' won · <span style="color:var(--amber)">'+stale+' need follow-up</span>'+(enrolled?' · <span style="color:var(--wave)">'+enrolled+' in outreach</span>':'')+(crmSource==='local'?' · <span style="color:var(--faint)">local preview</span>':' · <span style="color:var(--good)">shared</span>');
+  v.innerHTML='<div class="chips">'+viewBtn('pipeline','Pipeline')+viewBtn('list','List')+viewBtn('attention','Follow-up · '+stale)+'</div>'
     +'<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input type="search" placeholder="Search accounts, owners, locations" value="'+esc(crmQ)+'" oninput="crmQ=this.value;renderCrmMain()"></div>'
     +'<div class="chips">'+sel('Owner',crmOwner,owners,'crmOwner')+sel('List',crmBoard,boards,'crmBoard')+(tags.length?sel('Tag',crmTag,tags,'crmTag'):'')+'</div>'
     +'<button class="btn ghost" style="margin-bottom:14px" onclick="openAddAcct()">＋ Add account</button>'
@@ -1170,22 +1219,67 @@ function pipelineHTML(list){return '<div class="pipe">'+STAGES.map(st=>{const it
     +'<div class="pcol-h" style="border-color:'+STAGECOLOR[st]+'"><span>'+st+(mrr?' · $'+mrr+'/mo':'')+'</span><span class="pill '+STAGEMETA[st]+'">'+items.length+'</span></div>'
     +'<div class="pcol-body">'+(items.length?items.map(a=>cardHTML(a,false)).join(''):'<div class="pcol-empty">Drop here</div>')+'</div></div>'}).join('')+'</div>'}
 function listHTML(list){return list.length?list.map(a=>cardHTML(a,true)).join(''):'<div class="empty"><div class="d">No accounts match these filters.</div></div>'}
-function openAcct(id){const a=CRMA.find(x=>x.id===id);if(!a)return;acctId=id;
+function openAcct(id){const a=CRMA.find(x=>x.id===id);if(!a)return;acctId=id;crmTab='account';renderCRM();window.scrollTo(0,0)}
+function renderAccountView(host){
+  const a=CRMA.find(x=>x.id===acctId);if(!a){backToPipeline();return}
+  const nm=displayName(a),col=acctColor(nm);
+  const h1=document.getElementById('crm-h1');if(h1)h1.textContent=nm;
+  document.getElementById('crm-sub').innerHTML='<a onclick="backToPipeline()" style="color:var(--wave);cursor:pointer;font-weight:600">← Back to pipeline</a>';
+  host.innerHTML=
+    '<div class="acct-hd">'
+      +'<span class="acct-av" style="background:'+col+'22;color:'+col+'">'+esc(acctInitials(nm))+'</span>'
+      +'<div style="min-width:0;flex:1"><span class="pill dim" id="ac-seg"></span>'
+        +'<div class="acct-title" id="ac-name">—</div>'
+        +'<div class="d" id="ac-subline" style="color:var(--muted);margin-top:2px"></div></div>'
+    +'</div>'
+    +'<div class="acct-actions">'
+      +'<button class="btn" id="ac-email">✉️ Email</button>'
+      +'<button class="btn ghost" id="ac-enroll" onclick="openEnroll(acctId)">🚀 Enroll in campaign</button>'
+      +'<button class="btn ghost" id="ac-dash">Client dashboard</button>'
+    +'</div>'
+    +'<div class="acct-grid">'
+      +'<div class="acct-col">'
+        +'<div class="card"><div class="sec-head"><h2>Stage</h2></div><div class="rolepick" id="ac-stage"></div>'
+          +'<p class="d" style="font-weight:600;color:var(--text);margin:16px 0 5px">Owner</p><input class="field" id="ac-owner" style="margin:0" onchange="saveOwner(acctId)" placeholder="Unassigned">'
+          +'<p class="d" style="font-weight:600;color:var(--text);margin:16px 0 6px">Tags</p><div id="ac-tags" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px"></div>'
+          +'<div class="searchbar" style="margin:0"><input id="ac-tag-input" placeholder="Add a tag (hot, ASL, K-12, VR)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addTag(acctId)}"></div>'
+        +'</div>'
+        +'<div class="card"><div class="sec-head"><h2>Company dashboard</h2><a onclick="openMetrics(acctId)">Edit</a></div><div class="tiles" id="ac-metrics"></div><div class="note" style="margin-top:11px">Live bands online, active users, recurring billing &amp; invoices light up when this company\'s Safewave dashboard is linked.</div></div>'
+        +'<div class="card"><div class="sec-head"><h2>Details</h2></div><div id="ac-body"></div></div>'
+      +'</div>'
+      +'<div class="acct-col">'
+        +'<div class="card"><div class="sec-head"><h2>Contacts</h2></div><div id="ac-contacts"></div>'
+          +'<div class="row" style="gap:6px;margin-top:9px"><input class="field" id="ac-c-name" placeholder="Name" style="margin:0;flex:1"><input class="field" id="ac-c-email" placeholder="Email" style="margin:0;flex:1"></div>'
+          +'<button class="btn ghost" style="margin-top:9px" onclick="addContact(acctId)">＋ Add contact</button></div>'
+        +'<div class="card"><div class="sec-head"><h2>Activity</h2><span id="ac-campaign-badge"></span></div><div id="ac-notes"></div>'
+          +'<textarea class="field" id="note-input" placeholder="Add a call note…" style="min-height:76px;resize:vertical;font-family:var(--font-b);margin-top:11px"></textarea>'
+          +'<div class="row" style="gap:8px"><button class="btn" style="flex:1" onclick="addNote(acctId)">Save note</button><button class="btn ghost" id="rec-btn" style="flex:1" onclick="toggleRecord(acctId)">● Record call</button></div>'
+          +'<div class="note" style="margin-top:10px">Recording transcribes the call live in your browser into the note above — review, then Save.</div></div>'
+      +'</div>'
+    +'</div>';
+  populateAccount(a);
+}
+function populateAccount(a){const id=a.id;
   document.getElementById('ac-seg').textContent=a.board||'';
   document.getElementById('ac-name').textContent=displayName(a);
+  const sub=document.getElementById('ac-subline');if(sub)sub.textContent=[(a.owner&&a.owner!=='Unassigned')?('Owner: '+a.owner):'Unassigned',a.location,a.email].filter(Boolean).join('  ·  ');
   document.getElementById('ac-stage').innerHTML=STAGES.map(s=>'<button data-v="'+s+'" class="'+((a.stage||'New')===s?'on':'')+'" onclick="setStage(\''+id+'\',\''+s+'\',this)">'+s+'</button>').join('');
   document.getElementById('ac-owner').value=a.owner==='Unassigned'?'':(a.owner||'');
   renderTags(a);
   const rows=[['Contact',a.contact],['Title',a.title],['Company',a.company],['Email',a.email],['Phone',a.phone],['Location',a.location],['Website',a.website],['Source status',a.status]].filter(x=>x[1]);
   Object.keys(a.extra||{}).forEach(k=>rows.push([k,a.extra[k]]));
-  document.getElementById('ac-body').innerHTML=rows.map(x=>'<div class="kv"><span>'+esc(x[0])+'</span><b>'+linkify(x[1])+'</b></div>').join('')||'<div class="d">No further details.</div>';
+  document.getElementById('ac-body').innerHTML=rows.map(x=>'<div class="kv"><span>'+esc(x[0])+'</span><b>'+linkify(x[1])+'</b></div>').join('')||'<div class="d" style="color:var(--faint)">No further details yet.</div>';
   const dash=document.getElementById('ac-dash');dash.textContent=a.dashboardUrl?'Open client dashboard ↗':'Link client dashboard';
   dash.onclick=()=>{if(a.dashboardUrl){window.open(a.dashboardUrl,'_blank','noopener')}else{const u=prompt('Paste this client\'s Safewave dashboard link (temporary — the live device feed connects next):');if(u){updateAccount(id,{dashboardUrl:u});toast('✓ Dashboard linked');dash.textContent='Open client dashboard ↗'}}};
-  const eb=document.getElementById('ac-email');if(a.email){eb.style.display='block';eb.onclick=openCompose}else{eb.style.display='none'}
-  renderMetrics(a);renderContacts(a);
+  const eb=document.getElementById('ac-email');if(a.email){eb.style.display='';eb.onclick=openCompose}else{eb.style.display='none'}
+  renderMetrics(a);renderContacts(a);renderCampaignBadge(a);
   const cn=document.getElementById('ac-c-name');if(cn)cn.value='';const ce=document.getElementById('ac-c-email');if(ce)ce.value='';
-  renderNotes(a);document.getElementById('note-input').value='';
-  openSheet('sh-acct')}
+  renderNotes(a);const ni=document.getElementById('note-input');if(ni)ni.value='';
+}
+function renderCampaignBadge(a){const el=document.getElementById('ac-campaign-badge');if(!el)return;const en=a.campaign;
+  if(!en){el.innerHTML='';return}
+  const map={active:'wave',completed:'good','no-email':'amber','no-sender':'amber'};
+  el.innerHTML='<span class="pill '+(map[en.status]||'dim')+'" style="cursor:pointer" onclick="unenroll(\''+a.id+'\')" title="Click to remove">🚀 '+esc(en.name||'Campaign')+' · step '+((en.step||0)+1)+' ✕</span>';}
 function setStage(id,s,btn){updateAccount(id,{stage:s});btn.closest('.rolepick').querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderCrmMain();toast('✓ Moved to '+s)}
 function saveOwner(id){const v=document.getElementById('ac-owner').value.trim()||'Unassigned';updateAccount(id,{owner:v});renderCrmMain()}
 function renderTags(a){document.getElementById('ac-tags').innerHTML=(a.tags||[]).length?(a.tags||[]).map(t=>'<span class="pill wave" style="cursor:pointer" onclick="rmTag(\''+a.id+'\',decodeURIComponent(\''+encodeURIComponent(t)+'\'))">'+esc(t)+' ✕</span>').join(' '):'<span class="d" style="color:var(--faint)">No tags yet</span>'}
@@ -1221,7 +1315,7 @@ function changePassword(){const p=document.getElementById('pf-pass').value;if(!p
 
 /* ---- Per-user email: connect your own mailbox, send + log from accounts ---- */
 const SMTP_PRESET={gmail:{smtp:'smtp.gmail.com',port:587},outlook:{smtp:'smtp.office365.com',port:587},ionos:{smtp:'smtp.ionos.com',port:587},other:{smtp:'',port:587}};
-async function loadMail(){if(!hasFirestore()||!CURRENT_USER||!CURRENT_USER.uid)return;try{const d=await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).get();CURRENT_USER.mail=d.exists?d.data():null}catch(e){CURRENT_USER.mail=null}}
+async function loadMail(){if(!hasFirestore()||!CURRENT_USER||!CURRENT_USER.uid)return;try{const d=await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).get();CURRENT_USER.mail=d.exists?d.data():null}catch(e){CURRENT_USER.mail=null}refreshPulse()}
 function openMail(){const m=(CURRENT_USER&&CURRENT_USER.mail)||{};
   document.getElementById('mail-email').value=m.email||(CURRENT_USER&&CURRENT_USER.email)||'';
   document.getElementById('mail-smtp').value=m.smtp||'';document.getElementById('mail-pass').value='';
@@ -1249,6 +1343,276 @@ async function sendAccountEmail(){const a=CRMA.find(x=>x.id===acctId);if(!a||!a.
   if(!backendReady()||!(CURRENT_USER.mail&&CURRENT_USER.mail.email)){window.location.href='mailto:'+encodeURIComponent(a.email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);logAccountEmail(a,a.email,subject,body);closeSheets();renderCrmMain();toast('Opened your mail app · logged to the account');return}
   try{await firebase.functions().httpsCallable('sendUserEmail')({to:a.email,subject:subject,text:body,accountId:a.id});toast('✓ Sent from '+CURRENT_USER.mail.email);closeSheets();loadCRM()}
   catch(e){toast('Send failed — '+((e&&e.message)||'check Connect email'))}}
+
+/* ================= OUTREACH: use-case pitches · campaigns · prospecting ================= */
+/* Merge tokens available in every step: {{firstName}} {{contact}} {{company}} {{city}} */
+function crmMergeCtx(a){const contact=(a.contact||(a.contacts&&a.contacts[0]&&a.contacts[0].name)||'').trim();const first=(contact.split(/\s+/)[0])||'there';return {firstName:first,contact:contact||'there',company:displayName(a)||'your team',city:(a.location||'').split(',')[0]||''}}
+function fillTemplate(s,ctx){return String(s||'').replace(/\{\{\s*(\w+)\s*\}\}/g,(m,k)=>ctx[k]!=null?ctx[k]:'')}
+
+const PITCHES={
+ audiology:{label:'Audiology & hearing clinics',keyword:'audiologist',steps:[
+   {day:0,subject:'A safety add-on your hard-of-hearing patients ask for',body:'Hi {{firstName}},\n\nAt Safewave we make a wristband that delivers strong vibration alerts so people who are Deaf or hard of hearing never miss what matters at home — smoke and CO alarms, the doorbell, a crying baby, phone alerts.\n\nMany audiology practices offer the Safewave Band alongside hearing aids: it fills the gap for the sounds patients still miss, improves at-home safety, and adds a recurring revenue line for {{company}}.\n\nWould a 10-minute call this week make sense?\n\nThanks,'},
+   {day:4,subject:'Re: safety add-on for {{company}}',body:'Hi {{firstName}},\n\nJust following up — I can send a demo band to your office so your team can feel the alert strength firsthand, no cost. Practices tell us patients decide in the first ten seconds.\n\nWhat address should I use?\n\nBest,'}]},
+ senior:{label:'Senior living & assisted living',keyword:'assisted living facility',steps:[
+   {day:0,subject:'Life-safety alerts for residents with hearing loss',body:'Hi {{firstName}},\n\nMost assisted-living residents have age-related hearing loss — which means a resident can sleep through a fire alarm or miss a staff page. The Safewave Band solves that: a wristband that vibrates strongly for emergencies and alerts, so residents at {{company}} stay safe and independent.\n\nWe work with communities on fleet pricing and a simple dashboard your staff use to manage every band.\n\nCould we grab 15 minutes to walk through it?\n\nThanks,'},
+   {day:5,subject:'Re: resident safety at {{company}}',body:'Hi {{firstName}},\n\nCircling back — I can put together a quick pilot for one wing so your team sees the resident and staff experience before any commitment.\n\nWorth a short call?\n\nBest,'}]},
+ vocrehab:{label:'Vocational rehabilitation',keyword:'vocational rehabilitation services',steps:[
+   {day:0,subject:'Assistive tech that keeps Deaf clients safe & independent',body:'Hi {{firstName}},\n\nThe Safewave Band is assistive technology for Deaf and hard-of-hearing individuals — a wristband that converts critical sounds and alerts into strong vibrations so clients can live and work independently and safely.\n\nIt is a natural fit for VR-funded AT plans. We can support device demos, documentation, and fleet ordering for {{company}}.\n\nOpen to a short call to see how it maps to your clients’ goals?\n\nThanks,'},
+   {day:6,subject:'Re: AT for your Deaf clients',body:'Hi {{firstName}},\n\nFollowing up in case this got buried — I can send materials your counselors can share with clients, plus a demo unit.\n\nWhat’s the best way to get this in front of your team?\n\nBest,'}]},
+ stateat:{label:'State outreach & AT programs',keyword:'assistive technology program',steps:[
+   {day:0,subject:'Adding the Safewave Band to your AT demo & loan library',body:'Hi {{firstName}},\n\nSafewave makes a vibration-alert wristband that helps Deaf and hard-of-hearing residents stay safe and connected. We’d love to get it into {{company}}’s device demonstration and loan program so more people can try it before they buy.\n\nWe support AT programs with demo units, training, and equitable-access pricing.\n\nCould we set up a brief call?\n\nThanks,'},
+   {day:6,subject:'Re: demo units for {{company}}',body:'Hi {{firstName}},\n\nJust checking back — happy to ship demo bands for your library and join a short training for your staff.\n\nWho should I coordinate with?\n\nBest,'}]},
+ assoc:{label:'Deaf associations & foundations',keyword:'deaf association',steps:[
+   {day:0,subject:'A member benefit that improves everyday safety',body:'Hi {{firstName}},\n\nSafewave builds a wristband that gives Deaf and hard-of-hearing people strong vibration alerts for the sounds that matter — alarms, alerts, the door. We partner with associations like {{company}} on member benefits and group pricing.\n\nWould your members find value in a group offer or a demo at your next event?\n\nDo you have 15 minutes this week?\n\nThanks,'},
+   {day:7,subject:'Re: member benefit idea for {{company}}',body:'Hi {{firstName}},\n\nFollowing up — we can sponsor a demo table or provide bands for a giveaway to introduce your community to the device.\n\nWould that be of interest?\n\nBest,'}]},
+ influencer:{label:'Influencers & affiliates',keyword:'',steps:[
+   {day:0,subject:'Partner with Safewave — bands + affiliate revenue',body:'Hi {{firstName}},\n\nLove what you’re building with your community. Safewave makes a vibration-alert wristband for Deaf and hard-of-hearing people, and we’d like to send you one to try and, if you love it, partner on an affiliate basis.\n\nAuthentic reviews from voices your audience trusts are the best way we grow — and you earn on every referral.\n\nCan I send a band your way?\n\nThanks,'},
+   {day:5,subject:'Re: sending you a Safewave Band',body:'Hi {{firstName}},\n\nStill happy to send a band over — just need a shipping address. No strings; try it and share only if it resonates.\n\nWhere should I send it?\n\nBest,'}]},
+ k12:{label:'Schools & Deaf education',keyword:'school for the deaf',steps:[
+   {day:0,subject:'Student-safety alerts for Deaf & hard-of-hearing students',body:'Hi {{firstName}},\n\nThe Safewave Band gives Deaf and hard-of-hearing students strong vibration alerts — fire alarms, bells, and staff notifications — in the classroom and the dorm. It supports IEP assistive-technology goals and keeps students safe and included at {{company}}.\n\nWe offer school pricing and a simple dashboard for staff to manage every band.\n\nCould we set up a short call?\n\nThanks,'},
+   {day:6,subject:'Re: student safety at {{company}}',body:'Hi {{firstName}},\n\nFollowing up — I can arrange demo units so staff and students can try them, plus materials for your AT team.\n\nWho’s the right person to include?\n\nBest,'}]},
+ custom:{label:'Custom / blank',keyword:'',steps:[{day:0,subject:'',body:'Hi {{firstName}},\n\n'}]}
+};
+
+let CAMP=[], campMode='list', campDraft=null;
+async function loadCampaigns(){
+  if(hasFirestore()){try{const s=await firebase.firestore().collection('campaigns').get();CAMP=s.docs.map(d=>Object.assign({id:d.id},d.data()))}catch(e){CAMP=[]}}
+  else CAMP=[];
+  const scr=document.getElementById('s-crm');if(scr&&scr.classList.contains('on')&&crmTab==='campaigns')renderCRM();
+}
+function renderCampaigns(v){
+  if(campMode==='edit'){renderCampaignBuilder(v);return}
+  document.getElementById('crm-sub').innerHTML=CAMP.length+' campaign'+(CAMP.length!==1?'s':'')+' · automated outreach with a Safewave pitch tailored to each use case';
+  let html='<button class="btn" style="margin-bottom:14px" onclick="newCampaign()">＋ New campaign</button>';
+  if(!CAMP.length){html+='<div class="empty"><div class="ico">🚀</div><div class="t">No campaigns yet</div><div class="d">Build an automated, multi-step sequence. Pick a use case and the Safewave pitch is written for you — then enroll matching accounts and the daily runner sends each step from your mailbox.</div></div>';v.innerHTML=html;return}
+  html+=CAMP.map(c=>{const enrolled=CRMA.filter(a=>a.campaign&&a.campaign.id===c.id);const active=enrolled.filter(a=>a.campaign.status==='active').length;const uc=PITCHES[c.useCase]||{};
+    return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(c.name)+'</div><div class="d">'+esc(uc.label||'Custom')+' · '+(c.steps||[]).length+' steps · '+enrolled.length+' enrolled'+(active?' ('+active+' active)':'')+'</div></div><span class="pill '+(c.status==='active'?'good':'dim')+'">'+(c.status==='active'?'ACTIVE':'PAUSED')+'</span></div>'
+     +'<div class="row" style="gap:8px;margin-top:11px;flex-wrap:wrap">'
+       +'<button class="btn ghost" style="flex:1;min-width:90px" onclick="editCampaign(\''+c.id+'\')">Edit</button>'
+       +'<button class="btn ghost" style="flex:1;min-width:90px" onclick="toggleCampaign(\''+c.id+'\')">'+(c.status==='active'?'Pause':'Activate')+'</button>'
+       +'<button class="btn ghost" style="flex:1;min-width:120px" onclick="enrollMatching(\''+c.id+'\')">Enroll matching</button>'
+     +'</div></div>';}).join('');
+  v.innerHTML=html;
+}
+function newCampaign(){campDraft={id:'cmp'+Date.now().toString(36),name:'',useCase:'',ownerUid:CURRENT_USER.uid,ownerEmail:(CURRENT_USER.mail&&CURRENT_USER.mail.email)||CURRENT_USER.email,status:'paused',segment:{board:'all',stage:'all',tag:'all',owner:'all'},steps:[]};campMode='edit';renderCRM();window.scrollTo(0,0)}
+function editCampaign(id){const c=CAMP.find(x=>x.id===id);if(!c)return;campDraft=JSON.parse(JSON.stringify(c));if(!campDraft.segment)campDraft.segment={board:'all',stage:'all',tag:'all',owner:'all'};campMode='edit';renderCRM();window.scrollTo(0,0)}
+function segSel(label,key,opts,cur){return '<select onchange="campDraft.segment.'+key+'=this.value" style="flex-shrink:0;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:99px;padding:7px 12px;font-family:var(--font-b);font-size:12px;font-weight:600"><option value="all"'+((cur||'all')==='all'?' selected':'')+'>'+label+': All</option>'+opts.map(o=>'<option'+(cur===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>'}
+function renderCampaignBuilder(v){const c=campDraft;
+  const owners=Array.from(new Set(CRMA.map(a=>a.owner||'Unassigned'))).sort();
+  const boards=Array.from(new Set(CRMA.map(a=>a.board))).sort();
+  const tags=Array.from(new Set([].concat.apply([],CRMA.map(a=>a.tags||[])))).sort();
+  document.getElementById('crm-sub').innerHTML='<a onclick="campMode=\'list\';renderCRM()" style="color:var(--wave);cursor:pointer;font-weight:600">← Back to campaigns</a>';
+  const mail=(CURRENT_USER.mail&&CURRENT_USER.mail.email);
+  const steps=(c.steps||[]).map((s,i)=>
+    '<div class="card" style="background:var(--surface-2)"><div class="row" style="justify-content:space-between"><b>Step '+(i+1)+'</b><a onclick="rmStep('+i+')" style="color:var(--faint);cursor:pointer">Remove</a></div>'
+    +'<div class="row" style="gap:8px;margin-top:8px;align-items:center"><span class="d">Send on day</span><input class="field cs-day" data-i="'+i+'" type="number" min="0" value="'+(s.day||0)+'" style="margin:0;width:84px"></div>'
+    +'<input class="field cs-sub" data-i="'+i+'" placeholder="Subject" value="'+esc(s.subject||'')+'" style="margin:10px 0 8px">'
+    +'<textarea class="field cs-body" data-i="'+i+'" placeholder="Message — use {{firstName}} and {{company}}" style="min-height:130px;resize:vertical;font-family:var(--font-b);margin:0">'+esc(s.body||'')+'</textarea></div>').join('');
+  v.innerHTML=
+    '<input class="field" id="cb-name" placeholder="Campaign name (e.g. Audiology Q3 outreach)" value="'+esc(c.name||'')+'">'
+    +'<p class="d" style="font-weight:600;color:var(--text);margin:6px 0 6px">Use case — sets the Safewave pitch</p>'
+    +'<div class="rolepick" id="cb-usecase">'+Object.keys(PITCHES).map(k=>'<button data-v="'+k+'" class="'+(c.useCase===k?'on':'')+'" onclick="pickUseCase(\''+k+'\')">'+esc(PITCHES[k].label)+'</button>').join('')+'</div>'
+    +'<div class="note" style="margin:12px 0">Sends from <b>'+(mail?esc(mail):'your mailbox — not connected yet')+'</b>. '+(mail?'':'Connect your email (Account → Connect email) before activating. ')+'Personalise with <b>{{firstName}}</b>, <b>{{company}}</b>, <b>{{city}}</b>.</div>'
+    +'<div class="sec-head" style="margin-top:6px"><h2>Target segment</h2><span class="d">for “Enroll matching”</span></div>'
+    +'<div class="chips">'+segSel('Board','board',boards,c.segment.board)+segSel('Stage','stage',STAGES,c.segment.stage)+(tags.length?segSel('Tag','tag',tags,c.segment.tag):'')+segSel('Owner','owner',owners,c.segment.owner)+'</div>'
+    +'<div class="sec-head" style="margin-top:6px"><h2>Sequence</h2></div>'
+    +'<div id="cb-steps">'+(steps||'<div class="d" style="color:var(--faint);margin-bottom:8px">Pick a use case above to load a ready-made sequence, or add your own steps.</div>')+'</div>'
+    +'<button class="btn ghost" style="margin:10px 0 16px" onclick="addStep()">＋ Add step</button>'
+    +'<div class="row" style="gap:8px"><button class="btn" style="flex:1" onclick="saveCampaign()">Save campaign</button><button class="btn ghost" onclick="campMode=\'list\';renderCRM()">Cancel</button></div>';
+}
+function syncCampaignForm(){const c=campDraft;if(!c)return;const nm=document.getElementById('cb-name');if(nm)c.name=nm.value;
+  const days=document.querySelectorAll('.cs-day'),subs=document.querySelectorAll('.cs-sub'),bodies=document.querySelectorAll('.cs-body');
+  if(days.length){const steps=[];for(let i=0;i<days.length;i++)steps.push({day:Number(days[i].value)||0,subject:subs[i]?subs[i].value:'',body:bodies[i]?bodies[i].value:''});c.steps=steps}}
+function pickUseCase(k){syncCampaignForm();campDraft.useCase=k;const has=(campDraft.steps||[]).some(s=>(s.subject||(s.body&&s.body.trim()&&s.body.trim()!=='Hi {{firstName}},')));if(!has&&PITCHES[k].steps)campDraft.steps=JSON.parse(JSON.stringify(PITCHES[k].steps));if(!campDraft.name&&PITCHES[k].label&&k!=='custom')campDraft.name=PITCHES[k].label.split(' & ')[0]+' outreach';renderCRM()}
+function addStep(){syncCampaignForm();const st=campDraft.steps||[];const last=st.length?st[st.length-1].day||0:0;st.push({day:last+3,subject:'',body:'Hi {{firstName}},\n\n'});campDraft.steps=st;renderCRM()}
+function rmStep(i){syncCampaignForm();campDraft.steps.splice(i,1);renderCRM()}
+function saveCampaign(){syncCampaignForm();const c=campDraft;
+  if(!c.name||!c.name.trim()){toast('Name your campaign');return}
+  if(!(c.steps&&c.steps.length)){toast('Add at least one step');return}
+  c.ownerUid=CURRENT_USER.uid;c.ownerEmail=(CURRENT_USER.mail&&CURRENT_USER.mail.email)||CURRENT_USER.email;
+  const rec=JSON.parse(JSON.stringify(c));
+  if(hasFirestore()){firebase.firestore().collection('campaigns').doc(c.id).set(rec,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+  const i=CAMP.findIndex(x=>x.id===c.id);if(i>=0)CAMP[i]=rec;else CAMP.unshift(rec);
+  campMode='list';renderCRM();toast('✓ Campaign saved')}
+function toggleCampaign(id){const c=CAMP.find(x=>x.id===id);if(!c)return;
+  if(c.status!=='active'&&!(CURRENT_USER.mail&&CURRENT_USER.mail.email)){toast('Connect your email first (Account → Connect email)');return}
+  c.status=c.status==='active'?'paused':'active';
+  if(hasFirestore())firebase.firestore().collection('campaigns').doc(id).set({status:c.status},{merge:true}).catch(()=>{});
+  renderCRM();toast(c.status==='active'?'✓ Active — sends on the daily run':'Paused')}
+function enrollAccount(a,c){const en={id:c.id,name:c.name,step:0,status:'active',ownerUid:c.ownerUid||CURRENT_USER.uid,enrolledAt:new Date().toISOString(),nextAt:new Date().toISOString()};updateAccount(a.id,{campaign:en})}
+function enrollMatching(id){const c=CAMP.find(x=>x.id===id);if(!c)return;const sg=c.segment||{};
+  const match=CRMA.filter(a=>{
+    if(a.campaign&&a.campaign.status==='active')return false;
+    if(sg.board&&sg.board!=='all'&&a.board!==sg.board)return false;
+    if(sg.stage&&sg.stage!=='all'&&(a.stage||'New')!==sg.stage)return false;
+    if(sg.tag&&sg.tag!=='all'&&!(a.tags||[]).includes(sg.tag))return false;
+    if(sg.owner&&sg.owner!=='all'&&(a.owner||'Unassigned')!==sg.owner)return false;
+    return !!(a.email||(a.contacts&&a.contacts[0]&&a.contacts[0].email));});
+  if(!match.length){toast('No accounts with an email match that segment');return}
+  if(!confirm('Enroll '+match.length+' account'+(match.length>1?'s':'')+' in “'+c.name+'”? The first email sends on the next daily run.'))return;
+  match.forEach(a=>enrollAccount(a,c));renderCRM();toast('✓ Enrolled '+match.length+' account'+(match.length>1?'s':''))}
+function openEnroll(id){const a=CRMA.find(x=>x.id===id);if(!a)return;
+  if(!CAMP.length){toast('Create a campaign first');crmGoTab('campaigns');return}
+  document.getElementById('enroll-list').innerHTML=CAMP.map(c=>'<button class="btn ghost" style="width:100%;justify-content:space-between;margin-bottom:8px" onclick="doEnroll(\''+id+'\',\''+c.id+'\')"><span>'+esc(c.name)+'</span><span class="pill '+(c.status==='active'?'good':'dim')+'">'+(c.status==='active'?'ACTIVE':'PAUSED')+'</span></button>').join('');
+  openSheet('sh-enroll')}
+function doEnroll(id,cid){const a=CRMA.find(x=>x.id===id),c=CAMP.find(x=>x.id===cid);if(!a||!c)return;
+  if(!(a.email||(a.contacts&&a.contacts[0]&&a.contacts[0].email))){toast('This account has no email address');return}
+  enrollAccount(a,c);closeSheets();populateAccount(a);toast('✓ Enrolled in '+c.name)}
+function unenroll(id){const a=CRMA.find(x=>x.id===id);if(!a)return;updateAccount(id,{campaign:null});populateAccount(a);renderCrmMain();toast('Removed from campaign')}
+
+/* ---- Prospector: source new commercial contacts ---- */
+let prospResults=[], prospUseCase='';
+function renderProspect(v){
+  document.getElementById('crm-sub').innerHTML='Source new commercial contacts, then import them straight into the pipeline.';
+  const keys=Object.keys(PITCHES).filter(k=>k!=='custom'&&k!=='influencer');
+  v.innerHTML=
+    '<div class="note" style="margin-bottom:14px">Search real businesses in your target segments — audiology clinics, senior-living, schools, VR agencies — with name, address, phone and website. Pick a use case to prefill, add a location, then import the ones you want.</div>'
+    +'<p class="d" style="font-weight:600;color:var(--text);margin-bottom:6px">Use case</p>'
+    +'<div class="rolepick" id="pr-usecase">'+keys.map(k=>'<button data-v="'+k+'" class="'+(prospUseCase===k?'on':'')+'" onclick="pickProspectUseCase(\''+k+'\')">'+esc(PITCHES[k].label)+'</button>').join('')+'</div>'
+    +'<input class="field" id="pr-keyword" placeholder="What to search (e.g. audiologist, assisted living)" value="'+esc(prospUseCase&&PITCHES[prospUseCase]?PITCHES[prospUseCase].keyword:'')+'" style="margin-top:12px">'
+    +'<input class="field" id="pr-location" placeholder="Location (city, state — e.g. Louisville, KY)">'
+    +'<button class="btn" id="pr-go" style="margin-bottom:8px" onclick="runProspect()">🔎 Find prospects</button>'
+    +'<div id="pr-results"></div>';
+}
+function pickProspectUseCase(k){prospUseCase=k;const kw=document.getElementById('pr-keyword');if(kw)kw.value=PITCHES[k].keyword||'';document.querySelectorAll('#pr-usecase button').forEach(b=>b.classList.toggle('on',b.dataset.v===k))}
+async function runProspect(){
+  const keyword=document.getElementById('pr-keyword').value.trim(),location=document.getElementById('pr-location').value.trim();
+  if(!keyword){toast('Enter what to search for');return}
+  const res=document.getElementById('pr-results'),btn=document.getElementById('pr-go');
+  if(!backendReady()){res.innerHTML='<div class="note">Prospecting runs on the live site with the backend connected.</div>';return}
+  btn.disabled=true;btn.textContent='Searching…';res.innerHTML='<div class="d" style="padding:10px">Searching the business directory…</div>';
+  try{const r=await firebase.functions().httpsCallable('sourceProspects')({query:keyword,location:location});prospResults=(r.data&&r.data.results)||[];renderProspectResults()}
+  catch(e){res.innerHTML='<div class="note" style="border-style:solid;border-color:var(--amber)">'+esc((e&&e.message)||'Search failed')+'</div>'}
+  btn.disabled=false;btn.textContent='🔎 Find prospects';
+}
+function renderProspectResults(){const res=document.getElementById('pr-results');
+  if(!prospResults.length){res.innerHTML='<div class="empty"><div class="d">No businesses found — try a broader keyword or a different location.</div></div>';return}
+  const camps=CAMP.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  res.innerHTML='<div class="sec-head" style="margin-top:10px"><h2>'+prospResults.length+' found</h2><a onclick="prospSelectAll()">Select all</a></div>'
+    +prospResults.map((p,i)=>'<label class="card" style="display:flex;gap:11px;align-items:flex-start;cursor:pointer"><input type="checkbox" class="pr-chk" data-i="'+i+'" style="margin-top:3px;width:18px;height:18px;flex-shrink:0;accent-color:var(--wave)"><div style="min-width:0"><div class="t">'+esc(p.name)+'</div><div class="d">'+[esc(p.address),esc(p.phone),p.website?esc(p.website.replace(/^https?:\/\//,'')):''].filter(Boolean).join(' · ')+'</div></div></label>').join('')
+    +'<div class="card" style="background:var(--surface-2)"><p class="d" style="font-weight:600;color:var(--text);margin-bottom:8px">Import selected as accounts</p>'
+      +(CAMP.length?'<div class="row" style="gap:8px;margin-bottom:10px"><span class="d">Auto-enroll in</span><select id="pr-enroll" style="flex:1;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 10px;font-family:var(--font-b)"><option value="">— none —</option>'+camps+'</select></div>':'')
+      +'<button class="btn" onclick="importProspects()">Import selected</button></div>';
+}
+function prospSelectAll(){document.querySelectorAll('.pr-chk').forEach(c=>c.checked=true)}
+function importProspects(){
+  const idxs=Array.from(document.querySelectorAll('.pr-chk')).filter(c=>c.checked).map(c=>Number(c.dataset.i));
+  if(!idxs.length){toast('Select at least one');return}
+  const seg=prospUseCase&&PITCHES[prospUseCase]?PITCHES[prospUseCase].label:'Prospected';
+  const enrollSel=document.getElementById('pr-enroll');const camp=enrollSel&&enrollSel.value?CAMP.find(c=>c.id===enrollSel.value):null;
+  const today=new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'});let n=0;
+  idxs.forEach(i=>{const p=prospResults[i];if(!p)return;
+    const rec={id:'p'+Date.now().toString(36)+n,board:'Prospected',name:p.name,contact:'',owner:(CURRENT_USER&&CURRENT_USER.name)||'Unassigned',email:'',phone:p.phone||'',location:p.address||'',website:p.website||'',stage:'New',status:'',tags:[seg],notes:[{user:'Prospector',at:today,text:'Sourced via Prospector — '+(p.category||seg)}],contacts:[],extra:{}};
+    if(camp&&p.website)rec.website=p.website;
+    if(camp)rec.campaign={id:camp.id,name:camp.name,step:0,status:'active',ownerUid:camp.ownerUid,enrolledAt:new Date().toISOString(),nextAt:new Date().toISOString()};
+    addAccount(rec);n++});
+  toast('✓ Imported '+n+' account'+(n>1?'s':'')+(camp?' → '+camp.name:''));
+  crmGoTab('pipeline');
+}
+
+/* ================= FINANCIALS (restricted to the finance allow-list) ================= */
+function parseMoney(v){if(typeof v==='number')return v;if(!v)return 0;const s=(''+v).replace(/[$,\s]/g,'');const m=s.match(/^(-?\d*\.?\d+)([kKmM])?$/);if(!m)return Number(s)||0;let n=parseFloat(m[1]);if(m[2]&&m[2].toLowerCase()==='k')n*=1e3;if(m[2]&&m[2].toLowerCase()==='m')n*=1e6;return n}
+function fmtMoney(n){n=Math.round(n||0);return (n<0?'-$':'$')+Math.abs(n).toLocaleString()}
+let financeData=null;
+function financeDefaults(){return {cashOnHand:0,projections:{customers:0,avgMrr:0,growthPct:0,horizon:12},pnl:[{label:'Hardware sales (Shopify · 90d gross)',type:'rev',amount:parseMoney(SHOP.grosse90||SHOP.gross90||0)}],budget:[],payroll:[]}}
+async function loadFinanceAccess(){
+  if(!hasFirestore()){FINANCE_EMAILS=[];return}
+  try{const d=await firebase.firestore().collection('settings').doc('finance').get();FINANCE_EMAILS=d.exists?(d.data().emails||[]):[]}catch(e){FINANCE_EMAILS=[]}
+  if(CURRENT_USER&&CURRENT_USER.role==='superadmin'){const lc=FINANCE_EMAILS.map(e=>(e||'').toLowerCase());if(!lc.includes((CURRENT_USER.email||'').toLowerCase())){FINANCE_EMAILS=FINANCE_EMAILS.concat([CURRENT_USER.email]);try{await firebase.firestore().collection('settings').doc('finance').set({emails:FINANCE_EMAILS},{merge:true})}catch(e){}}}
+}
+async function loadFinance(){
+  if(!hasFirestore()){financeData=financeDefaults();return}
+  try{const d=await firebase.firestore().collection('finance').doc('main').get();financeData=d.exists?Object.assign(financeDefaults(),d.data()):financeDefaults()}catch(e){financeData=financeDefaults()}
+  const scr=document.getElementById('s-finance');if(scr&&scr.classList.contains('on'))renderFinance();
+  refreshPulse();
+}
+function saveFinance(patch,msg){Object.assign(financeData,patch);if(hasFirestore()){firebase.firestore().collection('finance').doc('main').set(financeData,{merge:true}).then(()=>{if(msg)toast(msg)}).catch(e=>toast('Save failed — '+((e&&e.code)||'republish Firestore rules')))}else if(msg)toast(msg)}
+function financeBurn(){const payroll=(financeData.payroll||[]).reduce((s,p)=>s+parseMoney(p.monthly),0);const opex=(financeData.pnl||[]).filter(l=>l.type==='opex').reduce((s,l)=>s+parseMoney(l.amount),0);return {payroll,opex,total:payroll+opex}}
+function financeMRR(){const p=financeData.projections||{};return parseMoney(p.customers)*parseMoney(p.avgMrr)}
+function projSeries(){const p=financeData.projections||{};const base=financeMRR();const g=parseMoney(p.growthPct)/100;const h=Math.max(1,Math.min(60,parseMoney(p.horizon)||12));const marks=Array.from(new Set([1,3,6,12,h].filter(x=>x<=h)));return {base:base,end:base*Math.pow(1+g,h),h:h,pts:marks.map(m=>({m:m,mrr:base*Math.pow(1+g,m)}))}}
+function renderFinance(){
+  const body=document.getElementById('fin-body');if(!body)return;
+  if(!financeAllowed()){body.innerHTML='<div class="empty"><div class="ico">🔒</div><div class="t">Restricted</div><div class="d">Financials are visible only to approved teammates.</div></div>';return}
+  if(!financeData){body.innerHTML='<div class="d" style="padding:10px">Loading…</div>';loadFinance();return}
+  const burn=financeBurn(),mrr=financeMRR(),net=mrr-burn.total,cash=parseMoney(financeData.cashOnHand);
+  const runway=net>=0?null:cash/(-net);
+  const pnl=financeData.pnl||[],rev=pnl.filter(l=>l.type==='rev').reduce((s,l)=>s+parseMoney(l.amount),0),cogs=pnl.filter(l=>l.type==='cogs').reduce((s,l)=>s+parseMoney(l.amount),0),opex=pnl.filter(l=>l.type==='opex').reduce((s,l)=>s+parseMoney(l.amount),0);
+  const gross=rev-cogs,pnlNet=gross-opex;
+  const ps=projSeries();
+  document.getElementById('fin-sub').innerHTML='Restricted to '+FINANCE_EMAILS.length+' teammate'+(FINANCE_EMAILS.length!==1?'s':'')+' · Shopify data + your projections';
+  body.innerHTML=
+    '<div class="tiles" style="margin-bottom:16px">'
+      +ftile(SHOP.grosse90||SHOP.gross90,'Gross · 90 days','LIVE')
+      +ftile(SHOP.lastWeekRev,'Revenue · last wk','LIVE')
+      +ftile(SHOP.lastWeekOrders,'Orders · last wk','LIVE')
+      +ftile(SHOP.aov,'Avg order value','LIVE')
+    +'</div>'
+    /* Runway */
+    +'<div class="card"><div class="sec-head"><h2>Runway &amp; burn</h2></div>'
+      +'<div class="tiles">'
+        +'<div class="tile"><div class="n">'+fmtMoney(mrr)+'</div><div class="l">Projected MRR</div></div>'
+        +'<div class="tile"><div class="n">'+fmtMoney(burn.total)+'</div><div class="l">Monthly burn (payroll+opex)</div></div>'
+        +'<div class="tile"><div class="n" style="color:'+(net>=0?'var(--good)':'var(--amber)')+'">'+fmtMoney(net)+'</div><div class="l">Net / month</div></div>'
+        +'<div class="tile"><div class="n">'+(runway===null?'∞':runway.toFixed(1))+'</div><div class="l">Months of runway</div></div>'
+      +'</div>'
+      +'<div class="row" style="gap:8px;margin-top:12px;align-items:center"><span class="d" style="font-weight:600;color:var(--text)">Cash on hand</span><input class="field" id="fp-cash" type="number" value="'+(parseMoney(financeData.cashOnHand)||0)+'" style="margin:0;max-width:180px"><button class="btn ghost" onclick="saveCash()">Save</button></div>'
+      +'<div class="note" style="margin-top:10px">'+(net>=0?'Net-positive at the current run-rate — runway is effectively unlimited while this holds.':'At '+fmtMoney(-net)+'/mo net burn, cash lasts ~'+(runway?runway.toFixed(1):'—')+' months. Grow enterprise MRR or trim opex to extend.')+'</div>'
+    +'</div>'
+    /* Projections */
+    +'<div class="card"><div class="sec-head"><h2>Enterprise subscription projections</h2></div>'
+      +'<div class="frow"><label class="fr-lbl">Enterprise customers</label><input class="field" id="fp-customers" type="number" value="'+(parseMoney((financeData.projections||{}).customers)||0)+'"></div>'
+      +'<div class="frow"><label class="fr-lbl">Avg MRR per customer</label><input class="field" id="fp-mrr" type="number" value="'+(parseMoney((financeData.projections||{}).avgMrr)||0)+'"></div>'
+      +'<div class="frow"><label class="fr-lbl">Monthly growth %</label><input class="field" id="fp-growth" type="number" value="'+(parseMoney((financeData.projections||{}).growthPct)||0)+'"></div>'
+      +'<div class="frow"><label class="fr-lbl">Horizon (months)</label><input class="field" id="fp-horizon" type="number" value="'+(parseMoney((financeData.projections||{}).horizon)||12)+'"></div>'
+      +'<button class="btn ghost" onclick="saveProjections()" style="margin:6px 0 12px">Save projections</button>'
+      +'<div class="kv"><span>Baseline MRR</span><b>'+fmtMoney(ps.base)+'  ·  '+fmtMoney(ps.base*12)+' ARR</b></div>'
+      +ps.pts.map(p=>'<div class="kv"><span>Month '+p.m+'</span><b>'+fmtMoney(p.mrr)+' MRR · '+fmtMoney(p.mrr*12)+' ARR</b></div>').join('')
+      +'<div class="note" style="margin-top:10px">Feeds the runway model above. Swap in live subscription counts once the Safewave enterprise dashboard is connected.</div>'
+    +'</div>'
+    /* P&L builder */
+    +'<div class="card"><div class="sec-head"><h2>P&amp;L builder</h2><a onclick="addPnl()">＋ Line</a></div>'
+      +pnl.map((l,i)=>'<div class="frow pnl-row"><input class="field fr-label" value="'+esc(l.label||'')+'" placeholder="Line item"><select class="fr-type field" style="max-width:120px">'+['rev','cogs','opex'].map(t=>'<option value="'+t+'"'+(l.type===t?' selected':'')+'>'+({rev:'Revenue',cogs:'COGS',opex:'Opex'}[t])+'</option>').join('')+'</select><input class="field fr-amt" type="number" value="'+(parseMoney(l.amount)||0)+'" style="max-width:120px"><a class="fr-x" onclick="rmPnl('+i+')">✕</a></div>').join('')
+      +'<button class="btn" onclick="savePnl()" style="margin:6px 0 12px">Save P&amp;L</button>'
+      +'<div class="kv"><span>Revenue</span><b>'+fmtMoney(rev)+'</b></div><div class="kv"><span>COGS</span><b>'+fmtMoney(cogs)+'</b></div><div class="kv"><span>Gross profit</span><b>'+fmtMoney(gross)+'</b></div><div class="kv"><span>Operating expenses</span><b>'+fmtMoney(opex)+'</b></div><div class="kv"><span style="font-weight:700">Net</span><b style="color:'+(pnlNet>=0?'var(--good)':'var(--amber)')+'">'+fmtMoney(pnlNet)+'</b></div>'
+    +'</div>'
+    /* Budget builder */
+    +'<div class="card"><div class="sec-head"><h2>Budget builder</h2><a onclick="addBudget()">＋ Line</a></div>'
+      +(financeData.budget||[]).map((b,i)=>{const v=parseMoney(b.actual)-parseMoney(b.budget);return '<div class="frow bud-row"><input class="field fr-label" value="'+esc(b.label||'')+'" placeholder="Category"><input class="field fr-bud" type="number" placeholder="Budget" value="'+(parseMoney(b.budget)||0)+'" style="max-width:110px"><input class="field fr-act" type="number" placeholder="Actual" value="'+(parseMoney(b.actual)||0)+'" style="max-width:110px"><span class="d" style="min-width:70px;text-align:right;color:'+(v>0?'var(--amber)':'var(--good)')+'">'+fmtMoney(v)+'</span><a class="fr-x" onclick="rmBudget('+i+')">✕</a></div>'}).join('')
+      +'<button class="btn" onclick="saveBudget()" style="margin-top:6px">Save budget</button>'
+      +(!(financeData.budget||[]).length?'<div class="d" style="color:var(--faint);margin-top:8px">Add budget lines to track plan vs actual (variance in the right column).</div>':'')
+    +'</div>'
+    /* Payroll */
+    +'<div class="card"><div class="sec-head"><h2>Payroll</h2><a onclick="addPay()">＋ Person</a></div>'
+      +(financeData.payroll||[]).map((p,i)=>'<div class="frow pay-row"><input class="field fr-name" value="'+esc(p.name||'')+'" placeholder="Name"><input class="field fr-role" value="'+esc(p.role||'')+'" placeholder="Role"><input class="field fr-monthly" type="number" placeholder="Monthly" value="'+(parseMoney(p.monthly)||0)+'" style="max-width:120px"><a class="fr-x" onclick="rmPay('+i+')">✕</a></div>').join('')
+      +'<button class="btn" onclick="savePay()" style="margin:6px 0 10px">Save payroll</button>'
+      +'<div class="kv"><span style="font-weight:700">Total monthly payroll</span><b>'+fmtMoney(burn.payroll)+'</b></div>'
+      +'<div class="note" style="margin-top:10px">Manual entry today — feeds the burn model. Live Gusto / ADP payroll sync connects here next.</div>'
+    +'</div>'
+    +financeAccessHTML();
+}
+function ftile(v,l,badge){return '<div class="tile"><div class="n">'+esc(String(v==null?'—':v))+'</div><div class="l">'+esc(l)+(badge?' <span class="pill wave" style="font-size:9px;padding:1px 6px">'+badge+'</span>':'')+'</div></div>'}
+function saveCash(){saveFinance({cashOnHand:Number(document.getElementById('fp-cash').value)||0},'✓ Saved');renderFinance()}
+function saveProjections(){const pr={customers:Number(document.getElementById('fp-customers').value)||0,avgMrr:Number(document.getElementById('fp-mrr').value)||0,growthPct:Number(document.getElementById('fp-growth').value)||0,horizon:Number(document.getElementById('fp-horizon').value)||12};saveFinance({projections:pr},'✓ Projections saved');renderFinance()}
+function gatherPnl(){return Array.from(document.querySelectorAll('.pnl-row')).map(r=>({label:r.querySelector('.fr-label').value,type:r.querySelector('.fr-type').value,amount:Number(r.querySelector('.fr-amt').value)||0}))}
+function addPnl(){financeData.pnl=gatherPnl();financeData.pnl.push({label:'',type:'opex',amount:0});renderFinance()}
+function rmPnl(i){financeData.pnl=gatherPnl();financeData.pnl.splice(i,1);renderFinance()}
+function savePnl(){financeData.pnl=gatherPnl();saveFinance({pnl:financeData.pnl},'✓ P&L saved');renderFinance()}
+function gatherBudget(){return Array.from(document.querySelectorAll('.bud-row')).map(r=>({label:r.querySelector('.fr-label').value,budget:Number(r.querySelector('.fr-bud').value)||0,actual:Number(r.querySelector('.fr-act').value)||0}))}
+function addBudget(){financeData.budget=gatherBudget();financeData.budget.push({label:'',budget:0,actual:0});renderFinance()}
+function rmBudget(i){financeData.budget=gatherBudget();financeData.budget.splice(i,1);renderFinance()}
+function saveBudget(){financeData.budget=gatherBudget();saveFinance({budget:financeData.budget},'✓ Budget saved');renderFinance()}
+function gatherPay(){return Array.from(document.querySelectorAll('.pay-row')).map(r=>({name:r.querySelector('.fr-name').value,role:r.querySelector('.fr-role').value,monthly:Number(r.querySelector('.fr-monthly').value)||0}))}
+function addPay(){financeData.payroll=gatherPay();financeData.payroll.push({name:'',role:'',monthly:0});renderFinance()}
+function rmPay(i){financeData.payroll=gatherPay();financeData.payroll.splice(i,1);renderFinance()}
+function savePay(){financeData.payroll=gatherPay();saveFinance({payroll:financeData.payroll},'✓ Payroll saved');renderFinance()}
+function financeAccessHTML(){if(!CURRENT_USER||CURRENT_USER.role!=='superadmin')return '';
+  return '<div class="card"><div class="sec-head"><h2>Who can see Financials</h2></div><div>'
+   +FINANCE_EMAILS.map(e=>'<div class="frow"><span class="grow">'+esc(e)+'</span>'+((e||'').toLowerCase()===SUPER_EMAIL?'<span class="pill dim">you</span>':'<a onclick="rmFinanceEmail(decodeURIComponent(\''+encodeURIComponent(e)+'\'))" style="color:var(--faint);cursor:pointer">remove</a>')+'</div>').join('')
+   +'</div><div class="row" style="gap:8px;margin-top:8px"><input class="field" id="fin-add-email" placeholder="Add teammate email (Jared, Trevon…)" style="margin:0;flex:1"><button class="btn" onclick="addFinanceEmail()">Add</button></div>'
+   +'<div class="note" style="margin-top:10px">Only these people (plus the super admin) can open this tab and read the numbers — enforced by Firestore security rules, not just the UI.</div></div>';
+}
+function addFinanceEmail(){const el=document.getElementById('fin-add-email');const e=(el.value||'').trim();if(!e)return;if(FINANCE_EMAILS.map(x=>(x||'').toLowerCase()).includes(e.toLowerCase())){toast('Already has access');return}FINANCE_EMAILS=FINANCE_EMAILS.concat([e]);firebase.firestore().collection('settings').doc('finance').set({emails:FINANCE_EMAILS},{merge:true}).then(()=>{toast('✓ Added '+e);renderFinance()}).catch(er=>toast('Save failed — '+((er&&er.code)||'')))}
+function rmFinanceEmail(e){FINANCE_EMAILS=FINANCE_EMAILS.filter(x=>x!==e);firebase.firestore().collection('settings').doc('finance').set({emails:FINANCE_EMAILS},{merge:true}).then(()=>{toast('Removed '+e);renderFinance()}).catch(er=>toast('Save failed'))}
 
 /* ================= TRIAGE ENGINE (real, testable) ================= */
 const SafewaveTriage=(function(){
