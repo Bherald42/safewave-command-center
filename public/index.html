@@ -2340,6 +2340,33 @@ function saveFinance(patch,msg){Object.assign(financeData,patch);if(hasFirestore
 function financeBurn(){const payroll=(financeData.payroll||[]).reduce((s,p)=>s+parseMoney(p.monthly),0);const opex=(financeData.pnl||[]).filter(l=>l.type==='opex').reduce((s,l)=>s+parseMoney(l.amount),0);return {payroll,opex,total:payroll+opex}}
 function financeMRR(){const p=financeData.projections||{};return parseMoney(p.customers)*parseMoney(p.avgMrr)}
 function projSeries(){const p=financeData.projections||{};const base=financeMRR();const g=parseMoney(p.growthPct)/100;const h=Math.max(1,Math.min(60,parseMoney(p.horizon)||12));const marks=Array.from(new Set([1,3,6,12,h].filter(x=>x<=h)));return {base:base,end:base*Math.pow(1+g,h),h:h,pts:marks.map(m=>({m:m,mrr:base*Math.pow(1+g,m)}))}}
+function finSeries(){const p=financeData.projections||{};const base=financeMRR();const g=parseMoney(p.growthPct)/100;const h=Math.max(6,Math.min(36,parseMoney(p.horizon)||12));const burn=financeBurn().total;
+  const mrr=[],cash=[];let c=parseMoney(financeData.cashOnHand);let runOut=-1;
+  for(let m=0;m<=h;m++){const mv=base*Math.pow(1+g,m);mrr.push(mv);if(m>0)c+=(mv-burn);cash.push(c);if(runOut<0&&c<0)runOut=m}
+  return {mrr:mrr,cash:cash,h:h,runOut:runOut};}
+let finUID=0;
+function areaChart(vals,opts){opts=opts||{};const W=320,H=88,pad=6;const zero=opts.zero;
+  let lo=Math.min.apply(null,vals),hi=Math.max.apply(null,vals);if(zero){lo=Math.min(lo,0);hi=Math.max(hi,0)}if(hi===lo)hi=lo+1;
+  const n=vals.length;const X=i=>pad+(i/(n-1))*(W-2*pad);const Y=v=>H-pad-((v-lo)/(hi-lo))*(H-2*pad);
+  let line='';vals.forEach((v,i)=>{line+=(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '});
+  const area='M'+X(0).toFixed(1)+' '+Y(vals[0]).toFixed(1)+' '+vals.map((v,i)=>'L'+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ')+' L'+X(n-1).toFixed(1)+' '+(H-pad)+' L'+X(0).toFixed(1)+' '+(H-pad)+' Z';
+  const col=opts.color||'var(--wave)';const id='fc'+(++finUID);let extra='';
+  if(zero){const zy=Y(0);extra+='<line x1="'+pad+'" y1="'+zy.toFixed(1)+'" x2="'+(W-pad)+'" y2="'+zy.toFixed(1)+'" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 3"/>';}
+  const ex=X(n-1),ey=Y(vals[n-1]);
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="display:block;width:100%;height:auto" role="img">'
+    +'<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+col+'" stop-opacity="0.26"/><stop offset="1" stop-color="'+col+'" stop-opacity="0"/></linearGradient></defs>'
+    +extra+'<path d="'+area+'" fill="url(#'+id+')"/><path d="'+line+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="'+ex.toFixed(1)+'" cy="'+ey.toFixed(1)+'" r="3.4" fill="'+col+'"/></svg>';
+}
+function finTrajectoryCard(){const s=finSeries();const net=financeMRR()-financeBurn().total;
+  const mrrEnd=s.mrr[s.mrr.length-1];const cashCol=net>=0?'var(--good)':'var(--amber)';
+  return '<div class="card"><div class="sec-head"><h2>MRR trajectory</h2><span class="pill dim">'+s.h+' mo</span></div>'
+    +areaChart(s.mrr,{color:'var(--good)'})
+    +'<div class="row" style="justify-content:space-between;margin-top:8px"><span class="d">Now '+fmtMoney(s.mrr[0])+'</span><span class="d" style="color:var(--text);font-weight:600">Month '+s.h+' · '+fmtMoney(mrrEnd)+' ('+fmtMoney(mrrEnd*12)+' ARR)</span></div></div>'
+    +'<div class="card"><div class="sec-head"><h2>Cash runway</h2><span class="pill '+(net>=0?'good':'amber')+'">'+(net>=0?'GROWING':(s.runOut>=0?'OUT ~mo '+s.runOut:'BURNING'))+'</span></div>'
+    +areaChart(s.cash,{color:cashCol,zero:true})
+    +'<div class="row" style="justify-content:space-between;margin-top:8px"><span class="d">Now '+fmtMoney(s.cash[0])+'</span><span class="d" style="color:var(--text);font-weight:600">'+(s.runOut>=0?'Runs out ~month '+s.runOut:'Month '+s.h+' · '+fmtMoney(s.cash[s.cash.length-1]))+'</span></div>'
+    +'<div class="note" style="margin-top:9px">Projected from current cash, monthly burn, and the MRR growth below. Edit the inputs to model scenarios.</div></div>';
+}
 function renderFinance(){
   const body=document.getElementById('fin-body');if(!body)return;
   if(!financeAllowed()){body.innerHTML='<div class="empty"><div class="ico">🔒</div><div class="t">Restricted</div><div class="d">Financials are visible only to approved teammates.</div></div>';return}
@@ -2368,6 +2395,8 @@ function renderFinance(){
       +'<div class="row" style="gap:8px;margin-top:12px;align-items:center"><span class="d" style="font-weight:600;color:var(--text)">Cash on hand</span><input class="field" id="fp-cash" type="number" value="'+(parseMoney(financeData.cashOnHand)||0)+'" style="margin:0;max-width:180px"><button class="btn ghost" onclick="saveCash()">Save</button></div>'
       +'<div class="note" style="margin-top:10px">'+(net>=0?'Net-positive at the current run-rate — runway is effectively unlimited while this holds.':'At '+fmtMoney(-net)+'/mo net burn, cash lasts ~'+(runway?runway.toFixed(1):'—')+' months. Grow enterprise MRR or trim opex to extend.')+'</div>'
     +'</div>'
+    /* Trajectory charts */
+    +finTrajectoryCard()
     /* Projections */
     +'<div class="card"><div class="sec-head"><h2>Enterprise subscription projections</h2></div>'
       +'<div class="frow"><label class="fr-lbl">Enterprise customers</label><input class="field" id="fp-customers" type="number" value="'+(parseMoney((financeData.projections||{}).customers)||0)+'"></div>'
