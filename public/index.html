@@ -615,6 +615,14 @@ input[type=date]{color-scheme:dark}
     <div class="rolepick" id="bt-priority">
       <button data-v="safety">Safety</button><button data-v="high">High</button><button data-v="medium" class="on">Medium</button><button data-v="low">Low</button>
     </div>
+    <div class="row" style="gap:8px;margin-top:12px">
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Cost budget $</p><input class="field" id="bt-cost" type="number" placeholder="0" style="margin:0"></div>
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Spent so far $</p><input class="field" id="bt-spent" type="number" placeholder="0" style="margin:0"></div>
+    </div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Cost category <span style="color:var(--faint);font-weight:400">(feeds Financials)</span></p>
+    <div class="rolepick" id="bt-costcat">
+      <button data-v="none" class="on">None</button><button data-v="hardware">Hardware dev</button><button data-v="consulting">3rd-party consulting</button><button data-v="other">Other</button>
+    </div>
     <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Blocked by <span style="color:var(--faint);font-weight:400">(must finish first — flags what's late upstream)</span></p>
     <div class="rolepick" id="bt-deps"></div>
     <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Tag teammates <span style="color:var(--faint);font-weight:400">(they get notified &amp; follow updates)</span></p>
@@ -1707,6 +1715,7 @@ function renderProjectDetail(body,pid){
     +(p.vision?'<div class="d" style="margin-top:10px;color:var(--text)">'+esc(p.vision)+'</div>':'')
     +'<div class="kv" style="margin-top:10px"><span>Owner</span><b>'+esc(p.owner||'Unassigned')+'</b></div>'
     +'<div class="kv"><span>Timeline</span><b>'+(p.start?fmtDate(new Date(dayMs(p.start))):'—')+' → '+(p.end?fmtDate(new Date(dayMs(p.end))):'—')+'</b></div>'
+    +(function(){const sp=projectSpend(pid);return (sp.budget||sp.spent)?'<div class="kv"><span>Dev cost</span><b>'+fmtMoney(sp.spent)+' spent'+(sp.budget?' / '+fmtMoney(sp.budget)+' budget':'')+'</b></div>':''})()
     +'<div class="progress" style="margin-top:10px"><i style="width:'+prog+'%"></i></div></div>';
   html+='<div class="sec-head" style="margin-top:16px"><h2>Timeline</h2><span class="pill dim">Gantt</span></div>'+ganttHTML(p,ts);
   html+='<div class="sec-head" style="margin-top:16px"><h2>Tasks</h2><span class="pill '+(ts.length?'wave':'dim')+'">'+ts.length+'</span></div>';
@@ -1784,6 +1793,8 @@ function openBuildTask(id,presetProj){btEditId=id||null;btFile=null;const t=id?B
   document.getElementById('bt-due').value=t&&t.due?String(t.due).slice(0,10):'';
   document.querySelectorAll('#bt-status button').forEach(b=>b.classList.toggle('on',b.dataset.v===taskStatus(t||{})));
   document.querySelectorAll('#bt-priority button').forEach(b=>b.classList.toggle('on',b.dataset.v===((t&&t.priority)||'medium')));
+  document.getElementById('bt-cost').value=t&&t.cost?t.cost:'';document.getElementById('bt-spent').value=t&&t.spent?t.spent:'';
+  document.querySelectorAll('#bt-costcat button').forEach(b=>b.classList.toggle('on',b.dataset.v===((t&&t.costCat)||'none')));
   document.getElementById('bt-deps').innerHTML=depOptions(t?t.projectId:(presetProj||''),btEditId,t?t.deps:[]);
   document.getElementById('bt-project').onchange=refreshDepPicker;
   document.getElementById('bt-watchers').innerHTML=watcherChips(t?t.watchers:[]);
@@ -1818,7 +1829,8 @@ function saveBuildTask(){const title=document.getElementById('bt-title').value.t
   const pr=document.querySelector('#bt-priority button.on');const stb=document.querySelector('#bt-status button.on');
   const watchers=Array.from(document.querySelectorAll('#bt-watchers button.on')).map(b=>b.dataset.v);
   const deps=Array.from(document.querySelectorAll('#bt-deps button.on')).map(b=>b.dataset.v);
-  const data={title:title,projectId:document.getElementById('bt-project').value,assignee:document.getElementById('bt-assignee').value,start:document.getElementById('bt-start').value||'',due:document.getElementById('bt-due').value||'',status:stb?stb.dataset.v:'todo',priority:pr?pr.dataset.v:'medium',watchers:watchers,deps:deps,notes:document.getElementById('bt-notes').value.trim()};
+  const ccb=document.querySelector('#bt-costcat button.on');
+  const data={title:title,projectId:document.getElementById('bt-project').value,assignee:document.getElementById('bt-assignee').value,start:document.getElementById('bt-start').value||'',due:document.getElementById('bt-due').value||'',status:stb?stb.dataset.v:'todo',priority:pr?pr.dataset.v:'medium',watchers:watchers,deps:deps,cost:Number(document.getElementById('bt-cost').value)||0,spent:Number(document.getElementById('bt-spent').value)||0,costCat:ccb?ccb.dataset.v:'none',notes:document.getElementById('bt-notes').value.trim()};
   let prev=null,prevW=[];
   if(btEditId){const t=BUILDT.find(x=>x.id===btEditId);if(t){prev=t.assignee;prevW=t.watchers||[];Object.assign(t,data);persistBuild(t)}}
   else{const t=Object.assign({id:'b'+Date.now().toString(36),updates:[],createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()},data);BUILDT.unshift(t);persistBuild(t)}
@@ -2338,11 +2350,18 @@ async function loadFinance(){
 }
 function saveFinance(patch,msg){Object.assign(financeData,patch);if(hasFirestore()){firebase.firestore().collection('finance').doc('main').set(financeData,{merge:true}).then(()=>{if(msg)toast(msg)}).catch(e=>toast('Save failed — '+((e&&e.code)||'republish Firestore rules')))}else if(msg)toast(msg)}
 function financeBurn(){const payroll=(financeData.payroll||[]).reduce((s,p)=>s+parseMoney(p.monthly),0);const opex=(financeData.pnl||[]).filter(l=>l.type==='opex').reduce((s,l)=>s+parseMoney(l.amount),0);return {payroll,opex,total:payroll+opex}}
+/* Build-board development costs → Financials (hardware dev, 3rd-party consulting) */
+function buildSpend(){const cats={hardware:{budget:0,spent:0},consulting:{budget:0,spent:0},other:{budget:0,spent:0}};let tb=0,ts=0;
+  (typeof BUILDT!=='undefined'?BUILDT:[]).forEach(t=>{const c=parseMoney(t.cost),sp=parseMoney(t.spent);if(!c&&!sp)return;let cat=t.costCat;if(!cat||cat==='none'||!cats[cat])cat='other';cats[cat].budget+=c;cats[cat].spent+=sp;tb+=c;ts+=sp});
+  return {cats:cats,totalBudget:tb,totalSpent:ts,remaining:Math.max(0,tb-ts)};}
+const COSTCAT_LABEL={hardware:'Hardware development',consulting:'3rd-party consulting',other:'Other build'};
+function projectSpend(pid){let b=0,s=0;projectTasks(pid).forEach(t=>{b+=parseMoney(t.cost);s+=parseMoney(t.spent)});return {budget:b,spent:s}}
 function financeMRR(){const p=financeData.projections||{};return parseMoney(p.customers)*parseMoney(p.avgMrr)}
 function projSeries(){const p=financeData.projections||{};const base=financeMRR();const g=parseMoney(p.growthPct)/100;const h=Math.max(1,Math.min(60,parseMoney(p.horizon)||12));const marks=Array.from(new Set([1,3,6,12,h].filter(x=>x<=h)));return {base:base,end:base*Math.pow(1+g,h),h:h,pts:marks.map(m=>({m:m,mrr:base*Math.pow(1+g,m)}))}}
 function finSeries(){const p=financeData.projections||{};const base=financeMRR();const g=parseMoney(p.growthPct)/100;const h=Math.max(6,Math.min(36,parseMoney(p.horizon)||12));const burn=financeBurn().total;
+  const remain=(typeof buildSpend==='function'?buildSpend().remaining:0);
   const mrr=[],cash=[];let c=parseMoney(financeData.cashOnHand);let runOut=-1;
-  for(let m=0;m<=h;m++){const mv=base*Math.pow(1+g,m);mrr.push(mv);if(m>0)c+=(mv-burn);cash.push(c);if(runOut<0&&c<0)runOut=m}
+  for(let m=0;m<=h;m++){const mv=base*Math.pow(1+g,m);mrr.push(mv);if(m===1)c-=remain;if(m>0)c+=(mv-burn);cash.push(c);if(runOut<0&&c<0)runOut=m}
   return {mrr:mrr,cash:cash,h:h,runOut:runOut};}
 let finUID=0;
 function areaChart(vals,opts){opts=opts||{};const W=320,H=88,pad=6;const zero=opts.zero;
@@ -2373,7 +2392,8 @@ function renderFinance(){
   if(!financeData){body.innerHTML='<div class="d" style="padding:10px">Loading…</div>';loadFinance();return}
   const burn=financeBurn(),mrr=financeMRR(),net=mrr-burn.total,cash=parseMoney(financeData.cashOnHand);
   const runway=net>=0?null:cash/(-net);
-  const pnl=financeData.pnl||[],rev=pnl.filter(l=>l.type==='rev').reduce((s,l)=>s+parseMoney(l.amount),0),cogs=pnl.filter(l=>l.type==='cogs').reduce((s,l)=>s+parseMoney(l.amount),0),opex=pnl.filter(l=>l.type==='opex').reduce((s,l)=>s+parseMoney(l.amount),0);
+  const pnl=financeData.pnl||[],rev=pnl.filter(l=>l.type==='rev').reduce((s,l)=>s+parseMoney(l.amount),0),cogs=pnl.filter(l=>l.type==='cogs').reduce((s,l)=>s+parseMoney(l.amount),0),opexManual=pnl.filter(l=>l.type==='opex').reduce((s,l)=>s+parseMoney(l.amount),0);
+  const bs=buildSpend();const opex=opexManual+bs.totalSpent;
   const gross=rev-cogs,pnlNet=gross-opex;
   const ps=projSeries();
   document.getElementById('fin-sub').innerHTML='Restricted to '+FINANCE_EMAILS.length+' teammate'+(FINANCE_EMAILS.length!==1?'s':'')+' · Shopify data + your projections';
@@ -2412,8 +2432,13 @@ function renderFinance(){
     +'<div class="card"><div class="sec-head"><h2>P&amp;L builder</h2><a onclick="addPnl()">＋ Line</a></div>'
       +pnl.map((l,i)=>'<div class="frow pnl-row"><input class="field fr-label" value="'+esc(l.label||'')+'" placeholder="Line item"><select class="fr-type field" style="max-width:120px">'+['rev','cogs','opex'].map(t=>'<option value="'+t+'"'+(l.type===t?' selected':'')+'>'+({rev:'Revenue',cogs:'COGS',opex:'Opex'}[t])+'</option>').join('')+'</select><input class="field fr-amt" type="number" value="'+(parseMoney(l.amount)||0)+'" style="max-width:120px"><a class="fr-x" onclick="rmPnl('+i+')">✕</a></div>').join('')
       +'<button class="btn" onclick="savePnl()" style="margin:6px 0 12px">Save P&amp;L</button>'
-      +'<div class="kv"><span>Revenue</span><b>'+fmtMoney(rev)+'</b></div><div class="kv"><span>COGS</span><b>'+fmtMoney(cogs)+'</b></div><div class="kv"><span>Gross profit</span><b>'+fmtMoney(gross)+'</b></div><div class="kv"><span>Operating expenses</span><b>'+fmtMoney(opex)+'</b></div><div class="kv"><span style="font-weight:700">Net</span><b style="color:'+(pnlNet>=0?'var(--good)':'var(--amber)')+'">'+fmtMoney(pnlNet)+'</b></div>'
+      +'<div class="kv"><span>Revenue</span><b>'+fmtMoney(rev)+'</b></div><div class="kv"><span>COGS</span><b>'+fmtMoney(cogs)+'</b></div><div class="kv"><span>Gross profit</span><b>'+fmtMoney(gross)+'</b></div><div class="kv"><span>Operating expenses (manual)</span><b>'+fmtMoney(opexManual)+'</b></div>'+(bs.totalSpent?'<div class="kv"><span>Build &amp; R&amp;D (from projects)</span><b>'+fmtMoney(bs.totalSpent)+'</b></div>':'')+'<div class="kv"><span style="font-weight:700">Net</span><b style="color:'+(pnlNet>=0?'var(--good)':'var(--amber)')+'">'+fmtMoney(pnlNet)+'</b></div>'
     +'</div>'
+    /* Build & R&D spend from the board */
+    +'<div class="card"><div class="sec-head"><h2>Build &amp; R&amp;D spend</h2><a onclick="goto(\'s-build\')">Board ↗</a></div>'
+      +'<div class="tiles"><div class="tile"><div class="n">'+fmtMoney(bs.totalSpent)+'</div><div class="l">Spent to date</div></div><div class="tile"><div class="n">'+fmtMoney(bs.totalBudget)+'</div><div class="l">Budgeted</div></div><div class="tile"><div class="n" style="color:'+(bs.remaining?'var(--amber)':'var(--good)')+'">'+fmtMoney(bs.remaining)+'</div><div class="l">Remaining commitment</div></div></div>'
+      +['hardware','consulting','other'].filter(k=>bs.cats[k].budget||bs.cats[k].spent).map(k=>'<div class="kv"><span>'+COSTCAT_LABEL[k]+'</span><b>'+fmtMoney(bs.cats[k].spent)+' spent'+(bs.cats[k].budget?' / '+fmtMoney(bs.cats[k].budget):'')+'</b></div>').join('')
+      +'<div class="note" style="margin-top:10px">Pulled from tasks on the Build board (hardware dev, 3rd-party consulting). Spend feeds Net above; the remaining commitment is drawn against the cash-runway projection.</div></div>'
     /* Budget builder */
     +'<div class="card"><div class="sec-head"><h2>Budget builder</h2><a onclick="addBudget()">＋ Line</a></div>'
       +(financeData.budget||[]).map((b,i)=>{const v=parseMoney(b.actual)-parseMoney(b.budget);return '<div class="frow bud-row"><input class="field fr-label" value="'+esc(b.label||'')+'" placeholder="Category"><input class="field fr-bud" type="number" placeholder="Budget" value="'+(parseMoney(b.budget)||0)+'" style="max-width:110px"><input class="field fr-act" type="number" placeholder="Actual" value="'+(parseMoney(b.actual)||0)+'" style="max-width:110px"><span class="d" style="min-width:70px;text-align:right;color:'+(v>0?'var(--amber)':'var(--good)')+'">'+fmtMoney(v)+'</span><a class="fr-x" onclick="rmBudget('+i+')">✕</a></div>'}).join('')
