@@ -992,6 +992,37 @@ function subscribeOrders(){if(!hasFirestore()){return}
 async function loadInventory(){if(!hasFirestore())return;try{const d=await firebase.firestore().collection('inventory').doc('main').get();if(d.exists&&d.data().locations){SIZES.forEach(z=>0);INV=Object.assign({covington:{},pace:{},china:{}},d.data().locations)}}catch(e){}
   const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();}
 function saveInventory(){if(hasFirestore())firebase.firestore().collection('inventory').doc('main').set({locations:INV,updatedAt:new Date().toISOString()},{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+/* ---- purchase orders: auto-drafted from the forecast ---- */
+let PO=[];
+async function loadPOs(){if(!hasFirestore())return;try{const qs=await firebase.firestore().collection('purchase_orders').get();PO=qs.docs.map(d=>Object.assign({id:d.id},d.data()))}catch(e){PO=[]}const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on')&&stockTab==='forecast')renderStock()}
+function persistPO(o){if(hasFirestore())firebase.firestore().collection('purchase_orders').doc(o.id).set(o,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+function poId(){return 'PO'+Date.now().toString(36).toUpperCase().slice(-6)}
+function itemsStr(its){return its.map(i=>SIZELABEL[i.size]+' ×'+i.qty).join(' · ')}
+function draftPaceTransfer(){const COVER=8;const items=[];SIZES.forEach(z=>{const need=Math.ceil(BURN[z]*COVER)-cov(z);const q=Math.max(0,Math.min(INV.pace[z]||0,need));if(q>0)items.push({size:z,qty:q})});
+  if(!items.length){toast('Covington is well stocked — no transfer needed');return}
+  const o={id:poId(),kind:'pace',items:items,status:'draft',reason:'Top Covington up to ~'+COVER+' wks of cover',createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()};
+  PO.unshift(o);persistPO(o);renderStock();toast('✓ Draft Pace transfer — '+itemsStr(items))}
+function draftChinaPO(){const COVER=26;const items=[];SIZES.forEach(z=>{const need=Math.ceil(BURN[z]*COVER)-net(z);if(need>0)items.push({size:z,qty:Math.ceil(need/10)*10})});
+  if(!items.length){toast('Network covered ~6 months — no China order needed yet');return}
+  const o={id:poId(),kind:'china',items:items,status:'draft',reason:'Reach ~'+COVER+' wks of network cover ('+CHINA_LEAD_MONTHS+'-mo lead)',leadWeeks:CHINA_LEAD_WEEKS,createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()};
+  PO.unshift(o);persistPO(o);renderStock();toast('✓ Draft China PO — '+itemsStr(items))}
+function placePO(id){const o=PO.find(x=>x.id===id);if(!o)return;o.status='placed';o.placedAt=new Date().toISOString();const lead=o.kind==='china'?CHINA_LEAD_WEEKS:TRANSFER_WEEKS;o.eta=new Date(Date.now()+lead*7*864e5).toISOString();persistPO(o);renderStock();refreshPulse();toast('✓ '+o.id+' placed · ETA '+fmtDate(new Date(dayMs(o.eta))))}
+function receivePO(id){const o=PO.find(x=>x.id===id);if(!o)return;if(!confirm('Receive '+o.id+' into inventory? '+itemsStr(o.items)))return;
+  if(o.kind==='china'){o.items.forEach(it=>{INV.pace[it.size]=(INV.pace[it.size]||0)+it.qty})}
+  else{o.items.forEach(it=>{const q=Math.min(it.qty,INV.pace[it.size]||0);INV.pace[it.size]=(INV.pace[it.size]||0)-q;INV.covington[it.size]=(INV.covington[it.size]||0)+q})}
+  o.status='received';o.receivedAt=new Date().toISOString();persistPO(o);saveInventory();renderStock();refreshPulse();
+  toast('✓ '+o.id+' received into '+(o.kind==='china'?'Pace':'Covington'))}
+function deletePO(id){PO=PO.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('purchase_orders').doc(id).delete().catch(()=>{});renderStock()}
+function poCard(o){const st={draft:['dim','DRAFT'],placed:['wave','PLACED'],received:['good','RECEIVED']}[o.status]||['dim',o.status];
+  let act='';
+  if(o.status==='draft')act='<button class="btn" style="flex:1" onclick="placePO(\''+o.id+'\')">Place order</button><button class="btn ghost" style="flex:1" onclick="deletePO(\''+o.id+'\')">Discard</button>';
+  else if(o.status==='placed')act='<button class="btn" style="flex:1" onclick="receivePO(\''+o.id+'\')">Mark received</button>';
+  return '<div class="card"><div class="row"><div class="grow"><div class="t">'+(o.kind==='china'?'China production':'Pace → Covington')+' · '+esc(o.id)+'</div><div class="d">'+itemsStr(o.items)+' · '+esc(o.reason||'')+(o.eta&&o.status==='placed'?' · ETA '+fmtDate(new Date(dayMs(o.eta))):'')+'</div></div><span class="pill '+st[0]+'">'+st[1]+'</span></div>'+(act?'<div class="row" style="gap:8px;margin-top:9px">'+act+'</div>':'')+'</div>'}
+function renderPOs(){const open=PO.filter(o=>o.status!=='received').sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  let html='<div class="sec-head" style="margin-top:18px"><h2>Purchase orders</h2><span class="pill '+(open.length?'wave':'dim')+'">'+open.length+'</span></div>';
+  html+='<div class="row" style="gap:8px;margin-bottom:12px"><button class="btn ghost" style="flex:1" onclick="draftPaceTransfer()">＋ Draft Pace transfer</button><button class="btn ghost" style="flex:1" onclick="draftChinaPO()">＋ Draft China PO</button></div>';
+  html+=open.length?open.map(poCard).join(''):'<div class="d" style="color:var(--faint)">No open POs. Draft one from the forecast above.</div>';
+  return html;}
 async function loadFulfillments(){if(!hasFirestore())return;try{const qs=await firebase.firestore().collection('fulfillments').get();FULF={};qs.forEach(d=>{FULF[d.id]=d.data();const o=SHOP.orders.find(x=>x.n===d.id);if(o&&d.data().status==='fulfilled')o.ful='FULFILLED'})}catch(e){FULF={}}
   const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();}
 function cov(z){return (INV.covington[z]||0)}
@@ -1162,6 +1193,7 @@ function renderForecastTab(body){
       +'<div class="fc-track"><div class="fc-fill" style="width:'+pct+'%"></div><div class="fc-mark" style="left:'+markPct+'%" title="China order-by threshold"></div></div>'
       +'<div class="d" style="margin-top:9px">'+(cb<=0?'<b style="color:var(--amber)">Order from China now.</b>':'Start China order by <b style="color:var(--text)">'+fmtDate(weeksToDate(cb))+'</b> (~'+Math.round(cb)+' wk).')+(cov(z)<=0?' <b style="color:var(--amber)">Covington is 0 — transfer from Pace to keep shipping.</b>':'')+'</div></div>';
   });
+  html+=renderPOs();
   body.innerHTML=html;
 }
 function renderOrdersTab(body){
@@ -1316,7 +1348,7 @@ function enterApp(user){
   document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
   buildNav(user.role);renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
-  loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();subscribeReturns();subscribeNotifications();subscribeOrders();
+  loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();loadPOs();subscribeReturns();subscribeNotifications();subscribeOrders();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
