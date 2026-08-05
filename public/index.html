@@ -511,6 +511,14 @@ input[type=date]{color-scheme:dark}
       </div>
     </main>
 
+    <main class="screen" id="s-feedback">
+      <p class="eyebrow">Super admin</p>
+      <h1>Team feedback</h1>
+      <p class="sub" id="fbx-sub">Ideas, issues and questions from the team — each tagged with the screen and any annotated screenshot.</p>
+      <div class="chips" id="fbx-filter" style="margin:4px 0 14px"></div>
+      <div id="fbx-list"></div>
+    </main>
+
   </div>
 </div>
 
@@ -837,17 +845,6 @@ input[type=date]{color-scheme:dark}
 
 <!-- Lightbox for viewing an attached screenshot -->
 <div id="shot-view" onclick="this.style.display='none'"><img id="shot-view-img" alt="screenshot"></div>
-
-<div class="sheet" id="sh-feedback-inbox" onclick="if(event.target===this)closeSheets()">
-  <div class="sheet-body">
-    <div class="grab"></div>
-    <span class="pill wave">TEAM FEEDBACK</span>
-    <h1 style="font-size:20px;margin:11px 0 4px">Team feedback</h1>
-    <p class="sub" id="fbx-sub"></p>
-    <div class="chips" id="fbx-filter" style="margin:6px 0 12px"></div>
-    <div id="fbx-list"></div>
-  </div>
-</div>
 
 <div class="sheet" id="sh-users" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
@@ -1438,12 +1435,12 @@ function subscribeFeedback(){if(!hasFirestore()||!isSuperAdmin())return;
   if(fbUnsub){try{fbUnsub()}catch(e){}}
   try{fbUnsub=firebase.firestore().collection('feedback').orderBy('createdAt','desc').limit(200).onSnapshot(qs=>{
     FEEDBACK=qs.docs.map(d=>Object.assign({id:d.id},d.data()));renderFeedbackBadge();
-    const sh=document.getElementById('sh-feedback-inbox');if(sh&&sh.classList.contains('on'))renderFeedbackInbox();
+    const scr=document.getElementById('s-feedback');if(scr&&scr.classList.contains('on'))renderFeedbackInbox();
   },e=>{})}catch(e){}}
 function fbOpenCount(){return FEEDBACK.filter(f=>f.status!=='resolved').length}
 function renderFeedbackBadge(){const b=document.getElementById('fb-badge');if(b){const c=fbOpenCount();b.textContent=c>9?'9+':String(c);b.style.display=(isSuperAdmin()&&c)?'flex':'none'}
   const ac=document.getElementById('acc-fb-count');if(ac){const c=fbOpenCount();ac.textContent=c?'· '+c+' open':''}}
-function openFeedbackInbox(){fbxFilter='open';closeSheets();renderFeedbackInbox();openSheet('sh-feedback-inbox')}
+function openFeedbackInbox(){fbxFilter='open';closeSheets();goto('s-feedback')}
 function fbxTab(v,l,n){return '<button class="chip'+(fbxFilter===v?' on':'')+'" onclick="fbxFilter=\''+v+'\';renderFeedbackInbox()">'+l+(n!=null?' · '+n:'')+'</button>'}
 function renderFeedbackInbox(){const open=fbOpenCount();
   document.getElementById('fbx-sub').textContent=FEEDBACK.length?(open+' open · '+FEEDBACK.length+' total'):'No feedback yet — it lands here when the team taps 💬 on any screen.';
@@ -1455,10 +1452,10 @@ function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMi
   return '<div class="card"><div class="row"><div class="grow"><div class="t">'+tp+' '+esc(f.type||'Feedback')+' · '+esc(f.screenLabel||'')+'</div><div class="d">'+esc(f.fromName||f.fromEmail||'Teammate')+(time?' · '+time:'')+'</div></div><span class="pill '+(resolved?'good':'wave')+'">'+(resolved?'RESOLVED':'OPEN')+'</span></div>'
     +'<div class="note" style="margin-top:9px;white-space:pre-wrap">'+esc(f.text||'')+'</div>'
     +(f.shot?'<img src="'+f.shot+'" alt="screenshot" style="max-width:100%;border-radius:8px;margin-top:9px;cursor:zoom-in;display:block" onclick="viewShot(this.src)">':'')
-    +'<div class="row" style="gap:8px;margin-top:10px">'
-      +(resolved?'<button class="btn ghost" style="flex:1" onclick="setFeedbackStatus(\''+f.id+'\',\'open\')">Reopen</button>':'<button class="btn ghost" style="flex:1" onclick="setFeedbackStatus(\''+f.id+'\',\'resolved\')">Mark resolved</button>')
-      +(f.screen?'<button class="btn ghost" style="flex:1" onclick="closeSheets();goto(\''+esc(f.screen)+'\')">Go to '+esc(f.screenLabel||'screen')+'</button>':'')
-      +(f.fromEmail?'<button class="btn ghost" style="flex:0 0 auto" onclick="replyFeedback(decodeURIComponent(\''+encodeURIComponent(f.fromEmail)+'\'))">Reply</button>':'')
+    +'<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
+      +(resolved?'<button class="btn ghost" style="flex:1 1 120px" onclick="setFeedbackStatus(\''+f.id+'\',\'open\')">Reopen</button>':'<button class="btn ghost" style="flex:1 1 120px" onclick="setFeedbackStatus(\''+f.id+'\',\'resolved\')">Mark resolved</button>')
+      +(f.screen?'<button class="btn ghost" style="flex:1 1 120px" onclick="goto(\''+esc(f.screen)+'\')">Go to '+esc(f.screenLabel||'screen')+'</button>':'')
+      +(f.fromEmail?'<button class="btn ghost" style="flex:1 1 90px" onclick="replyFeedback(decodeURIComponent(\''+encodeURIComponent(f.fromEmail)+'\'))">Reply</button>':'')
     +'</div></div>'}
 function setFeedbackStatus(id,st){if(hasFirestore())firebase.firestore().collection('feedback').doc(id).set({status:st},{merge:true}).catch(e=>toast('Update failed — '+((e&&e.code)||'')));const f=FEEDBACK.find(x=>x.id===id);if(f)f.status=st;renderFeedbackInbox();renderFeedbackBadge()}
 function replyFeedback(email){if(!email)return;window.location.href='mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent('Re: your Safewave feedback')}
@@ -1537,12 +1534,14 @@ function viewShot(src){if(!src)return;const v=document.getElementById('shot-view
 /* ================= NAV / ROUTER ================= */
 let CURRENT_USER=null;
 const FINANCE_NAV={id:'s-finance',label:'Financials',roles:[],svg:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>'};
+const FEEDBACK_NAV={id:'s-feedback',label:'Feedback',roles:[],svg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'};
 let FINANCE_EMAILS=[];
 function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;if(u.role==='superadmin')return true;return FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase())}
 function buildNav(role){
   const nav=document.getElementById('nav');nav.innerHTML='';
   const items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(role)));
   if(financeAllowed())items.splice(1,0,FINANCE_NAV);
+  if(isSuperAdmin())items.push(FEEDBACK_NAV);
   const current=document.querySelector('.screen.on');const curId=current?current.id:'s-pulse';
   items.forEach((n)=>{
     const b=document.createElement('button');b.className='tab'+(n.id===curId?' on':'');b.dataset.s=n.id;
@@ -1561,6 +1560,7 @@ function goto(id,btn){
   if(id==='s-build')renderBuild();
   if(id==='s-chat')renderChat();
   if(id==='s-stock')renderStock();
+  if(id==='s-feedback')renderFeedbackInbox();
 }
 
 /* ================= SESSION ================= */
