@@ -98,9 +98,29 @@ account) and true background **FCM push** (VAPID key + `firebase-messaging-sw.js
 + device tokens) — the service worker's `push` handler is already in place.
 
 ## New Firestore collections (rules already included)
-`inventory/main` (location counts), `fulfillments/{orderId}` (QC + firmware +
-sign-off), `build_tasks`, `campaigns`, `chat_channels/*/messages`,
+`inventory/main` (location counts), `fulfillments/{orderId}` (checklist +
+firmware + tracking + sign-off), `bands/{serial}` (per-band identity + lifecycle
+history), `returns/{rma}` (returns queue), `orders/{id}` (live Shopify orders),
+`notifications`, `build_tasks`, `campaigns`, `chat_channels/*/messages`,
 `settings/chat`, `finance/main`, `settings/finance`.
+
+## Fulfillment lifecycle — what's built vs. an integration
+Built in-app: pull from stock → pre-shipment checklist → firmware + sign-off →
+**band gets a serial** (its QR carries its whole history) assigned to the
+customer → Covington decrements → print band label. Returns: **Start return**
+(alerts the team) → **Issue return label** (prints an RMA slip) → **inspection
+checklist** → back to inventory, keeping the serial so the same band can be
+reissued (or scrapped for life-safety).
+
+Two pieces need a carrier/Shopify integration (they can't be faked):
+- **Real shipping label + tracking number.** Today the carrier label is printed
+  in Shopify and the tracking number is pasted in at fulfilment. To auto-capture
+  it, add a Shopify **fulfillments** webhook (or the Fulfillment API) that writes
+  the tracking number back onto `orders/{id}`.
+- **Carrier return label.** The RMA slip prints from the app; a real prepaid
+  return label comes from **Shopify Returns** or **EasyPost/Shippo**. A Shopify
+  **returns/refunds** webhook can also auto-open a return here (step 7) instead
+  of the manual "Start return".
 
 ## Notes
 - Support-ticket replies and account emails are human-initiated. **Campaign
