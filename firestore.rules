@@ -137,5 +137,15 @@ service cloud.firestore {
       allow read: if isSuper() || (signedIn() && request.auth.token.email in resource.data.emails);
       allow write: if isSuper();
     }
+
+    // Fundraise round config (target + round name). The investor pipeline itself
+    // lives in crm_accounts (team-shared); this doc holds only the round total,
+    // gated to leadership (admins/managers) who run the raise.
+    function canRaise() {
+      return signedIn() && (myRole() == 'superadmin' || myRole() == 'admin' || myRole() == 'manager');
+    }
+    match /settings/raise {
+      allow read, write: if canRaise();
+    }
   }
 }

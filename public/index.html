@@ -1286,9 +1286,25 @@ function renderPulse(user){
   if(user.role==='admin'||user.role==='manager')roll+=rtile('s-build',top?top.id:'Build',top?'Top: '+top.title:'Project triage','wave');
   if(user.role==='admin')roll+=rtile('s-comply','SOC 2 + HIPAA','Comply · Drata','dim');
   if(financeAllowed()&&financeData){const b=financeBurn(),net=financeMRR()-b.total;roll+=rtile('s-finance',fmtMoney(net)+'/mo',net>=0?'Financials · net positive':'Financials · burn',net>=0?'good':'amber')}
+  if(canMoney){const rs=raiseStats();if(rs.investors||rs.target){const pct=rs.target?Math.round(rs.committed/rs.target*100):0;const lbl=(RAISE.round?RAISE.round+' · ':'Raise · ')+(rs.target?pct+'% of '+fmtMoney(rs.target):fmtMoney(rs.committed)+' committed');roll+=raiseTile(fmtMoney(rs.committed),lbl,rs.target&&pct>=100?'good':'wave',rs.target?pct:0);}}
   document.getElementById('pulse-roll').innerHTML=roll;
 }
 function rtile(to,n,l,pill){return '<div class="tile tap" tabindex="0" onclick="goto(\''+to+'\')"><div class="n" style="font-size:17px">'+esc(n)+'</div><div class="l"><span class="pill '+pill+'" style="font-size:9px;padding:1px 6px">•</span> '+esc(l)+'</div></div>'}
+function raiseTile(n,l,pill,pct){return '<div class="tile tap" tabindex="0" onclick="goRaise()"><div class="n" style="font-size:17px">'+esc(n)+'</div><div class="l"><span class="pill '+pill+'" style="font-size:9px;padding:1px 6px">•</span> '+esc(l)+'</div>'+(pct?'<div class="progress" style="margin-top:7px;height:5px"><i style="width:'+Math.min(100,pct)+'%;background:var(--'+pill+')"></i></div>':'')+'</div>'}
+function goRaise(){crmTab='fundraise';acctId=null;goto('s-crm')}
+function fundraiseFinCard(cash,net){const s=raiseStats();if(!s.investors&&!s.target)return '';
+  const pct=s.target?Math.min(100,Math.round(s.committed/s.target*100)):0;
+  const postRaise=(cash||0)+s.wired;const extend=(net<0&&s.committed)?(s.committed/(-net)):0;
+  return '<div class="card"><div class="sec-head"><h2>Fundraise'+(RAISE.round?' · '+esc(RAISE.round):'')+'</h2><a onclick="goRaise()">Manage →</a></div>'
+    +'<div class="row"><div class="grow"><div class="d">'+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target)+' target':' committed')+' · '+s.investors+' investor'+(s.investors!==1?'s':'')+'</div></div><div class="mono" style="font-weight:700">'+pct+'%</div></div>'
+    +(s.target?'<div class="progress" style="margin-top:9px;height:9px"><i style="width:'+pct+'%;background:var(--good)"></i></div>':'')
+    +'<div class="tiles" style="margin-top:12px">'
+      +'<div class="tile"><div class="n" style="color:var(--good)">'+fmtMoney(s.wired)+'</div><div class="l">Wired (in bank)</div></div>'
+      +'<div class="tile"><div class="n">'+fmtMoney(s.hard)+'</div><div class="l">Committed</div></div>'
+      +'<div class="tile"><div class="n" style="color:var(--muted)">'+fmtMoney(s.soft)+'</div><div class="l">Soft</div></div>'
+    +'</div>'
+    +'<div class="note" style="margin-top:10px">'+(extend?'Closing the '+fmtMoney(s.committed)+' committed adds ~'+extend.toFixed(1)+' months of runway at the current burn.':'Wired capital is included in cash on hand; committed &amp; soft are pipeline.')+'</div>'
+  +'</div>';}
 function taskGroup(label,arr){if(!arr.length)return '';return '<div class="pulse-sub-h">'+label+' · '+arr.length+'</div>'+arr.map(taskCard).join('')}
 function taskCard(x){const dm=dueMeta(x.dueMs);return '<div class="card tap" tabindex="0" onclick="goto(\''+x.screen+'\')"><div class="row"><div class="grow"><div class="t">'+esc(x.title)+'</div><div class="d">'+esc(x.kind)+(x.who?' · '+esc(x.who):'')+'</div></div>'+(dm.label?'<span class="pill '+dm.cls+'">'+esc(dm.label)+'</span>':'<span class="pill dim">'+esc(x.kind)+'</span>')+'</div></div>'}
 function opsCard(to,pill,tag,title,sub){return '<div class="card tap" tabindex="0" onclick="'+(to==='__mail'?'openAccountPanel()':'goto(\''+to+'\')')+'"><div class="row"><div class="grow"><div class="t">'+esc(title)+'</div><div class="d">'+esc(sub)+'</div></div><span class="pill '+pill+'">'+esc(tag)+'</span></div></div>'}
@@ -1371,6 +1387,7 @@ function enterApp(user){
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
   buildNav(user.role);renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
   loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();loadPOs();subscribeReturns();subscribeNotifications();subscribeOrders();
+  if(canFundraise())loadRaise().then(()=>{refreshPulse();if(crmTab==='fundraise')renderCRM();});
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
@@ -1898,11 +1915,13 @@ function lastAct(a){let ds=[];(a.notes||[]).forEach(n=>{const d=pDate(n.at);if(d
 function isStale(a){if(a.stage==='Won'||a.stage==='Lost')return false;const la=lastAct(a);return la==null||(Date.now()-la)/864e5>STALE_DAYS}
 function localSeed(){let base=(window.CRM_SEED||[]).map(a=>Object.assign({},a));try{const nw=JSON.parse(localStorage.getItem('sw_crm_new')||'[]');base=nw.concat(base)}catch(e){}try{const ov=JSON.parse(localStorage.getItem('sw_crm_edits')||'{}');base.forEach(a=>{if(ov[a.id])Object.assign(a,ov[a.id])})}catch(e){}return base}
 /* ---- add account, contacts, company metrics ---- */
-function openAddAcct(){['na-name','na-contact','na-email','na-phone','na-location','na-owner'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});document.getElementById('na-stage').innerHTML=STAGES.map(s=>'<button data-v="'+s+'" class="'+(s==='New'?'on':'')+'">'+s+'</button>').join('');closeSheets();openSheet('sh-addacct')}
+function openAddAcct(){addAcctBoard='Added';['na-name','na-contact','na-email','na-phone','na-location','na-owner'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});document.getElementById('na-stage').innerHTML=STAGES.map(s=>'<button data-v="'+s+'" class="'+(s==='New'?'on':'')+'">'+s+'</button>').join('');const h=document.querySelector('#sh-addacct h1');if(h)h.textContent='Add an account';closeSheets();openSheet('sh-addacct')}
 function saveNewAccount(){const name=document.getElementById('na-name').value.trim();if(!name){toast('Enter an account name');return}
   const sb=document.querySelector('#na-stage button.on');
-  const rec={id:'c'+Date.now().toString(36),board:'Added',name:name,contact:document.getElementById('na-contact').value.trim(),owner:document.getElementById('na-owner').value.trim()||'Unassigned',email:document.getElementById('na-email').value.trim(),phone:document.getElementById('na-phone').value.trim(),location:document.getElementById('na-location').value.trim(),stage:sb?sb.dataset.v:'New',status:'',tags:[],notes:[],contacts:[],extra:{}};
-  addAccount(rec);closeSheets();crmSeg='all';crmQ='';renderCRM();toast('✓ Account added — '+name)}
+  const board=addAcctBoard||'Added';const investor=board==='Fundraise';
+  const rec={id:'c'+Date.now().toString(36),board:board,name:name,contact:document.getElementById('na-contact').value.trim(),owner:document.getElementById('na-owner').value.trim()||'Unassigned',email:document.getElementById('na-email').value.trim(),phone:document.getElementById('na-phone').value.trim(),location:document.getElementById('na-location').value.trim(),stage:sb?sb.dataset.v:'New',status:'',tags:[],notes:[],contacts:[],extra:{}};
+  if(investor){rec.commit=0;rec.commitStatus='';}
+  addAccount(rec);addAcctBoard='Added';closeSheets();crmSeg='all';crmQ='';renderCRM();toast('✓ '+(investor?'Investor':'Account')+' added — '+name)}
 function addAccount(rec){CRMA.unshift(rec);
   if(crmSource==='firestore'&&hasFirestore()){firebase.firestore().collection('crm_accounts').doc(rec.id).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
   else{try{const nw=JSON.parse(localStorage.getItem('sw_crm_new')||'[]');nw.unshift(rec);localStorage.setItem('sw_crm_new',JSON.stringify(nw))}catch(e){}}}
@@ -1966,24 +1985,57 @@ function sel(label,cur,opts,varn){return '<select onchange="'+varn+'=this.value;
   +opts.map(o=>'<option'+(cur===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>'}
 /* ---- CRM top-level router: Pipeline · Campaigns · Prospect · Account ---- */
 let crmTab='pipeline';
+let addAcctBoard='Added';
 function crmGoTab(t){crmTab=t;if(t!=='account')acctId=null;campMode='list';renderCRM()}
 function backToPipeline(){crmTab='pipeline';acctId=null;renderCRM()}
+function canFundraise(){const r=CURRENT_USER&&CURRENT_USER.role;return r==='admin'||r==='manager'||r==='superadmin'}
 function crmTabsHTML(){
   const tab=(id,l,ic)=>'<button class="chip'+(crmTab===id?' on':'')+'" onclick="crmGoTab(\''+id+'\')">'+ic+' '+l+'</button>';
-  return '<div class="chips" style="margin-bottom:16px">'+tab('pipeline','Pipeline','▦')+tab('campaigns','Campaigns','🚀')+tab('prospect','Prospect','🔎')+'</div>';
+  return '<div class="chips" style="margin-bottom:16px">'+tab('pipeline','Pipeline','▦')+tab('campaigns','Campaigns','🚀')+tab('prospect','Prospect','🔎')+(canFundraise()?tab('fundraise','Fundraise','💰'):'')+'</div>';
 }
 function renderCRM(){
   const body=document.getElementById('crm-body');if(!body)return;
   const h1=document.getElementById('crm-h1');
   if(!crmReady){body.innerHTML='<div class="d" style="padding:16px">Loading…</div>';return}
   if(crmTab==='account'){body.innerHTML='';renderAccountView(body);return}
-  if(h1)h1.textContent=crmTab==='campaigns'?'Campaigns':crmTab==='prospect'?'Prospector':'Pipeline';
+  if(h1)h1.textContent=crmTab==='campaigns'?'Campaigns':crmTab==='prospect'?'Prospector':crmTab==='fundraise'?'Fundraise':'Pipeline';
   body.innerHTML=crmTabsHTML()+'<div id="crm-view"></div>';
   const v=document.getElementById('crm-view');
   if(crmTab==='campaigns')renderCampaigns(v);
   else if(crmTab==='prospect')renderProspect(v);
+  else if(crmTab==='fundraise')renderFundraise(v);
   else renderPipelineView(v);
 }
+/* ================= FUNDRAISE (investor pipeline on top of the CRM) ================= */
+let RAISE={target:0,round:''};
+const COMMIT=['soft','hard','wired','passed'];
+const COMMIT_META={soft:{label:'Soft',pill:'dim'},hard:{label:'Committed',pill:'wave'},wired:{label:'Wired',pill:'good'},passed:{label:'Passed',pill:'dim'}};
+async function loadRaise(){if(!hasFirestore())return;try{const d=await firebase.firestore().collection('settings').doc('raise').get();if(d.exists)RAISE=Object.assign({target:0,round:''},d.data())}catch(e){}}
+function saveRaise(){if(hasFirestore())firebase.firestore().collection('settings').doc('raise').set(RAISE,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+function raiseAccounts(){return (CRMA||[]).filter(a=>a.board==='Fundraise')}
+function raiseStats(){let soft=0,hard=0,wired=0,inv=0;raiseAccounts().forEach(a=>{const c=Number(a.commit)||0;const st=a.commitStatus||'';if(st==='wired')wired+=c;else if(st==='hard')hard+=c;else if(st==='soft')soft+=c;if(a.board==='Fundraise')inv++});return {soft:soft,hard:hard,wired:wired,committed:hard+wired,target:Number(RAISE.target)||0,investors:inv}}
+function editRaiseTarget(){const t=prompt('Round target ($):',RAISE.target||'');if(t===null)return;RAISE.target=Number((''+t).replace(/[^0-9.]/g,''))||0;const r=prompt('Round name (e.g. Pre-seed, Seed):',RAISE.round||'');if(r!==null)RAISE.round=r.trim();saveRaise();renderCRM();refreshPulse()}
+function openAddInvestor(){openAddAcct();addAcctBoard='Fundraise';const h=document.querySelector('#sh-addacct h1');if(h)h.textContent='Add an investor'}
+function fundraiseEditorCard(){return '<div class="card"><div class="sec-head"><h2>Commitment</h2></div>'
+  +'<div class="rolepick" id="ac-commit-status">'+COMMIT.map(s=>'<button data-v="'+s+'">'+COMMIT_META[s].label+'</button>').join('')+'</div>'
+  +'<div class="row" style="gap:8px;margin-top:10px"><input class="field" id="ac-commit" type="number" inputmode="decimal" placeholder="Amount ($)" style="margin:0;flex:1"><button class="btn ghost" onclick="saveCommit()">Save</button></div>'
+  +'<div class="note" style="margin-top:9px">Wired &amp; committed roll up to the round total on Pulse and Financials.</div></div>';}
+function populateCommit(a){const ci=document.getElementById('ac-commit');if(!ci)return;ci.value=(a.commit!=null&&a.commit!=='')?a.commit:'';
+  document.querySelectorAll('#ac-commit-status button').forEach(b=>{b.classList.toggle('on',b.dataset.v===(a.commitStatus||''));b.onclick=function(){document.querySelectorAll('#ac-commit-status button').forEach(x=>x.classList.remove('on'));this.classList.add('on')};});}
+function saveCommit(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;const amt=Number((''+(document.getElementById('ac-commit').value||'')).replace(/[^0-9.]/g,''))||0;const sb=document.querySelector('#ac-commit-status button.on');updateAccount(acctId,{commit:amt,commitStatus:sb?sb.dataset.v:''});refreshPulse();toast('✓ Commitment saved')}
+function renderFundraise(v){
+  const s=raiseStats();const pct=s.target?Math.min(100,Math.round(s.committed/s.target*100)):0;
+  document.getElementById('crm-sub').innerHTML=(RAISE.round?esc(RAISE.round)+' · ':'')+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target):'')+' committed';
+  let html='<div class="card"><div class="row"><div class="grow"><div class="t">'+(RAISE.round?esc(RAISE.round)+' round':'Round')+'</div><div class="d">'+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target)+' target':' committed')+' · '+s.investors+' investor'+(s.investors!==1?'s':'')+'</div></div><a onclick="editRaiseTarget()">Set target</a></div>'
+    +'<div class="progress" style="margin-top:11px;height:10px"><i style="width:'+pct+'%;background:var(--good)"></i></div>'
+    +'<div class="tiles" style="margin-top:12px"><div class="tile"><div class="n" style="color:var(--good)">'+fmtMoney(s.wired)+'</div><div class="l">Wired</div></div><div class="tile"><div class="n">'+fmtMoney(s.hard)+'</div><div class="l">Committed</div></div><div class="tile"><div class="n" style="color:var(--muted)">'+fmtMoney(s.soft)+'</div><div class="l">Soft</div></div></div></div>';
+  html+='<button class="btn" style="margin:14px 0" onclick="openAddInvestor()">＋ Add investor</button>';
+  const list=raiseAccounts().slice().sort((a,b)=>(Number(b.commit)||0)-(Number(a.commit)||0));
+  html+=list.length?list.map(fundraiseCard).join(''):'<div class="empty"><div class="ico">💰</div><div class="t">No investors yet</div><div class="d">Add investors and track outreach, commitments and next steps — email, sequences and call notes all work like the sales pipeline.</div></div>';
+  v.innerHTML=html;
+}
+function fundraiseCard(a){const cm=COMMIT_META[a.commitStatus]||{label:a.stage||'Prospect',pill:'dim'};const c=Number(a.commit)||0;const dm=dueMeta(dayMs(a.dueAt));
+  return '<div class="card tap" tabindex="0" onclick="openAcct(\''+a.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(displayName(a))+'</div><div class="d">'+[esc(a.owner&&a.owner!=='Unassigned'?a.owner:''),a.nextStep?esc(a.nextStep):'',dm.label].filter(Boolean).join(' · ')+'</div></div><div style="text-align:right"><div class="mono" style="font-weight:600">'+(c?fmtMoney(c):'—')+'</div><span class="pill '+cm.pill+'">'+cm.label+'</span></div></div></div>'}
 function renderPipelineView(v){
   if(!CRMA.length){document.getElementById('crm-sub').textContent='No accounts yet.';v.innerHTML=crmEmpty();return}
   const total=CRMA.length,won=CRMA.filter(a=>a.stage==='Won').length,stale=CRMA.filter(isStale).length;
@@ -2062,6 +2114,7 @@ function renderAccountView(host){
           +'<p class="d" style="font-weight:600;color:var(--text);margin:16px 0 6px">Tags</p><div id="ac-tags" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px"></div>'
           +'<div class="searchbar" style="margin:0"><input id="ac-tag-input" placeholder="Add a tag (hot, ASL, K-12, VR)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addTag(acctId)}"></div>'
         +'</div>'
+        +(a.board==='Fundraise'?fundraiseEditorCard():'')
         +'<div class="card"><div class="sec-head"><h2>Next step</h2></div><input class="field" id="ac-nextstep" placeholder="e.g. Send proposal, book a demo" style="margin:0 0 8px"><div class="row" style="gap:8px"><input class="field" id="ac-due" type="date" style="margin:0;flex:1"><button class="btn ghost" onclick="saveNextStep()">Save</button></div><div class="note" style="margin-top:9px">Owner + due date show on your Pulse and the team past-due list.</div></div>'
         +'<div class="card"><div class="sec-head"><h2>Company dashboard</h2><a onclick="openMetrics(acctId)">Edit</a></div><div class="tiles" id="ac-metrics"></div><div class="note" style="margin-top:11px">Live bands online, active users, recurring billing &amp; invoices light up when this company\'s Safewave dashboard is linked.</div></div>'
         +'<div class="card"><div class="sec-head"><h2>Details</h2></div><div id="ac-body"></div></div>'
@@ -2096,6 +2149,7 @@ function populateAccount(a){const id=a.id;
   const du=document.getElementById('ac-due');if(du)du.value=a.dueAt?String(a.dueAt).slice(0,10):'';
   const cn=document.getElementById('ac-c-name');if(cn)cn.value='';const ce=document.getElementById('ac-c-email');if(ce)ce.value='';
   renderNotes(a);const ni=document.getElementById('note-input');if(ni)ni.value='';
+  populateCommit(a);
 }
 function saveNextStep(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;const step=document.getElementById('ac-nextstep').value.trim(),due=document.getElementById('ac-due').value||'';updateAccount(acctId,{nextStep:step,dueAt:due});if(step&&a.owner&&a.owner!=='Unassigned')notifyAssignee(a.owner,'Follow-up assigned',step+' — '+displayName(a)+(due?' · due '+due:''),'s-crm');renderCrmMain();refreshPulse();toast('✓ Next step saved')}
 function renderCampaignBadge(a){const el=document.getElementById('ac-campaign-badge');if(!el)return;const en=a.campaign;
@@ -2415,6 +2469,8 @@ function renderFinance(){
       +'<div class="row" style="gap:8px;margin-top:12px;align-items:center"><span class="d" style="font-weight:600;color:var(--text)">Cash on hand</span><input class="field" id="fp-cash" type="number" value="'+(parseMoney(financeData.cashOnHand)||0)+'" style="margin:0;max-width:180px"><button class="btn ghost" onclick="saveCash()">Save</button></div>'
       +'<div class="note" style="margin-top:10px">'+(net>=0?'Net-positive at the current run-rate — runway is effectively unlimited while this holds.':'At '+fmtMoney(-net)+'/mo net burn, cash lasts ~'+(runway?runway.toFixed(1):'—')+' months. Grow enterprise MRR or trim opex to extend.')+'</div>'
     +'</div>'
+    /* Fundraise */
+    +fundraiseFinCard(cash,net)
     /* Trajectory charts */
     +finTrajectoryCard()
     /* Projections */
