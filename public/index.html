@@ -3,36 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#191C22">
+<meta name="theme-color" content="#EDF1F5">
 <title>Safewave Command Center</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Safewave">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 /* ================= DESIGN TOKENS ================= */
 :root{
-  --bg:#191C22;            /* app base — lifted out of near-black */
-  --bg-grad:radial-gradient(1200px 600px at 50% -10%, #21252D 0%, #191C22 60%);
-  --surface:#242932;       /* cards */
-  --surface-2:#2C323D;     /* raised */
-  --line:#3A414E;          /* hairlines */
-  --text:#EEF1F4;
-  --muted:#A2AAB6;
-  --faint:#727B89;
-  --wave:#4FD8EC;          /* accent — wave cyan */
-  --wave-dim:rgba(79,216,236,.14);
-  --wave-ink:#053540;
-  --safety:#FF6B6B;        /* life-safety red — reserved */
-  --safety-dim:rgba(255,107,107,.14);
-  --amber:#F2B04E;         /* warnings incl. stock-critical */
-  --amber-dim:rgba(242,176,78,.14);
-  --good:#54D9A0;
-  --good-dim:rgba(84,217,160,.14);
-  --violet:#A78BFA;
+  --bg:#EDF1F5;            /* app base — soft, cool light */
+  --bg-grad:radial-gradient(1200px 620px at 50% -12%, #FFFFFF 0%, #EDF1F5 62%);
+  --surface:#FFFFFF;       /* cards */
+  --surface-2:#EEF2F7;     /* raised / chips */
+  --line:#DCE3EB;          /* hairlines */
+  --text:#161B22;
+  --muted:#586471;
+  --faint:#8792A0;
+  --wave:#0A8FA6;          /* accent — deep wave cyan (readable on light) */
+  --wave-dim:rgba(10,143,166,.12);
+  --wave-ink:#FFFFFF;
+  --safety:#D6453F;        /* life-safety red — reserved */
+  --safety-dim:rgba(214,69,63,.12);
+  --amber:#B26A12;         /* warnings incl. stock-critical */
+  --amber-dim:rgba(206,138,36,.16);
+  --good:#1C9968;
+  --good-dim:rgba(28,153,104,.13);
+  --violet:#6A50DC;
+  --hair:rgba(20,30,45,.03); /* faint fills that were white-on-dark */
+  --shadow:0 1px 2px rgba(20,30,50,.05),0 10px 30px rgba(20,30,50,.08);
   --r:14px;
   --font-d:'Space Grotesk',sans-serif;
   --font-b:'Inter',sans-serif;
@@ -62,7 +64,8 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .sec-head a{color:var(--wave);font-size:12.5px;font-weight:600;text-decoration:none;cursor:pointer}
 .mono{font-family:var(--font-m)}
 
-.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px;margin-bottom:9px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px;margin-bottom:9px;box-shadow:var(--shadow)}
+.tile,.inv-table,.gantt-wrap,.chat-stream,.cmdk-box,.sheet-body{box-shadow:var(--shadow)}
 .card.tap{cursor:pointer;transition:border-color .15s,transform .05s}
 .card.tap:hover{border-color:#4a5361}
 .card.tap:active{transform:scale(.995)}
@@ -111,7 +114,7 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .progress i{display:block;height:100%;background:var(--wave);border-radius:3px}
 
 /* empty / not-connected states */
-.empty{border:1px dashed var(--line);border-radius:var(--r);padding:22px 18px;text-align:center;background:rgba(255,255,255,.012)}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:22px 18px;text-align:center;background:var(--hair)}
 .empty .ico{font-size:24px}
 .empty .t{margin-top:8px}
 .empty .d{margin:6px auto 0;max-width:360px}
@@ -131,7 +134,7 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .rec-on{background:var(--safety-dim)!important;border-color:var(--safety)!important;color:var(--safety)!important}
 /* pipeline board */
 .pipe{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px}
-.pcol{flex:0 0 250px;min-width:250px;background:rgba(255,255,255,.02);border:1px solid transparent;border-radius:14px;padding:9px 9px 4px;transition:background .12s,border-color .12s}
+.pcol{flex:0 0 250px;min-width:250px;background:var(--hair);border:1px solid transparent;border-radius:14px;padding:9px 9px 4px;transition:background .12s,border-color .12s}
 .pcol.over{background:var(--wave-dim);border-color:var(--wave)}
 .pcol-h{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 6px 9px;border-bottom:2px solid var(--wave);margin-bottom:9px;font-family:var(--font-d);font-weight:600;font-size:12.5px}
 .pcol-body{min-height:30px}
@@ -179,14 +182,14 @@ input[type=date]{color-scheme:dark}
 .qc-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
 .qc-row:last-child{border-bottom:0}
 .qc-row input{width:18px;height:18px;accent-color:var(--wave);flex-shrink:0}
-#notif-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--amber);color:#0B0C0E;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-b)}
-.cmdk{display:none;position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);align-items:flex-start;justify-content:center;padding:11vh 16px 16px}
+#notif-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--amber);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-b)}
+.cmdk{display:none;position:fixed;inset:0;z-index:120;background:rgba(20,30,45,.35);backdrop-filter:blur(3px);align-items:flex-start;justify-content:center;padding:11vh 16px 16px}
 .cmdk.on{display:flex}
-.cmdk-box{width:100%;max-width:580px;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.55);max-height:74vh;display:flex;flex-direction:column}
+.cmdk-box{width:100%;max-width:580px;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(20,30,50,.22);max-height:74vh;display:flex;flex-direction:column}
 .cmdk-box input{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);font-family:var(--font-b);font-size:16px;padding:16px 18px;outline:none}
 .cmdk-box input::placeholder{color:var(--faint)}
 .cmdk-results{overflow-y:auto;flex:1}
-.cmdk-item{display:flex;gap:12px;align-items:center;padding:11px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03)}
+.cmdk-item{display:flex;gap:12px;align-items:center;padding:11px 16px;cursor:pointer;border-bottom:1px solid var(--line)}
 .cmdk-item.sel{background:var(--wave-dim)}
 .cmdk-item .type{font-family:var(--font-m);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--wave);min-width:54px;flex-shrink:0}
 .cmdk-item .ci-t{font-size:14px;color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -239,7 +242,7 @@ input[type=date]{color-scheme:dark}
 
 /* ================= APP SHELL ================= */
 #app{display:none;min-height:100vh;padding-bottom:96px}
-.appbar{position:sticky;top:0;z-index:40;background:rgba(25,28,34,.9);backdrop-filter:blur(12px);
+.appbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.82);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--line);padding:13px 16px;display:flex;align-items:center;gap:12px}
 .appbar .logo{font-size:17px}
 .spacer{flex:1}
@@ -258,7 +261,7 @@ input[type=date]{color-scheme:dark}
 .screen.on{display:block}
 
 /* nav — bottom tabs on mobile, top bar on desktop */
-.nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(25,28,34,.96);backdrop-filter:blur(12px);
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);
   border-top:1px solid var(--line);display:flex;padding:6px 2px calc(9px + env(safe-area-inset-bottom));overflow-x:auto;scrollbar-width:none}
 .nav::-webkit-scrollbar{display:none}
 .tab{flex:1 0 auto;min-width:56px;background:none;border:0;color:var(--faint);font-family:var(--font-b);font-size:9.5px;font-weight:600;
@@ -278,7 +281,7 @@ input[type=date]{color-scheme:dark}
 }
 
 /* sheet */
-.sheet{display:none;position:fixed;inset:0;z-index:60;justify-content:center;align-items:flex-end;background:rgba(0,0,0,.55)}
+.sheet{display:none;position:fixed;inset:0;z-index:60;justify-content:center;align-items:flex-end;background:rgba(20,30,45,.38)}
 .sheet.on{display:flex}
 .sheet-body{width:100%;max-width:460px;max-height:88vh;overflow-y:auto;background:var(--surface);border:1px solid var(--line);
   border-radius:20px 20px 0 0;padding:12px 18px calc(26px + env(safe-area-inset-bottom))}
@@ -295,7 +298,7 @@ input[type=date]{color-scheme:dark}
 
 #toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%) translateY(10px);max-width:360px;width:calc(100% - 40px);
   background:var(--surface-2);border:1px solid var(--wave);color:var(--text);font-size:12.5px;font-weight:500;
-  padding:12px 16px;border-radius:12px;z-index:200;opacity:0;transition:.24s;pointer-events:none;text-align:center;box-shadow:0 10px 34px rgba(0,0,0,.5)}
+  padding:12px 16px;border-radius:12px;z-index:200;opacity:0;transition:.24s;pointer-events:none;text-align:center;box-shadow:0 10px 34px rgba(20,30,50,.22)}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 @media(min-width:860px){#toast{bottom:28px}}
 [hidden]{display:none!important}
