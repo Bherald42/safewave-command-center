@@ -2425,15 +2425,16 @@ function renderHubInner(){const f=crmFollowups();let html='';
   html+='<div class="searchbar" style="margin-top:2px"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input type="search" placeholder="Search accounts, owners, locations" value="'+esc(crmQ)+'" oninput="crmQ=this.value;hubSearch()"></div>';
   html+='<div id="hub-results"></div>';
   html+='<div id="hub-sections">';
-  html+='<div class="sec-head" style="margin-top:14px"><h2>Follow-ups</h2>'+(f.overdue.length?'<span class="pill amber">'+f.overdue.length+' overdue</span>':(f.soon.length?'<span class="pill wave">'+f.soon.length+' upcoming</span>':'<span class="pill good">clear</span>'))+'</div>';
+  const stale=crmFiltered().filter(isStale).length;
+  // slim one-row stage strip — jump to any stage without a wall of tiles
+  html+='<div class="chips" style="margin:2px 0 2px">'+STAGES.map(s=>{const n=stageCount(s);return n?'<button class="chip" onclick="openDrill(\''+s+'\')"><span style="width:8px;height:8px;display:inline-block;border-radius:2px;background:'+STAGECOLOR[s]+';margin-right:6px;vertical-align:middle"></span>'+s+' · '+n+'</button>':''}).join('')+'<button class="chip" onclick="openDrill(\'__all\')">All · '+CRMA.length+'</button>'+(stale?'<button class="chip" style="color:var(--amber)" onclick="crmSetView(\'attention\')">⚠ '+stale+' need a step</button>':'')+'</div>';
+  // Follow-ups — the focus of the page
+  html+='<div class="sec-head" style="margin-top:16px"><h2>Follow-ups</h2>'+(f.overdue.length?'<span class="pill amber">'+f.overdue.length+' overdue</span>':(f.soon.length?'<span class="pill wave">'+f.soon.length+' upcoming</span>':'<span class="pill good">clear</span>'))+'</div>';
   if(f.overdue.length||f.soon.length){
-    if(f.overdue.length){html+='<div class="pulse-sub-h">Overdue · '+f.overdue.length+'</div>'+f.overdue.slice(0,6).map(x=>followRow(x.a)).join('');if(f.overdue.length>6)html+='<div class="d" style="color:var(--faint);margin:2px 0 6px">+'+(f.overdue.length-6)+' more overdue</div>'}
-    if(f.soon.length){html+='<div class="pulse-sub-h">Due soon · '+f.soon.length+'</div>'+f.soon.slice(0,6).map(x=>followRow(x.a)).join('')}
-  }else{html+='<div class="card" style="text-align:center;color:var(--muted)">No next steps due. Open an account and set a next step + date to plan a follow-up — it shows here and on your Pulse.</div>'}
-  html+='<div class="row" style="gap:10px;margin-top:12px">'+hubTile('crmSetView(\'attention\')',crmFiltered().filter(isStale).length,'Need a next step','var(--amber)')+hubTile('openDrill(\'__all\')',CRMA.length,'All accounts','var(--wave)')+'</div>';
-  html+='<div class="sec-head" style="margin-top:20px"><h2>Pipeline by stage</h2></div>'+tileGrid(STAGES.map(s=>hubTile('openDrill(\''+s+'\')',stageCount(s),s,STAGECOLOR[s])).join(''));
-  html+=boardTilesHTML();
-  html+='<div class="row" style="gap:8px;margin-top:20px;flex-wrap:wrap"><button class="btn ghost" style="flex:1;min-width:150px" onclick="openAddAcct()">＋ Add account</button><button class="btn ghost" style="flex:1;min-width:140px" onclick="crmGoTab(\'campaigns\')">🚀 Campaigns</button><button class="btn ghost" style="flex:1;min-width:140px" onclick="crmGoTab(\'prospect\')">🔎 Prospect</button><button class="btn ghost" style="flex:0 0 auto" onclick="exportPipeline()">⬇︎ CSV</button></div>';
+    if(f.overdue.length){html+='<div class="pulse-sub-h">Overdue · '+f.overdue.length+'</div>'+f.overdue.slice(0,8).map(x=>followRow(x.a)).join('');if(f.overdue.length>8)html+='<div class="d" style="color:var(--faint);margin:2px 0 6px">+'+(f.overdue.length-8)+' more overdue</div>'}
+    if(f.soon.length){html+='<div class="pulse-sub-h">Due soon · '+f.soon.length+'</div>'+f.soon.slice(0,8).map(x=>followRow(x.a)).join('')}
+  }else{html+='<div class="card" style="text-align:center;color:var(--muted)">Nothing due. Open an account and set a next step + date — it shows here and on your Pulse.</div>'}
+  html+='<div class="row" style="gap:8px;margin-top:18px;flex-wrap:wrap"><button class="btn ghost" style="flex:1;min-width:150px" onclick="openAddAcct()">＋ Add account</button><button class="btn ghost" style="flex:1;min-width:140px" onclick="crmGoTab(\'campaigns\')">🚀 Campaigns</button><button class="btn ghost" style="flex:1;min-width:140px" onclick="crmGoTab(\'prospect\')">🔎 Prospect</button></div>';
   html+='</div>';
   return html;
 }
