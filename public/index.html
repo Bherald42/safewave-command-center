@@ -1921,6 +1921,7 @@ function sendChat(){const inp=document.getElementById('chat-input');const text=(
 
 /* ================= CRM — enterprise sales pipeline (pre-loaded; Firestore-shared) ================= */
 const STAGES=['New','Contacted','Engaged','Meeting','Proposal','Won','Lost'];
+const RAISE_STAGES=['Prospect','Pitched','Diligence','Committed','Wired','Passed'];
 const STAGEMETA={New:'dim',Contacted:'amber',Engaged:'wave',Meeting:'wave',Proposal:'good',Won:'good',Lost:'dim'};
 const STALE_DAYS=30;
 let CRMA=[], crmReady=false, crmSource='local';
@@ -2052,10 +2053,22 @@ function renderFundraise(v){
     +'<div class="tiles" style="margin-top:12px"><div class="tile"><div class="n" style="color:var(--good)">'+fmtMoney(s.wired)+'</div><div class="l">Wired</div></div><div class="tile"><div class="n">'+fmtMoney(s.hard)+'</div><div class="l">Committed</div></div><div class="tile"><div class="n" style="color:var(--muted)">'+fmtMoney(s.soft)+'</div><div class="l">Soft</div></div></div></div>';
   html+=dataRoomCard();
   html+='<div class="row" style="gap:8px;margin:14px 0;flex-wrap:wrap"><button class="btn" style="flex:1;min-width:150px" onclick="openAddInvestor()">＋ Add investor</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="newInvestorCampaign()">✉️ Investor outreach</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="openInvestorUpdate()">📣 Send update</button></div>';
-  const list=raiseAccounts().slice().sort((a,b)=>(Number(b.commit)||0)-(Number(a.commit)||0));
-  html+=list.length?list.map(fundraiseCard).join(''):'<div class="empty"><div class="ico">💰</div><div class="t">No investors yet</div><div class="d">Add investors and track outreach, commitments and next steps — email, sequences and call notes all work like the sales pipeline.</div></div>';
+  const all=raiseAccounts();
+  if(!all.length){html+='<div class="empty"><div class="ico">💰</div><div class="t">No investors yet</div><div class="d">Add investors and track outreach, commitments and next steps — email, sequences and call notes all work like the sales pipeline.</div></div>';v.innerHTML=html;return}
+  html+='<div class="chips" style="margin-bottom:12px">'+raiseViewBtn('pipeline','Pipeline')+raiseViewBtn('list','List')+'</div>';
+  if(raiseView==='list'){
+    html+=all.slice().sort((a,b)=>(Number(b.commit)||0)-(Number(a.commit)||0)).map(fundraiseCard).join('');
+  }else{
+    RAISE_STAGES.forEach(st=>{const grp=all.filter(a=>raiseStageOf(a)===st);if(!grp.length)return;
+      const sum=grp.reduce((s,a)=>s+(Number(a.commit)||0),0);
+      html+='<div class="pulse-sub-h">'+esc(st)+' · '+grp.length+(sum?' · '+fmtMoney(sum):'')+'</div>';
+      html+=grp.slice().sort((a,b)=>(Number(b.commit)||0)-(Number(a.commit)||0)).map(fundraiseCard).join('');});
+  }
   v.innerHTML=html;
 }
+let raiseView='pipeline';
+function raiseViewBtn(v,l){return '<button class="chip'+(raiseView===v?' on':'')+'" onclick="raiseView=\''+v+'\';renderCRM()">'+esc(l)+'</button>'}
+function raiseStageOf(a){if(a.raiseStage)return a.raiseStage;const m={wired:'Wired',hard:'Committed',passed:'Passed',soft:'Pitched'};return m[a.commitStatus||'']||'Prospect'}
 function dataRoomCard(){const docs=RAISE.docs||[];
   return '<div class="card"><div class="sec-head"><h2>Data room</h2><a onclick="addRaiseDoc()">＋ Add link</a></div>'
     +(docs.length?docs.map((d,i)=>'<div class="kv"><span><a href="'+esc(d.url)+'" target="_blank" rel="noopener" style="color:var(--wave);font-weight:600">'+esc(d.label||d.url)+' ↗</a></span><a onclick="rmRaiseDoc('+i+')" style="color:var(--faint);cursor:pointer">✕</a></div>').join('')
@@ -2093,7 +2106,7 @@ async function sendInvestorUpdate(){
     catch(e){fail++}}
   if(btn){btn.disabled=false;btn.textContent='Send update'}
   closeSheets();loadCRM();toast('✓ Sent '+ok+' update'+(ok!==1?'s':'')+(fail?' · '+fail+' failed':''))}
-function fundraiseCard(a){const cm=COMMIT_META[a.commitStatus]||{label:a.stage||'Prospect',pill:'dim'};const c=Number(a.commit)||0;const dm=dueMeta(dayMs(a.dueAt));
+function fundraiseCard(a){const cm=COMMIT_META[a.commitStatus]||{label:raiseStageOf(a),pill:'dim'};const c=Number(a.commit)||0;const dm=dueMeta(dayMs(a.dueAt));
   return '<div class="card tap" tabindex="0" onclick="openAcct(\''+a.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(displayName(a))+'</div><div class="d">'+[esc(a.owner&&a.owner!=='Unassigned'?a.owner:''),a.nextStep?esc(a.nextStep):'',dm.label].filter(Boolean).join(' · ')+'</div></div><div style="text-align:right"><div class="mono" style="font-weight:600">'+(c?fmtMoney(c):'—')+'</div><span class="pill '+cm.pill+'">'+cm.label+'</span></div></div></div>'}
 function renderPipelineView(v){
   if(!CRMA.length){document.getElementById('crm-sub').textContent='No accounts yet.';v.innerHTML=crmEmpty();return}
@@ -2194,7 +2207,8 @@ function populateAccount(a){const id=a.id;
   document.getElementById('ac-seg').textContent=a.board||'';
   document.getElementById('ac-name').textContent=displayName(a);
   const sub=document.getElementById('ac-subline');if(sub)sub.textContent=[(a.owner&&a.owner!=='Unassigned')?('Owner: '+a.owner):'Unassigned',a.location,a.email].filter(Boolean).join('  ·  ');
-  document.getElementById('ac-stage').innerHTML=STAGES.map(s=>'<button data-v="'+s+'" class="'+((a.stage||'New')===s?'on':'')+'" onclick="setStage(\''+id+'\',\''+s+'\',this)">'+s+'</button>').join('');
+  const inv=a.board==='Fundraise';const stg=inv?RAISE_STAGES:STAGES;const curStg=inv?(a.raiseStage||'Prospect'):(a.stage||'New');const stgFn=inv?'setRaiseStage':'setStage';
+  document.getElementById('ac-stage').innerHTML=stg.map(s=>'<button data-v="'+s+'" class="'+(curStg===s?'on':'')+'" onclick="'+stgFn+'(\''+id+'\',\''+s+'\',this)">'+s+'</button>').join('');
   document.getElementById('ac-owner').value=a.owner==='Unassigned'?'':(a.owner||'');
   renderTags(a);
   const rows=[['Contact',a.contact],['Title',a.title],['Company',a.company],['Email',a.email],['Phone',a.phone],['Location',a.location],['Website',a.website],['Source status',a.status]].filter(x=>x[1]);
@@ -2216,6 +2230,7 @@ function renderCampaignBadge(a){const el=document.getElementById('ac-campaign-ba
   const map={active:'wave',completed:'good','no-email':'amber','no-sender':'amber'};
   el.innerHTML='<span class="pill '+(map[en.status]||'dim')+'" style="cursor:pointer" onclick="unenroll(\''+a.id+'\')" title="Click to remove">🚀 '+esc(en.name||'Campaign')+' · step '+((en.step||0)+1)+' ✕</span>';}
 function setStage(id,s,btn){updateAccount(id,{stage:s});btn.closest('.rolepick').querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderCrmMain();toast('✓ Moved to '+s)}
+function setRaiseStage(id,s,btn){const patch={raiseStage:s},map={Committed:'hard',Wired:'wired',Passed:'passed'};if(map[s])patch.commitStatus=map[s];updateAccount(id,patch);btn.closest('.rolepick').querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');const a=CRMA.find(x=>x.id===id);if(a)populateCommit(a);refreshPulse();toast('✓ Moved to '+s)}
 function saveOwner(id){const v=document.getElementById('ac-owner').value.trim()||'Unassigned';updateAccount(id,{owner:v});renderCrmMain()}
 function renderTags(a){document.getElementById('ac-tags').innerHTML=(a.tags||[]).length?(a.tags||[]).map(t=>'<span class="pill wave" style="cursor:pointer" onclick="rmTag(\''+a.id+'\',decodeURIComponent(\''+encodeURIComponent(t)+'\'))">'+esc(t)+' ✕</span>').join(' '):'<span class="d" style="color:var(--faint)">No tags yet</span>'}
 function addTag(id){const inp=document.getElementById('ac-tag-input');const t=inp.value.trim();if(!t)return;const a=CRMA.find(x=>x.id===id);const tags=(a.tags||[]).slice();if(!tags.includes(t))tags.push(t);updateAccount(id,{tags:tags});inp.value='';renderTags(a);renderCrmMain()}
