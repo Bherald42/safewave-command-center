@@ -120,13 +120,17 @@ exports.sourceProspects = onCall({ region: REGION }, async (request) => {
 });
 
 /* ------------------------------------------------------------------ *
- * SHOPIFY ORDER WEBHOOK — ingest new orders + alert the whole team
+ * SHOPIFY WEBHOOK — orders, fulfilment/tracking, and returns
  * ------------------------------------------------------------------ *
- * Point a Shopify "orders/create" (and optionally "orders/updated") webhook
- * at this function's URL. Set SHOPIFY_WEBHOOK_SECRET to the webhook signing
- * secret so we can verify each request is really from Shopify. New orders are
- * written to orders/{id} (the app's live fulfilment queue reads them) and a
- * to:"all" notification is created so every teammate gets the alert.
+ * Point these Shopify webhook topics at this function's URL (same URL for all):
+ *   orders/create          → new order → orders/{id} + "new order" alert to all
+ *   fulfillments/create     → tracking number synced back onto the order + band
+ *   fulfillments/update     → tracking updates
+ *   returns/request         → a return opens in the Returns queue + alert to all
+ *   returns/approve|close|cancel|decline → return status kept in sync
+ * Set SHOPIFY_WEBHOOK_SECRET to the webhook signing secret so we can verify
+ * each request is really from Shopify. (Function name kept as shopifyOrderWebhook
+ * so an already-configured URL keeps working.)
  */
 exports.shopifyOrderWebhook = onRequest({ region: REGION }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).send("POST only"); return; }
@@ -144,33 +148,85 @@ exports.shopifyOrderWebhook = onRequest({ region: REGION }, async (req, res) => 
   if (!ok) { res.status(401).send("Invalid signature"); return; }
 
   const topic = req.get("X-Shopify-Topic") || "orders/create";
-  const o = req.body || {};
-  const cust = o.customer || {};
-  const ship = o.shipping_address || {};
-  const name = [cust.first_name, cust.last_name].filter(Boolean).join(" ") || ship.name || o.email || "Customer";
-  const n = o.name || ("#" + (o.order_number || o.id || ""));
-  const id = String(o.id || n).replace(/[^\w-]/g, "") || String(Date.now());
-  const rec = {
-    n: n, name: name, email: o.email || "",
-    total: Number(o.total_price || 0),
-    date: (function () { try { return new Date(o.created_at || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric" }); } catch (e) { return ""; } })(),
-    ful: String(o.fulfillment_status || "").toLowerCase() === "fulfilled" ? "FULFILLED" : "UNFULFILLED",
-    source: "shopify", at: new Date().toISOString(),
-  };
+  const body = req.body || {};
   try {
-    await db.collection("orders").doc(id).set(rec, { merge: true });
-    if (topic === "orders/create") {
-      await db.collection("notifications").add({
-        to: "all", title: "New order " + rec.n, body: rec.name + " · $" + rec.total,
-        link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
+    if (topic.indexOf("returns/") === 0) await handleShopifyReturn(topic, body);
+    else if (topic.indexOf("fulfillments/") === 0 || topic === "orders/fulfilled") await handleShopifyFulfillment(body);
+    else await handleShopifyOrder(body);
   } catch (e) {
-    logger.error("shopifyOrderWebhook write failed", e && e.message);
+    logger.error("shopifyWebhook " + topic + " failed", e && e.message);
     res.status(500).send("error"); return;
   }
   res.status(200).send("ok");
 });
+
+function shopShortDate(iso) { try { return new Date(iso || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric" }); } catch (e) { return ""; } }
+
+async function handleShopifyOrder(o) {
+  const cust = o.customer || {}, ship = o.shipping_address || {};
+  const name = [cust.first_name, cust.last_name].filter(Boolean).join(" ") || ship.name || o.email || "Customer";
+  const n = o.name || ("#" + (o.order_number || o.id || ""));
+  const id = String(o.id || n).replace(/[^\w-]/g, "") || String(Date.now());
+  const rec = {
+    n: n, name: name, email: o.email || "", total: Number(o.total_price || 0),
+    date: shopShortDate(o.created_at),
+    ful: String(o.fulfillment_status || "").toLowerCase() === "fulfilled" ? "FULFILLED" : "UNFULFILLED",
+    source: "shopify", at: new Date().toISOString(),
+  };
+  await db.collection("orders").doc(id).set(rec, { merge: true });
+  await db.collection("notifications").add({
+    to: "all", title: "New order " + rec.n, body: rec.name + " · $" + rec.total,
+    link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+async function handleShopifyFulfillment(f) {
+  const orderId = String(f.order_id || f.id || "").replace(/[^\w-]/g, "");
+  if (!orderId) return;
+  const first = (f.fulfillments && f.fulfillments[0]) || f;
+  const track = first.tracking_number || (first.tracking_numbers && first.tracking_numbers[0]) || "";
+  const trackUrl = first.tracking_url || (first.tracking_urls && first.tracking_urls[0]) || "";
+  const carrier = first.tracking_company || "";
+  await db.collection("orders").doc(orderId).set({ ful: "FULFILLED", tracking: track, trackingUrl: trackUrl, carrier: carrier }, { merge: true });
+  // mirror the tracking number onto our in-app fulfilment + band records
+  const ord = await db.collection("orders").doc(orderId).get();
+  const n = ord.exists ? ord.data().n : null;
+  if (n && track) {
+    const fs = await db.collection("fulfillments").doc(n).get();
+    if (fs.exists) {
+      await fs.ref.set({ tracking: track }, { merge: true });
+      const serial = fs.data().serial;
+      if (serial) await db.collection("bands").doc(serial).set({ tracking: track }, { merge: true });
+    }
+  }
+}
+
+async function handleShopifyReturn(topic, body) {
+  const r = body.return || body;
+  const orderId = String(r.order_id || "").replace(/[^\w-]/g, "");
+  const rmaId = "RMA-SH-" + String(r.id || Date.now()).slice(-8);
+  const status = topic === "returns/approve" ? "label-issued"
+    : topic === "returns/close" ? "restocked"
+    : (topic === "returns/cancel" || topic === "returns/decline") ? "cancelled"
+    : "requested";
+  let n = null, serial = "", size = "", customer = "";
+  if (orderId) {
+    const ord = await db.collection("orders").doc(orderId).get();
+    if (ord.exists) {
+      n = ord.data().n; customer = ord.data().name || "";
+      if (n) { const fs = await db.collection("fulfillments").doc(n).get(); if (fs.exists) { serial = fs.data().serial || ""; size = fs.data().size || ""; } }
+    }
+  }
+  const existing = await db.collection("returns").doc(rmaId).get();
+  const rec = { id: rmaId, order: n || ("#" + (r.order_id || "")), serial: serial, size: size, customer: customer, status: status, source: "shopify", at: (existing.exists && existing.data().at) || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  await db.collection("returns").doc(rmaId).set(rec, { merge: true });
+  if (!existing.exists && status === "requested") {
+    await db.collection("notifications").add({
+      to: "all", title: "Return requested · " + rec.order, body: (customer || "") + (serial ? " · band " + serial : ""),
+      link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+}
 
 /* ------------------------------------------------------------------ *
  * RUN CAMPAIGNS  →  send next due step of each active campaign
