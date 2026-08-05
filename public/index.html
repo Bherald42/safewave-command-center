@@ -193,6 +193,20 @@ input[type=date]{color-scheme:dark}
 .qc-row:last-child{border-bottom:0}
 .qc-row input{width:18px;height:18px;accent-color:var(--wave);flex-shrink:0}
 #notif-badge,#fb-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--amber);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-b)}
+#shot-editor{display:none;position:fixed;inset:0;z-index:200;background:#0b1420;flex-direction:column}
+#shot-editor.on{display:flex}
+#shot-bar{display:flex;gap:6px;padding:10px;align-items:center;flex-wrap:wrap;background:#0b1420;border-bottom:1px solid rgba(255,255,255,.08)}
+.shot-tool{background:rgba(255,255,255,.08);color:#e8eef5;border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:8px 11px;font-family:var(--font-b);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.shot-tool.on{background:var(--wave);border-color:var(--wave);color:#fff}
+.shot-tool.primary{background:var(--wave);border-color:var(--wave);color:#fff}
+.shot-colors{display:inline-flex;gap:5px;align-items:center;margin:0 4px}
+.shot-sw{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.35);cursor:pointer;padding:0}
+.shot-sw.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+#shot-stage{flex:1;position:relative;overflow:auto;display:flex;align-items:center;justify-content:center;padding:8px;touch-action:none}
+#shot-canvas{max-width:100%;max-height:100%;box-shadow:0 6px 30px rgba(0,0,0,.5);cursor:crosshair;touch-action:none}
+#shot-hint{color:#9fb0c2;font-size:12px;text-align:center;padding:8px 12px calc(8px + env(safe-area-inset-bottom));font-family:var(--font-b)}
+#shot-view{display:none;position:fixed;inset:0;z-index:210;background:rgba(6,12,20,.92);align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+#shot-view img{max-width:100%;max-height:100%;border-radius:10px}
 .cmdk{display:none;position:fixed;inset:0;z-index:120;background:rgba(20,30,45,.35);backdrop-filter:blur(3px);align-items:flex-start;justify-content:center;padding:11vh 16px 16px}
 .cmdk.on{display:flex}
 .cmdk-box{width:100%;max-width:580px;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(20,30,50,.22);max-height:74vh;display:flex;flex-direction:column}
@@ -794,11 +808,35 @@ input[type=date]{color-scheme:dark}
     <p class="sub">Goes privately to Brad — ideas, issues and questions to make this platform better.</p>
     <p class="d" style="font-weight:600;color:var(--text);margin:10px 0 6px">About <span class="pill dim" id="fb-screen">this screen</span></p>
     <div class="rolepick" id="fb-type"><button data-v="Idea" class="on">💡 Idea</button><button data-v="Issue">🐞 Issue</button><button data-v="Question">❓ Question</button></div>
-    <textarea class="field" id="fb-text" placeholder="What's working, what's not, what would help…" style="min-height:150px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
+    <textarea class="field" id="fb-text" placeholder="What's working, what's not, what would help…" style="min-height:130px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
+    <div id="fb-shot-wrap" style="display:none;margin:2px 0 4px"><img id="fb-shot-img" alt="screenshot" style="max-width:100%;border-radius:10px;border:1px solid var(--line);display:block"><button class="btn ghost" style="margin-top:6px" onclick="removeShot()">Remove screenshot</button></div>
+    <button class="btn ghost" id="fb-shot-btn" style="margin-bottom:10px" onclick="captureScreenshot()">📷 Add annotated screenshot</button>
+    <input type="file" id="fb-shot-file" accept="image/*" style="display:none" onchange="shotFilePicked(this)">
     <button class="btn" onclick="sendFeedback()">Send to Brad</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
   </div>
 </div>
+
+<!-- Snip & annotate editor -->
+<div id="shot-editor">
+  <div id="shot-bar">
+    <button class="shot-tool" id="st-crop" data-m="crop" onclick="shotSetMode('crop')" title="Crop region">◳ Crop</button>
+    <button class="shot-tool on" id="st-pen" data-m="pen" onclick="shotSetMode('pen')" title="Pen">✎ Pen</button>
+    <button class="shot-tool" id="st-arrow" data-m="arrow" onclick="shotSetMode('arrow')" title="Arrow">↗ Arrow</button>
+    <button class="shot-tool" id="st-rect" data-m="rect" onclick="shotSetMode('rect')" title="Box">▭ Box</button>
+    <button class="shot-tool" id="st-ellipse" data-m="ellipse" onclick="shotSetMode('ellipse')" title="Circle">◯ Circle</button>
+    <span class="shot-colors" id="shot-colors"></span>
+    <button class="shot-tool" onclick="shotUndo()" title="Undo">⤺ Undo</button>
+    <span style="flex:1"></span>
+    <button class="shot-tool" onclick="closeShotEditor()">Cancel</button>
+    <button class="shot-tool primary" id="st-done" onclick="shotDone()">Attach ✓</button>
+  </div>
+  <div id="shot-stage"><canvas id="shot-canvas"></canvas></div>
+  <div id="shot-hint">Drag to crop the area you want, then tap Attach — or switch to Pen / Arrow / Circle to mark it up.</div>
+</div>
+
+<!-- Lightbox for viewing an attached screenshot -->
+<div id="shot-view" onclick="this.style.display='none'"><img id="shot-view-img" alt="screenshot"></div>
 
 <div class="sheet" id="sh-feedback-inbox" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
@@ -1383,17 +1421,19 @@ function currentScreenLabel(){return SCREEN_LABELS[currentScreenId()]||'App'}
 function isSuperAdmin(){return !!(CURRENT_USER&&CURRENT_USER.role==='superadmin')}
 function notifySuper(title,body,link){const t=(TEAM||[]).find(x=>(x.email||'').toLowerCase()===SUPER_EMAIL);if(t&&t.uid)notify(t.uid,title,body,link||'')}
 function openFeedback(){if(!CURRENT_USER)return;document.getElementById('fb-screen').textContent=currentScreenLabel();document.getElementById('fb-text').value='';
+  fbShot=null;showShotThumb();
   document.querySelectorAll('#fb-type button').forEach((b,i)=>{b.classList.toggle('on',i===0);b.onclick=function(){document.querySelectorAll('#fb-type button').forEach(x=>x.classList.remove('on'));this.classList.add('on')}});
   closeSheets();openSheet('sh-feedback')}
 function sendFeedback(){const text=document.getElementById('fb-text').value.trim();if(!text){toast('Write your feedback first');return}
   const type=((document.querySelector('#fb-type button.on')||{}).dataset||{}).v||'Idea';
   const rec={fromUid:CURRENT_USER.uid,fromName:CURRENT_USER.name||'',fromEmail:CURRENT_USER.email||'',screen:currentScreenId(),screenLabel:currentScreenLabel(),type:type,text:text,status:'open'};
+  if(fbShot)rec.shot=fbShot;
   if(!hasFirestore()){toast('Not connected — feedback needs the shared cloud');return}
   rec.createdAt=firebase.firestore.FieldValue.serverTimestamp();
   firebase.firestore().collection('feedback').add(rec)
     .then(()=>{notifySuper(type+' · '+rec.screenLabel,(CURRENT_USER.name||'A teammate')+': '+text.slice(0,90),'')})
     .catch(e=>toast('Send failed — '+((e&&e.code)||'check rules')));
-  closeSheets();toast('✓ Sent to Brad — thank you')}
+  fbShot=null;closeSheets();toast('✓ Sent to Brad — thank you')}
 function subscribeFeedback(){if(!hasFirestore()||!isSuperAdmin())return;
   if(fbUnsub){try{fbUnsub()}catch(e){}}
   try{fbUnsub=firebase.firestore().collection('feedback').orderBy('createdAt','desc').limit(200).onSnapshot(qs=>{
@@ -1414,6 +1454,7 @@ function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMi
   const tp=({Idea:'💡',Issue:'🐞',Question:'❓'})[f.type]||'💬';
   return '<div class="card"><div class="row"><div class="grow"><div class="t">'+tp+' '+esc(f.type||'Feedback')+' · '+esc(f.screenLabel||'')+'</div><div class="d">'+esc(f.fromName||f.fromEmail||'Teammate')+(time?' · '+time:'')+'</div></div><span class="pill '+(resolved?'good':'wave')+'">'+(resolved?'RESOLVED':'OPEN')+'</span></div>'
     +'<div class="note" style="margin-top:9px;white-space:pre-wrap">'+esc(f.text||'')+'</div>'
+    +(f.shot?'<img src="'+f.shot+'" alt="screenshot" style="max-width:100%;border-radius:8px;margin-top:9px;cursor:zoom-in;display:block" onclick="viewShot(this.src)">':'')
     +'<div class="row" style="gap:8px;margin-top:10px">'
       +(resolved?'<button class="btn ghost" style="flex:1" onclick="setFeedbackStatus(\''+f.id+'\',\'open\')">Reopen</button>':'<button class="btn ghost" style="flex:1" onclick="setFeedbackStatus(\''+f.id+'\',\'resolved\')">Mark resolved</button>')
       +(f.screen?'<button class="btn ghost" style="flex:1" onclick="closeSheets();goto(\''+esc(f.screen)+'\')">Go to '+esc(f.screenLabel||'screen')+'</button>':'')
@@ -1421,6 +1462,77 @@ function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMi
     +'</div></div>'}
 function setFeedbackStatus(id,st){if(hasFirestore())firebase.firestore().collection('feedback').doc(id).set({status:st},{merge:true}).catch(e=>toast('Update failed — '+((e&&e.code)||'')));const f=FEEDBACK.find(x=>x.id===id);if(f)f.status=st;renderFeedbackInbox();renderFeedbackBadge()}
 function replyFeedback(email){if(!email)return;window.location.href='mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent('Re: your Safewave feedback')}
+
+/* ---- Snip & annotate: capture the page, crop a region, draw arrows/circles/pen ---- */
+let fbShot=null,shotBase=null,shotOps=[],shotMode='pen',shotColor='#ff3b30',shotDrawing=false,shotStart=null,shotTemp=null,shotWired=false;
+const SHOT_COLORS=['#ff3b30','#ffcc00','#34c759','#0a84ff','#ffffff','#111111'];
+async function captureScreenshot(){closeSheets();
+  const gdm=navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia;
+  if(!gdm){shotFileFallback();return}
+  try{
+    const stream=await navigator.mediaDevices.getDisplayMedia({video:{displaySurface:'browser'},audio:false});
+    const video=document.createElement('video');video.muted=true;video.srcObject=stream;await video.play().catch(()=>{});
+    await new Promise(r=>setTimeout(r,220));
+    const w=video.videoWidth||window.innerWidth,h=video.videoHeight||window.innerHeight;
+    const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(video,0,0,w,h);
+    stream.getTracks().forEach(t=>{try{t.stop()}catch(e){}});
+    openShotEditor(cv,'crop');
+  }catch(e){if(e&&(e.name==='NotAllowedError'||e.name==='AbortError')){reopenFeedback();return}shotFileFallback()}
+}
+function shotFileFallback(){const f=document.getElementById('fb-shot-file');if(f)f.click();else reopenFeedback()}
+function shotFilePicked(input){const file=input.files&&input.files[0];input.value='';if(!file){reopenFeedback();return}
+  const url=URL.createObjectURL(file),img=new Image();
+  img.onload=()=>{let w=img.naturalWidth,h=img.naturalHeight;const mx=1600;if(w>mx){h=Math.round(h*mx/w);w=mx}
+    const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);URL.revokeObjectURL(url);openShotEditor(cv,'crop')};
+  img.onerror=()=>{URL.revokeObjectURL(url);toast('Could not read that image');reopenFeedback()};img.src=url}
+function openShotEditor(cv,mode){const mx=1600;if(cv.width>mx){const h=Math.round(cv.height*mx/cv.width);const s=document.createElement('canvas');s.width=mx;s.height=h;s.getContext('2d').drawImage(cv,0,0,mx,h);cv=s}
+  shotBase=cv;shotOps=[];shotTemp=null;renderShotColors();document.getElementById('shot-editor').classList.add('on');
+  wireShotCanvas();shotResizeCanvas();shotSetMode(mode||'pen');shotRedraw()}
+function closeShotEditor(){document.getElementById('shot-editor').classList.remove('on');reopenFeedback()}
+function reopenFeedback(){openSheet('sh-feedback')}
+function shotSetMode(m){shotMode=m;document.querySelectorAll('.shot-tool[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  const hint=document.getElementById('shot-hint');if(hint)hint.textContent=m==='crop'?'Drag to select the area to keep — it crops to that. Or pick a draw tool to mark up.':'Drag to draw. Undo removes the last mark. Attach when done.'}
+function renderShotColors(){const el=document.getElementById('shot-colors');if(!el)return;el.innerHTML=SHOT_COLORS.map(c=>'<button class="shot-sw'+(c===shotColor?' on':'')+'" style="background:'+c+'" onclick="shotPickColor(\''+c+'\')" aria-label="color"></button>').join('')}
+function shotPickColor(c){shotColor=c;renderShotColors()}
+function shotResizeCanvas(){const cn=document.getElementById('shot-canvas');cn.width=shotBase.width;cn.height=shotBase.height}
+function shotPt(ev){const cn=document.getElementById('shot-canvas'),r=cn.getBoundingClientRect();const cx=ev.touches?ev.touches[0].clientX:ev.clientX,cy=ev.touches?ev.touches[0].clientY:ev.clientY;return {x:(cx-r.left)*(cn.width/r.width),y:(cy-r.top)*(cn.height/r.height)}}
+function wireShotCanvas(){if(shotWired)return;shotWired=true;const cn=document.getElementById('shot-canvas');
+  const down=ev=>{ev.preventDefault();shotDrawing=true;const p=shotPt(ev);shotStart=p;
+    if(shotMode==='pen')shotTemp={type:'pen',color:shotColor,pts:[p]};else shotTemp={type:shotMode,color:shotColor,x1:p.x,y1:p.y,x2:p.x,y2:p.y};shotRedraw()};
+  const move=ev=>{if(!shotDrawing)return;ev.preventDefault();const p=shotPt(ev);if(shotMode==='pen')shotTemp.pts.push(p);else{shotTemp.x2=p.x;shotTemp.y2=p.y}shotRedraw()};
+  const up=ev=>{if(!shotDrawing)return;shotDrawing=false;if(shotMode==='crop'){applyCrop(shotTemp);shotTemp=null;return}
+    if(shotTemp){if(shotTemp.type==='pen'&&shotTemp.pts.length<2)shotTemp.pts.push({x:shotTemp.pts[0].x+1,y:shotTemp.pts[0].y+1});shotOps.push(shotTemp);shotTemp=null}shotRedraw()};
+  cn.addEventListener('mousedown',down);cn.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
+  cn.addEventListener('touchstart',down,{passive:false});cn.addEventListener('touchmove',move,{passive:false});cn.addEventListener('touchend',up)}
+function applyCrop(r){if(!r)return;let x=Math.min(r.x1,r.x2),y=Math.min(r.y1,r.y2),w=Math.abs(r.x2-r.x1),h=Math.abs(r.y2-r.y1);
+  if(w<8||h<8){shotRedraw();return}x=Math.max(0,x);y=Math.max(0,y);w=Math.min(shotBase.width-x,w);h=Math.min(shotBase.height-y,h);
+  const s=document.createElement('canvas');s.width=Math.round(w);s.height=Math.round(h);s.getContext('2d').drawImage(shotBase,x,y,w,h,0,0,w,h);
+  shotBase=s;shotOps=[];shotResizeCanvas();shotSetMode('pen');shotRedraw()}
+function shotUndo(){if(shotOps.length){shotOps.pop();shotRedraw()}}
+function shotRedraw(){const cn=document.getElementById('shot-canvas');if(!cn||!shotBase)return;const ctx=cn.getContext('2d');
+  ctx.clearRect(0,0,cn.width,cn.height);ctx.drawImage(shotBase,0,0);shotOps.forEach(o=>drawOp(ctx,o));
+  if(shotTemp){if(shotMode==='crop')drawCropSel(ctx,shotTemp);else drawOp(ctx,shotTemp)}}
+function shotLW(){return Math.max(2,Math.round(shotBase.width/300))}
+function drawOp(ctx,o){ctx.strokeStyle=o.color;ctx.fillStyle=o.color;ctx.lineWidth=shotLW();ctx.lineCap='round';ctx.lineJoin='round';
+  if(o.type==='pen'){ctx.beginPath();o.pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();return}
+  if(o.type==='rect'){ctx.strokeRect(Math.min(o.x1,o.x2),Math.min(o.y1,o.y2),Math.abs(o.x2-o.x1),Math.abs(o.y2-o.y1));return}
+  if(o.type==='ellipse'){ctx.beginPath();ctx.ellipse((o.x1+o.x2)/2,(o.y1+o.y2)/2,Math.abs(o.x2-o.x1)/2,Math.abs(o.y2-o.y1)/2,0,0,2*Math.PI);ctx.stroke();return}
+  if(o.type==='arrow'){const a=Math.atan2(o.y2-o.y1,o.x2-o.x1),hl=Math.max(10,shotLW()*4);ctx.beginPath();ctx.moveTo(o.x1,o.y1);ctx.lineTo(o.x2,o.y2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(o.x2,o.y2);ctx.lineTo(o.x2-hl*Math.cos(a-0.4),o.y2-hl*Math.sin(a-0.4));ctx.lineTo(o.x2-hl*Math.cos(a+0.4),o.y2-hl*Math.sin(a+0.4));ctx.closePath();ctx.fill()}}
+function drawCropSel(ctx,r){const x=Math.min(r.x1,r.x2),y=Math.min(r.y1,r.y2),w=Math.abs(r.x2-r.x1),h=Math.abs(r.y2-r.y1);
+  ctx.save();ctx.fillStyle='rgba(6,12,20,.5)';ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);ctx.clearRect(x,y,w,h);ctx.drawImage(shotBase,x,y,w,h,x,y,w,h);
+  ctx.strokeStyle='#0a84ff';ctx.lineWidth=shotLW();ctx.setLineDash([9,6]);ctx.strokeRect(x,y,w,h);ctx.restore()}
+function shotDone(){if(!shotBase){closeShotEditor();return}
+  const out=document.createElement('canvas');out.width=shotBase.width;out.height=shotBase.height;const ctx=out.getContext('2d');ctx.drawImage(shotBase,0,0);shotOps.forEach(o=>drawOp(ctx,o));
+  fbShot=encodeShot(out);document.getElementById('shot-editor').classList.remove('on');showShotThumb();reopenFeedback()}
+function encodeShot(cv){const LIMIT=680000;
+  for(const s of [1,0.8,0.66,0.5]){let c=cv;if(s<1){c=document.createElement('canvas');c.width=Math.max(1,Math.round(cv.width*s));c.height=Math.max(1,Math.round(cv.height*s));c.getContext('2d').drawImage(cv,0,0,c.width,c.height)}
+    for(const q of [0.72,0.6,0.45]){const d=c.toDataURL('image/jpeg',q);if(d.length<=LIMIT)return d}}
+  return cv.toDataURL('image/jpeg',0.4)}
+function showShotThumb(){const w=document.getElementById('fb-shot-wrap'),img=document.getElementById('fb-shot-img'),btn=document.getElementById('fb-shot-btn');if(!w)return;
+  if(fbShot){img.src=fbShot;w.style.display='';if(btn)btn.textContent='📷 Replace screenshot'}else{w.style.display='none';if(btn)btn.textContent='📷 Add annotated screenshot'}}
+function removeShot(){fbShot=null;showShotThumb()}
+function viewShot(src){if(!src)return;const v=document.getElementById('shot-view');document.getElementById('shot-view-img').src=src;v.style.display='flex'}
 
 /* ================= NAV / ROUTER ================= */
 let CURRENT_USER=null;
