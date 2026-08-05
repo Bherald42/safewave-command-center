@@ -2118,7 +2118,7 @@ const RAISE_STAGES=['Prospect','Pitched','Diligence','Committed','Wired','Passed
 const STAGEMETA={New:'dim',Contacted:'amber',Engaged:'wave',Meeting:'wave',Proposal:'good',Won:'good',Lost:'dim'};
 const STALE_DAYS=30;
 let CRMA=[], crmReady=false, crmSource='local';
-let crmView='pipeline', crmOwner='all', crmBoard='all', crmTag='all', crmQ='', acctId=null;
+let crmView='hub', crmOwner='all', crmBoard='all', crmTag='all', crmQ='', acctId=null, crmDrill=null;
 function linkify(v){v=v||'';if(/@/.test(v)&&!/\s/.test(v))return '<a href="mailto:'+esc(v)+'" style="color:var(--wave)">'+esc(v)+'</a>';
   if(!/\s/.test(v)&&/^https?:|\.(com|org|gov|net|edu|io)/i.test(v)){const u=/^https?:/.test(v)?v:'https://'+v;return '<a href="'+esc(u)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(v)+'</a>'}
   return esc(v)}
@@ -2318,21 +2318,74 @@ async function sendInvestorUpdate(){
   closeSheets();loadCRM();toast('✓ Sent '+ok+' update'+(ok!==1?'s':'')+(fail?' · '+fail+' failed':''))}
 function fundraiseCard(a){const cm=COMMIT_META[a.commitStatus]||{label:raiseStageOf(a),pill:'dim'};const c=Number(a.commit)||0;const dm=dueMeta(dayMs(a.dueAt));
   return '<div class="card tap" tabindex="0" onclick="openAcct(\''+a.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(displayName(a))+'</div><div class="d">'+[esc(a.owner&&a.owner!=='Unassigned'?a.owner:''),a.nextStep?esc(a.nextStep):'',dm.label].filter(Boolean).join(' · ')+'</div></div><div style="text-align:right"><div class="mono" style="font-weight:600">'+(c?fmtMoney(c):'—')+'</div><span class="pill '+cm.pill+'">'+cm.label+'</span></div></div></div>'}
+function crmSetView(x){crmView=x;crmDrill=null;renderCRM()}
+function crmBar(){const b=(x,l)=>'<button class="chip'+(crmView===x&&!crmDrill?' on':'')+'" onclick="crmSetView(\''+x+'\')">'+l+'</button>';
+  return '<div class="chips">'+b('hub','◧ Overview')+b('pipeline','▦ Board')+b('list','☰ List')+'</div>';}
 function renderPipelineView(v){
   if(!CRMA.length){document.getElementById('crm-sub').textContent='No accounts yet.';v.innerHTML=crmEmpty();return}
   const total=CRMA.length,won=CRMA.filter(a=>a.stage==='Won').length,stale=CRMA.filter(isStale).length;
   const enrolled=CRMA.filter(a=>a.campaign&&a.campaign.status==='active').length;
+  document.getElementById('crm-sub').innerHTML=total+' accounts · '+won+' won · <span style="color:var(--amber)">'+stale+' need follow-up</span>'+(enrolled?' · <span style="color:var(--wave)">'+enrolled+' in outreach</span>':'')+(crmSource==='local'?' · <span style="color:var(--faint)">local preview</span>':' · <span style="color:var(--good)">shared</span>');
+  if(crmDrill){v.innerHTML=crmBar()+renderDrillInner();return}
+  if(crmView==='hub'){v.innerHTML=crmBar()+renderHubInner();hubSearch();return}
+  // classic board / list / follow-up
   const owners=Array.from(new Set(CRMA.map(a=>a.owner||'Unassigned'))).sort();
   const boards=Array.from(new Set(CRMA.map(a=>a.board))).sort();
   const tags=Array.from(new Set([].concat.apply([],CRMA.map(a=>a.tags||[])))).sort();
-  document.getElementById('crm-sub').innerHTML=total+' accounts · '+won+' won · <span style="color:var(--amber)">'+stale+' need follow-up</span>'+(enrolled?' · <span style="color:var(--wave)">'+enrolled+' in outreach</span>':'')+(crmSource==='local'?' · <span style="color:var(--faint)">local preview</span>':' · <span style="color:var(--good)">shared</span>');
-  v.innerHTML='<div class="chips">'+viewBtn('pipeline','Pipeline')+viewBtn('list','List')+viewBtn('attention','Follow-up · '+stale)+'</div>'
+  v.innerHTML=crmBar()
     +'<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input type="search" placeholder="Search accounts, owners, locations" value="'+esc(crmQ)+'" oninput="crmQ=this.value;renderCrmMain()"></div>'
-    +'<div class="chips">'+sel('Owner',crmOwner,owners,'crmOwner')+sel('List',crmBoard,boards,'crmBoard')+(tags.length?sel('Tag',crmTag,tags,'crmTag'):'')+'</div>'
+    +'<div class="chips">'+sel('Owner',crmOwner,owners,'crmOwner')+sel('List',crmBoard,boards,'crmBoard')+(tags.length?sel('Tag',crmTag,tags,'crmTag'):'')+'<button class="chip'+(crmView==='attention'?' on':'')+'" onclick="crmSetView(\'attention\')">⚠ Follow-up · '+stale+'</button></div>'
     +'<div class="row" style="gap:8px;margin-bottom:14px"><button class="btn ghost" style="flex:1" onclick="openAddAcct()">＋ Add account</button><button class="btn ghost" style="flex:0 0 auto" onclick="exportPipeline()">⬇︎ CSV</button></div>'
     +'<div id="crm-main"></div>';
   renderCrmMain();
 }
+/* ---- CRM Overview hub: follow-ups + clickable tiles that drill into a focused list ---- */
+function qMatch(a){if(!crmQ)return true;const q=crmQ.toLowerCase();return [a.name,a.email,a.contact,a.company,a.location,a.owner].some(v=>(v||'').toLowerCase().includes(q))}
+function stageCount(s){return CRMA.filter(a=>(a.stage||'New')===s).length}
+function crmFollowups(){const t=todayMs();const items=CRMA.filter(a=>a.dueAt&&a.stage!=='Won'&&a.stage!=='Lost').map(a=>({a:a,ms:dayMs(a.dueAt)})).filter(x=>x.ms!=null);
+  return {overdue:items.filter(x=>x.ms<t).sort((a,b)=>a.ms-b.ms),soon:items.filter(x=>x.ms>=t&&x.ms<=t+14*864e5).sort((a,b)=>a.ms-b.ms)};}
+function hubTile(onclick,n,label,color){return '<button class="card tap" style="margin:0;padding:14px;text-align:left;display:flex;flex-direction:column;gap:5px;cursor:pointer;width:100%" onclick="'+onclick+'">'
+  +'<span style="width:10px;height:10px;border-radius:3px;background:'+(color||'var(--wave)')+'"></span>'
+  +'<span style="font-family:var(--font-d);font-weight:700;font-size:22px;line-height:1;color:var(--text)">'+n+'</span>'
+  +'<span style="font-size:12.5px;color:var(--muted)">'+esc(label)+'</span></button>';}
+function tileGrid(inner){return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px">'+inner+'</div>';}
+function followRow(a){const dm=dueMeta(dayMs(a.dueAt));const nm=displayName(a),col=acctColor(nm);
+  return '<div class="card tap" tabindex="0" style="margin-bottom:8px" onclick="openAcct(\''+a.id+'\')"><div class="row"><span class="pc-av" style="background:'+col+'22;color:'+col+';flex-shrink:0">'+esc(acctInitials(nm))+'</span><div class="grow" style="min-width:0"><div class="t">'+esc(nm)+'</div><div class="d">'+[esc(a.owner&&a.owner!=='Unassigned'?a.owner:'Unassigned'),a.nextStep?esc(a.nextStep):'Follow up'].filter(Boolean).join(' · ')+'</div></div><span class="pill '+(dm.overdue?'amber':dm.soon?'wave':'dim')+'">'+esc(dm.label||'')+'</span></div></div>';}
+function boardTilesHTML(){const boards={};CRMA.forEach(a=>{if(a.board==='Fundraise')return;const b=a.board||'Other';boards[b]=(boards[b]||0)+1});
+  const keys=Object.keys(boards).sort((a,b)=>boards[b]-boards[a]);if(keys.length<2)return '';
+  return '<div class="sec-head" style="margin-top:20px"><h2>Browse by list</h2></div>'+tileGrid(keys.map(b=>hubTile('openBoardDrill(decodeURIComponent(\''+encodeURIComponent(b)+'\'))',boards[b],b,'var(--wave)')).join(''));}
+function renderHubInner(){const f=crmFollowups();let html='';
+  html+='<div class="searchbar" style="margin-top:2px"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input type="search" placeholder="Search accounts, owners, locations" value="'+esc(crmQ)+'" oninput="crmQ=this.value;hubSearch()"></div>';
+  html+='<div id="hub-results"></div>';
+  html+='<div id="hub-sections">';
+  html+='<div class="sec-head" style="margin-top:14px"><h2>Follow-ups</h2>'+(f.overdue.length?'<span class="pill amber">'+f.overdue.length+' overdue</span>':(f.soon.length?'<span class="pill wave">'+f.soon.length+' upcoming</span>':'<span class="pill good">clear</span>'))+'</div>';
+  if(f.overdue.length||f.soon.length){
+    if(f.overdue.length){html+='<div class="pulse-sub-h">Overdue · '+f.overdue.length+'</div>'+f.overdue.slice(0,6).map(x=>followRow(x.a)).join('');if(f.overdue.length>6)html+='<div class="d" style="color:var(--faint);margin:2px 0 6px">+'+(f.overdue.length-6)+' more overdue</div>'}
+    if(f.soon.length){html+='<div class="pulse-sub-h">Due soon · '+f.soon.length+'</div>'+f.soon.slice(0,6).map(x=>followRow(x.a)).join('')}
+  }else{html+='<div class="card" style="text-align:center;color:var(--muted)">No next steps due. Open an account and set a next step + date to plan a follow-up — it shows here and on your Pulse.</div>'}
+  html+='<div class="row" style="gap:10px;margin-top:12px">'+hubTile('crmSetView(\'attention\')',crmFiltered().filter(isStale).length,'Need a next step','var(--amber)')+hubTile('openDrill(\'__all\')',CRMA.length,'All accounts','var(--wave)')+'</div>';
+  html+='<div class="sec-head" style="margin-top:20px"><h2>Pipeline by stage</h2></div>'+tileGrid(STAGES.map(s=>hubTile('openDrill(\''+s+'\')',stageCount(s),s,STAGECOLOR[s])).join(''));
+  html+=boardTilesHTML();
+  html+='<div class="row" style="gap:8px;margin-top:20px;flex-wrap:wrap"><button class="btn ghost" style="flex:1;min-width:150px" onclick="openAddAcct()">＋ Add account</button><button class="btn ghost" style="flex:1;min-width:140px" onclick="crmGoTab(\'campaigns\')">🚀 Campaigns</button><button class="btn ghost" style="flex:1;min-width:140px" onclick="crmGoTab(\'prospect\')">🔎 Prospect</button><button class="btn ghost" style="flex:0 0 auto" onclick="exportPipeline()">⬇︎ CSV</button></div>';
+  html+='</div>';
+  return html;
+}
+function hubSearch(){const res=document.getElementById('hub-results'),secs=document.getElementById('hub-sections');if(!res)return;
+  if(crmQ){if(secs)secs.style.display='none';const list=CRMA.filter(qMatch).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    res.innerHTML='<div class="sec-head" style="margin-top:14px"><h2>Results</h2><span class="pill dim">'+list.length+'</span></div>'+listHTML(list);}
+  else{if(secs)secs.style.display='';res.innerHTML='';}}
+function openDrill(k){crmDrill=k;crmQ='';renderCRM()}
+function openBoardDrill(name){crmDrill='board:'+name;crmQ='';renderCRM()}
+function closeDrill(){crmDrill=null;crmQ='';renderCRM()}
+function drillList(){const isAll=crmDrill==='__all';const isBoard=(''+crmDrill).indexOf('board:')===0;const boardName=isBoard?crmDrill.slice(6):'';const stage=(!isAll&&!isBoard)?crmDrill:'';
+  return CRMA.filter(a=>{if(stage&&(a.stage||'New')!==stage)return false;if(isBoard&&a.board!==boardName)return false;return qMatch(a)}).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));}
+function drillLabel(){const isAll=crmDrill==='__all';const isBoard=(''+crmDrill).indexOf('board:')===0;return isAll?'All accounts':isBoard?('List · '+crmDrill.slice(6)):('Stage · '+crmDrill);}
+function renderDrillInner(){const list=drillList();
+  return '<button class="btn ghost" style="margin:2px 0 12px" onclick="closeDrill()">← Overview</button>'
+    +'<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input type="search" placeholder="Search in '+esc(drillLabel())+'" value="'+esc(crmQ)+'" oninput="crmQ=this.value;renderDrillMain()"></div>'
+    +'<div class="sec-head"><h2>'+esc(drillLabel())+'</h2><span class="pill dim" id="drill-count">'+list.length+'</span></div>'
+    +'<div id="crm-main">'+listHTML(list)+'</div>';}
+function renderDrillMain(){const el=document.getElementById('crm-main');if(!el)return;const list=drillList();el.innerHTML=listHTML(list);const c=document.getElementById('drill-count');if(c)c.textContent=list.length;}
 function renderCrmMain(){const el=document.getElementById('crm-main');if(!el)return;const list=crmFiltered();
   if(crmView==='pipeline')el.innerHTML=pipelineHTML(list);
   else if(crmView==='attention')el.innerHTML=listHTML(list.filter(isStale).sort((a,b)=>(lastAct(a)||0)-(lastAct(b)||0)));
