@@ -481,12 +481,13 @@ input[type=date]{color-scheme:dark}
     <main class="screen" id="s-know">
       <p class="eyebrow">Knowledge</p>
       <h1>One source of truth</h1>
-      <p class="sub">Search docs, tickets, chat, CRM notes and engineering — once sources are connected.</p>
+      <p class="sub">One search across accounts, tickets, orders, tasks, customers and decisions.</p>
       <div class="searchbar">
         <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
-        <input type="search" placeholder="Search everything" aria-label="Search everything" onkeydown="if(event.key==='Enter')toast('Unified search spans every connected source — live once integrations are wired')">
+        <input id="know-q" type="search" placeholder="Search everything…" aria-label="Search everything" oninput="renderKnow(this.value)">
       </div>
-      <div class="sec">
+      <div id="know-results"></div>
+      <div class="sec" id="know-decisions">
         <div class="sec-head"><h2>Decision log</h2><span class="pill dim">real decisions</span></div>
         <div class="card" id="decision-log"></div>
       </div>
@@ -1284,6 +1285,17 @@ function opsCard(to,pill,tag,title,sub){return '<div class="card tap" tabindex="
 function renderDecisions(){
   document.getElementById('decision-log').innerHTML=DECISIONS.map(d=>'<div class="note" style="margin-top:8px"><div class="meta">'+d[0].toUpperCase()+'</div>'+d[1]+'</div>').join('')+'<div class="d" style="margin-top:10px">Real calls made during the build — searchable forever, so context never leaves when a person does.</div>';
 }
+function renderKnow(q){q=(q||'').trim();const res=document.getElementById('know-results'),dec=document.getElementById('know-decisions');if(!res)return;
+  if(!q){res.innerHTML='';if(dec)dec.style.display='';return}
+  if(dec)dec.style.display='none';
+  const items=(typeof cmdkBuild==='function'?cmdkBuild(q):[]).filter(it=>it.type!=='Go'&&it.type!=='Add');
+  window.__knowItems=items;
+  const ql=q.toLowerCase();const decs=DECISIONS.filter(d=>(d[0]+' '+d[1]).toLowerCase().indexOf(ql)>=0);
+  let html=items.map((it,i)=>'<div class="card tap" tabindex="0" onclick="knowRun('+i+')"><div class="row"><div class="grow"><div class="t">'+esc(it.t)+'</div>'+(it.s?'<div class="d">'+esc(it.s)+'</div>':'')+'</div><span class="pill dim">'+esc(it.type)+'</span></div></div>').join('');
+  if(decs.length)html+='<div class="sec-head" style="margin-top:14px"><h2>Decisions</h2></div>'+decs.map(d=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc(d[0].toUpperCase())+'</div>'+esc(d[1])+'</div>').join('');
+  res.innerHTML=html||'<div class="empty"><div class="d">No matches for "'+esc(q)+'".</div></div>';
+}
+function knowRun(i){const it=(window.__knowItems||[])[i];if(it&&it.run)it.run()}
 
 /* ================= NAV / ROUTER ================= */
 let CURRENT_USER=null;
