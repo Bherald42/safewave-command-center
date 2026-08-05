@@ -179,6 +179,7 @@ input[type=date]{color-scheme:dark}
 .qc-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
 .qc-row:last-child{border-bottom:0}
 .qc-row input{width:18px;height:18px;accent-color:var(--wave);flex-shrink:0}
+#notif-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--amber);color:#0B0C0E;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-b)}
 .pcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--wave);border-radius:11px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .12s,transform .05s}
 .pcard:hover{border-color:#4a5361}
 .pcard:active{transform:scale(.99)}
@@ -314,6 +315,10 @@ input[type=date]{color-scheme:dark}
     <div class="spacer"></div>
     <button class="iconbtn" aria-label="Search everything" onclick="goto('s-know')">
       <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+    </button>
+    <button class="iconbtn" style="position:relative" aria-label="Notifications" onclick="openNotifs()">
+      <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      <span id="notif-badge" style="display:none">0</span>
     </button>
     <button class="who" onclick="openAccountPanel()" aria-label="Account">
       <span class="av" id="who-av">–</span>
@@ -735,6 +740,17 @@ input[type=date]{color-scheme:dark}
   </div>
 </div>
 
+<div class="sheet" id="sh-notif" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">NOTIFICATIONS</span>
+    <h1 style="font-size:20px;margin:11px 0 10px">Alerts</h1>
+    <button class="btn" id="notif-enable" style="display:none;margin-bottom:12px" onclick="enableNotifs()">🔔 Enable phone / desktop alerts</button>
+    <div id="notif-list"></div>
+    <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
 <div id="toast" role="status" aria-live="polite"></div>
 
 <!-- Firebase (auto-configured by Firebase Hosting on the live domain) -->
@@ -1047,7 +1063,7 @@ function enterApp(user){
   document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
   buildNav(user.role);renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
-  loadTeam();loadBuildTasks();loadChatChannels();loadInventory();loadFulfillments();
+  loadTeam();loadBuildTasks();loadChatChannels();loadInventory();loadFulfillments();subscribeNotifications();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
@@ -1145,6 +1161,7 @@ function saveTicket(){
   if(!title){toast('Give the ticket a short title');return}
   const t={id:'TK-'+Date.now().toString(36).toUpperCase().slice(-5),title:title,customer:document.getElementById('tk-customer').value.trim(),channel:pickVal('tk-channel'),product:pickVal('tk-product'),sev:pickVal('tk-sev')||'medium',desc:document.getElementById('tk-desc').value.trim(),assignee:document.getElementById('tk-assignee').value,due:document.getElementById('tk-due').value||'',status:'open',created:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'you'};
   TKTS.unshift(t);persistTicket(t);closeSheets();renderSupport();refreshPulse();
+  if(t.assignee)notifyAssignee(t.assignee,'Ticket assigned to you',t.title,'s-support');
   toast('✓ Ticket '+t.id+' created — '+SEV[t.sev].label+' · '+t.channel)
 }
 function ticketCard(t){const s=SEV[t.sev];const breach=t.status==='open'&&slaLeft(t)<0;const dm=dueMeta(dayMs(t.due));const meta=[t.channel,t.customer,t.assignee].filter(Boolean).map(esc).join(' · ');
@@ -1173,7 +1190,7 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
   const dd=document.getElementById('tkv-due');if(dd&&t.due)dd.value=String(t.due).slice(0,10);
   openSheet('sh-ticket')
 }
-function saveTicketMeta(id){const a=document.getElementById('tkv-assignee'),d=document.getElementById('tkv-due');updTicket(id,t=>{t.assignee=a?a.value:t.assignee;t.due=d?d.value:t.due});closeSheets();renderSupport();refreshPulse();toast('✓ Saved')}
+function saveTicketMeta(id){const a=document.getElementById('tkv-assignee'),d=document.getElementById('tkv-due');const t0=TKTS.find(x=>x.id===id);const prev=t0?t0.assignee:null;const t=updTicket(id,t=>{t.assignee=a?a.value:t.assignee;t.due=d?d.value:t.due});if(t&&t.assignee&&t.assignee!==prev)notifyAssignee(t.assignee,'Ticket assigned to you',t.title,'s-support');closeSheets();renderSupport();refreshPulse();toast('✓ Saved')}
 function resolveTicket(id){updTicket(id,t=>t.status='closed');closeSheets();renderSupport();toast('✓ '+id+' resolved')}
 function reopenTicket(id){updTicket(id,t=>t.status='open');closeSheets();renderSupport();toast(id+' reopened')}
 function promoteTicket(id){closeSheets();toast('✓ '+id+' flagged for Build — becomes a ranked engineering item once the triage feed is wired')}
@@ -1208,6 +1225,38 @@ function setUserRole(uid,role,btn){
     toast('✓ Role set to '+roleLabel(role)+' — applies on their next sign-in');
   }).catch(e=>toast('Could not update — '+((e&&e.code)||'check Firestore rules')));
 }
+
+/* ================= NOTIFICATIONS (in-app + browser) ================= */
+let NOTIF=[], notifUnsub=null, notifPrimed=false, notifLastRead=0;
+function uidForName(name){if(!name)return null;const t=(TEAM||[]).find(x=>(x.name||'').toLowerCase()===(''+name).toLowerCase());return t?t.uid:null}
+function notify(to,title,body,link){if(!hasFirestore()||!to||!CURRENT_USER)return;
+  firebase.firestore().collection('notifications').add({to:to,title:title,body:body||'',link:link||'',by:CURRENT_USER.name||CURRENT_USER.email||'',at:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{})}
+function notifyAssignee(name,title,body,link){if(!name)return;const uid=uidForName(name);if(!uid||uid===(CURRENT_USER&&CURRENT_USER.uid))return;notify(uid,title,body,link)}
+function notifyAll(title,body,link){notify('all',title,body,link)}
+function notifAtMs(n){return (n.at&&n.at.toMillis)?n.at.toMillis():0}
+function unreadCount(){return NOTIF.filter(n=>notifAtMs(n)>notifLastRead&&n.by!==(CURRENT_USER&&CURRENT_USER.name)).length}
+function renderNotifBadge(){const b=document.getElementById('notif-badge');if(!b)return;const c=unreadCount();b.textContent=c>9?'9+':String(c);b.style.display=c?'flex':'none'}
+function popNotif(n){toast('🔔 '+n.title+(n.body?' — '+n.body:''));
+  try{if(window.Notification&&Notification.permission==='granted'){const nt=new Notification(n.title,{body:n.body||'',icon:'/icon-192.png'});nt.onclick=()=>{try{window.focus()}catch(e){}if(n.link)goto(n.link);nt.close()}}}catch(e){}}
+function subscribeNotifications(){if(!hasFirestore()||!CURRENT_USER)return;
+  notifLastRead=Number(localStorage.getItem('sw_notif_read_'+CURRENT_USER.uid)||0)||0;notifPrimed=false;
+  if(notifUnsub){try{notifUnsub()}catch(e){}}
+  try{notifUnsub=firebase.firestore().collection('notifications').orderBy('at','desc').limit(40).onSnapshot(qs=>{
+    const me=CURRENT_USER.uid,myName=CURRENT_USER.name;
+    qs.docChanges().forEach(ch=>{if(ch.type==='added'&&notifPrimed){const n=ch.doc.data();if((n.to===me||n.to==='all')&&n.by!==myName)popNotif(n)}});
+    NOTIF=[];qs.forEach(d=>{const n=d.data();if(n.to===me||n.to==='all')NOTIF.push(Object.assign({id:d.id},n))});
+    notifPrimed=true;renderNotifBadge();
+  },e=>{})}catch(e){}}
+function openNotifs(){
+  const body=document.getElementById('notif-list');if(!body)return;
+  body.innerHTML=NOTIF.length?NOTIF.map(n=>{const t=notifAtMs(n);const time=t?new Date(t).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';return '<div class="card tap" tabindex="0" onclick="notifOpen(\''+esc(n.link||'')+'\')"><div class="t">'+esc(n.title)+'</div><div class="d">'+esc(n.body||'')+(time?' · '+time:'')+'</div></div>'}).join(''):'<div class="empty"><div class="d">No notifications yet. New orders and tasks assigned to you show up here.</div></div>';
+  notifLastRead=Date.now();try{localStorage.setItem('sw_notif_read_'+CURRENT_USER.uid,String(notifLastRead))}catch(e){}renderNotifBadge();
+  const en=document.getElementById('notif-enable');if(en)en.style.display=(window.Notification&&Notification.permission==='default')?'':'none';
+  openSheet('sh-notif');
+}
+function notifOpen(link){closeSheets();if(link)goto(link)}
+function enableNotifs(){if(!window.Notification){toast('This browser doesn’t support alerts');return}
+  Notification.requestPermission().then(p=>{toast(p==='granted'?'✓ Alerts on — you’ll get new orders + your tasks':'Alerts blocked — turn them on in browser settings');const en=document.getElementById('notif-enable');if(en)en.style.display=(p==='default')?'':'none'})}
 
 /* ================= TEAM ROSTER · TASKS · BUILD BOARD · CHAT ================= */
 /* date helpers */
@@ -1268,8 +1317,10 @@ function openBuildTask(id){btEditId=id||null;const t=id?BUILDT.find(x=>x.id===id
 function saveBuildTask(){const title=document.getElementById('bt-title').value.trim();if(!title){toast('Give the task a title');return}
   const pr=document.querySelector('#bt-priority button.on');
   const data={title:title,assignee:document.getElementById('bt-assignee').value,due:document.getElementById('bt-due').value||'',priority:pr?pr.dataset.v:'medium',notes:document.getElementById('bt-notes').value.trim()};
-  if(btEditId){const t=BUILDT.find(x=>x.id===btEditId);if(t){Object.assign(t,data);persistBuild(t)}}
+  let prevAssignee=null;
+  if(btEditId){const t=BUILDT.find(x=>x.id===btEditId);if(t){prevAssignee=t.assignee;Object.assign(t,data);persistBuild(t)}}
   else{const t=Object.assign({id:'b'+Date.now().toString(36),status:'open',createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()},data);BUILDT.unshift(t);persistBuild(t)}
+  if(data.assignee&&data.assignee!==prevAssignee)notifyAssignee(data.assignee,'New task assigned',data.title+(data.due?' · due '+data.due:''),'s-build');
   closeSheets();renderBuild();refreshPulse();toast('✓ Task saved')}
 function markBuildDone(id){const t=BUILDT.find(x=>x.id===id);if(!t)return;t.status=t.status==='done'?'open':'done';persistBuild(t);renderBuild();refreshPulse();toast(t.status==='done'?'✓ Done':'Reopened')}
 function deleteBuildTask(){if(!btEditId)return;const id=btEditId;BUILDT=BUILDT.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('build_tasks').doc(id).delete().catch(()=>{});closeSheets();renderBuild();refreshPulse();toast('Task deleted')}
@@ -1518,7 +1569,7 @@ function populateAccount(a){const id=a.id;
   const cn=document.getElementById('ac-c-name');if(cn)cn.value='';const ce=document.getElementById('ac-c-email');if(ce)ce.value='';
   renderNotes(a);const ni=document.getElementById('note-input');if(ni)ni.value='';
 }
-function saveNextStep(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;updateAccount(acctId,{nextStep:document.getElementById('ac-nextstep').value.trim(),dueAt:document.getElementById('ac-due').value||''});renderCrmMain();refreshPulse();toast('✓ Next step saved')}
+function saveNextStep(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;const step=document.getElementById('ac-nextstep').value.trim(),due=document.getElementById('ac-due').value||'';updateAccount(acctId,{nextStep:step,dueAt:due});if(step&&a.owner&&a.owner!=='Unassigned')notifyAssignee(a.owner,'Follow-up assigned',step+' — '+displayName(a)+(due?' · due '+due:''),'s-crm');renderCrmMain();refreshPulse();toast('✓ Next step saved')}
 function renderCampaignBadge(a){const el=document.getElementById('ac-campaign-badge');if(!el)return;const en=a.campaign;
   if(!en){el.innerHTML='';return}
   const map={active:'wave',completed:'good','no-email':'amber','no-sender':'amber'};

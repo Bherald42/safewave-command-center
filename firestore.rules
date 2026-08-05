@@ -76,6 +76,15 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    // Notifications — new orders (to:'all') + task assignments (to: a uid).
+    // Any teammate can create one (assigning work / order alerts); read is
+    // filtered client-side to the recipient. Not editable/deletable.
+    match /notifications/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
     // Overdue/needs-attention summary, written by the scanOverdue function.
     match /nudges/{id} {
       allow read: if signedIn();
