@@ -50,6 +50,11 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    // Outreach campaigns — shared so the whole team sees active sequences.
+    match /campaigns/{id} {
+      allow read, write: if signedIn();
+    }
+
     // Overdue/needs-attention summary, written by the scanOverdue function.
     match /nudges/{id} {
       allow read: if signedIn();
@@ -60,6 +65,24 @@ service cloud.firestore {
     // No other teammate can read them; the backend uses the Admin SDK to send.
     match /mail_credentials/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Financials — visible ONLY to the super admin and the emails on the
+    // finance allow-list (settings/finance). The UI hides the tab too, but
+    // this is the real enforcement.
+    function financeOK() {
+      return isSuper() || (signedIn()
+        && exists(/databases/$(database)/documents/settings/finance)
+        && request.auth.token.email in get(/databases/$(database)/documents/settings/finance).data.emails);
+    }
+    match /finance/{doc} {
+      allow read, write: if financeOK();
+    }
+    // The allow-list itself: only the super admin can edit who has access;
+    // a teammate can read it only if they are on it (or are the super admin).
+    match /settings/finance {
+      allow read: if isSuper() || (signedIn() && request.auth.token.email in resource.data.emails);
+      allow write: if isSuper();
     }
   }
 }
