@@ -193,6 +193,17 @@ input[type=date]{color-scheme:dark}
 .cmdk-item .ci-s{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cmdk-empty{padding:22px 16px;color:var(--faint);font-size:13px}
 .cmdk-foot{display:flex;gap:18px;padding:9px 16px;border-top:1px solid var(--line);font-size:10.5px;color:var(--faint);font-family:var(--font-m);letter-spacing:.04em}
+.gantt-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:8px 0}
+.gantt{position:relative;min-height:40px}
+.g-row{position:relative;height:30px;display:flex;align-items:center}
+.g-row.g-head{height:22px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.g-lbl{width:150px;flex:0 0 150px;padding:0 10px;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.g-bar{position:absolute;height:16px;border-radius:5px;top:7px;opacity:.92}
+.g-today{position:absolute;top:0;bottom:0;width:2px;background:var(--wave);opacity:.7;z-index:1}
+.upd-files{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.upd-files img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.upd-file{font-size:12px;color:var(--wave);text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+#bt-watchers button,#pj-status button{font-size:11.5px}
 .pcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--wave);border-radius:11px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .12s,transform .05s}
 .pcard:hover{border-color:#4a5361}
 .pcard:active{transform:scale(.99)}
@@ -414,9 +425,9 @@ input[type=date]{color-scheme:dark}
     <!-- BUILD -->
     <main class="screen" id="s-build">
       <p class="eyebrow">Build · project management</p>
-      <h1>Build tasks</h1>
-      <p class="sub" id="build-sub">Assign work, set due dates, track it to done.</p>
-      <button class="btn" style="margin-bottom:16px" onclick="openBuildTask()">＋ Add task</button>
+      <h1 id="build-h1">Development</h1>
+      <p class="sub" id="build-sub">Roadmap, projects, and the ranked list of what to build next.</p>
+      <div class="chips" id="build-tabs" style="margin-bottom:14px"></div>
       <div id="build-body"></div>
     </main>
 
@@ -566,22 +577,65 @@ input[type=date]{color-scheme:dark}
   <div class="sheet-body">
     <div class="grab"></div>
     <span class="pill wave" id="bt-pill">NEW TASK</span>
-    <h1 style="font-size:20px;margin:11px 0 12px" id="bt-h">Add a build task</h1>
+    <span class="pill dim" id="bt-ticket" style="display:none;margin-left:6px"></span>
+    <h1 style="font-size:20px;margin:11px 0 12px" id="bt-h">Add a task</h1>
     <input class="field" id="bt-title" placeholder="Task — what needs doing?">
     <div class="row" style="gap:8px">
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Project</p><select class="field" id="bt-project" style="margin:0"></select></div>
       <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Assign to</p><select class="field" id="bt-assignee" style="margin:0"></select></div>
-      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Due date</p><input class="field" id="bt-due" type="date" style="margin:0"></div>
+    </div>
+    <div class="row" style="gap:8px;margin-top:10px">
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Start</p><input class="field" id="bt-start" type="date" style="margin:0"></div>
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Due</p><input class="field" id="bt-due" type="date" style="margin:0"></div>
+    </div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Status</p>
+    <div class="rolepick" id="bt-status">
+      <button data-v="todo" class="on">To-do</button><button data-v="doing">In progress</button><button data-v="blocked">Blocked</button><button data-v="done">Done</button>
     </div>
     <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Priority</p>
     <div class="rolepick" id="bt-priority">
-      <button data-v="safety" >Safety</button>
-      <button data-v="high">High</button>
-      <button data-v="medium" class="on">Medium</button>
-      <button data-v="low">Low</button>
+      <button data-v="safety">Safety</button><button data-v="high">High</button><button data-v="medium" class="on">Medium</button><button data-v="low">Low</button>
     </div>
-    <textarea class="field" id="bt-notes" placeholder="Notes (optional)" style="min-height:70px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
-    <button class="btn" onclick="saveBuildTask()">Save task</button>
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Tag teammates <span style="color:var(--faint);font-weight:400">(they get notified &amp; follow updates)</span></p>
+    <div class="rolepick" id="bt-watchers"></div>
+    <textarea class="field" id="bt-notes" placeholder="Description / notes" style="min-height:64px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
+    <div id="bt-updates-wrap" style="display:none">
+      <div class="sec-head" style="margin-top:6px"><h2>Updates</h2></div>
+      <div id="bt-updates"></div>
+      <textarea class="field" id="bt-update-text" placeholder="Post an update…" style="min-height:56px;resize:vertical;font-family:var(--font-b);margin-top:8px"></textarea>
+      <div class="row" style="gap:8px">
+        <label class="btn ghost" style="flex:0 0 auto;cursor:pointer">📎 Photo/file<input type="file" id="bt-update-file" style="display:none" onchange="btFilePicked()"></label>
+        <span class="d" id="bt-file-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+        <button class="btn" onclick="addUpdate()">Post</button>
+      </div>
+    </div>
+    <button class="btn" style="margin-top:14px" onclick="saveBuildTask()">Save task</button>
     <button class="btn ghost" style="margin-top:8px" id="bt-del" onclick="deleteBuildTask()">Delete</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-project" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave" id="pj-pill">NEW PROJECT</span>
+    <h1 style="font-size:20px;margin:11px 0 12px" id="pj-h">New project</h1>
+    <input class="field" id="pj-name" placeholder="Project name (e.g. XS strap launch)">
+    <textarea class="field" id="pj-vision" placeholder="The vision / goal — what &quot;done&quot; looks like" style="min-height:64px;resize:vertical;font-family:var(--font-b)"></textarea>
+    <div class="row" style="gap:8px">
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Owner</p><select class="field" id="pj-owner" style="margin:0"></select></div>
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Horizon</p><select class="field" id="pj-horizon" style="margin:0"><option value="now">Now</option><option value="next">Next</option><option value="later">Later</option></select></div>
+    </div>
+    <div class="row" style="gap:8px;margin-top:10px">
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Start</p><input class="field" id="pj-start" type="date" style="margin:0"></div>
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Target end</p><input class="field" id="pj-end" type="date" style="margin:0"></div>
+    </div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Status</p>
+    <div class="rolepick" id="pj-status">
+      <button data-v="planning" class="on">Planning</button><button data-v="active">Active</button><button data-v="paused">Paused</button><button data-v="done">Done</button>
+    </div>
+    <button class="btn" style="margin-top:14px" onclick="saveProject()">Save project</button>
+    <button class="btn ghost" style="margin-top:8px" id="pj-del" onclick="deleteProject()">Delete</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
   </div>
 </div>
@@ -813,6 +867,7 @@ input[type=date]{color-scheme:dark}
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-storage-compat.js"></script>
 <script src="/__/firebase/init.js?useEmulator=false" onerror="window.__noFirebase=true"></script>
 <script src="crm-seed.js" onerror="window.CRM_SEED=window.CRM_SEED||null"></script>
 
@@ -1231,7 +1286,7 @@ function enterApp(user){
   document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
   buildNav(user.role);renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
-  loadTeam();loadBuildTasks();loadChatChannels();loadInventory();loadFulfillments();loadBands();subscribeReturns();subscribeNotifications();subscribeOrders();
+  loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();subscribeReturns();subscribeNotifications();subscribeOrders();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
@@ -1361,7 +1416,15 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
 function saveTicketMeta(id){const a=document.getElementById('tkv-assignee'),d=document.getElementById('tkv-due');const t0=TKTS.find(x=>x.id===id);const prev=t0?t0.assignee:null;const t=updTicket(id,t=>{t.assignee=a?a.value:t.assignee;t.due=d?d.value:t.due});if(t&&t.assignee&&t.assignee!==prev)notifyAssignee(t.assignee,'Ticket assigned to you',t.title,'s-support');closeSheets();renderSupport();refreshPulse();toast('✓ Saved')}
 function resolveTicket(id){updTicket(id,t=>t.status='closed');closeSheets();renderSupport();toast('✓ '+id+' resolved')}
 function reopenTicket(id){updTicket(id,t=>t.status='open');closeSheets();renderSupport();toast(id+' reopened')}
-function promoteTicket(id){closeSheets();toast('✓ '+id+' flagged for Build — becomes a ranked engineering item once the triage feed is wired')}
+function promoteTicket(id){const t=(typeof TKTS!=='undefined'?TKTS:[]).find(x=>x.id===id);if(!t)return;
+  if((typeof BUILDT!=='undefined'?BUILDT:[]).some(b=>b.ticketId===id)){toast('Already on the Build board');closeSheets();goto('s-build');return}
+  const pr={safety:'safety',high:'high',medium:'medium',low:'low'}[t.sev]||'medium';
+  const task={id:'b'+Date.now().toString(36),title:t.title,projectId:'support',assignee:t.assignee||'',start:'',due:t.due||'',status:'todo',priority:pr,ticketId:id,customer:t.customer||'',watchers:[],notes:t.desc||'',updates:[],createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()};
+  BUILDT.unshift(task);persistBuild(task);
+  updTicket(id,x=>{x.promoted=true});
+  if(task.assignee)notifyAssignee(task.assignee,'Ticket promoted to Build',t.title,'s-build');
+  closeSheets();buildTab='focus';buildProj=null;goto('s-build');renderBuild();
+  toast('✓ '+id+' pushed to Build');}
 
 /* ================= TEAM & ROLES (Firestore users/{uid}) ================= */
 function fsSetupNote(code){return '<div class="note"><b>Team management needs Firestore turned on.</b><br>Firebase console → Build → <b>Firestore Database</b> → Create database (production mode), then publish the security rules provided. It\'s free at this scale.'+(code?'<br><span style="color:var(--amber)">('+esc(code)+')</span>':'')+'</div>'}
@@ -1464,8 +1527,37 @@ function assigneeOptions(sel){return '<option value="">Unassigned</option>'+TEAM
 function isMine(name){if(!name||!CURRENT_USER)return false;const me=(CURRENT_USER.name||'').toLowerCase();const first=me.split(' ')[0];return name.toLowerCase()===me||(first.length>1&&name.toLowerCase().indexOf(first)>=0)}
 
 /* build task board (build_tasks) */
-let BUILDT=[], btEditId=null;
+let BUILDT=[], BUILDP=[], btEditId=null, pjEditId=null, buildTab='focus', buildProj=null, btFile=null;
 const BPRI={safety:{label:'SAFETY',pill:'safety',rank:0},high:{label:'HIGH',pill:'amber',rank:1},medium:{label:'MEDIUM',pill:'wave',rank:2},low:{label:'LOW',pill:'dim',rank:3}};
+const TSTATUS={todo:{label:'To-do',pill:'dim'},doing:{label:'In progress',pill:'wave'},blocked:{label:'Blocked',pill:'amber'},done:{label:'Done',pill:'good'}};
+function taskStatus(t){return t.status==='done'?'done':(t.status==='doing'||t.status==='blocked'||t.status==='todo')?t.status:'todo'}
+async function loadProjects(){if(!hasFirestore()){BUILDP=[];return}
+  try{const qs=await firebase.firestore().collection('build_projects').get();BUILDP=qs.docs.map(d=>Object.assign({id:d.id},d.data()))}catch(e){BUILDP=[]}
+  const scr=document.getElementById('s-build');if(scr&&scr.classList.contains('on'))renderBuild();}
+function persistProject(p){if(hasFirestore())firebase.firestore().collection('build_projects').doc(p.id).set(p,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+function projName(pid){if(pid==='support')return 'Customer support';const p=BUILDP.find(x=>x.id===pid);return p?p.name:''}
+function projectTasks(pid){return BUILDT.filter(t=>t.projectId===pid)}
+function projectProgress(p){const ts=projectTasks(p.id);if(!ts.length)return 0;return Math.round(ts.filter(t=>taskStatus(t)==='done').length/ts.length*100)}
+function projectHealth(p){if(p.status==='done')return {key:'done',label:'DONE',pill:'good'};
+  const ts=projectTasks(p.id).filter(t=>taskStatus(t)!=='done');
+  const blocked=ts.filter(t=>taskStatus(t)==='blocked').length;
+  const overdue=ts.filter(t=>{const d=dayMs(t.due);return d&&d<todayMs()}).length;
+  const endOver=p.end&&dayMs(p.end)<todayMs()&&ts.length;
+  if(blocked)return {key:'stuck',label:'STUCK',pill:'amber'};
+  if(overdue||endOver)return {key:'risk',label:'AT RISK',pill:'amber'};
+  return {key:'ok',label:'ON TRACK',pill:'good'};
+}
+function taskScore(t){
+  let s={safety:100,high:40,medium:15,low:5}[t.priority||'medium'];
+  if(t.ticketId||t.customer)s*=2.2;                 // customer downtime impact
+  const proj=BUILDP.find(p=>p.id===t.projectId);
+  const end=dayMs(t.due)||(proj&&dayMs(proj.end));
+  if(end){const days=(end-todayMs())/864e5;if(days<=0)s*=3;else if(days<=7)s*=2;else if(days<=21)s*=1.4;} // deadline pressure
+  if(taskStatus(t)==='blocked')s*=1.6;
+  const dur=(dayMs(t.due)&&dayMs(t.start))?(dayMs(t.due)-dayMs(t.start))/864e5:0;
+  if(dur>=14)s*=1.2;                                // long tasks threaten end dates
+  return Math.round(s);
+}
 async function loadBuildTasks(){
   if(!hasFirestore()){BUILDT=[];return}
   try{const qs=await firebase.firestore().collection('build_tasks').get();BUILDT=qs.docs.map(d=>Object.assign({id:d.id},d.data()))}catch(e){BUILDT=[]}
@@ -1473,40 +1565,175 @@ async function loadBuildTasks(){
   refreshPulse();
 }
 function persistBuild(t){if(hasFirestore())firebase.firestore().collection('build_tasks').doc(t.id).set(t,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+function buildGoTab(t){buildTab=t;buildProj=null;renderBuild()}
+function openProjectDetail(id){buildProj=id;renderBuild();window.scrollTo(0,0)}
 function renderBuild(){
   const body=document.getElementById('build-body');if(!body)return;
-  const open=BUILDT.filter(t=>t.status!=='done').sort((a,b)=>{const da=dayMs(a.due),db=dayMs(b.due);if(da&&db)return da-db;if(da)return -1;if(db)return 1;return ((BPRI[a.priority]||BPRI.medium).rank)-((BPRI[b.priority]||BPRI.medium).rank)});
-  const done=BUILDT.filter(t=>t.status==='done');
-  document.getElementById('build-sub').textContent=open.length+' open · '+done.length+' done';
-  let html=open.length?open.map(buildCard).join(''):'<div class="empty"><div class="ico">🔧</div><div class="t">No open tasks</div><div class="d">Add a task, assign it to a teammate, and set a due date — it shows up on their Pulse.</div></div>';
-  if(done.length)html+='<div class="sec-head" style="margin-top:18px"><h2>Done</h2><span class="pill good">'+done.length+'</span></div>'+done.map(buildCard).join('');
-  html+='<div class="sec" style="margin-top:18px"><div class="sec-head"><h2>Priority scoring</h2><span class="pill wave">ACTIVE</span></div><div class="card"><div class="d" style="color:var(--text)"><b>Score = (Reach × Impact × Confidence ÷ Effort) × Safety × Revenue</b></div><div class="kv"><span>Safety — could miss an emergency alert</span><b style="color:var(--safety)">×3</b></div><div class="kv"><span>Revenue — blocks a signed/pipeline deal</span><b style="color:var(--amber)">×2</b></div></div></div>';
+  const h1=document.getElementById('build-h1'),sub=document.getElementById('build-sub'),tb=document.getElementById('build-tabs');
+  if(buildProj){if(tb)tb.innerHTML='';return renderProjectDetail(body,buildProj)}
+  const tab=(id,l)=>'<button class="chip'+(buildTab===id?' on':'')+'" onclick="buildGoTab(\''+id+'\')">'+l+'</button>';
+  if(tb)tb.innerHTML=tab('focus','Focus')+tab('projects','Projects')+tab('roadmap','Roadmap');
+  if(h1)h1.textContent=buildTab==='roadmap'?'Roadmap':buildTab==='projects'?'Projects':'Focus';
+  if(buildTab==='projects')renderProjects(body,sub);
+  else if(buildTab==='roadmap')renderRoadmap(body,sub);
+  else renderFocus(body,sub);
+}
+/* FOCUS — the ranked list of what to build next, across all projects */
+function renderFocus(body,sub){
+  const active=BUILDT.filter(t=>taskStatus(t)!=='done').map(t=>({t:t,s:taskScore(t)})).sort((a,b)=>b.s-a.s);
+  if(sub)sub.innerHTML=active.length+' open · ranked by customer impact, deadline &amp; duration';
+  let html='<button class="btn" style="margin-bottom:14px" onclick="openBuildTask()">＋ Add task</button>';
+  html+=active.length?active.map(x=>focusCard(x.t,x.s)).join(''):'<div class="empty"><div class="ico">🔧</div><div class="t">Nothing queued</div><div class="d">Add a task or push a support ticket to the board.</div></div>';
+  const done=BUILDT.filter(t=>taskStatus(t)==='done');
+  if(done.length)html+='<div class="sec-head" style="margin-top:18px"><h2>Recently done</h2><span class="pill good">'+done.length+'</span></div>'+done.slice(0,8).map(t=>focusCard(t,0)).join('');
   body.innerHTML=html;
 }
-function buildCard(t){const pr=BPRI[t.priority]||BPRI.medium;const dm=dueMeta(dayMs(t.due));const done=t.status==='done';
-  return '<div class="card tap" tabindex="0" onclick="openBuildTask(\''+t.id+'\')"'+(done?' style="opacity:.6"':'')+'><div class="row"><div class="grow"><div class="t"'+(done?' style="text-decoration:line-through"':'')+'>'+esc(t.title)+'</div><div class="d">'+[esc(t.assignee||'Unassigned'),(!done&&dm.label?dm.label:'')].filter(Boolean).join(' · ')+'</div></div>'
-    +(done?'<span class="pill good">DONE</span>':'<span class="pill '+pr.pill+'">'+pr.label+'</span>')+'</div>'
-    +(!done?'<div style="margin-top:9px"><button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="event.stopPropagation();markBuildDone(\''+t.id+'\')">✓ Mark done</button></div>':'')+'</div>'}
-function openBuildTask(id){btEditId=id||null;const t=id?BUILDT.find(x=>x.id===id):null;
+function focusCard(t,score){const pr=BPRI[t.priority]||BPRI.medium;const st=TSTATUS[taskStatus(t)];const dm=dueMeta(dayMs(t.due));const done=taskStatus(t)==='done';
+  const chips=[];if(t.projectId)chips.push('<span class="mchip">'+esc(projName(t.projectId)||'Project')+'</span>');
+  if(t.customer||t.ticketId)chips.push('<span class="mchip warn">customer</span>');
+  if(dm.label&&!done)chips.push('<span class="mchip'+(dm.overdue||dm.soon?' warn':'')+'">'+esc(dm.label)+'</span>');
+  if((t.updates||[]).length)chips.push('<span class="mchip">💬 '+t.updates.length+'</span>');
+  return '<div class="card tap" tabindex="0" onclick="openBuildTask(\''+t.id+'\')"'+(done?' style="opacity:.55"':'')+'><div class="row"><div class="grow"><div class="t"'+(done?' style="text-decoration:line-through"':'')+'>'+esc(t.title)+'</div><div class="d">'+[esc(t.assignee||'Unassigned'),st.label].join(' · ')+'</div></div>'
+    +(done?'<span class="pill good">DONE</span>':'<span class="pill '+pr.pill+'">'+pr.label+(score?' · '+score:'')+'</span>')+'</div>'
+    +(chips.length?'<div class="pc-chips" style="padding-left:0;margin-top:9px">'+chips.join('')+'</div>':'')
+    +(!done?'<div style="margin-top:9px"><button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="event.stopPropagation();cycleStatus(\''+t.id+'\')">'+(taskStatus(t)==='todo'?'▶ Start':taskStatus(t)==='doing'?'✓ Mark done':taskStatus(t)==='blocked'?'▶ Unblock':'Reopen')+'</button></div>':'')+'</div>';
+}
+function cycleStatus(id){const t=BUILDT.find(x=>x.id===id);if(!t)return;const s=taskStatus(t);t.status=s==='todo'?'doing':s==='doing'?'done':s==='blocked'?'doing':'todo';persistBuild(t);renderBuild();refreshPulse();toast('→ '+TSTATUS[taskStatus(t)].label)}
+/* PROJECTS — list + drill-in with Gantt */
+function renderProjects(body,sub){
+  if(sub)sub.innerHTML=BUILDP.length+' project'+(BUILDP.length!==1?'s':'')+' · own the work end to end';
+  let html='<button class="btn" style="margin-bottom:14px" onclick="openProject()">＋ New project</button>';
+  if(!BUILDP.length){html+='<div class="empty"><div class="ico">🗂️</div><div class="t">No projects yet</div><div class="d">Create a project with a vision and target date, then add tasks and a timeline.</div></div>';body.innerHTML=html;return}
+  const order={now:0,next:1,later:2};
+  html+=BUILDP.slice().sort((a,b)=>(order[a.horizon]||0)-(order[b.horizon]||0)).map(p=>{const h=projectHealth(p),prog=projectProgress(p),ts=projectTasks(p.id);
+    return '<div class="card tap" tabindex="0" onclick="openProjectDetail(\''+p.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(p.name)+'</div><div class="d">'+[esc(p.owner||'Unassigned'),(p.end?'due '+fmtDate(new Date(dayMs(p.end))):''),ts.length+' tasks'].filter(Boolean).join(' · ')+'</div></div><span class="pill '+h.pill+'">'+h.label+'</span></div>'
+      +'<div class="progress" style="margin-top:11px"><i style="width:'+prog+'%"></i></div><div class="d" style="margin-top:5px;font-size:11.5px">'+prog+'% complete</div></div>';}).join('');
+  body.innerHTML=html;
+}
+function renderProjectDetail(body,pid){
+  const p=BUILDP.find(x=>x.id===pid);if(!p){buildProj=null;return renderBuild()}
+  const h=projectHealth(p),prog=projectProgress(p);const ts=projectTasks(pid);
+  document.getElementById('build-h1').textContent=p.name;
+  document.getElementById('build-sub').innerHTML='<a onclick="buildProj=null;renderBuild()" style="color:var(--wave);cursor:pointer;font-weight:600">← All projects</a>';
+  let html='<div class="acct-actions"><button class="btn" onclick="openBuildTask(null,\''+pid+'\')">＋ Add task</button><button class="btn ghost" onclick="openProject(\''+pid+'\')">Edit project</button></div>';
+  html+='<div class="card"><div class="row"><div class="grow"><span class="pill dim">'+(p.horizon||'now').toUpperCase()+'</span> <span class="pill '+h.pill+'" style="margin-left:4px">'+h.label+'</span></div><b class="mono">'+prog+'%</b></div>'
+    +(p.vision?'<div class="d" style="margin-top:10px;color:var(--text)">'+esc(p.vision)+'</div>':'')
+    +'<div class="kv" style="margin-top:10px"><span>Owner</span><b>'+esc(p.owner||'Unassigned')+'</b></div>'
+    +'<div class="kv"><span>Timeline</span><b>'+(p.start?fmtDate(new Date(dayMs(p.start))):'—')+' → '+(p.end?fmtDate(new Date(dayMs(p.end))):'—')+'</b></div>'
+    +'<div class="progress" style="margin-top:10px"><i style="width:'+prog+'%"></i></div></div>';
+  html+='<div class="sec-head" style="margin-top:16px"><h2>Timeline</h2><span class="pill dim">Gantt</span></div>'+ganttHTML(p,ts);
+  html+='<div class="sec-head" style="margin-top:16px"><h2>Tasks</h2><span class="pill '+(ts.length?'wave':'dim')+'">'+ts.length+'</span></div>';
+  html+=ts.length?ts.slice().sort((a,b)=>(dayMs(a.due)||9e15)-(dayMs(b.due)||9e15)).map(t=>focusCard(t,taskScore(t))).join(''):'<div class="empty"><div class="d">No tasks yet — add the first one.</div></div>';
+  body.innerHTML=html;
+}
+function ganttHTML(p,ts){
+  const dated=ts.filter(t=>dayMs(t.due));if(!dated.length)return '<div class="note">Add start/due dates to tasks to see them on the timeline.</div>';
+  let min=dayMs(p.start)||Math.min.apply(null,dated.map(t=>dayMs(t.start)||dayMs(t.due)));
+  let max=dayMs(p.end)||Math.max.apply(null,dated.map(t=>dayMs(t.due)));
+  min=Math.min(min,todayMs());max=Math.max(max,todayMs());
+  const span=Math.max(7,(max-min)/864e5);const DAY=Math.max(6,Math.min(26,Math.round(720/span)));const W=Math.round(span*DAY)+160;
+  const x=ms=>160+Math.round((ms-min)/864e5*DAY);
+  let rows='';
+  dated.slice().sort((a,b)=>(dayMs(a.start)||dayMs(a.due))-(dayMs(b.start)||dayMs(b.due))).forEach(t=>{
+    const s=dayMs(t.start)||(dayMs(t.due)-3*864e5);const e=dayMs(t.due);const st=taskStatus(t);
+    const col=st==='done'?'var(--good)':st==='blocked'?'var(--amber)':st==='doing'?'var(--wave)':'var(--line)';
+    const left=x(s),width=Math.max(DAY,x(e)-x(s));
+    rows+='<div class="g-row"><div class="g-lbl">'+esc(t.title)+'</div><div class="g-bar" style="left:'+left+'px;width:'+width+'px;background:'+col+'" title="'+esc(t.title)+'"></div></div>';
+  });
+  const todayX=x(todayMs());
+  return '<div class="gantt-wrap"><div class="gantt" style="width:'+W+'px">'
+    +'<div class="g-today" style="left:'+todayX+'px"></div>'
+    +'<div class="g-row g-head"><div class="g-lbl">Task</div><div class="d" style="position:absolute;left:'+(todayX+4)+'px;top:2px;font-size:10px;color:var(--wave)">today</div></div>'
+    +rows+'</div></div>';
+}
+/* ROADMAP — high-level, grouped by horizon, auto health from tasks */
+function renderRoadmap(body,sub){
+  if(sub)sub.innerHTML='Where the product is headed — health &amp; progress update automatically as tasks move';
+  const groups=[['now','Now'],['next','Next'],['later','Later']];
+  let html='<button class="btn" style="margin-bottom:14px" onclick="openProject()">＋ New project</button>';
+  if(!BUILDP.length){html+='<div class="empty"><div class="ico">🧭</div><div class="t">No roadmap yet</div><div class="d">Create projects and set each to Now / Next / Later to build the roadmap.</div></div>';body.innerHTML=html;return}
+  groups.forEach(g=>{const ps=BUILDP.filter(p=>(p.horizon||'now')===g[0]);
+    html+='<div class="pulse-sub-h">'+g[1]+' · '+ps.length+'</div>';
+    html+=ps.length?ps.map(p=>{const h=projectHealth(p),prog=projectProgress(p);
+      return '<div class="card tap" tabindex="0" onclick="openProjectDetail(\''+p.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(p.name)+'</div><div class="d">'+[esc(p.owner||''),p.end?'target '+fmtDate(new Date(dayMs(p.end))):''].filter(Boolean).join(' · ')+'</div></div><span class="pill '+h.pill+'">'+h.label+'</span></div><div class="progress" style="margin-top:10px"><i style="width:'+prog+'%;background:'+(h.key==='stuck'||h.key==='risk'?'var(--amber)':'var(--good)')+'"></i></div></div>';}).join(''):'<div class="d" style="color:var(--faint);margin-bottom:8px">Nothing here yet.</div>';
+  });
+  body.innerHTML=html;
+}
+/* ---- project create/edit ---- */
+function openProject(id){pjEditId=id||null;const p=id?BUILDP.find(x=>x.id===id):null;
+  document.getElementById('pj-pill').textContent=p?'EDIT PROJECT':'NEW PROJECT';
+  document.getElementById('pj-h').textContent=p?'Edit project':'New project';
+  document.getElementById('pj-name').value=p?p.name||'':'';
+  document.getElementById('pj-vision').value=p?p.vision||'':'';
+  document.getElementById('pj-owner').innerHTML=assigneeOptions(p?p.owner:(CURRENT_USER&&CURRENT_USER.name));
+  document.getElementById('pj-horizon').value=(p&&p.horizon)||'now';
+  document.getElementById('pj-start').value=p&&p.start?String(p.start).slice(0,10):'';
+  document.getElementById('pj-end').value=p&&p.end?String(p.end).slice(0,10):'';
+  document.querySelectorAll('#pj-status button').forEach(b=>b.classList.toggle('on',b.dataset.v===((p&&p.status)||'planning')));
+  document.getElementById('pj-del').style.display=p?'':'none';
+  closeSheets();openSheet('sh-project');
+}
+function saveProject(){const name=document.getElementById('pj-name').value.trim();if(!name){toast('Name the project');return}
+  const stb=document.querySelector('#pj-status button.on');
+  const data={name:name,vision:document.getElementById('pj-vision').value.trim(),owner:document.getElementById('pj-owner').value,horizon:document.getElementById('pj-horizon').value,start:document.getElementById('pj-start').value||'',end:document.getElementById('pj-end').value||'',status:stb?stb.dataset.v:'planning'};
+  if(pjEditId){const p=BUILDP.find(x=>x.id===pjEditId);if(p)Object.assign(p,data),persistProject(p)}
+  else{const p=Object.assign({id:'p'+Date.now().toString(36),createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()},data);BUILDP.unshift(p)}
+  const savedId=pjEditId||BUILDP[0].id;persistProject(BUILDP.find(x=>x.id===savedId));
+  closeSheets();renderBuild();toast('✓ Project saved')}
+function deleteProject(){if(!pjEditId)return;const id=pjEditId;BUILDP=BUILDP.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('build_projects').doc(id).delete().catch(()=>{});if(buildProj===id)buildProj=null;closeSheets();renderBuild();toast('Project deleted')}
+/* ---- task create/edit with status, watchers, updates, files ---- */
+function projectOptions(sel){return '<option value="">— No project —</option><option value="support"'+(sel==='support'?' selected':'')+'>Customer support</option>'+BUILDP.map(p=>'<option value="'+p.id+'"'+(sel===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')}
+function watcherChips(sel){sel=sel||[];return (TEAM||[]).map(m=>'<button type="button" data-v="'+esc(m.name)+'" class="'+(sel.indexOf(m.name)>=0?'on':'')+'" onclick="this.classList.toggle(\'on\')">'+esc(m.name)+'</button>').join('')||'<span class="d" style="color:var(--faint)">No teammates yet</span>'}
+function openBuildTask(id,presetProj){btEditId=id||null;btFile=null;const t=id?BUILDT.find(x=>x.id===id):null;
   document.getElementById('bt-pill').textContent=t?'EDIT TASK':'NEW TASK';
-  document.getElementById('bt-h').textContent=t?'Edit task':'Add a build task';
+  document.getElementById('bt-h').textContent=t?'Edit task':'Add a task';
+  const tk=document.getElementById('bt-ticket');if(tk){if(t&&t.ticketId){tk.style.display='';tk.textContent='from '+t.ticketId}else tk.style.display='none'}
   document.getElementById('bt-title').value=t?t.title||'':'';
+  document.getElementById('bt-project').innerHTML=projectOptions(t?t.projectId:(presetProj||''));
   document.getElementById('bt-assignee').innerHTML=assigneeOptions(t?t.assignee:(CURRENT_USER&&CURRENT_USER.name));
+  document.getElementById('bt-start').value=t&&t.start?String(t.start).slice(0,10):'';
   document.getElementById('bt-due').value=t&&t.due?String(t.due).slice(0,10):'';
+  document.querySelectorAll('#bt-status button').forEach(b=>b.classList.toggle('on',b.dataset.v===taskStatus(t||{})));
   document.querySelectorAll('#bt-priority button').forEach(b=>b.classList.toggle('on',b.dataset.v===((t&&t.priority)||'medium')));
+  document.getElementById('bt-watchers').innerHTML=watcherChips(t?t.watchers:[]);
   document.getElementById('bt-notes').value=t?t.notes||'':'';
+  document.getElementById('bt-file-name').textContent='';document.getElementById('bt-update-text').value='';
+  const uw=document.getElementById('bt-updates-wrap');uw.style.display=t?'':'none';if(t)renderUpdates(t);
   document.getElementById('bt-del').style.display=t?'':'none';
   closeSheets();openSheet('sh-buildtask');
 }
+function renderUpdates(t){const el=document.getElementById('bt-updates');if(!el)return;const us=(t.updates||[]);
+  el.innerHTML=us.length?us.slice().reverse().map(u=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([u.by,u.at].filter(Boolean).join(' · '))+'</div>'+(u.text?esc(u.text):'')+((u.files||[]).length?'<div class="upd-files">'+u.files.map(f=>/^image\//.test(f.type)?'<a href="'+esc(f.url)+'" target="_blank" rel="noopener"><img src="'+esc(f.url)+'" alt="'+esc(f.name)+'"></a>':'<a href="'+esc(f.url)+'" target="_blank" rel="noopener" class="upd-file">📎 '+esc(f.name)+'</a>').join('')+'</div>':'')+'</div>').join(''):'<div class="d" style="color:var(--faint)">No updates yet.</div>';
+}
+function btFilePicked(){const f=document.getElementById('bt-update-file').files[0];btFile=f||null;document.getElementById('bt-file-name').textContent=f?f.name:''}
+async function addUpdate(){if(!btEditId){toast('Save the task first');return}const t=BUILDT.find(x=>x.id===btEditId);if(!t)return;
+  const text=document.getElementById('bt-update-text').value.trim();if(!text&&!btFile){toast('Write an update or attach a file');return}
+  let files=[];
+  if(btFile){try{toast('Uploading…');files=[await uploadBuildFile(t.id,btFile)]}catch(e){toast((e&&e.message)==='storage-unavailable'?'Turn on Firebase Storage to attach files':'Upload failed');return}}
+  const u={by:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),text:text,files:files};
+  t.updates=(t.updates||[]).concat([u]);persistBuild(t);
+  document.getElementById('bt-update-text').value='';btFile=null;document.getElementById('bt-update-file').value='';document.getElementById('bt-file-name').textContent='';
+  renderUpdates(t);
+  (t.watchers||[]).forEach(w=>notifyAssignee(w,'Update on '+t.title,text.slice(0,80),'s-build'));
+  toast('✓ Update posted');
+}
+async function uploadBuildFile(taskId,file){
+  if(!(typeof firebase!=='undefined'&&firebase.storage))throw new Error('storage-unavailable');
+  const path='build/'+taskId+'/'+Date.now()+'_'+file.name.replace(/[^\w.\-]/g,'_');
+  const ref=firebase.storage().ref(path);await ref.put(file);const url=await ref.getDownloadURL();
+  return {name:file.name,url:url,type:file.type||''};
+}
 function saveBuildTask(){const title=document.getElementById('bt-title').value.trim();if(!title){toast('Give the task a title');return}
-  const pr=document.querySelector('#bt-priority button.on');
-  const data={title:title,assignee:document.getElementById('bt-assignee').value,due:document.getElementById('bt-due').value||'',priority:pr?pr.dataset.v:'medium',notes:document.getElementById('bt-notes').value.trim()};
-  let prevAssignee=null;
-  if(btEditId){const t=BUILDT.find(x=>x.id===btEditId);if(t){prevAssignee=t.assignee;Object.assign(t,data);persistBuild(t)}}
-  else{const t=Object.assign({id:'b'+Date.now().toString(36),status:'open',createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()},data);BUILDT.unshift(t);persistBuild(t)}
-  if(data.assignee&&data.assignee!==prevAssignee)notifyAssignee(data.assignee,'New task assigned',data.title+(data.due?' · due '+data.due:''),'s-build');
+  const pr=document.querySelector('#bt-priority button.on');const stb=document.querySelector('#bt-status button.on');
+  const watchers=Array.from(document.querySelectorAll('#bt-watchers button.on')).map(b=>b.dataset.v);
+  const data={title:title,projectId:document.getElementById('bt-project').value,assignee:document.getElementById('bt-assignee').value,start:document.getElementById('bt-start').value||'',due:document.getElementById('bt-due').value||'',status:stb?stb.dataset.v:'todo',priority:pr?pr.dataset.v:'medium',watchers:watchers,notes:document.getElementById('bt-notes').value.trim()};
+  let prev=null,prevW=[];
+  if(btEditId){const t=BUILDT.find(x=>x.id===btEditId);if(t){prev=t.assignee;prevW=t.watchers||[];Object.assign(t,data);persistBuild(t)}}
+  else{const t=Object.assign({id:'b'+Date.now().toString(36),updates:[],createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()},data);BUILDT.unshift(t);persistBuild(t)}
+  if(data.assignee&&data.assignee!==prev)notifyAssignee(data.assignee,'Task assigned to you',data.title+(data.due?' · due '+data.due:''),'s-build');
+  watchers.filter(w=>prevW.indexOf(w)<0&&w!==data.assignee).forEach(w=>notifyAssignee(w,'You were tagged on a task',data.title,'s-build'));
   closeSheets();renderBuild();refreshPulse();toast('✓ Task saved')}
-function markBuildDone(id){const t=BUILDT.find(x=>x.id===id);if(!t)return;t.status=t.status==='done'?'open':'done';persistBuild(t);renderBuild();refreshPulse();toast(t.status==='done'?'✓ Done':'Reopened')}
+function markBuildDone(id){const t=BUILDT.find(x=>x.id===id);if(!t)return;t.status=taskStatus(t)==='done'?'todo':'done';persistBuild(t);renderBuild();refreshPulse();toast(taskStatus(t)==='done'?'✓ Done':'Reopened')}
 function deleteBuildTask(){if(!btEditId)return;const id=btEditId;BUILDT=BUILDT.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('build_tasks').doc(id).delete().catch(()=>{});closeSheets();renderBuild();refreshPulse();toast('Task deleted')}
 
 /* unified task feed for Pulse (build + tickets + CRM follow-ups) */

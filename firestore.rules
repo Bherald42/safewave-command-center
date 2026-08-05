@@ -55,8 +55,11 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
-    // Build tasks — shared project board (assignee + due date).
+    // Build tasks + projects — shared project board (assignee, dates, status).
     match /build_tasks/{id} {
+      allow read, write: if signedIn();
+    }
+    match /build_projects/{id} {
       allow read, write: if signedIn();
     }
 
