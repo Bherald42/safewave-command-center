@@ -60,6 +60,14 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    // Inventory (locations) + order fulfillment records — shared ops.
+    match /inventory/{doc} {
+      allow read, write: if signedIn();
+    }
+    match /fulfillments/{id} {
+      allow read, write: if signedIn();
+    }
+
     // Team chat — channels + messages, shared across signed-in teammates.
     match /chat_channels/{ch}/messages/{m} {
       allow read, write: if signedIn();

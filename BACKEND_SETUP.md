@@ -67,10 +67,37 @@ Steps are personalised with `{{firstName}}`, `{{company}}`, `{{city}}` and carry
 the Safewave use-case pitch. Enrollment/step state lives on each `crm_accounts`
 doc under `campaign`; campaigns live in the `campaigns` collection.
 
+## Install to home screen (PWA)
+The app ships a web manifest (`public/manifest.webmanifest`) + service worker
+(`public/sw.js`), so on the live HTTPS site it can be installed to a phone home
+screen (Android: "Install app"; iOS Safari: Share → Add to Home Screen). It then
+opens full-screen like a native app. The service worker already handles `push`
+notifications — it just needs a sender (below).
+
+## New-order alerts (email + phone push) — connect step
+So Jared rarely opens Shopify, wire a Shopify **orders/create** webhook to a
+Cloud Function that (a) writes the order to Firestore and (b) emails + pushes an
+alert. Still to configure (needs keys only you can create):
+1. A **Shopify webhook** (Settings → Notifications → Webhooks, or a custom app)
+   pointing at an `orders/create` function URL.
+2. A **system mailbox** (e.g. ops@safewavetech.com) for the alert email, or reuse
+   `sendUserEmail` from a designated account.
+3. **FCM web push**: a VAPID key + `firebase-messaging-sw.js`; store each device
+   token in Firestore and have the function send to them. The service worker's
+   `push` handler is already in place.
+
+## New Firestore collections (rules already included)
+`inventory/main` (location counts), `fulfillments/{orderId}` (QC + firmware +
+sign-off), `build_tasks`, `campaigns`, `chat_channels/*/messages`,
+`settings/chat`, `finance/main`, `settings/finance`.
+
 ## Notes
 - Support-ticket replies and account emails are human-initiated. **Campaign
   emails send automatically** once a campaign is activated and accounts are
   enrolled — pause the campaign to stop sends.
+- Stock: Covington is the sellable/QC pool; fulfilling an order decrements it and
+  logging a return adds back. QR labels print from the fulfilment card (the QR
+  image comes from a public QR generator).
 - Users should use an **app password** (Gmail/Outlook/IONOS all offer one), not
   their main login password.
 - Future hardening: OAuth mailbox connect (Gmail/Microsoft) and encrypting
