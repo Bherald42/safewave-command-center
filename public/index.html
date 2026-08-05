@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#191C22">
 <title>Safewave Command Center</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Safewave">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -160,6 +165,20 @@ input[type=date]{color-scheme:dark}
 .chat-msg.me .bub{background:var(--wave-dim);border-color:var(--wave)}
 .chat-compose{display:flex;gap:8px;align-items:center}
 .chat-compose .field{flex:1}
+.inv-table{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.inv-row{display:grid;grid-template-columns:1.7fr .6fr .6fr .6fr .7fr;gap:6px;padding:11px 12px;align-items:center;border-bottom:1px solid var(--line);font-family:var(--font-m);font-size:14px}
+.inv-row:last-child{border-bottom:0}
+.inv-row span:not(:first-child){text-align:center}
+.inv-row span:first-child{font-family:var(--font-b)}
+.inv-head{background:var(--surface-2);font-family:var(--font-b)!important;font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+.inv-tot{background:var(--surface-2)}
+.inv-row.tap{cursor:pointer}.inv-row.tap:hover{background:var(--surface-2)}
+.fc-track{position:relative;height:12px;background:var(--line);border-radius:6px;margin-top:12px;overflow:visible}
+.fc-fill{height:100%;background:var(--good);border-radius:6px;max-width:100%}
+.fc-mark{position:absolute;top:-4px;width:2px;height:20px;background:var(--amber)}
+.qc-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
+.qc-row:last-child{border-bottom:0}
+.qc-row input{width:18px;height:18px;accent-color:var(--wave);flex-shrink:0}
 .pcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--wave);border-radius:11px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .12s,transform .05s}
 .pcard:hover{border-color:#4a5361}
 .pcard:active{transform:scale(.99)}
@@ -341,42 +360,11 @@ input[type=date]{color-scheme:dark}
 
     <!-- STOCK -->
     <main class="screen" id="s-stock">
-      <p class="eyebrow">Stock · Covington → Pace NY → China</p>
-      <h1>Stock &amp; Order Lookup</h1>
-      <p class="sub" id="stock-sub"></p>
-
-      <div class="searchbar">
-        <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
-        <input id="lookup" type="search" placeholder="Order # or customer name" aria-label="Order lookup" oninput="renderOrders(this.value)">
-      </div>
-
-      <div id="stock-alert"></div>
-
-      <div class="sec">
-        <div class="sec-head"><h2>On-hand by size</h2><span class="pill dim">tap to adjust</span></div>
-        <div id="stock-list"></div>
-      </div>
-
-      <div class="sec">
-        <div class="sec-head"><h2>Supply chain</h2></div>
-        <div class="card">
-          <div class="row" style="gap:0">
-            <div style="flex:1;text-align:center"><div class="mono" id="sc-office" style="font-size:20px;font-weight:600;color:var(--amber)">—</div><div class="d" style="font-size:11px">Safewave Office<br>Covington, KY</div></div>
-            <div style="color:var(--faint);font-size:10px;font-weight:600;padding:0 4px">←2wk—</div>
-            <div style="flex:1;text-align:center"><div class="mono" style="font-size:20px;font-weight:600;color:var(--faint)">?</div><div class="d" style="font-size:11px">Pace NY<br>warehouse</div></div>
-            <div style="color:var(--faint);font-size:10px;font-weight:600;padding:0 4px">←8wk—</div>
-            <div style="flex:1;text-align:center"><div class="mono" style="font-size:20px;font-weight:600;color:var(--faint)">?</div><div class="d" style="font-size:11px">China<br>production</div></div>
-          </div>
-          <div class="note" style="margin-top:12px">Pace NY &amp; China counts are <b>not yet tracked</b> — confirm with Pace. Only the Covington column is live from Shopify.</div>
-        </div>
-      </div>
-
-      <div class="sec">
-        <div class="sec-head"><h2>Recent orders</h2><span class="pill good"><span class="dot"></span>LIVE</span></div>
-        <div id="order-list"></div>
-      </div>
-
-      <div class="note" style="margin-bottom:8px" id="stock-foot"></div>
+      <p class="eyebrow">Stock · fulfillment &amp; inventory</p>
+      <h1 id="stock-h1">Stock &amp; Fulfillment</h1>
+      <p class="sub" id="stock-sub">Loading…</p>
+      <div class="chips" id="stock-tabs" style="margin-bottom:14px"></div>
+      <div id="stock-body"></div>
     </main>
 
     <!-- SUPPORT -->
@@ -704,6 +692,49 @@ input[type=date]{color-scheme:dark}
   </div>
 </div>
 
+<div class="sheet" id="sh-fulfill" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">FULFILL ORDER</span>
+    <h1 style="font-size:20px;margin:11px 0 4px" id="ff-order">—</h1>
+    <div class="d" id="ff-cust" style="margin-bottom:12px"></div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Band size</p>
+    <div class="rolepick" id="ff-size">
+      <button data-v="S">Small</button><button data-v="M">Medium</button><button data-v="L" class="on">Large</button>
+    </div>
+    <div class="row" style="gap:8px;margin-top:12px">
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Assigned to</p><select class="field" id="ff-assignee" style="margin:0"></select></div>
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Firmware flashed</p><input class="field" id="ff-firmware" placeholder="e.g. v2.1.4" style="margin:0"></div>
+    </div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">QC sign-off</p>
+    <div id="ff-qc">
+      <label class="qc-row"><input type="checkbox" data-k="vibration"> Vibration alert test</label>
+      <label class="qc-row"><input type="checkbox" data-k="ble"> BLE pairing verified</label>
+      <label class="qc-row"><input type="checkbox" data-k="charge"> Charge &amp; battery check</label>
+      <label class="qc-row"><input type="checkbox" data-k="firmware"> Firmware flashed to latest</label>
+      <label class="qc-row"><input type="checkbox" data-k="strap"> Strap &amp; packaging</label>
+    </div>
+    <div class="note" style="margin:10px 0">Completing signs off as <b id="ff-signer">you</b> with a timestamp, decrements Covington stock, and prints a QR label for the box.</div>
+    <button class="btn" onclick="completeFulfillment()">✓ Complete &amp; print label</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-invedit" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">INVENTORY</span>
+    <h1 style="font-size:20px;margin:11px 0 12px" id="ie-h">Edit location</h1>
+    <div class="row" style="gap:8px">
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Small</p><input class="field" id="ie-S" type="number" min="0" style="margin:0"></div>
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Medium</p><input class="field" id="ie-M" type="number" min="0" style="margin:0"></div>
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Large</p><input class="field" id="ie-L" type="number" min="0" style="margin:0"></div>
+    </div>
+    <button class="btn" style="margin-top:14px" onclick="saveInvEdit()">Save counts</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
 <div id="toast" role="status" aria-live="polite"></div>
 
 <!-- Firebase (auto-configured by Firebase Hosting on the live domain) -->
@@ -768,78 +799,123 @@ const NAV_ITEMS = [
   {id:'s-know',    label:'Knowledge',roles:['admin','manager','member'], svg:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/>'},
 ];
 
-/* ================= STOCK MATH ================= */
-function avail(s){return Math.max(0,s.onHand-s.committed)}
-function weeksCover(s){return s.burn>0?avail(s)/s.burn:Infinity}
-function reorderPoint(s){return Math.ceil(s.burn*LEAD.remakeWeeks*(1+LEAD.safety))}
-function stockoutDate(s){const d=new Date(SNAPSHOT_DATE);d.setDate(d.getDate()+Math.round(weeksCover(s)*7));return d}
-function orderByDate(s,w){const d=stockoutDate(s);d.setDate(d.getDate()-w*7);return d}
-function statusOf(s){const w=weeksCover(s);if(w<1.5)return{key:'crit',label:'CRITICAL',pill:'amber',bars:1};if(w<3)return{key:'low',label:'TRANSFER',pill:'amber',bars:2};return{key:'ok',label:'HEALTHY',pill:'good',bars:4}}
-function totalAvail(){return SHOP.sizes.reduce((a,s)=>a+avail(s),0)}
-function totalBurn(){return SHOP.sizes.reduce((a,s)=>a+s.burn,0)}
-const fmtDate=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-
+/* ================= STOCK · INVENTORY & FULFILLMENT ================= */
+const CHINA_LEAD_MONTHS=2, CHINA_LEAD_WEEKS=Math.round(CHINA_LEAD_MONTHS*4.345), TRANSFER_WEEKS=2, SAFETY_WEEKS=2;
+const SIZES=['S','M','L'], SIZELABEL={S:'Small',M:'Medium',L:'Large'};
+const BURN={S:1.5,M:2.0,L:1.5}; /* per-week velocity from Shopify 6-wk order rate; live when Shopify backend connects */
+const LOCS=[['covington','Covington, KY','Ships from here · QC pool'],['pace','Pace NY','Upstream · 2-wk transfer'],['china','China','Production · '+CHINA_LEAD_MONTHS+'-mo lead']];
+let INV={covington:{S:20,M:0,L:9},pace:{S:80,M:380,L:80},china:{S:0,M:0,L:0}};
+let FULF={}, stockTab='fulfill', invEditLoc=null, ffOrder=null;
+async function loadInventory(){if(!hasFirestore())return;try{const d=await firebase.firestore().collection('inventory').doc('main').get();if(d.exists&&d.data().locations){SIZES.forEach(z=>0);INV=Object.assign({covington:{},pace:{},china:{}},d.data().locations)}}catch(e){}
+  const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();}
+function saveInventory(){if(hasFirestore())firebase.firestore().collection('inventory').doc('main').set({locations:INV,updatedAt:new Date().toISOString()},{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+async function loadFulfillments(){if(!hasFirestore())return;try{const qs=await firebase.firestore().collection('fulfillments').get();FULF={};qs.forEach(d=>{FULF[d.id]=d.data();const o=SHOP.orders.find(x=>x.n===d.id);if(o&&d.data().status==='fulfilled')o.ful='FULFILLED'})}catch(e){FULF={}}
+  const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();}
+function cov(z){return (INV.covington[z]||0)}
+function net(z){return (INV.covington[z]||0)+(INV.pace[z]||0)+(INV.china[z]||0)}
+function covWeeks(z){return BURN[z]>0?cov(z)/BURN[z]:Infinity}
+function netWeeks(z){return BURN[z]>0?net(z)/BURN[z]:Infinity}
+function chinaByWeeks(z){return netWeeks(z)-CHINA_LEAD_WEEKS-SAFETY_WEEKS}
+function sizeStatus(z){if(cov(z)<=0)return{key:'block',label:'CAN’T SHIP',pill:'amber'};if(covWeeks(z)<TRANSFER_WEEKS+SAFETY_WEEKS)return{key:'transfer',label:'TRANSFER',pill:'amber'};if(chinaByWeeks(z)<=SAFETY_WEEKS)return{key:'china',label:'ORDER CHINA',pill:'amber'};return{key:'ok',label:'HEALTHY',pill:'good'}}
+function totalAvail(){return SIZES.reduce((a,z)=>a+cov(z),0)}
+function totalNetwork(){return SIZES.reduce((a,z)=>a+net(z),0)}
+function totalBurn(){return SIZES.reduce((a,z)=>a+BURN[z],0)}
+function weeksToDate(w){const d=new Date();d.setDate(d.getDate()+Math.round(w*7));return d}
+const fmtDate=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+function isFulfilled(o){const f=FULF[o.n];return o.ful==='FULFILLED'||(f&&f.status==='fulfilled')}
+function unfulfilledOrders(){return SHOP.orders.filter(o=>!isFulfilled(o))}
+function stockBlocks(){return SIZES.filter(z=>cov(z)<=0&&net(z)>0)}
+function stockGoTab(t){stockTab=t;renderStock()}
 function renderStock(){
-  document.getElementById('stock-sub').textContent='Burn = live 6-week order rate (~'+totalBurn().toFixed(1)+'/wk). '+totalAvail()+' bands available to sell.';
-  document.getElementById('sc-office').textContent=totalAvail();
-  document.getElementById('stock-foot').innerHTML='<b>Snapshot from Shopify · Aug 4 2026.</b> Flips to real-time LIVE once the read-only Shopify backend is connected. Editing a count is a local override until then.';
-  // alert
-  const crit=SHOP.sizes.filter(s=>statusOf(s).key==='crit').sort((a,b)=>weeksCover(a)-weeksCover(b))[0];
-  const ab=document.getElementById('stock-alert');
-  if(crit){
-    const days=Math.round(weeksCover(crit)*7), ob=orderByDate(crit,LEAD.transferWeeks), over=ob<SNAPSHOT_DATE;
-    ab.innerHTML='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>STOCK CRITICAL</span>'
-      +'<div class="t" style="margin-top:7px">'+crit.size+' — about '+days+' days of cover</div>'
-      +'<div class="d">Only '+avail(crit)+' '+crit.size+' available against '+crit.burn.toFixed(1)+'/wk. Transfer from Pace NY (2 wk) should have been placed by <b style="color:var(--text)">'+fmtDate(ob)+'</b>'+(over?' — <b style="color:var(--amber)">now overdue</b>.':'.')+'</div>'
-      +'<button class="btn" style="margin-top:11px" onclick="toast(\'✓ Transfer request drafted for '+crit.size+' — confirm quantity with Pace once NY counts are known\')">Draft transfer request</button></div>';
-  } else ab.innerHTML='';
-  // list
-  const wrap=document.getElementById('stock-list');wrap.innerHTML='';
-  SHOP.sizes.forEach((s,i)=>{
-    const st=statusOf(s),w=weeksCover(s);
-    const bars=[1,2,3,4,5].map(n=>'<i class="'+(n<=st.bars?'f':'')+'"></i>').join('');
-    const c=document.createElement('div');c.className='card tap';c.tabIndex=0;c.setAttribute('role','button');
-    c.setAttribute('aria-label',s.size+', '+avail(s)+' available, '+w.toFixed(1)+' weeks cover, tap to adjust');
-    c.innerHTML='<div class="row"><div class="wstr '+(st.key!=='ok'?'warn':'')+'" aria-hidden="true">'+bars+'</div>'
-      +'<div class="grow"><div class="t">'+s.size+' · <span class="mono">'+avail(s)+'</span> available'+(s.committed?' <span class="d" style="display:inline">('+s.onHand+' on hand, '+s.committed+' committed)</span>':'')+'</div>'
-      +'<div class="d">'+w.toFixed(1)+' wk cover · reorder point '+reorderPoint(s)+' · burn '+s.burn.toFixed(1)+'/wk</div></div>'
-      +'<span class="pill '+st.pill+'">'+st.label+'</span></div>';
-    c.onclick=()=>openEdit(i);c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openEdit(i)}};
-    wrap.appendChild(c);
-  });
-  const tight=SHOP.sizes.map((s,i)=>({s,i})).sort((a,b)=>weeksCover(a.s)-weeksCover(b.s))[0];
-  if(statusOf(tight.s).key==='crit'){
-    const a=document.createElement('a');a.style.cssText='color:var(--wave);font-size:12.5px;font-weight:600;cursor:pointer;display:inline-block;margin-top:6px';
-    a.textContent='Why is '+tight.s.size+' critical? →';a.onclick=()=>openWhy(tight.i);wrap.appendChild(a);
-  }
+  const body=document.getElementById('stock-body');if(!body)return;
+  const unf=unfulfilledOrders().length;
+  const tab=(id,l)=>'<button class="chip'+(stockTab===id?' on':'')+'" onclick="stockGoTab(\''+id+'\')">'+l+'</button>';
+  const tb=document.getElementById('stock-tabs');if(tb)tb.innerHTML=tab('fulfill','Fulfill'+(unf?' · '+unf:''))+tab('inventory','Inventory')+tab('forecast','Forecast')+tab('orders','Orders');
+  const sub=document.getElementById('stock-sub');if(sub)sub.innerHTML=totalAvail()+' sellable in Covington · '+totalNetwork()+' across network · ~'+totalBurn().toFixed(1)+'/wk';
+  if(stockTab==='inventory')renderInventoryTab(body);
+  else if(stockTab==='forecast')renderForecastTab(body);
+  else if(stockTab==='orders')renderOrdersTab(body);
+  else renderFulfillTab(body);
 }
-function renderOrders(q){
-  q=(q||'').trim().toLowerCase();
-  const wrap=document.getElementById('order-list');wrap.innerHTML='';
+function renderFulfillTab(body){
+  const unf=unfulfilledOrders();
+  const done=SHOP.orders.filter(o=>FULF[o.n]&&FULF[o.n].status==='fulfilled');
+  let html='';
+  const blocks=stockBlocks();
+  if(blocks.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>CAN’T SHIP</span><div class="t" style="margin-top:7px">'+blocks.map(z=>SIZELABEL[z]).join(', ')+' — 0 in Covington</div><div class="d">Transfer from Pace before these ship. Pace has '+blocks.map(z=>SIZELABEL[z]+' '+(INV.pace[z]||0)).join(', ')+'.</div></div>';
+  html+='<div class="sec-head"><h2>To fulfill</h2><span class="pill '+(unf.length?'amber':'good')+'">'+unf.length+'</span></div>';
+  html+=unf.length?unf.map(fulfillCard).join(''):'<div class="empty"><div class="ico">✓</div><div class="t">All caught up</div><div class="d">No orders waiting. New paid orders appear here automatically.</div></div>';
+  if(done.length)html+='<div class="sec-head" style="margin-top:18px"><h2>Fulfilled</h2><span class="pill good">'+done.length+'</span></div>'+done.map(fulfilledCard).join('');
+  body.innerHTML=html;
+}
+function fulfillCard(o){return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · paid</div></div><span class="pill amber">TO SHIP</span></div><button class="btn" style="margin-top:10px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill this order</button></div>'}
+function fulfilledCard(o){const f=FULF[o.n]||{};return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+SIZELABEL[f.size]+' · '+esc(f.serial||'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+'</div></div><span class="pill good">DONE</span></div><div class="row" style="gap:8px;margin-top:9px"><button class="btn ghost" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Print label</button><button class="btn ghost" style="flex:1" onclick="returnOrder(\''+esc(o.n)+'\')">Log return</button></div></div>'}
+function openFulfill(n){const o=SHOP.orders.find(x=>x.n===n);if(!o)return;ffOrder=n;
+  document.getElementById('ff-order').textContent=o.n+' · '+o.name;
+  document.getElementById('ff-cust').textContent=o.date+' · $'+o.total+' · paid';
+  const jared=(TEAM.find(t=>/jared/i.test(t.name))||{}).name;
+  document.getElementById('ff-assignee').innerHTML=assigneeOptions(jared||(CURRENT_USER&&CURRENT_USER.name)||'');
+  document.getElementById('ff-firmware').value='';
+  document.querySelectorAll('#ff-qc input').forEach(c=>c.checked=false);
+  document.querySelectorAll('#ff-size button').forEach(b=>b.classList.toggle('on',b.dataset.v==='L'));
+  document.getElementById('ff-signer').textContent=(CURRENT_USER&&CURRENT_USER.name)||'you';
+  closeSheets();openSheet('sh-fulfill');
+}
+function completeFulfillment(){const o=SHOP.orders.find(x=>x.n===ffOrder);if(!o)return;
+  const sz=document.querySelector('#ff-size button.on');const size=sz?sz.dataset.v:'L';
+  if(cov(size)<=0){toast(SIZELABEL[size]+' is 0 in Covington — transfer from Pace first');return}
+  const qc={};document.querySelectorAll('#ff-qc input').forEach(c=>qc[c.dataset.k]=c.checked);
+  if(!Object.keys(qc).every(k=>qc[k])){if(!confirm('Not all QC checks are ticked. Complete anyway?'))return}
+  const firmware=document.getElementById('ff-firmware').value.trim();
+  const serial='SW-'+ffOrder.replace(/[^0-9A-Za-z]/g,'')+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+  const rec={order:ffOrder,name:o.name,size:size,assignee:document.getElementById('ff-assignee').value,qc:qc,firmware:firmware,serial:serial,signoffBy:(CURRENT_USER&&CURRENT_USER.name)||'',signoffAt:new Date().toISOString(),status:'fulfilled'};
+  FULF[ffOrder]=rec;o.ful='FULFILLED';INV.covington[size]=Math.max(0,cov(size)-1);
+  if(hasFirestore())firebase.firestore().collection('fulfillments').doc(ffOrder).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
+  saveInventory();closeSheets();renderStock();refreshPulse();printLabel(ffOrder);
+  toast('✓ '+ffOrder+' fulfilled · '+SIZELABEL[size]+' -1 in Covington');
+}
+function returnOrder(n){const f=FULF[n];if(!f)return;if(!confirm('Log a return for '+n+'? '+SIZELABEL[f.size]+' goes back into Covington inventory.'))return;
+  INV.covington[f.size]=cov(f.size)+1;f.status='returned';f.returnedAt=new Date().toISOString();
+  if(hasFirestore())firebase.firestore().collection('fulfillments').doc(n).set(f,{merge:true}).catch(()=>{});
+  saveInventory();renderStock();refreshPulse();toast('✓ Return logged · '+SIZELABEL[f.size]+' +1 in Covington');
+}
+function printLabel(n){const f=FULF[n];if(!f)return;const o=SHOP.orders.find(x=>x.n===n)||{};
+  const payload=encodeURIComponent(JSON.stringify({o:n,s:f.serial,sz:f.size,fw:f.firmware}));
+  const qr='https://api.qrserver.com/v1/create-qr-code/?size=220x220&qzone=1&data='+payload;
+  const w=window.open('','_blank','width=420,height=580');if(!w){toast('Allow pop-ups to print labels');return}
+  w.document.write('<html><head><title>Label '+esc(n)+'</title><style>body{font-family:Arial,sans-serif;margin:0;padding:22px;color:#0B0C0E;display:flex;justify-content:center}.lab{border:2px solid #0B0C0E;border-radius:12px;padding:18px;width:300px;text-align:center}.lab h2{margin:0 0 2px;font-size:20px}.k{font-size:12px;color:#555;margin-top:8px}.v{font-weight:700;color:#0B0C0E}img{margin:12px auto;display:block}</style></head><body onload="setTimeout(function(){window.print()},250)"><div class="lab"><h2>Safewave Band</h2><div class="k">vibration alerts for the Deaf &amp; hard-of-hearing</div><img src="'+qr+'" width="200" height="200" alt="QR"><div class="v" style="font-size:15px">'+esc(f.serial||'')+'</div><div class="k">Order <span class="v">'+esc(n)+'</span> · '+esc(o.name||'')+'</div><div class="k">Size <span class="v">'+SIZELABEL[f.size]+'</span> · Firmware <span class="v">'+esc(f.firmware||'—')+'</span></div><div class="k">QC by '+esc(f.signoffBy||'')+' · '+new Date(f.signoffAt||Date.now()).toLocaleDateString()+'</div></div></body></html>');
+  w.document.close();
+}
+function renderInventoryTab(body){
+  let html='<div class="sec-head"><h2>Inventory by location</h2><span class="pill dim">tap to edit</span></div>';
+  html+='<div class="inv-table"><div class="inv-row inv-head"><span>Location</span><span>S</span><span>M</span><span>L</span><span>Total</span></div>';
+  LOCS.forEach(l=>{const k=l[0];html+='<div class="inv-row tap" tabindex="0" onclick="openInvEdit(\''+k+'\')"><span><b>'+esc(l[1])+'</b><br><span class="d" style="font-size:11px">'+esc(l[2])+'</span></span><span>'+(INV[k].S||0)+'</span><span>'+(INV[k].M||0)+'</span><span>'+(INV[k].L||0)+'</span><span><b>'+SIZES.reduce((a,z)=>a+(INV[k][z]||0),0)+'</b></span></div>'});
+  html+='<div class="inv-row inv-tot"><span><b>Network total</b></span><span>'+net('S')+'</span><span>'+net('M')+'</span><span>'+net('L')+'</span><span><b>'+totalNetwork()+'</b></span></div></div>';
+  html+='<div class="note" style="margin-top:12px">Covington ships to customers and clears QC. Pace NY is upstream (2-wk transfer). China is production ('+CHINA_LEAD_MONTHS+'-mo lead). Fulfilling an order or logging a return adjusts Covington automatically.</div>';
+  body.innerHTML=html;
+}
+function openInvEdit(k){invEditLoc=k;const l=LOCS.find(x=>x[0]===k);document.getElementById('ie-h').textContent='Edit '+l[1];document.getElementById('ie-S').value=INV[k].S||0;document.getElementById('ie-M').value=INV[k].M||0;document.getElementById('ie-L').value=INV[k].L||0;closeSheets();openSheet('sh-invedit')}
+function saveInvEdit(){const k=invEditLoc;if(!k)return;INV[k]={S:Number(document.getElementById('ie-S').value)||0,M:Number(document.getElementById('ie-M').value)||0,L:Number(document.getElementById('ie-L').value)||0};saveInventory();closeSheets();renderStock();refreshPulse();toast('✓ Inventory updated')}
+function renderForecastTab(body){
+  let html='<div class="sec-head"><h2>When to start the China order</h2><span class="pill dim">'+CHINA_LEAD_MONTHS+'-mo lead</span></div>';
+  html+='<div class="note" style="margin-bottom:12px">Projected from ~'+totalBurn().toFixed(1)+' bands/wk of Shopify sales. The bar is weeks of network cover; the amber marker is the '+CHINA_LEAD_WEEKS+'-wk China lead + '+SAFETY_WEEKS+'-wk safety. A bar shorter than the marker means order now.</div>';
+  const finite=SIZES.map(netWeeks).filter(isFinite);const HOR=Math.max(60,Math.ceil((finite.length?Math.max.apply(null,finite):60)));
+  SIZES.forEach(z=>{const nw=netWeeks(z);const cb=chinaByWeeks(z);const st=sizeStatus(z);
+    const pct=Math.min(100,(isFinite(nw)?nw:HOR)/HOR*100);const markPct=Math.min(100,(CHINA_LEAD_WEEKS+SAFETY_WEEKS)/HOR*100);
+    html+='<div class="card"><div class="row"><div class="grow"><div class="t">'+SIZELABEL[z]+' · '+net(z)+' network ('+cov(z)+' Covington)</div><div class="d">'+(isFinite(nw)?nw.toFixed(0)+' wk network cover · burn '+BURN[z].toFixed(1)+'/wk':'no sales')+'</div></div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
+      +'<div class="fc-track"><div class="fc-fill" style="width:'+pct+'%"></div><div class="fc-mark" style="left:'+markPct+'%" title="China order-by threshold"></div></div>'
+      +'<div class="d" style="margin-top:9px">'+(cb<=0?'<b style="color:var(--amber)">Order from China now.</b>':'Start China order by <b style="color:var(--text)">'+fmtDate(weeksToDate(cb))+'</b> (~'+Math.round(cb)+' wk).')+(cov(z)<=0?' <b style="color:var(--amber)">Covington is 0 — transfer from Pace to keep shipping.</b>':'')+'</div></div>';
+  });
+  body.innerHTML=html;
+}
+function renderOrdersTab(body){
+  body.innerHTML='<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input id="lookup" type="search" placeholder="Order # or customer name" oninput="renderOrderList(this.value)"></div><div id="order-list"></div><div class="note" style="margin-top:8px">Shopify order + fulfilment status. Full 383-order history and live tracking numbers connect with the read-only Shopify backend.</div>';
+  renderOrderList('');
+}
+function renderOrderList(q){q=(q||'').trim().toLowerCase();const wrap=document.getElementById('order-list');if(!wrap)return;
   const hits=SHOP.orders.filter(o=>!q||o.n.toLowerCase().includes(q)||o.name.toLowerCase().includes(q));
-  if(!hits.length){wrap.innerHTML='<div class="empty"><div class="d">No order matches "'+q+'". Full-history search covers all 383 orders once the Shopify backend is connected.</div></div>';return}
-  hits.forEach(o=>{
-    const shipped=o.ful==='FULFILLED';
-    const c=document.createElement('div');c.className='card tap';c.tabIndex=0;
-    c.innerHTML='<div class="row"><div class="grow"><div class="t">'+o.n+' · '+o.name+'</div><div class="d">'+o.date+' · $'+o.total+' · paid</div></div><span class="pill '+(shipped?'good':'amber')+'">'+o.ful+'</span></div>';
-    c.onclick=()=>toast(o.n+' · '+o.name+' — full profile (band UID, firmware, tickets, emails) merges in with the customer-profile build');
-    wrap.appendChild(c);
-  });
+  wrap.innerHTML=hits.length?hits.map(o=>{const done=isFulfilled(o);const f=FULF[o.n];return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · '+(done?'fulfilled'+(f&&f.serial?' · '+esc(f.serial):''):'awaiting fulfilment')+'</div></div><span class="pill '+(done?'good':'amber')+'">'+(done?'FULFILLED':'OPEN')+'</span></div>'+(!done?'<button class="btn ghost" style="margin-top:9px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill</button>':'')+'</div>'}).join(''):'<div class="empty"><div class="d">No order matches that search.</div></div>';
 }
-let editIdx=-1,editVal=0;
-function openEdit(i){editIdx=i;editVal=SHOP.sizes[i].onHand;
-  document.getElementById('e-title').textContent=SHOP.sizes[i].size;document.getElementById('e-val').textContent=editVal;
-  document.getElementById('e-delta').textContent='';document.querySelectorAll('#e-reason button').forEach(b=>b.classList.remove('on'));openSheet('sh-edit')}
-function bump(n){editVal=Math.max(0,editVal+n);document.getElementById('e-val').textContent=editVal;
-  const d=editVal-SHOP.sizes[editIdx].onHand,el=document.getElementById('e-delta');
-  el.textContent=d===0?'no change':(d>0?'+'+d:d)+' vs on hand ('+SHOP.sizes[editIdx].onHand+')';el.style.color=d>0?'var(--good)':d<0?'var(--amber)':'var(--faint)'}
-function saveEdit(){const d=editVal-SHOP.sizes[editIdx].onHand;const rEl=document.querySelector('#e-reason button.on');const reason=rEl?rEl.dataset.r:null;if(d!==0&&!reason){toast('Pick a reason code — every stock change is logged');return}
-  SHOP.sizes[editIdx].onHand=editVal;closeSheets();renderStock();
-  toast('✓ '+SHOP.sizes[editIdx].size+' set to '+editVal+(d?' ('+reason+')':'')+' — local override, syncs to Shopify post-launch')}
-function openWhy(i){const s=SHOP.sizes[i],w=weeksCover(s);
-  document.getElementById('w-title').textContent=s.size+' band';
-  document.getElementById('w-body').innerHTML=kv('Available to sell',avail(s)+' units')+kv('Sales rate (6-wk avg)',s.burn.toFixed(1)+' / week')+kv('Weeks of cover',w.toFixed(1)+' wk')+kv('Reorder point',reorderPoint(s)+' units')+kv('Projected stockout',fmtDate(stockoutDate(s)))+kv('Transfer order-by (2 wk)',fmtDate(orderByDate(s,LEAD.transferWeeks)))+kv('Remake order-by (8 wk)',fmtDate(orderByDate(s,LEAD.remakeWeeks)));
-  openSheet('sh-why')}
 function kv(k,v){return '<div class="kv"><span>'+k+'</span><b>'+v+'</b></div>'}
 
 /* ================= PULSE ================= */
@@ -869,10 +945,10 @@ function renderPulse(user){
   const ongoing=mine.filter(x=>!x.overdue&&!(x.dueMs!=null&&x.dueMs<=soonCut)).sort(byDue);
   // ops signals everyone should see
   const ops=[];
-  const crit=SHOP.sizes.filter(s=>statusOf(s).key==='crit').sort((a,b)=>weeksCover(a)-weeksCover(b))[0];
-  if(crit){const days=Math.round(weeksCover(crit)*7);ops.push(opsCard('s-stock','amber',avail(crit)+' LEFT',crit.size+' bands: '+avail(crit)+' left — order now','~'+days+' days cover (live Shopify)'))}
-  const unfilled=SHOP.orders.filter(o=>o.ful==='UNFULFILLED');
-  if(unfilled.length)ops.push(opsCard('s-stock','wave','TO SHIP',unfilled.length+' order'+(unfilled.length>1?'s':'')+' to ship',unfilled.map(o=>o.n).join(', ')));
+  const blocks=(typeof stockBlocks==='function')?stockBlocks():[];
+  blocks.forEach(z=>ops.push(opsCard('s-stock','amber','TRANSFER',SIZELABEL[z]+' bands: 0 in Covington','Can’t ship — transfer from Pace ('+(INV.pace[z]||0)+' available)')));
+  const unfilled=(typeof unfulfilledOrders==='function')?unfulfilledOrders():[];
+  if(unfilled.length)ops.push(opsCard('s-stock','wave','TO SHIP',unfilled.length+' order'+(unfilled.length>1?'s':'')+' to fulfill',unfilled.slice(0,5).map(o=>o.n).join(', ')));
   if(!(user.mail&&user.mail.email))ops.push(opsCard('__mail','amber','SET UP','Connect your email','Send from your address + run campaigns'));
   let html='';
   html+=taskGroup('Overdue',overdue);
@@ -890,8 +966,9 @@ function renderPulse(user){
   const total=(CRMA||[]).length,stale=(CRMA||[]).filter(isStale).length,outreach=(CRMA||[]).filter(a=>a.campaign&&a.campaign.status==='active').length;
   const openTk=(typeof TKTS!=='undefined'?TKTS:[]).filter(t=>t.status==='open').length;
   const top=(function(){try{return SafewaveTriage.ranked()[0]}catch(e){return null}})();
+  const stBlk=(typeof stockBlocks==='function')?stockBlocks():[];
   let roll=
-    rtile('s-stock',totalAvail()+' bands',crit?'Stock · '+crit.size+' critical':'Stock · healthy',crit?'amber':'good')
+    rtile('s-stock',totalAvail()+' sellable',stBlk.length?'Stock · '+stBlk.map(z=>SIZELABEL[z]).join('/')+' at 0':'Stock · healthy',stBlk.length?'amber':'good')
     +rtile('s-crm',total+' accounts',stale+' follow-up · '+outreach+' in outreach',stale?'amber':'wave')
     +rtile('s-support',openTk+' open',openTk?'Support tickets':'Support · all clear',openTk?'wave':'good');
   if(user.role==='admin'||user.role==='manager')roll+=rtile('s-build',top?top.id:'Build',top?'Top: '+top.title:'Project triage','wave');
@@ -933,6 +1010,7 @@ function goto(id,btn){
   if(id==='s-crm')renderCRM();
   if(id==='s-build')renderBuild();
   if(id==='s-chat')renderChat();
+  if(id==='s-stock')renderStock();
 }
 
 /* ================= SESSION ================= */
@@ -968,8 +1046,8 @@ function enterApp(user){
   document.getElementById('acc-email').textContent=user.email;
   document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
-  buildNav(user.role);renderPulse(user);renderStock();renderOrders('');renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
-  loadTeam();loadBuildTasks();loadChatChannels();
+  buildNav(user.role);renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
+  loadTeam();loadBuildTasks();loadChatChannels();loadInventory();loadFulfillments();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
@@ -1012,6 +1090,7 @@ function prettyAuthErr(err){
   return (err&&err.message)||'Could not sign in. Please try again.';
 }
 window.addEventListener('load',()=>{
+  if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('/sw.js').catch(()=>{})}
   if(fbReady()){
     firebase.auth().onAuthStateChanged(async u=>{
       if(u){ try{ enterApp(await resolveUser(u)); }catch(e){ enterApp({uid:u.uid,name:u.email.split('@')[0],email:u.email,role:fallbackRole(u.email),fsOff:true}); } }
