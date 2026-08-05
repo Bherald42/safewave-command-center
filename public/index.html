@@ -792,6 +792,7 @@ input[type=date]{color-scheme:dark}
     <span class="pill wave">NOTIFICATIONS</span>
     <h1 style="font-size:20px;margin:11px 0 10px">Alerts</h1>
     <button class="btn" id="notif-enable" style="display:none;margin-bottom:12px" onclick="enableNotifs()">🔔 Enable phone / desktop alerts</button>
+    <div id="notif-test"></div>
     <div id="notif-list"></div>
     <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
   </div>
@@ -1419,8 +1420,24 @@ function openNotifs(){
   body.innerHTML=NOTIF.length?NOTIF.map(n=>{const t=notifAtMs(n);const time=t?new Date(t).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';return '<div class="card tap" tabindex="0" onclick="notifOpen(\''+esc(n.link||'')+'\')"><div class="t">'+esc(n.title)+'</div><div class="d">'+esc(n.body||'')+(time?' · '+time:'')+'</div></div>'}).join(''):'<div class="empty"><div class="d">No notifications yet. New orders and tasks assigned to you show up here.</div></div>';
   notifLastRead=Date.now();try{localStorage.setItem('sw_notif_read_'+CURRENT_USER.uid,String(notifLastRead))}catch(e){}renderNotifBadge();
   const en=document.getElementById('notif-enable');if(en)en.style.display=(window.Notification&&Notification.permission==='default')?'':'none';
+  const tt=document.getElementById('notif-test');
+  if(tt)tt.innerHTML=(CURRENT_USER&&CURRENT_USER.role==='superadmin')?'<div class="card" style="background:var(--surface-2);margin-bottom:12px"><div class="d" style="font-weight:600;color:var(--text);margin-bottom:8px">Test tools <span class="pill dim">super admin</span></div><div class="d" style="margin-bottom:10px">Try the alerts + auto-return flow without Shopify. These write real (clearly-labelled) test records.</div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost" style="flex:1;min-width:120px" onclick="testAlert()">🔔 Test this device</button><button class="btn ghost" style="flex:1;min-width:120px" onclick="simTestOrder()">📦 Fake new order</button><button class="btn ghost" style="flex:1;min-width:120px" onclick="simTestReturn()">↩︎ Fake return</button></div></div>':'';
   openSheet('sh-notif');
 }
+function testAlert(){if(window.Notification&&Notification.permission==='default'){Notification.requestPermission().then(()=>popNotif({title:'🔔 Test alert',body:'Alerts work on this device.',link:'s-pulse'}))}else{popNotif({title:'🔔 Test alert',body:'Alerts work on this device.',link:'s-pulse'})}}
+function simTestOrder(){const n='#TEST-'+Date.now().toString(36).toUpperCase().slice(-4);
+  notify('all','New order '+n,'Test Customer · $150','s-stock');
+  popNotif({title:'New order '+n,body:'Test Customer · $150',link:'s-stock'});
+  LIVEORDERS.unshift({n:n,name:'Test Customer',total:150,date:'today',ful:'UNFULFILLED',email:'',tracking:'',trackingUrl:'',carrier:''});
+  closeSheets();goto('s-stock');stockTab='fulfill';renderStock();refreshPulse();
+  toast('✓ Fake order '+n+' added to Fulfill — try shipping it');}
+function simTestReturn(){const id='RMA-TEST-'+Date.now().toString(36).toUpperCase().slice(-4);
+  const r={id:id,order:'#TEST',serial:'SW-TEST-'+id.slice(-4),size:'M',customer:'Test Customer',status:'requested',source:'test',at:new Date().toISOString()};
+  persistReturn(r);RETURNS[id]=r;
+  notify('all','Return requested · #TEST','Test Customer · band '+r.serial,'s-stock');
+  popNotif({title:'Return requested · #TEST',body:'Test Customer · band '+r.serial,link:'s-stock'});
+  closeSheets();goto('s-stock');stockTab='returns';renderStock();
+  toast('✓ Fake return '+id+' opened — run it through to restock');}
 function notifOpen(link){closeSheets();if(link)goto(link)}
 function enableNotifs(){if(!window.Notification){toast('This browser doesn’t support alerts');return}
   Notification.requestPermission().then(p=>{toast(p==='granted'?'✓ Alerts on — you’ll get new orders + your tasks':'Alerts blocked — turn them on in browser settings');const en=document.getElementById('notif-enable');if(en)en.style.display=(p==='default')?'':'none'})}
