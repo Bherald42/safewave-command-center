@@ -192,7 +192,7 @@ input[type=date]{color-scheme:dark}
 .qc-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
 .qc-row:last-child{border-bottom:0}
 .qc-row input{width:18px;height:18px;accent-color:var(--wave);flex-shrink:0}
-#notif-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--amber);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-b)}
+#notif-badge,#fb-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--amber);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-b)}
 .cmdk{display:none;position:fixed;inset:0;z-index:120;background:rgba(20,30,45,.35);backdrop-filter:blur(3px);align-items:flex-start;justify-content:center;padding:11vh 16px 16px}
 .cmdk.on{display:flex}
 .cmdk-box{width:100%;max-width:580px;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(20,30,50,.22);max-height:74vh;display:flex;flex-direction:column}
@@ -356,6 +356,10 @@ input[type=date]{color-scheme:dark}
     <button class="iconbtn" style="position:relative" aria-label="Notifications" onclick="openNotifs()">
       <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       <span id="notif-badge" style="display:none">0</span>
+    </button>
+    <button class="iconbtn" style="position:relative" aria-label="Send feedback" onclick="openFeedback()">
+      <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span id="fb-badge" style="display:none">0</span>
     </button>
     <button class="who" onclick="openAccountPanel()" aria-label="Account">
       <span class="av" id="who-av">–</span>
@@ -550,6 +554,7 @@ input[type=date]{color-scheme:dark}
     <button class="btn ghost" style="margin-top:14px" onclick="openProfile()">Edit profile</button>
     <button class="btn ghost" style="margin-top:8px" onclick="openMail()">Connect / manage your email</button>
     <button class="btn" id="acc-manage" style="display:none;margin-top:8px" onclick="openUsers()">Manage team &amp; roles</button>
+    <button class="btn ghost" id="acc-feedback" style="display:none;margin-top:8px" onclick="openFeedbackInbox()">Team feedback <span id="acc-fb-count"></span></button>
     <button class="btn ghost" style="margin-top:8px" onclick="doSignOut()">Sign out</button>
   </div>
 </div>
@@ -778,6 +783,31 @@ input[type=date]{color-scheme:dark}
     <div class="note" style="margin:2px 0 10px">Personalise with <b>{{firstName}}</b> and <b>{{company}}</b>. Sends individually to each investor and logs to their record.</div>
     <button class="btn" id="iu-send" onclick="sendInvestorUpdate()">Send update</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-feedback" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">FEEDBACK</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Send feedback</h1>
+    <p class="sub">Goes privately to Brad — ideas, issues and questions to make this platform better.</p>
+    <p class="d" style="font-weight:600;color:var(--text);margin:10px 0 6px">About <span class="pill dim" id="fb-screen">this screen</span></p>
+    <div class="rolepick" id="fb-type"><button data-v="Idea" class="on">💡 Idea</button><button data-v="Issue">🐞 Issue</button><button data-v="Question">❓ Question</button></div>
+    <textarea class="field" id="fb-text" placeholder="What's working, what's not, what would help…" style="min-height:150px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
+    <button class="btn" onclick="sendFeedback()">Send to Brad</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-feedback-inbox" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">TEAM FEEDBACK</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Team feedback</h1>
+    <p class="sub" id="fbx-sub"></p>
+    <div class="chips" id="fbx-filter" style="margin:6px 0 12px"></div>
+    <div id="fbx-list"></div>
   </div>
 </div>
 
@@ -1344,6 +1374,54 @@ function renderKnow(q){q=(q||'').trim();const res=document.getElementById('know-
 }
 function knowRun(i){const it=(window.__knowItems||[])[i];if(it&&it.run)it.run()}
 
+/* ================= FEEDBACK (every screen → Brad, the super admin) ================= */
+let FEEDBACK=[], fbUnsub=null;
+const SCREEN_LABELS={'s-pulse':'Pulse','s-finance':'Financials','s-stock':'Stock','s-support':'Tickets','s-build':'Build','s-chat':'Chat','s-crm':'CRM','s-comply':'Compliance','s-know':'Knowledge'};
+let fbxFilter='open';
+function currentScreenId(){const el=document.querySelector('.screen.on');return el?el.id:'s-pulse'}
+function currentScreenLabel(){return SCREEN_LABELS[currentScreenId()]||'App'}
+function isSuperAdmin(){return !!(CURRENT_USER&&CURRENT_USER.role==='superadmin')}
+function notifySuper(title,body,link){const t=(TEAM||[]).find(x=>(x.email||'').toLowerCase()===SUPER_EMAIL);if(t&&t.uid)notify(t.uid,title,body,link||'')}
+function openFeedback(){if(!CURRENT_USER)return;document.getElementById('fb-screen').textContent=currentScreenLabel();document.getElementById('fb-text').value='';
+  document.querySelectorAll('#fb-type button').forEach((b,i)=>{b.classList.toggle('on',i===0);b.onclick=function(){document.querySelectorAll('#fb-type button').forEach(x=>x.classList.remove('on'));this.classList.add('on')}});
+  closeSheets();openSheet('sh-feedback')}
+function sendFeedback(){const text=document.getElementById('fb-text').value.trim();if(!text){toast('Write your feedback first');return}
+  const type=((document.querySelector('#fb-type button.on')||{}).dataset||{}).v||'Idea';
+  const rec={fromUid:CURRENT_USER.uid,fromName:CURRENT_USER.name||'',fromEmail:CURRENT_USER.email||'',screen:currentScreenId(),screenLabel:currentScreenLabel(),type:type,text:text,status:'open'};
+  if(!hasFirestore()){toast('Not connected — feedback needs the shared cloud');return}
+  rec.createdAt=firebase.firestore.FieldValue.serverTimestamp();
+  firebase.firestore().collection('feedback').add(rec)
+    .then(()=>{notifySuper(type+' · '+rec.screenLabel,(CURRENT_USER.name||'A teammate')+': '+text.slice(0,90),'')})
+    .catch(e=>toast('Send failed — '+((e&&e.code)||'check rules')));
+  closeSheets();toast('✓ Sent to Brad — thank you')}
+function subscribeFeedback(){if(!hasFirestore()||!isSuperAdmin())return;
+  if(fbUnsub){try{fbUnsub()}catch(e){}}
+  try{fbUnsub=firebase.firestore().collection('feedback').orderBy('createdAt','desc').limit(200).onSnapshot(qs=>{
+    FEEDBACK=qs.docs.map(d=>Object.assign({id:d.id},d.data()));renderFeedbackBadge();
+    const sh=document.getElementById('sh-feedback-inbox');if(sh&&sh.classList.contains('on'))renderFeedbackInbox();
+  },e=>{})}catch(e){}}
+function fbOpenCount(){return FEEDBACK.filter(f=>f.status!=='resolved').length}
+function renderFeedbackBadge(){const b=document.getElementById('fb-badge');if(b){const c=fbOpenCount();b.textContent=c>9?'9+':String(c);b.style.display=(isSuperAdmin()&&c)?'flex':'none'}
+  const ac=document.getElementById('acc-fb-count');if(ac){const c=fbOpenCount();ac.textContent=c?'· '+c+' open':''}}
+function openFeedbackInbox(){fbxFilter='open';closeSheets();renderFeedbackInbox();openSheet('sh-feedback-inbox')}
+function fbxTab(v,l,n){return '<button class="chip'+(fbxFilter===v?' on':'')+'" onclick="fbxFilter=\''+v+'\';renderFeedbackInbox()">'+l+(n!=null?' · '+n:'')+'</button>'}
+function renderFeedbackInbox(){const open=fbOpenCount();
+  document.getElementById('fbx-sub').textContent=FEEDBACK.length?(open+' open · '+FEEDBACK.length+' total'):'No feedback yet — it lands here when the team taps 💬 on any screen.';
+  document.getElementById('fbx-filter').innerHTML=fbxTab('open','Open',open)+fbxTab('all','All',FEEDBACK.length)+fbxTab('resolved','Resolved',FEEDBACK.length-open);
+  const list=FEEDBACK.filter(f=>fbxFilter==='all'?true:(fbxFilter==='resolved'?f.status==='resolved':f.status!=='resolved'));
+  document.getElementById('fbx-list').innerHTML=list.length?list.map(fbxCard).join(''):'<div class="empty"><div class="ico">💬</div><div class="t">Nothing here</div><div class="d">When the team taps the 💬 button on any screen, it shows up here.</div></div>'}
+function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMillis():0;const time=t?new Date(t).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';const resolved=f.status==='resolved';
+  const tp=({Idea:'💡',Issue:'🐞',Question:'❓'})[f.type]||'💬';
+  return '<div class="card"><div class="row"><div class="grow"><div class="t">'+tp+' '+esc(f.type||'Feedback')+' · '+esc(f.screenLabel||'')+'</div><div class="d">'+esc(f.fromName||f.fromEmail||'Teammate')+(time?' · '+time:'')+'</div></div><span class="pill '+(resolved?'good':'wave')+'">'+(resolved?'RESOLVED':'OPEN')+'</span></div>'
+    +'<div class="note" style="margin-top:9px;white-space:pre-wrap">'+esc(f.text||'')+'</div>'
+    +'<div class="row" style="gap:8px;margin-top:10px">'
+      +(resolved?'<button class="btn ghost" style="flex:1" onclick="setFeedbackStatus(\''+f.id+'\',\'open\')">Reopen</button>':'<button class="btn ghost" style="flex:1" onclick="setFeedbackStatus(\''+f.id+'\',\'resolved\')">Mark resolved</button>')
+      +(f.screen?'<button class="btn ghost" style="flex:1" onclick="closeSheets();goto(\''+esc(f.screen)+'\')">Go to '+esc(f.screenLabel||'screen')+'</button>':'')
+      +(f.fromEmail?'<button class="btn ghost" style="flex:0 0 auto" onclick="replyFeedback(decodeURIComponent(\''+encodeURIComponent(f.fromEmail)+'\'))">Reply</button>':'')
+    +'</div></div>'}
+function setFeedbackStatus(id,st){if(hasFirestore())firebase.firestore().collection('feedback').doc(id).set({status:st},{merge:true}).catch(e=>toast('Update failed — '+((e&&e.code)||'')));const f=FEEDBACK.find(x=>x.id===id);if(f)f.status=st;renderFeedbackInbox();renderFeedbackBadge()}
+function replyFeedback(email){if(!email)return;window.location.href='mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent('Re: your Safewave feedback')}
+
 /* ================= NAV / ROUTER ================= */
 let CURRENT_USER=null;
 const FINANCE_NAV={id:'s-finance',label:'Financials',roles:[],svg:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>'};
@@ -1409,11 +1487,14 @@ function enterApp(user){
   buildNav(user.role);renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
   loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();loadPOs();subscribeReturns();subscribeNotifications();subscribeOrders();
   if(canFundraise())loadRaise().then(()=>{refreshPulse();if(crmTab==='fundraise')renderCRM();});
+  if(isSuperAdmin())subscribeFeedback();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
 function showLogin(){document.getElementById('app').style.display='none';document.getElementById('login').hidden=false}
-function openAccountPanel(){const m=CURRENT_USER&&CURRENT_USER.mail;const el=document.getElementById('acc-mail');if(el){el.textContent=m&&m.email?m.email:'Not connected';el.style.color=m&&m.email?'var(--good)':'var(--faint)'}openSheet('sh-account')}
+function openAccountPanel(){const m=CURRENT_USER&&CURRENT_USER.mail;const el=document.getElementById('acc-mail');if(el){el.textContent=m&&m.email?m.email:'Not connected';el.style.color=m&&m.email?'var(--good)':'var(--faint)'}
+  const fb=document.getElementById('acc-feedback');if(fb){fb.style.display=isSuperAdmin()?'block':'none';renderFeedbackBadge()}
+  openSheet('sh-account')}
 
 /* ================= AUTH ================= */
 let MODE='signin';
