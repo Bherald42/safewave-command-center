@@ -2051,6 +2051,7 @@ function renderFundraise(v){
   let html='<div class="card"><div class="row"><div class="grow"><div class="t">'+(RAISE.round?esc(RAISE.round)+' round':'Round')+'</div><div class="d">'+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target)+' target':' committed')+' · '+s.investors+' investor'+(s.investors!==1?'s':'')+'</div></div><a onclick="editRaiseTarget()">Set target</a></div>'
     +'<div class="progress" style="margin-top:11px;height:10px"><i style="width:'+pct+'%;background:var(--good)"></i></div>'
     +'<div class="tiles" style="margin-top:12px"><div class="tile"><div class="n" style="color:var(--good)">'+fmtMoney(s.wired)+'</div><div class="l">Wired</div></div><div class="tile"><div class="n">'+fmtMoney(s.hard)+'</div><div class="l">Committed</div></div><div class="tile"><div class="n" style="color:var(--muted)">'+fmtMoney(s.soft)+'</div><div class="l">Soft</div></div></div></div>';
+  html+=capTableCard();
   html+=dataRoomCard();
   html+='<div class="row" style="gap:8px;margin:14px 0;flex-wrap:wrap"><button class="btn" style="flex:1;min-width:150px" onclick="openAddInvestor()">＋ Add investor</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="newInvestorCampaign()">✉️ Investor outreach</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="openInvestorUpdate()">📣 Send update</button></div>';
   const all=raiseAccounts();
@@ -2069,6 +2070,22 @@ function renderFundraise(v){
 let raiseView='pipeline';
 function raiseViewBtn(v,l){return '<button class="chip'+(raiseView===v?' on':'')+'" onclick="raiseView=\''+v+'\';renderCRM()">'+esc(l)+'</button>'}
 function raiseStageOf(a){if(a.raiseStage)return a.raiseStage;const m={wired:'Wired',hard:'Committed',passed:'Passed',soft:'Pitched'};return m[a.commitStatus||'']||'Prospect'}
+/* ---- Cap table math: commitments → ownership %, price/share, post-money ---- */
+function capTableCard(){const s=raiseStats();const pre=Number(RAISE.preMoney)||0,shares=Number(RAISE.shares)||0;
+  const amount=s.committed;const post=pre+amount;const price=shares?pre/shares:0;
+  const holders=raiseAccounts().filter(a=>(Number(a.commit)||0)>0&&(a.commitStatus==='hard'||a.commitStatus==='wired')).slice().sort((a,b)=>(Number(b.commit)||0)-(Number(a.commit)||0));
+  const newPct=post?amount/post*100:0;const foundersPct=Math.max(0,100-newPct);
+  let rows='';holders.forEach(a=>{const c=Number(a.commit)||0;const pct=post?c/post*100:0;const sh=price?Math.round(c/price):0;
+    rows+='<div class="kv"><span>'+esc(displayName(a))+'</span><b>'+fmtMoney(c)+' · '+pct.toFixed(1)+'%'+(sh?' · '+sh.toLocaleString()+' sh':'')+'</b></div>';});
+  return '<div class="card"><div class="sec-head"><h2>Cap table</h2><a onclick="editCapInputs()">Edit round</a></div>'
+    +'<div class="tiles" style="margin-bottom:10px"><div class="tile"><div class="n">'+(pre?fmtMoney(pre):'—')+'</div><div class="l">Pre-money</div></div><div class="tile"><div class="n">'+(pre?fmtMoney(post):'—')+'</div><div class="l">Post-money</div></div><div class="tile"><div class="n">'+(price?fmtMoney(price):'—')+'</div><div class="l">Price / share</div></div></div>'
+    +(pre?'<div class="kv"><span style="font-weight:700;color:var(--text)">Existing / founders</span><b>'+foundersPct.toFixed(1)+'%'+(shares?' · '+shares.toLocaleString()+' sh':'')+'</b></div>'+rows
+        +'<div class="note" style="margin-top:9px">New-investor ownership = check ÷ post-money, on committed &amp; wired checks ('+fmtMoney(amount)+'). Add existing shares for a per-share price.</div>'
+      :'<div class="d" style="color:var(--faint)">Set a pre-money valuation to model ownership %, post-money and price per share for this round.</div>')
+    +'</div>';}
+function editCapInputs(){const p=prompt('Pre-money valuation ($):',RAISE.preMoney||'');if(p===null)return;RAISE.preMoney=Number((''+p).replace(/[^0-9.]/g,''))||0;
+  const sh=prompt('Existing shares outstanding (optional — enables price per share):',RAISE.shares||'');if(sh!==null)RAISE.shares=Number((''+sh).replace(/[^0-9.]/g,''))||0;
+  saveRaise();renderCRM()}
 function dataRoomCard(){const docs=RAISE.docs||[];
   return '<div class="card"><div class="sec-head"><h2>Data room</h2><a onclick="addRaiseDoc()">＋ Add link</a></div>'
     +(docs.length?docs.map((d,i)=>'<div class="kv"><span><a href="'+esc(d.url)+'" target="_blank" rel="noopener" style="color:var(--wave);font-weight:600">'+esc(d.label||d.url)+' ↗</a></span><a onclick="rmRaiseDoc('+i+')" style="color:var(--faint);cursor:pointer">✕</a></div>').join('')
