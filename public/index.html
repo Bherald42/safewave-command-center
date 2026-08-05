@@ -974,7 +974,12 @@ function renderPulse(user){
   const soonCut=todayMs()+3*864e5;
   const overdue=mine.filter(x=>x.overdue).sort(byDue);
   const soon=mine.filter(x=>!x.overdue&&x.dueMs!=null&&x.dueMs<=soonCut).sort(byDue);
-  const ongoing=mine.filter(x=>!x.overdue&&!(x.dueMs!=null&&x.dueMs<=soonCut)).sort(byDue);
+  const ongoing=mine.filter(x=>!x.overdue&&x.dueMs!=null&&x.dueMs>soonCut).sort(byDue);
+  // the rotting law: my open records with no next step (invisible risk)
+  const rot=collectRotting();
+  const myRotTasks=rot.filter(x=>(x.kind==='Build'||x.kind==='Ticket')&&isMine(x.who));
+  const myDealRot=rot.filter(x=>x.kind==='CRM'&&isMine(x.who)).length;
+  const teamDealRot=rot.filter(x=>x.kind==='CRM').length;
   // ops signals everyone should see
   const ops=[];
   const blocks=(typeof stockBlocks==='function')?stockBlocks():[];
@@ -984,16 +989,24 @@ function renderPulse(user){
   if(!(user.mail&&user.mail.email))ops.push(opsCard('__mail','amber','SET UP','Connect your email','Send from your address + run campaigns'));
   let html='';
   html+=taskGroup('Overdue',overdue);
+  // needs a next step — my rotting records (invisible risk, surfaced loud)
+  if(myRotTasks.length||myDealRot){
+    html+='<div class="pulse-sub-h">Needs a next step · '+(myRotTasks.length+(myDealRot?1:0))+'</div>';
+    html+=myRotTasks.map(rottingCard).join('');
+    if(myDealRot)html+='<div class="card tap" tabindex="0" onclick="goto(\'s-crm\')"><div class="row"><div class="grow"><div class="t">'+myDealRot+' of your deals have no next step</div><div class="d">Give each one a next action + date so it can\'t stall</div></div><span class="pill amber">SET NEXT STEP</span></div></div>';
+  }
   html+=taskGroup('Due soon',soon);
   html+=taskGroup('Ongoing',ongoing);
   if(ops.length)html+='<div class="pulse-sub-h">Ops signals</div>'+ops.join('');
-  document.getElementById('pulse-attn').innerHTML=html||'<div class="empty"><div class="ico">✓</div><div class="t">You\'re clear</div><div class="d">Nothing assigned to you is due, and ops are healthy. Nice.</div></div>';
-  document.getElementById('pulse-actcount').textContent=(overdue.length+soon.length)?(overdue.length+soon.length)+' need you':(mine.length?mine.length+' ongoing':'clear');
-  // team past due — everyone sees, to check in / offer help
+  document.getElementById('pulse-attn').innerHTML=html||'<div class="empty"><div class="ico">✓</div><div class="t">You\'re clear</div><div class="d">Nothing assigned to you is due, nothing is stalling, and ops are healthy. Nice.</div></div>';
+  const needYou=overdue.length+soon.length+myRotTasks.length+(myDealRot?1:0);
+  document.getElementById('pulse-actcount').textContent=needYou?needYou+' need you':(mine.length?mine.length+' ongoing':'clear');
+  // team past due + stalling — everyone sees, to check in / offer help
   const teamOver=tasks.filter(x=>x.overdue).sort(byDue);
-  document.getElementById('pulse-team').innerHTML=teamOver.length?teamOver.map(x=>'<div class="card tap" tabindex="0" onclick="goto(\''+x.screen+'\')"><div class="row"><div class="grow"><div class="t">'+esc(x.title)+'</div><div class="d">'+esc(x.who||'Unassigned')+' · '+esc(x.kind)+'</div></div><span class="pill amber">'+esc(dueMeta(x.dueMs).label||'past due')+'</span></div></div>').join('')
-    :'<div class="d" style="color:var(--faint)">Nothing past due across the team. 🎉</div>';
-  document.getElementById('pulse-team-count').textContent=teamOver.length?teamOver.length+' overdue':'all clear';
+  let teamHtml=teamOver.map(x=>'<div class="card tap" tabindex="0" onclick="goto(\''+x.screen+'\')"><div class="row"><div class="grow"><div class="t">'+esc(x.title)+'</div><div class="d">'+esc(x.who||'Unassigned')+' · '+esc(x.kind)+'</div></div><span class="pill amber">'+esc(dueMeta(x.dueMs).label||'past due')+'</span></div></div>').join('');
+  if(canMoney&&teamDealRot)teamHtml+='<div class="card tap" tabindex="0" onclick="goto(\'s-crm\')"><div class="row"><div class="grow"><div class="t">'+teamDealRot+' open deals have no next step</div><div class="d">Across the team — assign an owner + next action</div></div><span class="pill dim">STALLING</span></div></div>';
+  document.getElementById('pulse-team').innerHTML=teamHtml||'<div class="d" style="color:var(--faint)">Nothing past due or stalling across the team. 🎉</div>';
+  document.getElementById('pulse-team-count').textContent=teamOver.length?teamOver.length+' overdue':(teamDealRot&&canMoney?teamDealRot+' stalling':'all clear');
   // across the business rollups
   const total=(CRMA||[]).length,stale=(CRMA||[]).filter(isStale).length,outreach=(CRMA||[]).filter(a=>a.campaign&&a.campaign.status==='active').length;
   const openTk=(typeof TKTS!=='undefined'?TKTS:[]).filter(t=>t.status==='open').length;
@@ -1348,6 +1361,19 @@ function collectTasks(){const out=[];const t=todayMs();
   (CRMA||[]).filter(a=>a.dueAt&&a.stage!=='Won'&&a.stage!=='Lost').forEach(a=>{const dm=dayMs(a.dueAt);out.push({who:a.owner||'',title:(a.nextStep?a.nextStep+' — ':'Follow up: ')+displayName(a),dueMs:dm,screen:'s-crm',kind:'CRM',overdue:dm!=null&&dm<t})});
   return out;
 }
+/* The rotting law: open records with NO next action + date. These are invisible
+   risk, so they surface loudly until someone gives them a next step. */
+function collectRotting(){const out=[];
+  BUILDT.filter(t=>t.status!=='done'&&!t.due).forEach(t=>out.push({kind:'Build',id:t.id,title:t.title,who:t.assignee||''}));
+  (typeof TKTS!=='undefined'?TKTS:[]).filter(t=>t.status==='open'&&!t.due).forEach(t=>out.push({kind:'Ticket',id:t.id,title:t.title,who:t.assignee||''}));
+  (CRMA||[]).filter(a=>a.stage!=='Won'&&a.stage!=='Lost'&&!a.dueAt).forEach(a=>out.push({kind:'CRM',id:a.id,title:displayName(a),who:a.owner||''}));
+  return out;
+}
+function openBuildFromPulse(id){goto('s-build');openBuildTask(id)}
+function openTicketFromPulse(id){goto('s-support');openTicket(id)}
+function openAcctFromPulse(id){goto('s-crm');openAcct(id)}
+function rottingCard(x){const open=x.kind==='Build'?"openBuildFromPulse('"+x.id+"')":x.kind==='Ticket'?"openTicketFromPulse('"+x.id+"')":"openAcctFromPulse('"+x.id+"')";
+  return '<div class="card tap" tabindex="0" onclick="'+open+'"><div class="row"><div class="grow"><div class="t">'+esc(x.title)+'</div><div class="d">'+esc(x.kind)+(x.who&&x.who!=='Unassigned'?' · '+esc(x.who):'')+'</div></div><span class="pill amber">SET NEXT STEP</span></div></div>'}
 
 /* team chat (chat_channels/{ch}/messages) — real-time */
 let chatChannels=['general','sales','build'], chatChannel='general', chatUnsub=null, CHATMSGS=[];
