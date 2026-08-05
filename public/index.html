@@ -1177,7 +1177,7 @@ function printLabel(n){const f=FULF[n];if(!f)return;const o=ordersList().find(x=
   w.document.close();
 }
 function renderInventoryTab(body){
-  let html='<div class="sec-head"><h2>Inventory by location</h2><span class="pill dim">tap to edit</span></div>';
+  let html='<div class="sec-head"><h2>Inventory by location</h2><a onclick="exportInventory()">⬇︎ CSV</a></div>';
   html+='<div class="inv-table"><div class="inv-row inv-head"><span>Location</span><span>S</span><span>M</span><span>L</span><span>Total</span></div>';
   LOCS.forEach(l=>{const k=l[0];html+='<div class="inv-row tap" tabindex="0" onclick="openInvEdit(\''+k+'\')"><span><b>'+esc(l[1])+'</b><br><span class="d" style="font-size:11px">'+esc(l[2])+'</span></span><span>'+(INV[k].S||0)+'</span><span>'+(INV[k].M||0)+'</span><span>'+(INV[k].L||0)+'</span><span><b>'+SIZES.reduce((a,z)=>a+(INV[k][z]||0),0)+'</b></span></div>'});
   html+='<div class="inv-row inv-tot"><span><b>Network total</b></span><span>'+net('S')+'</span><span>'+net('M')+'</span><span>'+net('L')+'</span><span><b>'+totalNetwork()+'</b></span></div></div>';
@@ -1200,7 +1200,7 @@ function renderForecastTab(body){
   body.innerHTML=html;
 }
 function renderOrdersTab(body){
-  body.innerHTML='<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input id="lookup" type="search" placeholder="Order # or customer name" oninput="renderOrderList(this.value)"></div><div id="order-list"></div><div class="note" style="margin-top:8px">Shopify order + fulfilment status. Full 383-order history and live tracking numbers connect with the read-only Shopify backend.</div>';
+  body.innerHTML='<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input id="lookup" type="search" placeholder="Order # or customer name" oninput="renderOrderList(this.value)"></div><button class="btn ghost" style="margin-bottom:12px" onclick="exportOrders()">⬇︎ Export orders CSV</button><div id="order-list"></div><div class="note" style="margin-top:8px">Shopify order + fulfilment status. Live orders + tracking flow in from the Shopify webhook.</div>';
   renderOrderList('');
 }
 function renderOrderList(q){q=(q||'').trim().toLowerCase();const wrap=document.getElementById('order-list');if(!wrap)return;
@@ -1983,7 +1983,7 @@ function renderPipelineView(v){
   v.innerHTML='<div class="chips">'+viewBtn('pipeline','Pipeline')+viewBtn('list','List')+viewBtn('attention','Follow-up · '+stale)+'</div>'
     +'<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input type="search" placeholder="Search accounts, owners, locations" value="'+esc(crmQ)+'" oninput="crmQ=this.value;renderCrmMain()"></div>'
     +'<div class="chips">'+sel('Owner',crmOwner,owners,'crmOwner')+sel('List',crmBoard,boards,'crmBoard')+(tags.length?sel('Tag',crmTag,tags,'crmTag'):'')+'</div>'
-    +'<button class="btn ghost" style="margin-bottom:14px" onclick="openAddAcct()">＋ Add account</button>'
+    +'<div class="row" style="gap:8px;margin-bottom:14px"><button class="btn ghost" style="flex:1" onclick="openAddAcct()">＋ Add account</button><button class="btn ghost" style="flex:0 0 auto" onclick="exportPipeline()">⬇︎ CSV</button></div>'
     +'<div id="crm-main"></div>';
   renderCrmMain();
 }
@@ -2516,6 +2516,16 @@ document.addEventListener('keydown',function(e){
   else if(e.key==='ArrowUp'){e.preventDefault();cmdkSel=Math.max(0,cmdkSel-1);cmdkPaint();cmdkScroll()}
   else if(e.key==='Enter'){e.preventDefault();cmdkRun(cmdkSel)}
 });
+
+/* ================= CSV EXPORT (reports) ================= */
+function csvCell(v){v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function exportCSV(filename,header,rows){
+  const lines=[header].concat(rows).map(r=>r.map(csvCell).join(','));
+  try{const blob=new Blob([lines.join('\n')],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url)},120);toast('✓ Exported '+filename)}catch(e){toast('Export not supported here')}
+}
+function exportPipeline(){const rows=(CRMA||[]).map(a=>[displayName(a),a.owner||'',a.stage||'New',a.board||'',a.email||'',a.phone||'',a.location||'',(a.metrics&&a.metrics.mrr)||'',a.dueAt||'',a.nextStep||'']);exportCSV('safewave-pipeline.csv',['Account','Owner','Stage','List','Email','Phone','Location','MRR','Due','Next step'],rows)}
+function exportOrders(){const rows=ordersList().map(o=>{const f=FULF[o.n];return [o.n,o.name||'',o.date||'',o.total||'',isFulfilled(o)?'Fulfilled':'Open',(f&&f.serial)||'',(f&&f.tracking)||o.tracking||'']});exportCSV('safewave-orders.csv',['Order','Customer','Date','Total','Status','Band serial','Tracking'],rows)}
+function exportInventory(){const rows=[];LOCS.forEach(l=>{const k=l[0];rows.push([l[1],INV[k].S||0,INV[k].M||0,INV[k].L||0,SIZES.reduce((a,z)=>a+(INV[k][z]||0),0)])});rows.push(['Network total',net('S'),net('M'),net('L'),totalNetwork()]);exportCSV('safewave-inventory.csv',['Location','Small','Medium','Large','Total'],rows)}
 
 /* ================= THEME (light default, dark optional) ================= */
 function currentTheme(){return document.documentElement.getAttribute('data-theme')||'light'}
