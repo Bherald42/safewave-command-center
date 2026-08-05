@@ -396,9 +396,16 @@ input[type=date]{color-scheme:dark}
 
       <div class="tiles" id="pulse-kpis" style="margin-bottom:18px"></div>
 
+      <div id="pulse-streak" style="margin-bottom:18px"></div>
+
       <div class="sec">
         <div class="sec-head"><h2>Your action items</h2><span class="pill dim" id="pulse-actcount"></span></div>
         <div id="pulse-attn"></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head"><h2>Team pulse</h2><span class="pill dim">who's driving it</span></div>
+        <div class="tiles" id="pulse-leaders"></div>
       </div>
 
       <div class="sec">
@@ -1377,6 +1384,7 @@ function renderPulse(user){
   if(financeAllowed()&&financeData){const b=financeBurn(),net=financeMRR()-b.total;roll+=rtile('s-finance',fmtMoney(net)+'/mo',net>=0?'Financials · net positive':'Financials · burn',net>=0?'good':'amber')}
   if(canMoney){const rs=raiseStats();if(rs.investors||rs.target){const pct=rs.target?Math.round(rs.committed/rs.target*100):0;const lbl=(RAISE.round?RAISE.round+' · ':'Raise · ')+(rs.target?pct+'% of '+fmtMoney(rs.target):fmtMoney(rs.committed)+' committed');roll+=raiseTile(fmtMoney(rs.committed),lbl,rs.target&&pct>=100?'good':'wave',rs.target?pct:0);}}
   document.getElementById('pulse-roll').innerHTML=roll;
+  renderTeamPulse(user);
 }
 function rtile(to,n,l,pill){return '<div class="tile tap" tabindex="0" onclick="goto(\''+to+'\')"><div class="n" style="font-size:17px">'+esc(n)+'</div><div class="l"><span class="pill '+pill+'" style="font-size:9px;padding:1px 6px">•</span> '+esc(l)+'</div></div>'}
 function raiseTile(n,l,pill,pct){return '<div class="tile tap" tabindex="0" onclick="goRaise()"><div class="n" style="font-size:17px">'+esc(n)+'</div><div class="l"><span class="pill '+pill+'" style="font-size:9px;padding:1px 6px">•</span> '+esc(l)+'</div>'+(pct?'<div class="progress" style="margin-top:7px;height:5px"><i style="width:'+Math.min(100,pct)+'%;background:var(--'+pill+')"></i></div>':'')+'</div>'}
@@ -1431,7 +1439,9 @@ function sendFeedback(){const text=document.getElementById('fb-text').value.trim
   if(!hasFirestore()){toast('Not connected — feedback needs the shared cloud');return}
   rec.createdAt=firebase.firestore.FieldValue.serverTimestamp();
   firebase.firestore().collection('feedback').add(rec)
-    .then(()=>{notifySuper(type+' · '+rec.screenLabel,(CURRENT_USER.name||'A teammate')+': '+text.slice(0,90),'')})
+    .then(()=>{notifySuper(type+' · '+rec.screenLabel,(CURRENT_USER.name||'A teammate')+': '+text.slice(0,90),'');
+      firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({feedbackCount:firebase.firestore.FieldValue.increment(1)},{merge:true}).catch(()=>{});
+      CURRENT_USER.feedbackCount=(CURRENT_USER.feedbackCount||0)+1;const me=(TEAM||[]).find(t=>t.uid===CURRENT_USER.uid);if(me)me.feedbackCount=(me.feedbackCount||0)+1;refreshPulse();})
     .catch(e=>toast('Send failed — '+((e&&e.code)||'check rules')));
   fbShot=null;closeSheets();toast('✓ Sent to Brad — thank you')}
 function subscribeFeedback(){if(!hasFirestore()||!isSuperAdmin())return;
@@ -1603,6 +1613,7 @@ function enterApp(user){
   loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();loadPOs();subscribeReturns();subscribeNotifications();subscribeOrders();
   if(canFundraise())loadRaise().then(()=>{refreshPulse();if(crmTab==='fundraise')renderCRM();});
   if(isSuperAdmin())subscribeFeedback();
+  recordActivity();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
@@ -1838,7 +1849,7 @@ function dueMeta(ms){if(ms==null)return {label:'',cls:'dim',overdue:false,soon:f
 let TEAM=[];
 async function loadTeam(){
   if(!hasFirestore()){TEAM=CURRENT_USER?[{uid:CURRENT_USER.uid,name:CURRENT_USER.name,email:CURRENT_USER.email,role:CURRENT_USER.role}]:[];return}
-  try{const qs=await firebase.firestore().collection('users').get();TEAM=qs.docs.map(d=>{const u=d.data()||{};return {uid:d.id,name:u.name||(u.email||'').split('@')[0]||d.id,email:u.email||'',role:u.role||'member'}}).sort((a,b)=>a.name.localeCompare(b.name))}catch(e){TEAM=[]}
+  try{const qs=await firebase.firestore().collection('users').get();TEAM=qs.docs.map(d=>{const u=d.data()||{};return {uid:d.id,name:u.name||(u.email||'').split('@')[0]||d.id,email:u.email||'',role:u.role||'member',streak:u.streak||0,bestStreak:u.bestStreak||0,activeDays:u.activeDays||0,feedbackCount:u.feedbackCount||0}}).sort((a,b)=>a.name.localeCompare(b.name))}catch(e){TEAM=[]}
   if(CURRENT_USER&&!TEAM.some(t=>t.uid===CURRENT_USER.uid))TEAM.unshift({uid:CURRENT_USER.uid,name:CURRENT_USER.name,email:CURRENT_USER.email,role:CURRENT_USER.role});
   refreshPulse();
 }
@@ -2088,6 +2099,46 @@ function collectRotting(){const out=[];
   (typeof TKTS!=='undefined'?TKTS:[]).filter(t=>t.status==='open'&&!t.due).forEach(t=>out.push({kind:'Ticket',id:t.id,title:t.title,who:t.assignee||''}));
   (CRMA||[]).filter(a=>a.stage!=='Won'&&a.stage!=='Lost'&&!a.dueAt).forEach(a=>out.push({kind:'CRM',id:a.id,title:displayName(a),who:a.owner||''}));
   return out;
+}
+/* ===== Streaks & Team pulse — a little fuel to keep everyone coming back ===== */
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+async function recordActivity(){
+  if(!hasFirestore()||!CURRENT_USER)return;
+  try{
+    const ref=firebase.firestore().collection('users').doc(CURRENT_USER.uid);
+    const snap=await ref.get();const d=snap.exists?snap.data():{};
+    const today=ymd(new Date());let streak=d.streak||0,best=d.bestStreak||0,days=d.activeDays||0;
+    if(d.lastActive!==today){
+      const yest=ymd(new Date(Date.now()-864e5));
+      streak=(d.lastActive===yest)?streak+1:1;best=Math.max(best,streak);days=days+1;
+      await ref.set({lastActive:today,streak:streak,bestStreak:best,activeDays:days},{merge:true});
+    }
+    CURRENT_USER.streak=streak;CURRENT_USER.bestStreak=best;CURRENT_USER.activeDays=days;
+    const me=(TEAM||[]).find(t=>t.uid===CURRENT_USER.uid);if(me){me.streak=streak;me.bestStreak=best;me.activeDays=days}
+    refreshPulse();
+  }catch(e){}
+}
+function outstandingByPerson(){const map={};collectTasks().forEach(x=>{if(!x.who)return;const k=x.who;if(!map[k])map[k]={open:0,overdue:0};map[k].open++;if(x.overdue)map[k].overdue++});return map}
+function renderTeamPulse(user){
+  const sEl=document.getElementById('pulse-streak');
+  if(sEl){const s=user.streak||0,best=user.bestStreak||0;
+    sEl.innerHTML='<div class="card" style="display:flex;align-items:center;gap:14px;margin:0">'
+      +'<div style="font-size:30px;line-height:1">'+(s>0?'🔥':'✨')+'</div>'
+      +'<div class="grow" style="min-width:0"><div class="t">'+(s>0?(s+'-day streak'):'Start your streak today')+'</div>'
+      +'<div class="d">'+(s>0?('Personal best '+best+' day'+(best!==1?'s':'')+' · come back tomorrow to keep it alive'):'Open the app each day to build a streak')+'</div></div>'
+      +(s>=5?'<span class="pill good">🏆 on fire</span>':s>=3?'<span class="pill wave">rolling</span>':'')+'</div>';}
+  const el=document.getElementById('pulse-leaders');if(!el)return;
+  const team=(TEAM||[]).filter(t=>t.name);const out=outstandingByPerson();
+  const first=n=>(''+(n||'')).split(' ')[0]||n;
+  const active=team.slice().sort((a,b)=>(b.streak||0)-(a.streak||0)||(b.activeDays||0)-(a.activeDays||0))[0];
+  const reporter=team.slice().sort((a,b)=>(b.feedbackCount||0)-(a.feedbackCount||0))[0];
+  let plate=null,plateN=0;Object.keys(out).forEach(k=>{if(out[k].open>plateN){plateN=out[k].open;plate=k}});
+  const tile=(emoji,name,label)=>'<div class="tile"><div class="n" style="font-size:15px">'+emoji+' '+esc(first(name)||'—')+'</div><div class="l">'+esc(label)+'</div></div>';
+  let html='';
+  if(active&&(active.streak||active.activeDays))html+=tile('🔥',active.name,'Most active · '+(active.streak||0)+'-day streak');
+  if(reporter&&reporter.feedbackCount)html+=tile('💬',reporter.name,'Top reporter · '+reporter.feedbackCount+' sent');
+  if(plate)html+=tile('🎯',plate,'Most on their plate · '+plateN+' open'+(out[plate].overdue?' ('+out[plate].overdue+' overdue)':''));
+  el.innerHTML=html||'<div class="d" style="color:var(--faint)">Activity, feedback and workload leaders show here as the team gets rolling. Open the app daily and your streak starts counting.</div>';
 }
 function openBuildFromPulse(id){goto('s-build');openBuildTask(id)}
 function openTicketFromPulse(id){goto('s-support');openTicket(id)}
