@@ -284,6 +284,19 @@ input[type=date]{color-scheme:dark}
 .who .nm small{color:var(--faint);font-size:10px;display:block}
 
 .wrap{max-width:1600px;margin:0 auto}
+.crow{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);margin-bottom:6px;cursor:pointer}
+.crow:hover{border-color:var(--wave)}
+.crow-av{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-weight:700;font-size:11px;flex-shrink:0}
+.crow-main{min-width:0;flex:1}
+.crow-nm{font-weight:600;font-size:14px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow-sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.cgroup{margin-bottom:12px}
+.cgroup-h{display:flex;align-items:center;gap:9px;width:100%;background:none;border:0;border-bottom:1px solid var(--line);padding:9px 2px;cursor:pointer;color:var(--text)}
+.cg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.cg-name{font-family:var(--font-d);font-weight:700;font-size:15px}
+.cg-caret{margin-left:auto;color:var(--muted);font-size:13px}
+.cgroup-body{padding-top:8px}
 .screen{display:none;padding:20px 16px 30px}
 .screen.on{display:block}
 
@@ -2374,7 +2387,7 @@ function fundraiseCard(a){const cm=COMMIT_META[a.commitStatus]||{label:raiseStag
   return '<div class="card tap" tabindex="0" onclick="openAcct(\''+a.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(displayName(a))+'</div><div class="d">'+[esc(a.owner&&a.owner!=='Unassigned'?a.owner:''),a.nextStep?esc(a.nextStep):'',dm.label].filter(Boolean).join(' · ')+'</div></div><div style="text-align:right"><div class="mono" style="font-weight:600">'+(c?fmtMoney(c):'—')+'</div><span class="pill '+cm.pill+'">'+cm.label+'</span></div></div></div>'}
 function crmSetView(x){crmView=x;crmDrill=null;renderCRM()}
 function crmBar(){const b=(x,l)=>'<button class="chip'+(crmView===x&&!crmDrill?' on':'')+'" onclick="crmSetView(\''+x+'\')">'+l+'</button>';
-  return '<div class="chips">'+b('hub','◧ Overview')+b('pipeline','▦ Board')+b('list','☰ List')+'</div>';}
+  return '<div class="chips">'+b('hub','◧ Overview')+b('groups','▤ Groups')+b('list','☰ List')+'</div>';}
 function renderPipelineView(v){
   if(!CRMA.length){document.getElementById('crm-sub').textContent='No accounts yet.';v.innerHTML=crmEmpty();return}
   const total=CRMA.length,won=CRMA.filter(a=>a.stage==='Won').length,stale=CRMA.filter(isStale).length;
@@ -2441,9 +2454,24 @@ function renderDrillInner(){const list=drillList();
     +'<div id="crm-main">'+listHTML(list)+'</div>';}
 function renderDrillMain(){const el=document.getElementById('crm-main');if(!el)return;const list=drillList();el.innerHTML=listHTML(list);const c=document.getElementById('drill-count');if(c)c.textContent=list.length;}
 function renderCrmMain(){const el=document.getElementById('crm-main');if(!el)return;const list=crmFiltered();
-  if(crmView==='pipeline')el.innerHTML=pipelineHTML(list);
+  if(crmView==='groups')el.innerHTML=groupedHTML(list);
   else if(crmView==='attention')el.innerHTML=listHTML(list.filter(isStale).sort((a,b)=>(lastAct(a)||0)-(lastAct(b)||0)));
   else el.innerHTML=listHTML(list.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')))}
+let crmExpanded={};
+function crmRow(a,showStage){const nm=displayName(a),col=acctColor(nm);const dm=a.dueAt?dueMeta(dayMs(a.dueAt)):null;const stale=isStale(a);
+  const meta=[a.owner&&a.owner!=='Unassigned'?a.owner:'Unassigned',a.location||''].filter(Boolean).join(' · ');
+  let rt='';
+  if(dm&&dm.label)rt+='<span class="pill '+(dm.overdue||dm.soon?'amber':'dim')+'">'+esc(dm.label)+'</span>';
+  else if(stale)rt+='<span class="pill amber" title="No recent activity">stale</span>';
+  if(showStage)rt+='<span class="pill '+STAGEMETA[a.stage||'New']+'">'+esc(a.stage||'New')+'</span>';
+  return '<div class="crow tap" tabindex="0" onclick="openAcct(\''+a.id+'\')"><span class="crow-av" style="background:'+col+'22;color:'+col+'">'+esc(acctInitials(nm))+'</span><div class="crow-main"><div class="crow-nm">'+esc(nm)+'</div><div class="crow-sub">'+esc(meta)+'</div></div><div class="crow-right">'+rt+'</div></div>';}
+function groupedHTML(list){let html='',any=false;
+  STAGES.forEach(st=>{const items=list.filter(a=>(a.stage||'New')===st);if(!items.length)return;any=true;
+    const open=(st in crmExpanded)?crmExpanded[st]:(items.length<=12);
+    html+='<div class="cgroup"><button class="cgroup-h" onclick="toggleCrmGroup(\''+st+'\')"><span class="cg-dot" style="background:'+STAGECOLOR[st]+'"></span><span class="cg-name">'+st+'</span><span class="pill '+STAGEMETA[st]+'">'+items.length+'</span><span class="cg-caret">'+(open?'▾ hide':'▸ show')+'</span></button>'
+      +(open?'<div class="cgroup-body">'+items.map(a=>crmRow(a,false)).join('')+'</div>':'')+'</div>';});
+  return any?html:'<div class="empty"><div class="d">No accounts match these filters.</div></div>';}
+function toggleCrmGroup(st){const items=crmFiltered().filter(a=>(a.stage||'New')===st);const cur=(st in crmExpanded)?crmExpanded[st]:(items.length<=12);crmExpanded[st]=!cur;renderCrmMain()}
 const STAGECOLOR={New:'#8791A0',Contacted:'#F2B04E',Engaged:'#4FD8EC',Meeting:'#7AC6FF',Proposal:'#54D9A0',Won:'#54D9A0',Lost:'#5A616B'};
 const AVCOLORS=['#4FD8EC','#54D9A0','#F2B04E','#A78BFA','#FF9F7A','#7AC6FF','#E5A3E0','#7BE0C3'];
 function displayName(a){let n=(a.name||'').trim();
@@ -2477,7 +2505,7 @@ function pipelineHTML(list){return '<div class="pipe">'+STAGES.map(st=>{const it
   return '<div class="pcol" ondragover="dragOver(event,this)" ondragleave="dragLeave(this)" ondrop="dropTo(event,\''+st+'\',this)">'
     +'<div class="pcol-h" style="border-color:'+STAGECOLOR[st]+'"><span>'+st+(mrr?' · $'+mrr+'/mo':'')+'</span><span class="pill '+STAGEMETA[st]+'">'+items.length+'</span></div>'
     +'<div class="pcol-body">'+(items.length?items.map(a=>cardHTML(a,false)).join(''):'<div class="pcol-empty">Drop here</div>')+'</div></div>'}).join('')+'</div>'}
-function listHTML(list){return list.length?list.map(a=>cardHTML(a,true)).join(''):'<div class="empty"><div class="d">No accounts match these filters.</div></div>'}
+function listHTML(list){return list.length?list.map(a=>crmRow(a,true)).join(''):'<div class="empty"><div class="d">No accounts match these filters.</div></div>'}
 function openAcct(id){const a=CRMA.find(x=>x.id===id);if(!a)return;acctId=id;crmTab='account';renderCRM();window.scrollTo(0,0)}
 function renderAccountView(host){
   const a=CRMA.find(x=>x.id===acctId);if(!a){backToPipeline();return}
