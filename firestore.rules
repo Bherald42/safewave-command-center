@@ -55,6 +55,19 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    // Build tasks — shared project board (assignee + due date).
+    match /build_tasks/{id} {
+      allow read, write: if signedIn();
+    }
+
+    // Team chat — channels + messages, shared across signed-in teammates.
+    match /chat_channels/{ch}/messages/{m} {
+      allow read, write: if signedIn();
+    }
+    match /settings/chat {
+      allow read, write: if signedIn();
+    }
+
     // Overdue/needs-attention summary, written by the scanOverdue function.
     match /nudges/{id} {
       allow read: if signedIn();
