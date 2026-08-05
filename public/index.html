@@ -855,6 +855,18 @@ input[type=date]{color-scheme:dark}
   </div>
 </div>
 
+<div class="sheet" id="sh-customer" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">CUSTOMER</span>
+    <h1 style="font-size:20px;margin:11px 0 2px" id="cu-name">—</h1>
+    <div class="d" id="cu-sub" style="margin-bottom:12px"></div>
+    <div class="acct-actions" id="cu-actions" style="margin-bottom:6px"></div>
+    <div id="cu-body"></div>
+    <button class="btn ghost" style="margin-top:10px" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
 <div id="cmdk" class="cmdk" onclick="if(event.target===this)closeCmdK()">
   <div class="cmdk-box" role="dialog" aria-label="Command bar">
     <input id="cmdk-input" placeholder="Search accounts, tickets, orders — or type a command…" oninput="cmdkRender()" autocomplete="off" spellcheck="false" aria-label="Search or command">
@@ -1143,7 +1155,7 @@ function renderOrdersTab(body){
 }
 function renderOrderList(q){q=(q||'').trim().toLowerCase();const wrap=document.getElementById('order-list');if(!wrap)return;
   const hits=ordersList().filter(o=>!q||o.n.toLowerCase().includes(q)||o.name.toLowerCase().includes(q));
-  wrap.innerHTML=hits.length?hits.map(o=>{const done=isFulfilled(o);const f=FULF[o.n];const track=(f&&f.tracking)||o.tracking||'';const trk=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(track)+'</a>':esc(track)):'';return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · '+(done?'fulfilled'+(f&&f.serial?' · '+esc(f.serial):'')+trk:'awaiting fulfilment')+'</div></div><span class="pill '+(done?'good':'amber')+'">'+(done?'FULFILLED':'OPEN')+'</span></div>'+(!done?'<button class="btn ghost" style="margin-top:9px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill</button>':'')+'</div>'}).join(''):'<div class="empty"><div class="d">No order matches that search.</div></div>';
+  wrap.innerHTML=hits.length?hits.map(o=>{const done=isFulfilled(o);const f=FULF[o.n];const track=(f&&f.tracking)||o.tracking||'';const trk=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(track)+'</a>':esc(track)):'';return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · '+(done?'fulfilled'+(f&&f.serial?' · '+esc(f.serial):'')+trk:'awaiting fulfilment')+'</div></div><span class="pill '+(done?'good':'amber')+'">'+(done?'FULFILLED':'OPEN')+'</span></div>'+'<div class="row" style="gap:8px;margin-top:9px">'+(!done?'<button class="btn ghost" style="flex:1" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill</button>':'')+'<button class="btn ghost" style="flex:1" onclick="viewCustomerFromOrder(\''+esc(o.n)+'\')">👤 Customer</button></div></div>'}).join(''):'<div class="empty"><div class="d">No order matches that search.</div></div>';
 }
 function kv(k,v){return '<div class="kv"><span>'+k+'</span><b>'+v+'</b></div>'}
 
@@ -1409,6 +1421,7 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
   const dm=dueMeta(dayMs(t.due));
   document.getElementById('tkv-body').innerHTML=kv('Ticket',t.id)+kv('Channel',esc(t.channel))+kv('Product',esc(t.product))+kv('Customer',esc(t.customer||'—'))+kv('Assigned',esc(t.assignee||'Unassigned'))+kv('Due',dm.label||'—')+kv('Opened',ageStr(t.created)+' · '+esc(t.by||'—'))+kv('SLA target',SEV[t.sev].sla+'h')+(t.desc?'<div class="note" style="margin-top:8px">'+esc(t.desc)+'</div>':'');
   let acts='<p class="d" style="font-weight:600;color:var(--text);margin:4px 0 6px">Assign / due date</p><div class="row" style="gap:8px"><select class="field" id="tkv-assignee" style="margin:0;flex:1"></select><input class="field" id="tkv-due" type="date" style="margin:0;flex:1"></div><button class="btn ghost" style="margin-bottom:12px" onclick="saveTicketMeta(\''+id+'\')">Save assignee / due</button>';
+  if(t.customer||t.email)acts+='<button class="btn ghost" style="margin-bottom:8px" onclick="viewCustomerFromTicket(\''+id+'\')">👤 View customer</button>';
   acts+=t.status==='open'?'<button class="btn" onclick="promoteTicket(\''+id+'\')">Promote to Build</button><button class="btn ghost" style="margin-top:8px" onclick="resolveTicket(\''+id+'\')">Mark resolved</button>':'<button class="btn ghost" onclick="reopenTicket(\''+id+'\')">Reopen</button>';
   if(t.email)acts+='<textarea class="field" id="tkv-reply" placeholder="Reply to '+esc(t.customer||t.email)+'…" style="min-height:72px;margin-top:12px;font-family:var(--font-b)"></textarea><button class="btn" onclick="sendTicketReply(\''+id+'\')">'+(backendReady()?'Send reply from sales@':'Reply (opens mail app)')+'</button>';
   document.getElementById('tkv-actions').innerHTML=acts;
@@ -2350,6 +2363,48 @@ const SafewaveTriage=(function(){
 })();
 try{SafewaveTriage.selfTest()}catch(e){}
 
+/* ================= UNIFIED CUSTOMER IDENTITY ================= */
+let curCustomer=null;
+function custKey(name,email){return ((email||'').trim().toLowerCase())||((name||'').trim().toLowerCase())}
+function sameCustomer(vn,ve,name,email){vn=(vn||'').trim().toLowerCase();ve=(ve||'').trim().toLowerCase();name=(name||'').trim().toLowerCase();email=(email||'').trim().toLowerCase();return (!!email&&!!ve&&ve===email)||(!!name&&!!vn&&vn===name)}
+function uniqueCustomers(){const seen={},out=[];
+  ordersList().forEach(o=>{const k=custKey(o.name,o.email);if(k&&!seen[k]){seen[k]=1;out.push({name:o.name||'',email:o.email||''})}});
+  (typeof TKTS!=='undefined'?TKTS:[]).forEach(t=>{const k=custKey(t.customer,t.email);if(k&&!seen[k]){seen[k]=1;out.push({name:t.customer||'',email:t.email||''})}});
+  return out;}
+function viewCustomerFromTicket(id){const t=(typeof TKTS!=='undefined'?TKTS:[]).find(x=>x.id===id);if(t)openCustomer(t.customer,t.email)}
+function viewCustomerFromOrder(n){const o=ordersList().find(x=>x.n===n);if(o)openCustomer(o.name,o.email)}
+function openCustomer(name,email){name=(name||'').trim();email=(email||'').trim();
+  if(!name&&!email){toast('No customer on this record');return}
+  curCustomer={name:name,email:email};
+  const orders=ordersList().filter(o=>sameCustomer(o.name,o.email,name,email));
+  const tickets=(typeof TKTS!=='undefined'?TKTS:[]).filter(t=>sameCustomer(t.customer,t.email,name,email));
+  const bands=Object.values(BANDS).filter(b=>sameCustomer(b.customer,'',name,email));
+  const rets=Object.values(RETURNS).filter(r=>sameCustomer(r.customer,'',name,email));
+  const account=(CRMA||[]).find(a=>sameCustomer(a.name,a.email,name,email)||sameCustomer(a.contact,a.email,name,email));
+  document.getElementById('cu-name').textContent=name||email||'Customer';
+  document.getElementById('cu-sub').textContent=[email,orders.length+' order'+(orders.length!==1?'s':''),tickets.length+' ticket'+(tickets.length!==1?'s':'')].filter(Boolean).join('  ·  ');
+  let acts='';
+  if(email)acts+='<button class="btn" onclick="customerEmail()">✉️ Email</button>';
+  acts+='<button class="btn ghost" onclick="customerTicket()">＋ Ticket</button>';
+  if(account)acts+='<button class="btn ghost" onclick="closeSheets();openAcctFromPulse(\''+account.id+'\')">Open account ↗</button>';
+  document.getElementById('cu-actions').innerHTML=acts;
+  let html='';
+  if(account)html+='<div class="card tap" onclick="closeSheets();openAcctFromPulse(\''+account.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(displayName(account))+'</div><div class="d">CRM account · '+esc(account.stage||'New')+(account.owner&&account.owner!=='Unassigned'?' · '+esc(account.owner):'')+'</div></div><span class="pill wave">CRM</span></div></div>';
+  html+='<div class="sec-head" style="margin-top:12px"><h2>Orders</h2><span class="pill '+(orders.length?'wave':'dim')+'">'+orders.length+'</span></div>';
+  html+=orders.length?orders.map(o=>{const f=FULF[o.n];const done=isFulfilled(o);const track=(f&&f.tracking)||o.tracking||'';return '<div class="card" style="padding:12px"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · $'+o.total+'</div><div class="d">'+esc(o.date)+(f&&f.serial?' · '+esc(f.serial):'')+(track?' · '+esc(track):'')+'</div></div><span class="pill '+(done?'good':'amber')+'">'+(done?'SHIPPED':'OPEN')+'</span></div></div>'}).join(''):'<div class="d" style="color:var(--faint)">No orders on record.</div>';
+  if(bands.length){html+='<div class="sec-head" style="margin-top:12px"><h2>Bands</h2><span class="pill dim">'+bands.length+'</span></div>'+bands.map(b=>'<div class="card" style="padding:11px"><div class="row"><div class="grow"><div class="t">'+esc(b.serial)+'</div><div class="d">'+(SIZELABEL[b.size]||'')+' · fw '+esc(b.firmware||'—')+'</div></div><span class="pill '+(b.status==='shipped'?'good':b.status==='restocked'?'wave':'dim')+'">'+esc((b.status||'').toUpperCase())+'</span></div></div>').join('');}
+  html+='<div class="sec-head" style="margin-top:12px"><h2>Tickets</h2><span class="pill '+(tickets.length?'wave':'dim')+'">'+tickets.length+'</span></div>';
+  html+=tickets.length?tickets.map(t=>'<div class="card tap" onclick="closeSheets();openTicket(\''+t.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(t.title)+'</div><div class="d">'+esc(t.id)+' · '+esc(t.status)+'</div></div><span class="pill '+SEV[t.sev].pill+'">'+SEV[t.sev].label+'</span></div></div>').join(''):'<div class="d" style="color:var(--faint)">No tickets.</div>';
+  if(rets.length){html+='<div class="sec-head" style="margin-top:12px"><h2>Returns</h2><span class="pill dim">'+rets.length+'</span></div>'+rets.map(r=>'<div class="card" style="padding:11px"><div class="row"><div class="grow"><div class="t">'+esc(r.id)+'</div><div class="d">band '+esc(r.serial||'—')+'</div></div><span class="pill amber">'+esc((r.status||'').toUpperCase())+'</span></div></div>').join('');}
+  document.getElementById('cu-body').innerHTML=html;
+  closeSheets();openSheet('sh-customer');
+}
+function customerEmail(){const c=curCustomer;if(!c||!c.email)return;
+  if(backendReady()&&CURRENT_USER.mail&&CURRENT_USER.mail.email){const body=prompt('Message to '+c.email+':');if(!body)return;
+    firebase.functions().httpsCallable('sendUserEmail')({to:c.email,subject:'Safewave',text:body}).then(()=>toast('✓ Sent from '+CURRENT_USER.mail.email)).catch(e=>toast('Send failed — '+((e&&e.message)||'')));
+  }else{window.location.href='mailto:'+encodeURIComponent(c.email)}}
+function customerTicket(){const c=curCustomer;if(!c)return;closeSheets();openAddTicket();const el=document.getElementById('tk-customer');if(el)el.value=c.name||c.email||''}
+
 /* ================= ⌘K COMMAND BAR — quick-add + search everything ================= */
 let cmdkItems=[], cmdkSel=0;
 function openCmdK(){const box=document.getElementById('cmdk');if(!box)return;box.classList.add('on');const i=document.getElementById('cmdk-input');i.value='';cmdkRender();setTimeout(()=>i.focus(),30)}
@@ -2365,6 +2420,7 @@ function cmdkBuild(q){q=(q||'').toLowerCase().trim();const out=[];
     (typeof TKTS!=='undefined'?TKTS:[]).filter(t=>[t.title,t.id,t.customer].some(v=>(v||'').toLowerCase().includes(q))).slice(0,5).forEach(t=>out.push({type:'Ticket',t:t.title,s:t.id+(t.assignee?' · '+t.assignee:''),run:function(){openTicketFromPulse(t.id)}}));
     (typeof BUILDT!=='undefined'?BUILDT:[]).filter(t=>[t.title,t.assignee].some(v=>(v||'').toLowerCase().includes(q))).slice(0,5).forEach(t=>out.push({type:'Task',t:t.title,s:t.assignee||'',run:function(){openBuildFromPulse(t.id)}}));
     (typeof ordersList==='function'?ordersList():[]).filter(o=>[o.n,o.name].some(v=>(v||'').toLowerCase().includes(q))).slice(0,5).forEach(o=>out.push({type:'Order',t:o.n+' · '+o.name,s:o.date||'',run:function(){goto('s-stock');stockGoTab('orders')}}));
+    (typeof uniqueCustomers==='function'?uniqueCustomers():[]).filter(c=>[c.name,c.email].some(v=>(v||'').toLowerCase().includes(q))).slice(0,5).forEach(c=>out.push({type:'Person',t:c.name||c.email,s:c.email||'customer',run:function(){openCustomer(c.name,c.email)}}));
   }
   return out;
 }
