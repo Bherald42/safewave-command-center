@@ -718,13 +718,14 @@ input[type=date]{color-scheme:dark}
     <div class="d" id="ff-cust" style="margin-bottom:12px"></div>
     <p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Band size</p>
     <div class="rolepick" id="ff-size">
-      <button data-v="S">Small</button><button data-v="M">Medium</button><button data-v="L" class="on">Large</button>
+      <button data-v="S" onclick="setTimeout(ffBandHint,0)">Small</button><button data-v="M" onclick="setTimeout(ffBandHint,0)">Medium</button><button data-v="L" class="on" onclick="setTimeout(ffBandHint,0)">Large</button>
     </div>
     <div class="row" style="gap:8px;margin-top:12px">
       <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Assigned to</p><select class="field" id="ff-assignee" style="margin:0"></select></div>
       <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Firmware flashed</p><input class="field" id="ff-firmware" placeholder="e.g. v2.1.4" style="margin:0"></div>
     </div>
-    <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">QC sign-off</p>
+    <div id="ff-band" class="note" style="display:none;margin:12px 0"></div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Pre-shipment checklist</p>
     <div id="ff-qc">
       <label class="qc-row"><input type="checkbox" data-k="vibration"> Vibration alert test</label>
       <label class="qc-row"><input type="checkbox" data-k="ble"> BLE pairing verified</label>
@@ -732,8 +733,36 @@ input[type=date]{color-scheme:dark}
       <label class="qc-row"><input type="checkbox" data-k="firmware"> Firmware flashed to latest</label>
       <label class="qc-row"><input type="checkbox" data-k="strap"> Strap &amp; packaging</label>
     </div>
-    <div class="note" style="margin:10px 0">Completing signs off as <b id="ff-signer">you</b> with a timestamp, decrements Covington stock, and prints a QR label for the box.</div>
-    <button class="btn" onclick="completeFulfillment()">✓ Complete &amp; print label</button>
+    <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Tracking number <span style="color:var(--faint);font-weight:400">(from the Shopify shipping label)</span></p>
+    <input class="field" id="ff-tracking" placeholder="e.g. 9400 1000 0000 0000 0000 00" style="margin:0">
+    <div class="note" style="margin:12px 0">Completing signs off as <b id="ff-signer">you</b>, assigns the band's serial to this customer, decrements Covington, and prints the band's QR label for the box.</div>
+    <button class="btn" onclick="completeFulfillment()">✓ Complete &amp; print band label</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-return" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill amber">RETURN · INSPECT</span>
+    <h1 style="font-size:20px;margin:11px 0 4px" id="rt-h">—</h1>
+    <div class="d" id="rt-sub" style="margin-bottom:12px"></div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Inspection checklist</p>
+    <div id="rt-qc">
+      <label class="qc-row"><input type="checkbox" data-k="received"> Band received</label>
+      <label class="qc-row"><input type="checkbox" data-k="condition"> Physical condition OK</label>
+      <label class="qc-row"><input type="checkbox" data-k="battery"> Battery holds charge</label>
+      <label class="qc-row"><input type="checkbox" data-k="reflash"> Firmware re-flashed to latest</label>
+      <label class="qc-row"><input type="checkbox" data-k="clean"> Cleaned &amp; repackaged</label>
+    </div>
+    <textarea class="field" id="rt-notes" placeholder="Notes (damage, reason, disposition)…" style="min-height:64px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
+    <p class="d" style="font-weight:600;color:var(--text);margin:8px 0 6px">Disposition</p>
+    <div class="rolepick" id="rt-disp">
+      <button data-v="restock" class="on">Back to inventory</button>
+      <button data-v="scrap">Scrap (life-safety)</button>
+    </div>
+    <div class="note" style="margin:12px 0">Restocking returns this exact band (serial kept) to Covington so it can be reissued. Scrap removes it — use it for any unit that could miss an alert.</div>
+    <button class="btn" onclick="completeReturn()">✓ Finish inspection</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
   </div>
 </div>
@@ -843,6 +872,17 @@ const BURN={S:1.5,M:2.0,L:1.5}; /* per-week velocity from Shopify 6-wk order rat
 const LOCS=[['covington','Covington, KY','Ships from here · QC pool'],['pace','Pace NY','Upstream · 2-wk transfer'],['china','China','Production · '+CHINA_LEAD_MONTHS+'-mo lead']];
 let INV={covington:{S:20,M:0,L:9},pace:{S:80,M:380,L:80},china:{S:0,M:0,L:0}};
 let FULF={}, stockTab='fulfill', invEditLoc=null, ffOrder=null;
+/* Per-band identity + returns lifecycle. A band gets a serial the first time it
+   ships and keeps it forever — its QR carries its whole history, so a returned
+   band can be inspected and reissued to a new customer. */
+let BANDS={}, RETURNS={}, curReturn=null;
+async function loadBands(){if(!hasFirestore())return;try{const qs=await firebase.firestore().collection('bands').get();BANDS={};qs.forEach(d=>BANDS[d.id]=d.data())}catch(e){BANDS={}}}
+function subscribeReturns(){if(!hasFirestore())return;
+  try{firebase.firestore().collection('returns').orderBy('at','desc').limit(120).onSnapshot(qs=>{RETURNS={};qs.forEach(d=>RETURNS[d.id]=Object.assign({id:d.id},d.data()));const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on')&&stockTab==='returns')renderStock();refreshPulse()},e=>{})}catch(e){}}
+function persistBand(b){if(hasFirestore())firebase.firestore().collection('bands').doc(b.serial).set(b,{merge:true}).catch(()=>{})}
+function persistReturn(r){if(hasFirestore())firebase.firestore().collection('returns').doc(r.id).set(r,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+function availableRefurb(size){return Object.values(BANDS).filter(b=>b.size===size&&b.status==='restocked')}
+function openReturns(){return Object.values(RETURNS).filter(r=>r.status!=='restocked')}
 /* Live orders from Shopify (via the order webhook → orders/{id}); falls back to
    the snapshot until the webhook is connected. */
 let LIVEORDERS=[], ordersUnsub=null;
@@ -882,12 +922,14 @@ function stockGoTab(t){stockTab=t;renderStock()}
 function renderStock(){
   const body=document.getElementById('stock-body');if(!body)return;
   const unf=unfulfilledOrders().length;
+  const openR=openReturns().length;
   const tab=(id,l)=>'<button class="chip'+(stockTab===id?' on':'')+'" onclick="stockGoTab(\''+id+'\')">'+l+'</button>';
-  const tb=document.getElementById('stock-tabs');if(tb)tb.innerHTML=tab('fulfill','Fulfill'+(unf?' · '+unf:''))+tab('inventory','Inventory')+tab('forecast','Forecast')+tab('orders','Orders');
+  const tb=document.getElementById('stock-tabs');if(tb)tb.innerHTML=tab('fulfill','Fulfill'+(unf?' · '+unf:''))+tab('returns','Returns'+(openR?' · '+openR:''))+tab('inventory','Inventory')+tab('forecast','Forecast')+tab('orders','Orders');
   const sub=document.getElementById('stock-sub');if(sub)sub.innerHTML=totalAvail()+' sellable in Covington · '+totalNetwork()+' across network · ~'+totalBurn().toFixed(1)+'/wk';
   if(stockTab==='inventory')renderInventoryTab(body);
   else if(stockTab==='forecast')renderForecastTab(body);
   else if(stockTab==='orders')renderOrdersTab(body);
+  else if(stockTab==='returns')renderReturnsTab(body);
   else renderFulfillTab(body);
 }
 function renderFulfillTab(body){
@@ -902,35 +944,102 @@ function renderFulfillTab(body){
   body.innerHTML=html;
 }
 function fulfillCard(o){return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · paid</div></div><span class="pill amber">TO SHIP</span></div><button class="btn" style="margin-top:10px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill this order</button></div>'}
-function fulfilledCard(o){const f=FULF[o.n]||{};return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+SIZELABEL[f.size]+' · '+esc(f.serial||'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+'</div></div><span class="pill good">DONE</span></div><div class="row" style="gap:8px;margin-top:9px"><button class="btn ghost" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Print label</button><button class="btn ghost" style="flex:1" onclick="returnOrder(\''+esc(o.n)+'\')">Log return</button></div></div>'}
+function fulfilledCard(o){const f=FULF[o.n]||{};const tr=f.tracking?' · '+esc(f.tracking):'';return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+SIZELABEL[f.size]+' · '+esc(f.serial||'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+tr+'</div></div><span class="pill good">SHIPPED</span></div><div class="row" style="gap:8px;margin-top:9px"><button class="btn ghost" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Reprint label</button><button class="btn ghost" style="flex:1" onclick="startReturn(\''+esc(o.n)+'\')">Start return</button></div></div>'}
 function openFulfill(n){const o=ordersList().find(x=>x.n===n);if(!o)return;ffOrder=n;
   document.getElementById('ff-order').textContent=o.n+' · '+o.name;
   document.getElementById('ff-cust').textContent=o.date+' · $'+o.total+' · paid';
   const jared=(TEAM.find(t=>/jared/i.test(t.name))||{}).name;
   document.getElementById('ff-assignee').innerHTML=assigneeOptions(jared||(CURRENT_USER&&CURRENT_USER.name)||'');
-  document.getElementById('ff-firmware').value='';
+  document.getElementById('ff-firmware').value='';document.getElementById('ff-tracking').value='';
   document.querySelectorAll('#ff-qc input').forEach(c=>c.checked=false);
   document.querySelectorAll('#ff-size button').forEach(b=>b.classList.toggle('on',b.dataset.v==='L'));
   document.getElementById('ff-signer').textContent=(CURRENT_USER&&CURRENT_USER.name)||'you';
+  ffBandHint();
   closeSheets();openSheet('sh-fulfill');
 }
+function ffBandHint(){const sz=document.querySelector('#ff-size button.on');const size=sz?sz.dataset.v:'L';const rf=availableRefurb(size);const el=document.getElementById('ff-band');if(!el)return;
+  if(rf.length){el.style.display='';el.innerHTML='♻︎ A refurbished '+SIZELABEL[size]+' band is available ('+esc(rf[0].serial)+') — it will be reissued to this customer, keeping its serial and history.'}else{el.style.display='none'}}
 function completeFulfillment(){const o=ordersList().find(x=>x.n===ffOrder);if(!o)return;
   const sz=document.querySelector('#ff-size button.on');const size=sz?sz.dataset.v:'L';
   if(cov(size)<=0){toast(SIZELABEL[size]+' is 0 in Covington — transfer from Pace first');return}
   const qc={};document.querySelectorAll('#ff-qc input').forEach(c=>qc[c.dataset.k]=c.checked);
-  if(!Object.keys(qc).every(k=>qc[k])){if(!confirm('Not all QC checks are ticked. Complete anyway?'))return}
+  if(!Object.keys(qc).every(k=>qc[k])){if(!confirm('Not all checklist items are ticked. Complete anyway?'))return}
   const firmware=document.getElementById('ff-firmware').value.trim();
-  const serial='SW-'+ffOrder.replace(/[^0-9A-Za-z]/g,'')+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
-  const rec={order:ffOrder,name:o.name,size:size,assignee:document.getElementById('ff-assignee').value,qc:qc,firmware:firmware,serial:serial,signoffBy:(CURRENT_USER&&CURRENT_USER.name)||'',signoffAt:new Date().toISOString(),status:'fulfilled'};
+  const tracking=document.getElementById('ff-tracking').value.trim();
+  const by=(CURRENT_USER&&CURRENT_USER.name)||'';const now=new Date().toISOString();
+  // reuse a refurbished band of this size if one exists, else mint a new serial
+  const rf=availableRefurb(size);const reuse=rf[0];
+  const serial=reuse?reuse.serial:('SW-'+size+'-'+Date.now().toString(36).toUpperCase().slice(-5));
+  const band=Object.assign(reuse||{serial:serial,size:size,firstShippedAt:now,history:[]},{status:'shipped',order:ffOrder,customer:o.name,firmware:firmware,tracking:tracking,shippedAt:now,shippedBy:by});
+  band.history=(band.history||[]).concat([{at:now,event:reuse?'reissued':'shipped',order:ffOrder,customer:o.name,by:by}]);
+  BANDS[serial]=band;persistBand(band);
+  const rec={order:ffOrder,name:o.name,size:size,assignee:document.getElementById('ff-assignee').value,qc:qc,firmware:firmware,tracking:tracking,serial:serial,reissued:!!reuse,signoffBy:by,signoffAt:now,status:'fulfilled'};
   FULF[ffOrder]=rec;o.ful='FULFILLED';INV.covington[size]=Math.max(0,cov(size)-1);
   if(hasFirestore())firebase.firestore().collection('fulfillments').doc(ffOrder).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
   saveInventory();closeSheets();renderStock();refreshPulse();printLabel(ffOrder);
-  toast('✓ '+ffOrder+' fulfilled · '+SIZELABEL[size]+' -1 in Covington');
+  toast('✓ '+ffOrder+' shipped · '+serial+(reuse?' (reissued)':'')+' · '+SIZELABEL[size]+' -1');
 }
-function returnOrder(n){const f=FULF[n];if(!f)return;if(!confirm('Log a return for '+n+'? '+SIZELABEL[f.size]+' goes back into Covington inventory.'))return;
-  INV.covington[f.size]=cov(f.size)+1;f.status='returned';f.returnedAt=new Date().toISOString();
-  if(hasFirestore())firebase.firestore().collection('fulfillments').doc(n).set(f,{merge:true}).catch(()=>{});
-  saveInventory();renderStock();refreshPulse();toast('✓ Return logged · '+SIZELABEL[f.size]+' +1 in Covington');
+/* ---- returns lifecycle: request → issue label → inspect → back to inventory ---- */
+function startReturn(n){const f=FULF[n];if(!f)return;
+  const existing=Object.values(RETURNS).find(r=>r.order===n&&r.status!=='restocked');
+  if(existing){stockGoTab('returns');toast('Return already open for '+n);return}
+  if(!confirm('Start a return for '+n+'? This alerts the team and creates a return label to issue.'))return;
+  const id='RMA-'+Date.now().toString(36).toUpperCase().slice(-6);
+  const r={id:id,order:n,serial:f.serial||'',size:f.size,customer:f.name||'',status:'requested',requestedBy:(CURRENT_USER&&CURRENT_USER.name)||'',at:new Date().toISOString()};
+  RETURNS[id]=r;persistReturn(r);
+  if(BANDS[f.serial]){BANDS[f.serial].status='return-requested';persistBand(BANDS[f.serial])}
+  notifyAll('Return requested · '+n,(r.customer||'')+' · '+SIZELABEL[f.size]+' band '+r.serial,'s-stock');
+  stockGoTab('returns');toast('✓ Return '+id+' opened — issue the label next');
+}
+function issueReturnLabel(id){const r=RETURNS[id];if(!r)return;r.status='label-issued';r.labelAt=new Date().toISOString();persistReturn(r);printReturnLabel(id);renderStock();toast('✓ Return label issued for '+r.order);}
+function openReturnChecklist(id){const r=RETURNS[id];if(!r)return;curReturn=id;
+  document.getElementById('rt-h').textContent=r.id+' · '+r.order;
+  document.getElementById('rt-sub').textContent=(r.customer||'')+' · '+SIZELABEL[r.size]+' · band '+(r.serial||'—');
+  document.querySelectorAll('#rt-qc input').forEach(c=>c.checked=false);
+  document.getElementById('rt-notes').value='';
+  document.querySelectorAll('#rt-disp button').forEach(b=>b.classList.toggle('on',b.dataset.v==='restock'));
+  closeSheets();openSheet('sh-return');
+}
+function completeReturn(){const r=RETURNS[curReturn];if(!r)return;
+  const qc={};document.querySelectorAll('#rt-qc input').forEach(c=>qc[c.dataset.k]=c.checked);
+  const disp=(document.querySelector('#rt-disp button.on')||{}).dataset?document.querySelector('#rt-disp button.on').dataset.v:'restock';
+  const notes=document.getElementById('rt-notes').value.trim();const now=new Date().toISOString();const by=(CURRENT_USER&&CURRENT_USER.name)||'';
+  if(disp==='restock'&&!qc.received){toast('Tick “Band received” before restocking');return}
+  r.status=disp==='restock'?'restocked':'scrapped';r.inspection=qc;r.notes=notes;r.closedBy=by;r.closedAt=now;persistReturn(r);
+  const band=BANDS[r.serial];
+  if(disp==='restock'){INV.covington[r.size]=cov(r.size)+1;
+    if(band){band.status='restocked';band.customer='';band.order='';band.history=(band.history||[]).concat([{at:now,event:'restocked',by:by}]);persistBand(band)}
+    saveInventory();toast('✓ '+r.serial+' back in Covington — reissuable');
+  }else{
+    if(band){band.status='scrapped';band.history=(band.history||[]).concat([{at:now,event:'scrapped',by:by}]);persistBand(band)}
+    toast('Return '+r.id+' scrapped');
+  }
+  closeSheets();renderStock();refreshPulse();
+}
+function printReturnLabel(id){const r=RETURNS[id];if(!r)return;
+  const payload=encodeURIComponent(JSON.stringify({rma:r.id,o:r.order,s:r.serial,sz:r.size}));
+  const qr='https://api.qrserver.com/v1/create-qr-code/?size=220x220&qzone=1&data='+payload;
+  const w=window.open('','_blank','width=420,height=600');if(!w){toast('Allow pop-ups to print');return}
+  w.document.write('<html><head><title>Return '+esc(r.id)+'</title><style>body{font-family:Arial,sans-serif;margin:0;padding:22px;color:#0B0C0E;display:flex;justify-content:center}.lab{border:2px dashed #0B0C0E;border-radius:12px;padding:18px;width:300px;text-align:center}.lab h2{margin:0 0 2px;font-size:19px}.k{font-size:12px;color:#555;margin-top:8px}.v{font-weight:700;color:#0B0C0E}img{margin:12px auto;display:block}.addr{margin-top:12px;font-size:13px;text-align:left;border-top:1px solid #ccc;padding-top:10px}</style></head><body onload="setTimeout(function(){window.print()},250)"><div class="lab"><h2>Safewave Return</h2><div class="k">RMA <span class="v">'+esc(r.id)+'</span></div><img src="'+qr+'" width="190" height="190" alt="QR"><div class="v">'+esc(r.serial||'')+'</div><div class="k">Order '+esc(r.order)+' · '+SIZELABEL[r.size]+'</div><div class="addr"><b>Return to:</b><br>Safewave Technology — Returns<br>Covington, KY<br><br><span style="color:#777;font-size:11px">Attach a carrier label (Shopify Returns / EasyPost) to ship. Scan this QR on arrival to open the inspection.</span></div></div></body></html>');
+  w.document.close();
+}
+function renderReturnsTab(body){
+  const all=Object.values(RETURNS).sort((a,b)=>(b.at||'').localeCompare(a.at||''));
+  const open=all.filter(r=>r.status!=='restocked'&&r.status!=='scrapped');
+  const closed=all.filter(r=>r.status==='restocked'||r.status==='scrapped');
+  let html='';
+  html+='<div class="note" style="margin-bottom:14px">A return moves: <b>Requested → Label issued → Inspect → Back to inventory</b>. Restocking keeps the band\'s serial so it can be reissued. Carrier return labels plug in via Shopify Returns or EasyPost.</div>';
+  html+='<div class="sec-head"><h2>Open returns</h2><span class="pill '+(open.length?'amber':'good')+'">'+open.length+'</span></div>';
+  html+=open.length?open.map(returnCard).join(''):'<div class="empty"><div class="ico">✓</div><div class="t">No open returns</div><div class="d">Start one from a shipped order in Fulfill, or a request arrives here automatically once the Shopify returns webhook is connected.</div></div>';
+  if(closed.length)html+='<div class="sec-head" style="margin-top:18px"><h2>Closed</h2><span class="pill dim">'+closed.length+'</span></div>'+closed.slice(0,20).map(returnCard).join('');
+  body.innerHTML=html;
+}
+function returnCard(r){
+  const st={requested:['amber','REQUESTED'],'label-issued':['wave','LABEL ISSUED'],restocked:['good','RESTOCKED'],scrapped:['dim','SCRAPPED']}[r.status]||['dim',r.status.toUpperCase()];
+  let action='';
+  if(r.status==='requested')action='<button class="btn" style="flex:1" onclick="issueReturnLabel(\''+r.id+'\')">Issue return label</button><button class="btn ghost" style="flex:1" onclick="openReturnChecklist(\''+r.id+'\')">Received · inspect</button>';
+  else if(r.status==='label-issued')action='<button class="btn" style="flex:1" onclick="openReturnChecklist(\''+r.id+'\')">Received · inspect</button><button class="btn ghost" style="flex:1" onclick="printReturnLabel(\''+r.id+'\')">Reprint label</button>';
+  return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(r.id)+' · '+esc(r.order)+'</div><div class="d">'+esc(r.customer||'')+' · '+SIZELABEL[r.size]+' · band '+esc(r.serial||'—')+'</div></div><span class="pill '+st[0]+'">'+st[1]+'</span></div>'+(action?'<div class="row" style="gap:8px;margin-top:9px">'+action+'</div>':'')+'</div>';
 }
 function printLabel(n){const f=FULF[n];if(!f)return;const o=ordersList().find(x=>x.n===n)||{};
   const payload=encodeURIComponent(JSON.stringify({o:n,s:f.serial,sz:f.size,fw:f.firmware}));
@@ -1113,7 +1222,7 @@ function enterApp(user){
   document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
   buildNav(user.role);renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
-  loadTeam();loadBuildTasks();loadChatChannels();loadInventory();loadFulfillments();subscribeNotifications();subscribeOrders();
+  loadTeam();loadBuildTasks();loadChatChannels();loadInventory();loadFulfillments();loadBands();subscribeReturns();subscribeNotifications();subscribeOrders();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
