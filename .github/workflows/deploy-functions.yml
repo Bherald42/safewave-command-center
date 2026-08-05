@@ -39,10 +39,12 @@ jobs:
           if [ -n "$PLACES_API_KEY" ]; then echo "PLACES_API_KEY=$PLACES_API_KEY" >> functions/.env; fi
           if [ -n "$SHOPIFY_WEBHOOK_SECRET" ]; then echo "SHOPIFY_WEBHOOK_SECRET=$SHOPIFY_WEBHOOK_SECRET" >> functions/.env; fi
           firebase deploy --only functions --project safewave-command-center --non-interactive --force
-      - name: Deploy Firestore rules
+      - name: Deploy Firestore + Storage rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
         run: |
           # Non-fatal: if the service account lacks rules-admin permission this
           # logs and continues (publish rules manually in the console instead).
-          firebase deploy --only firestore:rules --project safewave-command-center --non-interactive || echo "::warning::Firestore rules deploy skipped — check service account permissions, or publish rules manually."
+          firebase deploy --only firestore:rules --project safewave-command-center --non-interactive || echo "::warning::Firestore rules deploy skipped — check permissions or publish manually."
+          # Storage rules only deploy once Storage is enabled in the console.
+          firebase deploy --only storage --project safewave-command-center --non-interactive || echo "::warning::Storage rules deploy skipped — enable Storage in the Firebase console first."

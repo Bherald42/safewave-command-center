@@ -111,6 +111,14 @@ Shopify owns the carrier labels + tracking. Optional later: **email** alerts
 (reuse `sendUserEmail`) and background **FCM push** (VAPID + tokens) — the
 service worker's `push` handler is already in place.
 
+## Build attachments (photos/files) — enable Storage once
+The Build project board lets teammates attach photos/files to task updates. That
+needs Cloud Storage turned on: Firebase console → **Build → Storage → Get
+started** (accept the default bucket). After that the storage rules deploy
+automatically with the functions workflow (`storage.rules`, build attachments
+only, 25 MB cap). Until Storage is enabled, text updates still work and the app
+shows a "turn on Storage" note instead of failing.
+
 ## New Firestore collections (rules already included)
 `inventory/main` (location counts), `fulfillments/{orderId}` (checklist +
 firmware + tracking + sign-off), `bands/{serial}` (per-band identity + lifecycle

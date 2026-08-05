@@ -1,0 +1,16 @@
+rules_version = '2';
+// Safewave Command Center — Cloud Storage rules.
+// Build-task attachments (photos/files) — readable/writable by any signed-in
+// teammate, capped at 25 MB. Enable Storage once in the Firebase console
+// (Build → Storage → Get started); these rules deploy with the functions workflow.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /build/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.resource.size < 25 * 1024 * 1024;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
