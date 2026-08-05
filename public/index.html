@@ -2779,6 +2779,14 @@ function renderFinance(){
       +'<div class="note" style="margin-top:10px">Feeds the runway model above. Swap in live subscription counts once the Safewave enterprise dashboard is connected.</div>'
     +'</div>'
     /* P&L builder */
+    /* QuickBooks import */
+    +'<div class="card"><div class="sec-head"><h2>QuickBooks</h2><span class="pill dim">import</span></div>'
+      +'<p class="d" style="margin:0 0 10px;color:var(--muted)">Pull your books straight into the P&amp;L below. In QuickBooks, run <b>Reports → Profit &amp; Loss</b>, then <b>Export → Export to CSV</b>, and drop the file here.</p>'
+      +'<input type="file" id="qb-file" accept=".csv,text/csv" style="display:none" onchange="importQuickbooks(this)">'
+      +'<button class="btn" onclick="document.getElementById(\'qb-file\').click()">⬆︎ Import Profit &amp; Loss (CSV)</button>'
+      +'<div class="note" style="margin-top:10px">One click, no setup — income, COGS and expenses map into the P&amp;L for you to review and save. Automatic live QuickBooks Online sync is a larger connect (Intuit sign-in + secure link); say the word and we\'ll wire it. The CSV import keeps your P&amp;L current in the meantime.</div>'
+    +'</div>'
+    /* P&L builder */
     +'<div class="card"><div class="sec-head"><h2>P&amp;L builder</h2><a onclick="addPnl()">＋ Line</a></div>'
       +pnl.map((l,i)=>'<div class="frow pnl-row"><input class="field fr-label" value="'+esc(l.label||'')+'" placeholder="Line item"><select class="fr-type field" style="max-width:120px">'+['rev','cogs','opex'].map(t=>'<option value="'+t+'"'+(l.type===t?' selected':'')+'>'+({rev:'Revenue',cogs:'COGS',opex:'Opex'}[t])+'</option>').join('')+'</select><input class="field fr-amt" type="number" value="'+(parseMoney(l.amount)||0)+'" style="max-width:120px"><a class="fr-x" onclick="rmPnl('+i+')">✕</a></div>').join('')
       +'<button class="btn" onclick="savePnl()" style="margin:6px 0 12px">Save P&amp;L</button>'
@@ -2808,6 +2816,39 @@ function ftile(v,l,badge){return '<div class="tile"><div class="n">'+esc(String(
 function saveCash(){saveFinance({cashOnHand:Number(document.getElementById('fp-cash').value)||0},'✓ Saved');renderFinance()}
 function saveProjections(){const pr={customers:Number(document.getElementById('fp-customers').value)||0,avgMrr:Number(document.getElementById('fp-mrr').value)||0,growthPct:Number(document.getElementById('fp-growth').value)||0,horizon:Number(document.getElementById('fp-horizon').value)||12};saveFinance({projections:pr},'✓ Projections saved');renderFinance()}
 function gatherPnl(){return Array.from(document.querySelectorAll('.pnl-row')).map(r=>({label:r.querySelector('.fr-label').value,type:r.querySelector('.fr-type').value,amount:Number(r.querySelector('.fr-amt').value)||0}))}
+/* ---- QuickBooks Profit & Loss (CSV) import → P&L builder ---- */
+function importQuickbooks(input){const f=input.files&&input.files[0];input.value='';if(!f)return;
+  const rd=new FileReader();
+  rd.onload=e=>{try{const lines=parseQbPnl(String(e.target.result||''));
+    if(!lines.length){toast('No P&L lines found — export a Profit & Loss as CSV from QuickBooks');return}
+    if(!confirm('Import '+lines.length+' line'+(lines.length>1?'s':'')+' from QuickBooks? This replaces the current P&L lines — you can edit before saving.'))return;
+    financeData.pnl=lines;renderFinance();toast('✓ Imported '+lines.length+' lines — review, then Save P&L');
+  }catch(err){toast('Could not read that file — export a Profit & Loss report as CSV')}};
+  rd.onerror=()=>toast('Could not read that file');rd.readAsText(f)}
+function parseCsvRows(text){const rows=[];let i=0,field='',row=[],q=false;
+  while(i<text.length){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){field+='"';i++}else q=false}else field+=c}
+    else{if(c==='"')q=true;else if(c===','){row.push(field);field=''}
+      else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(field);rows.push(row);row=[];field=''}
+      else field+=c}
+    i++}
+  if(field.length||row.length){row.push(field);rows.push(row)}return rows}
+function qbAmount(cells){for(let j=cells.length-1;j>=0;j--){const raw=(cells[j]||'').trim();if(!raw||!/[0-9]/.test(raw))continue;
+  const neg=/^\(.*\)$/.test(raw);const n=Number(raw.replace(/[()$,\s]/g,''));if(!isNaN(n))return neg?-n:n}return null}
+function parseQbPnl(text){const rows=parseCsvRows(text);const out=[];let section=null;
+  const isTotal=s=>/^total\b/i.test(s)||/^gross profit/i.test(s)||/^net (operating |ordinary )?income/i.test(s)||/^net income/i.test(s)||/^net revenue/i.test(s);
+  rows.forEach(r=>{const cells=r.map(c=>(c||'').trim());
+    const label=cells.find(c=>c&&/[a-z]/i.test(c));if(!label)return;
+    const low=label.toLowerCase();const amt=qbAmount(cells);
+    // Section headers (no amount on the header row itself)
+    if(amt===null&&/^(income|revenue|other income)\b/.test(low)){section='rev';return}
+    if(amt===null&&/(cost of goods sold|cost of sales|cogs)/.test(low)){section='cogs';return}
+    if(amt===null&&/^(expenses|operating expenses|other expenses|expense)\b/.test(low)){section='opex';return}
+    if(isTotal(label))return;
+    if(amt===null||amt===0)return;
+    out.push({label:label.replace(/\s+/g,' ').trim(),type:section||'opex',amount:Math.abs(amt)});
+  });
+  return out}
 function addPnl(){financeData.pnl=gatherPnl();financeData.pnl.push({label:'',type:'opex',amount:0});renderFinance()}
 function rmPnl(i){financeData.pnl=gatherPnl();financeData.pnl.splice(i,1);renderFinance()}
 function savePnl(){financeData.pnl=gatherPnl();saveFinance({pnl:financeData.pnl},'✓ P&L saved');renderFinance()}
