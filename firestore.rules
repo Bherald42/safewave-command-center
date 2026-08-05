@@ -68,6 +68,13 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    // Live orders — written only by the Shopify webhook (Admin SDK); the app
+    // reads them for the fulfilment queue.
+    match /orders/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     // Team chat — channels + messages, shared across signed-in teammates.
     match /chat_channels/{ch}/messages/{m} {
       allow read, write: if signedIn();

@@ -23,10 +23,11 @@
  * sourceProspects returns a clear "add your key" message instead of failing.
  */
 
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -116,6 +117,59 @@ exports.sourceProspects = onCall({ region: REGION }, async (request) => {
   })).filter((r) => r.name);
 
   return { results };
+});
+
+/* ------------------------------------------------------------------ *
+ * SHOPIFY ORDER WEBHOOK — ingest new orders + alert the whole team
+ * ------------------------------------------------------------------ *
+ * Point a Shopify "orders/create" (and optionally "orders/updated") webhook
+ * at this function's URL. Set SHOPIFY_WEBHOOK_SECRET to the webhook signing
+ * secret so we can verify each request is really from Shopify. New orders are
+ * written to orders/{id} (the app's live fulfilment queue reads them) and a
+ * to:"all" notification is created so every teammate gets the alert.
+ */
+exports.shopifyOrderWebhook = onRequest({ region: REGION }, async (req, res) => {
+  if (req.method !== "POST") { res.status(405).send("POST only"); return; }
+  const secret = process.env.SHOPIFY_WEBHOOK_SECRET || "";
+  if (!secret) { res.status(503).send("Webhook secret not configured"); return; }
+
+  const hmac = req.get("X-Shopify-Hmac-Sha256") || "";
+  const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
+  let ok = false;
+  try {
+    const digest = crypto.createHmac("sha256", secret).update(raw).digest("base64");
+    const a = Buffer.from(digest), b = Buffer.from(hmac);
+    ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch (e) { ok = false; }
+  if (!ok) { res.status(401).send("Invalid signature"); return; }
+
+  const topic = req.get("X-Shopify-Topic") || "orders/create";
+  const o = req.body || {};
+  const cust = o.customer || {};
+  const ship = o.shipping_address || {};
+  const name = [cust.first_name, cust.last_name].filter(Boolean).join(" ") || ship.name || o.email || "Customer";
+  const n = o.name || ("#" + (o.order_number || o.id || ""));
+  const id = String(o.id || n).replace(/[^\w-]/g, "") || String(Date.now());
+  const rec = {
+    n: n, name: name, email: o.email || "",
+    total: Number(o.total_price || 0),
+    date: (function () { try { return new Date(o.created_at || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric" }); } catch (e) { return ""; } })(),
+    ful: String(o.fulfillment_status || "").toLowerCase() === "fulfilled" ? "FULFILLED" : "UNFULFILLED",
+    source: "shopify", at: new Date().toISOString(),
+  };
+  try {
+    await db.collection("orders").doc(id).set(rec, { merge: true });
+    if (topic === "orders/create") {
+      await db.collection("notifications").add({
+        to: "all", title: "New order " + rec.n, body: rec.name + " · $" + rec.total,
+        link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  } catch (e) {
+    logger.error("shopifyOrderWebhook write failed", e && e.message);
+    res.status(500).send("error"); return;
+  }
+  res.status(200).send("ok");
 });
 
 /* ------------------------------------------------------------------ *

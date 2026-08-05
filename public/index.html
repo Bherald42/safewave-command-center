@@ -822,6 +822,22 @@ const BURN={S:1.5,M:2.0,L:1.5}; /* per-week velocity from Shopify 6-wk order rat
 const LOCS=[['covington','Covington, KY','Ships from here · QC pool'],['pace','Pace NY','Upstream · 2-wk transfer'],['china','China','Production · '+CHINA_LEAD_MONTHS+'-mo lead']];
 let INV={covington:{S:20,M:0,L:9},pace:{S:80,M:380,L:80},china:{S:0,M:0,L:0}};
 let FULF={}, stockTab='fulfill', invEditLoc=null, ffOrder=null;
+/* Live orders from Shopify (via the order webhook → orders/{id}); falls back to
+   the snapshot until the webhook is connected. */
+let LIVEORDERS=[], ordersUnsub=null;
+function ordersList(){
+  if(!LIVEORDERS.length)return SHOP.orders;
+  const seen={},out=[];
+  LIVEORDERS.forEach(o=>{seen[o.n]=1;out.push(o)});
+  SHOP.orders.forEach(o=>{if(!seen[o.n])out.push(o)});
+  return out;
+}
+function subscribeOrders(){if(!hasFirestore()){return}
+  if(ordersUnsub){try{ordersUnsub()}catch(e){}}
+  try{ordersUnsub=firebase.firestore().collection('orders').orderBy('at','desc').limit(150).onSnapshot(qs=>{
+    LIVEORDERS=qs.docs.map(d=>{const o=d.data();return {n:o.n,name:o.name||'',total:o.total||0,date:o.date||'',ful:o.ful||'UNFULFILLED',email:o.email||''}});
+    const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
+  },e=>{})}catch(e){}}
 async function loadInventory(){if(!hasFirestore())return;try{const d=await firebase.firestore().collection('inventory').doc('main').get();if(d.exists&&d.data().locations){SIZES.forEach(z=>0);INV=Object.assign({covington:{},pace:{},china:{}},d.data().locations)}}catch(e){}
   const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();}
 function saveInventory(){if(hasFirestore())firebase.firestore().collection('inventory').doc('main').set({locations:INV,updatedAt:new Date().toISOString()},{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
@@ -839,7 +855,7 @@ function totalBurn(){return SIZES.reduce((a,z)=>a+BURN[z],0)}
 function weeksToDate(w){const d=new Date();d.setDate(d.getDate()+Math.round(w*7));return d}
 const fmtDate=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 function isFulfilled(o){const f=FULF[o.n];return o.ful==='FULFILLED'||(f&&f.status==='fulfilled')}
-function unfulfilledOrders(){return SHOP.orders.filter(o=>!isFulfilled(o))}
+function unfulfilledOrders(){return ordersList().filter(o=>!isFulfilled(o))}
 function stockBlocks(){return SIZES.filter(z=>cov(z)<=0&&net(z)>0)}
 function stockGoTab(t){stockTab=t;renderStock()}
 function renderStock(){
@@ -855,7 +871,7 @@ function renderStock(){
 }
 function renderFulfillTab(body){
   const unf=unfulfilledOrders();
-  const done=SHOP.orders.filter(o=>FULF[o.n]&&FULF[o.n].status==='fulfilled');
+  const done=ordersList().filter(o=>FULF[o.n]&&FULF[o.n].status==='fulfilled');
   let html='';
   const blocks=stockBlocks();
   if(blocks.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>CAN’T SHIP</span><div class="t" style="margin-top:7px">'+blocks.map(z=>SIZELABEL[z]).join(', ')+' — 0 in Covington</div><div class="d">Transfer from Pace before these ship. Pace has '+blocks.map(z=>SIZELABEL[z]+' '+(INV.pace[z]||0)).join(', ')+'.</div></div>';
@@ -866,7 +882,7 @@ function renderFulfillTab(body){
 }
 function fulfillCard(o){return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · paid</div></div><span class="pill amber">TO SHIP</span></div><button class="btn" style="margin-top:10px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill this order</button></div>'}
 function fulfilledCard(o){const f=FULF[o.n]||{};return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+SIZELABEL[f.size]+' · '+esc(f.serial||'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+'</div></div><span class="pill good">DONE</span></div><div class="row" style="gap:8px;margin-top:9px"><button class="btn ghost" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Print label</button><button class="btn ghost" style="flex:1" onclick="returnOrder(\''+esc(o.n)+'\')">Log return</button></div></div>'}
-function openFulfill(n){const o=SHOP.orders.find(x=>x.n===n);if(!o)return;ffOrder=n;
+function openFulfill(n){const o=ordersList().find(x=>x.n===n);if(!o)return;ffOrder=n;
   document.getElementById('ff-order').textContent=o.n+' · '+o.name;
   document.getElementById('ff-cust').textContent=o.date+' · $'+o.total+' · paid';
   const jared=(TEAM.find(t=>/jared/i.test(t.name))||{}).name;
@@ -877,7 +893,7 @@ function openFulfill(n){const o=SHOP.orders.find(x=>x.n===n);if(!o)return;ffOrde
   document.getElementById('ff-signer').textContent=(CURRENT_USER&&CURRENT_USER.name)||'you';
   closeSheets();openSheet('sh-fulfill');
 }
-function completeFulfillment(){const o=SHOP.orders.find(x=>x.n===ffOrder);if(!o)return;
+function completeFulfillment(){const o=ordersList().find(x=>x.n===ffOrder);if(!o)return;
   const sz=document.querySelector('#ff-size button.on');const size=sz?sz.dataset.v:'L';
   if(cov(size)<=0){toast(SIZELABEL[size]+' is 0 in Covington — transfer from Pace first');return}
   const qc={};document.querySelectorAll('#ff-qc input').forEach(c=>qc[c.dataset.k]=c.checked);
@@ -895,7 +911,7 @@ function returnOrder(n){const f=FULF[n];if(!f)return;if(!confirm('Log a return f
   if(hasFirestore())firebase.firestore().collection('fulfillments').doc(n).set(f,{merge:true}).catch(()=>{});
   saveInventory();renderStock();refreshPulse();toast('✓ Return logged · '+SIZELABEL[f.size]+' +1 in Covington');
 }
-function printLabel(n){const f=FULF[n];if(!f)return;const o=SHOP.orders.find(x=>x.n===n)||{};
+function printLabel(n){const f=FULF[n];if(!f)return;const o=ordersList().find(x=>x.n===n)||{};
   const payload=encodeURIComponent(JSON.stringify({o:n,s:f.serial,sz:f.size,fw:f.firmware}));
   const qr='https://api.qrserver.com/v1/create-qr-code/?size=220x220&qzone=1&data='+payload;
   const w=window.open('','_blank','width=420,height=580');if(!w){toast('Allow pop-ups to print labels');return}
@@ -929,7 +945,7 @@ function renderOrdersTab(body){
   renderOrderList('');
 }
 function renderOrderList(q){q=(q||'').trim().toLowerCase();const wrap=document.getElementById('order-list');if(!wrap)return;
-  const hits=SHOP.orders.filter(o=>!q||o.n.toLowerCase().includes(q)||o.name.toLowerCase().includes(q));
+  const hits=ordersList().filter(o=>!q||o.n.toLowerCase().includes(q)||o.name.toLowerCase().includes(q));
   wrap.innerHTML=hits.length?hits.map(o=>{const done=isFulfilled(o);const f=FULF[o.n];return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · '+(done?'fulfilled'+(f&&f.serial?' · '+esc(f.serial):''):'awaiting fulfilment')+'</div></div><span class="pill '+(done?'good':'amber')+'">'+(done?'FULFILLED':'OPEN')+'</span></div>'+(!done?'<button class="btn ghost" style="margin-top:9px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill</button>':'')+'</div>'}).join(''):'<div class="empty"><div class="d">No order matches that search.</div></div>';
 }
 function kv(k,v){return '<div class="kv"><span>'+k+'</span><b>'+v+'</b></div>'}
@@ -1063,7 +1079,7 @@ function enterApp(user){
   document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
   buildNav(user.role);renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
-  loadTeam();loadBuildTasks();loadChatChannels();loadInventory();loadFulfillments();subscribeNotifications();
+  loadTeam();loadBuildTasks();loadChatChannels();loadInventory();loadFulfillments();subscribeNotifications();subscribeOrders();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
@@ -1174,7 +1190,7 @@ function renderSupport(){
   document.getElementById('ticket-list').innerHTML=open.length?open.map(ticketCard).join(''):'<div class="empty"><div class="ico">✓</div><div class="t">No open tickets</div><div class="d">Tap “＋ Add ticket” to log one. Automatic capture from the app &amp; sales@ inbox connects next.</div></div>';
   const rsec=document.getElementById('ticket-resolved-sec');
   if(resolved.length){rsec.style.display='block';document.getElementById('ticket-resolved').innerHTML=resolved.map(ticketCard).join('')}else rsec.style.display='none';
-  document.getElementById('support-orders').innerHTML=SHOP.orders.slice(0,3).map(o=>'<div class="card"><div class="row"><div class="grow"><div class="t">'+o.n+' · '+o.name+'</div><div class="d">'+o.date+' · '+o.ful.toLowerCase()+'</div></div><span class="pill '+(o.ful==='FULFILLED'?'good':'amber')+'">'+o.ful+'</span></div></div>').join('')
+  document.getElementById('support-orders').innerHTML=ordersList().slice(0,3).map(o=>'<div class="card"><div class="row"><div class="grow"><div class="t">'+o.n+' · '+o.name+'</div><div class="d">'+o.date+' · '+o.ful.toLowerCase()+'</div></div><span class="pill '+(o.ful==='FULFILLED'?'good':'amber')+'">'+o.ful+'</span></div></div>').join('')
 }
 function toggleResolved(){const r=document.getElementById('ticket-resolved');const on=r.style.display!=='none';r.style.display=on?'none':'block';document.getElementById('resolved-toggle').textContent=on?'Show':'Hide'}
 function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
