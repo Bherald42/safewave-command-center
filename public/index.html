@@ -615,6 +615,8 @@ input[type=date]{color-scheme:dark}
     <div class="rolepick" id="bt-priority">
       <button data-v="safety">Safety</button><button data-v="high">High</button><button data-v="medium" class="on">Medium</button><button data-v="low">Low</button>
     </div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Blocked by <span style="color:var(--faint);font-weight:400">(must finish first — flags what's late upstream)</span></p>
+    <div class="rolepick" id="bt-deps"></div>
     <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Tag teammates <span style="color:var(--faint);font-weight:400">(they get notified &amp; follow updates)</span></p>
     <div class="rolepick" id="bt-watchers"></div>
     <textarea class="field" id="bt-notes" placeholder="Description / notes" style="min-height:64px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
@@ -1617,9 +1619,10 @@ function projectHealth(p){if(p.status==='done')return {key:'done',label:'DONE',p
   const ts=projectTasks(p.id).filter(t=>taskStatus(t)!=='done');
   const blocked=ts.filter(t=>taskStatus(t)==='blocked').length;
   const overdue=ts.filter(t=>{const d=dayMs(t.due);return d&&d<todayMs()}).length;
+  const upLate=ts.some(t=>taskUpstreamLate(t));
   const endOver=p.end&&dayMs(p.end)<todayMs()&&ts.length;
   if(blocked)return {key:'stuck',label:'STUCK',pill:'amber'};
-  if(overdue||endOver)return {key:'risk',label:'AT RISK',pill:'amber'};
+  if(overdue||endOver||upLate)return {key:'risk',label:'AT RISK',pill:'amber'};
   return {key:'ok',label:'ON TRACK',pill:'good'};
 }
 function taskScore(t){
@@ -1633,6 +1636,13 @@ function taskScore(t){
   if(dur>=14)s*=1.2;                                // long tasks threaten end dates
   return Math.round(s);
 }
+function taskById(id){return BUILDT.find(x=>x.id===id)}
+function taskDone(id){const t=taskById(id);return !t||taskStatus(t)==='done'}
+function taskWaiting(t){return (t.deps||[]).some(id=>!taskDone(id))}
+function taskUpstreamLate(t){return (t.deps||[]).some(id=>{const d=taskById(id);return d&&taskStatus(d)!=='done'&&dayMs(d.due)&&dayMs(d.due)<todayMs()})}
+function depOptions(projectId,selfId,sel){sel=sel||[];const cands=BUILDT.filter(t=>t.id!==selfId&&(!projectId||t.projectId===projectId)&&taskStatus(t)!=='done');
+  return cands.length?cands.map(t=>'<button type="button" data-v="'+t.id+'" class="'+(sel.indexOf(t.id)>=0?'on':'')+'" onclick="this.classList.toggle(\'on\')">'+esc((t.title||'').slice(0,26))+'</button>').join(''):'<span class="d" style="color:var(--faint)">No other tasks'+(projectId?' in this project':'')+' yet</span>'}
+function refreshDepPicker(){const proj=document.getElementById('bt-project').value;const cur=Array.from(document.querySelectorAll('#bt-deps button.on')).map(b=>b.dataset.v);document.getElementById('bt-deps').innerHTML=depOptions(proj,btEditId,cur)}
 async function loadBuildTasks(){
   if(!hasFirestore()){BUILDT=[];return}
   try{const qs=await firebase.firestore().collection('build_tasks').get();BUILDT=qs.docs.map(d=>Object.assign({id:d.id},d.data()))}catch(e){BUILDT=[]}
@@ -1666,6 +1676,8 @@ function renderFocus(body,sub){
 function focusCard(t,score){const pr=BPRI[t.priority]||BPRI.medium;const st=TSTATUS[taskStatus(t)];const dm=dueMeta(dayMs(t.due));const done=taskStatus(t)==='done';
   const chips=[];if(t.projectId)chips.push('<span class="mchip">'+esc(projName(t.projectId)||'Project')+'</span>');
   if(t.customer||t.ticketId)chips.push('<span class="mchip warn">customer</span>');
+  if(!done&&taskUpstreamLate(t))chips.push('<span class="mchip warn">⛓ upstream late</span>');
+  else if(!done&&taskWaiting(t))chips.push('<span class="mchip">⛓ waiting</span>');
   if(dm.label&&!done)chips.push('<span class="mchip'+(dm.overdue||dm.soon?' warn':'')+'">'+esc(dm.label)+'</span>');
   if((t.updates||[]).length)chips.push('<span class="mchip">💬 '+t.updates.length+'</span>');
   return '<div class="card tap" tabindex="0" onclick="openBuildTask(\''+t.id+'\')"'+(done?' style="opacity:.55"':'')+'><div class="row"><div class="grow"><div class="t"'+(done?' style="text-decoration:line-through"':'')+'>'+esc(t.title)+'</div><div class="d">'+[esc(t.assignee||'Unassigned'),st.label].join(' · ')+'</div></div>'
@@ -1713,7 +1725,9 @@ function ganttHTML(p,ts){
     const s=dayMs(t.start)||(dayMs(t.due)-3*864e5);const e=dayMs(t.due);const st=taskStatus(t);
     const col=st==='done'?'var(--good)':st==='blocked'?'var(--amber)':st==='doing'?'var(--wave)':'var(--line)';
     const left=x(s),width=Math.max(DAY,x(e)-x(s));
-    rows+='<div class="g-row"><div class="g-lbl">'+esc(t.title)+'</div><div class="g-bar" style="left:'+left+'px;width:'+width+'px;background:'+col+'" title="'+esc(t.title)+'"></div></div>';
+    const wait=st!=='done'&&taskWaiting(t),late=taskUpstreamLate(t);
+    const extra=(wait?';opacity:.5':'')+(late?';outline:2px solid var(--amber);outline-offset:1px':'');
+    rows+='<div class="g-row"><div class="g-lbl">'+(wait?'⛓ ':'')+esc(t.title)+'</div><div class="g-bar" style="left:'+left+'px;width:'+width+'px;background:'+col+extra+'" title="'+esc(t.title)+(late?' — upstream late':wait?' — waiting on a dependency':'')+'"></div></div>';
   });
   const todayX=x(todayMs());
   return '<div class="gantt-wrap"><div class="gantt" style="width:'+W+'px">'
@@ -1770,6 +1784,8 @@ function openBuildTask(id,presetProj){btEditId=id||null;btFile=null;const t=id?B
   document.getElementById('bt-due').value=t&&t.due?String(t.due).slice(0,10):'';
   document.querySelectorAll('#bt-status button').forEach(b=>b.classList.toggle('on',b.dataset.v===taskStatus(t||{})));
   document.querySelectorAll('#bt-priority button').forEach(b=>b.classList.toggle('on',b.dataset.v===((t&&t.priority)||'medium')));
+  document.getElementById('bt-deps').innerHTML=depOptions(t?t.projectId:(presetProj||''),btEditId,t?t.deps:[]);
+  document.getElementById('bt-project').onchange=refreshDepPicker;
   document.getElementById('bt-watchers').innerHTML=watcherChips(t?t.watchers:[]);
   document.getElementById('bt-notes').value=t?t.notes||'':'';
   document.getElementById('bt-file-name').textContent='';document.getElementById('bt-update-text').value='';
@@ -1801,7 +1817,8 @@ async function uploadBuildFile(taskId,file){
 function saveBuildTask(){const title=document.getElementById('bt-title').value.trim();if(!title){toast('Give the task a title');return}
   const pr=document.querySelector('#bt-priority button.on');const stb=document.querySelector('#bt-status button.on');
   const watchers=Array.from(document.querySelectorAll('#bt-watchers button.on')).map(b=>b.dataset.v);
-  const data={title:title,projectId:document.getElementById('bt-project').value,assignee:document.getElementById('bt-assignee').value,start:document.getElementById('bt-start').value||'',due:document.getElementById('bt-due').value||'',status:stb?stb.dataset.v:'todo',priority:pr?pr.dataset.v:'medium',watchers:watchers,notes:document.getElementById('bt-notes').value.trim()};
+  const deps=Array.from(document.querySelectorAll('#bt-deps button.on')).map(b=>b.dataset.v);
+  const data={title:title,projectId:document.getElementById('bt-project').value,assignee:document.getElementById('bt-assignee').value,start:document.getElementById('bt-start').value||'',due:document.getElementById('bt-due').value||'',status:stb?stb.dataset.v:'todo',priority:pr?pr.dataset.v:'medium',watchers:watchers,deps:deps,notes:document.getElementById('bt-notes').value.trim()};
   let prev=null,prevW=[];
   if(btEditId){const t=BUILDT.find(x=>x.id===btEditId);if(t){prev=t.assignee;prevW=t.watchers||[];Object.assign(t,data);persistBuild(t)}}
   else{const t=Object.assign({id:'b'+Date.now().toString(36),updates:[],createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()},data);BUILDT.unshift(t);persistBuild(t)}
