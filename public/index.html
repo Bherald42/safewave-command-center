@@ -760,6 +760,27 @@ input[type=date]{color-scheme:dark}
   </div>
 </div>
 
+<div class="sheet" id="sh-investor-update" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">INVESTOR UPDATE</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Send an investor update</h1>
+    <p class="sub" id="iu-hint"></p>
+    <p class="d" style="font-weight:600;color:var(--text);margin:8px 0 6px">Recipients</p>
+    <div class="rolepick" id="iu-audience">
+      <button data-v="committed" class="on">Committed &amp; wired</button>
+      <button data-v="active">Committed, wired &amp; soft</button>
+      <button data-v="all">All investors</button>
+    </div>
+    <p class="d" id="iu-count" style="color:var(--muted);margin:8px 0 0"></p>
+    <input class="field" id="iu-subject" placeholder="Subject (e.g. Safewave — August update)" style="margin-top:12px">
+    <textarea class="field" id="iu-body" placeholder="Hi {{firstName}},&#10;&#10;Quick update on Safewave this month…" style="min-height:170px;resize:vertical;font-family:var(--font-b)"></textarea>
+    <div class="note" style="margin:2px 0 10px">Personalise with <b>{{firstName}}</b> and <b>{{company}}</b>. Sends individually to each investor and logs to their record.</div>
+    <button class="btn" id="iu-send" onclick="sendInvestorUpdate()">Send update</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
 <div class="sheet" id="sh-users" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
@@ -2029,11 +2050,49 @@ function renderFundraise(v){
   let html='<div class="card"><div class="row"><div class="grow"><div class="t">'+(RAISE.round?esc(RAISE.round)+' round':'Round')+'</div><div class="d">'+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target)+' target':' committed')+' · '+s.investors+' investor'+(s.investors!==1?'s':'')+'</div></div><a onclick="editRaiseTarget()">Set target</a></div>'
     +'<div class="progress" style="margin-top:11px;height:10px"><i style="width:'+pct+'%;background:var(--good)"></i></div>'
     +'<div class="tiles" style="margin-top:12px"><div class="tile"><div class="n" style="color:var(--good)">'+fmtMoney(s.wired)+'</div><div class="l">Wired</div></div><div class="tile"><div class="n">'+fmtMoney(s.hard)+'</div><div class="l">Committed</div></div><div class="tile"><div class="n" style="color:var(--muted)">'+fmtMoney(s.soft)+'</div><div class="l">Soft</div></div></div></div>';
-  html+='<div class="row" style="gap:8px;margin:14px 0"><button class="btn" style="flex:1" onclick="openAddInvestor()">＋ Add investor</button><button class="btn ghost" style="flex:1" onclick="newInvestorCampaign()">✉️ Investor outreach</button></div>';
+  html+=dataRoomCard();
+  html+='<div class="row" style="gap:8px;margin:14px 0;flex-wrap:wrap"><button class="btn" style="flex:1;min-width:150px" onclick="openAddInvestor()">＋ Add investor</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="newInvestorCampaign()">✉️ Investor outreach</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="openInvestorUpdate()">📣 Send update</button></div>';
   const list=raiseAccounts().slice().sort((a,b)=>(Number(b.commit)||0)-(Number(a.commit)||0));
   html+=list.length?list.map(fundraiseCard).join(''):'<div class="empty"><div class="ico">💰</div><div class="t">No investors yet</div><div class="d">Add investors and track outreach, commitments and next steps — email, sequences and call notes all work like the sales pipeline.</div></div>';
   v.innerHTML=html;
 }
+function dataRoomCard(){const docs=RAISE.docs||[];
+  return '<div class="card"><div class="sec-head"><h2>Data room</h2><a onclick="addRaiseDoc()">＋ Add link</a></div>'
+    +(docs.length?docs.map((d,i)=>'<div class="kv"><span><a href="'+esc(d.url)+'" target="_blank" rel="noopener" style="color:var(--wave);font-weight:600">'+esc(d.label||d.url)+' ↗</a></span><a onclick="rmRaiseDoc('+i+')" style="color:var(--faint);cursor:pointer">✕</a></div>').join('')
+      :'<div class="d" style="color:var(--faint)">No documents yet. Add your deck, financial model, cap table or one-pager — one shared link every investor and teammate can reach.</div>')
+    +'</div>';}
+function addRaiseDoc(){const label=prompt('Document name (e.g. Pitch deck, Financial model, Cap table):','');if(label===null)return;const url=prompt('Link (Google Drive / Notion / DocSend URL):','');if(!url)return;RAISE.docs=(RAISE.docs||[]).concat([{label:label.trim()||url.trim(),url:url.trim()}]);saveRaise();renderCRM()}
+function rmRaiseDoc(i){if(!confirm('Remove this document link?'))return;RAISE.docs=(RAISE.docs||[]).slice();RAISE.docs.splice(i,1);saveRaise();renderCRM()}
+/* ---- Investor update broadcast ---- */
+function investorRecipients(mode){return raiseAccounts().filter(a=>{
+  const em=a.email||(a.contacts&&a.contacts[0]&&a.contacts[0].email);if(!em)return false;
+  const st=a.commitStatus||'';
+  if(mode==='committed')return st==='hard'||st==='wired';
+  if(mode==='active')return st==='hard'||st==='wired'||st==='soft';
+  return st!=='passed';});}
+function iuAudienceMode(){const b=document.querySelector('#iu-audience button.on');return b?b.dataset.v:'committed'}
+function iuUpdateCount(){const el=document.getElementById('iu-count');if(!el)return;const n=investorRecipients(iuAudienceMode()).length;el.textContent=n+' investor'+(n!==1?'s':'')+' with an email will receive this.'}
+function openInvestorUpdate(){if(!raiseAccounts().length){toast('Add investors first');return}
+  document.getElementById('iu-subject').value=(RAISE.round?RAISE.round+' — ':'Safewave — ')+'investor update';
+  document.getElementById('iu-body').value='Hi {{firstName}},\n\nQuick update on Safewave:\n\n• \n• \n• \n\nAs always, happy to jump on a call. Thank you for your support.\n\nBest,';
+  document.querySelectorAll('#iu-audience button').forEach((b,i)=>{b.classList.toggle('on',i===0);b.onclick=function(){document.querySelectorAll('#iu-audience button').forEach(x=>x.classList.remove('on'));this.classList.add('on');iuUpdateCount()}});
+  const mail=(CURRENT_USER.mail&&CURRENT_USER.mail.email);
+  document.getElementById('iu-hint').textContent=mail?('Sends from your address: '+mail):'Connect your email first (Account → Connect email) to send in-app.';
+  iuUpdateCount();closeSheets();openSheet('sh-investor-update')}
+async function sendInvestorUpdate(){
+  const subject=document.getElementById('iu-subject').value.trim(),body=document.getElementById('iu-body').value.trim();
+  if(!subject){toast('Add a subject');return}if(!body){toast('Write the update');return}
+  if(!backendReady()||!(CURRENT_USER.mail&&CURRENT_USER.mail.email)){toast('Connect your email first (Account → Connect email)');return}
+  const recips=investorRecipients(iuAudienceMode());
+  if(!recips.length){toast('No investors with an email in that group');return}
+  if(!confirm('Send this update to '+recips.length+' investor'+(recips.length>1?'s':'')+'?'))return;
+  const btn=document.getElementById('iu-send');if(btn){btn.disabled=true;btn.textContent='Sending…'}
+  let ok=0,fail=0;
+  for(const a of recips){const em=a.email||(a.contacts&&a.contacts[0]&&a.contacts[0].email);const ctx=crmMergeCtx(a);
+    try{await firebase.functions().httpsCallable('sendUserEmail')({to:em,subject:fillTemplate(subject,ctx),text:fillTemplate(body,ctx),accountId:a.id});ok++}
+    catch(e){fail++}}
+  if(btn){btn.disabled=false;btn.textContent='Send update'}
+  closeSheets();loadCRM();toast('✓ Sent '+ok+' update'+(ok!==1?'s':'')+(fail?' · '+fail+' failed':''))}
 function fundraiseCard(a){const cm=COMMIT_META[a.commitStatus]||{label:a.stage||'Prospect',pill:'dim'};const c=Number(a.commit)||0;const dm=dueMeta(dayMs(a.dueAt));
   return '<div class="card tap" tabindex="0" onclick="openAcct(\''+a.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(displayName(a))+'</div><div class="d">'+[esc(a.owner&&a.owner!=='Unassigned'?a.owner:''),a.nextStep?esc(a.nextStep):'',dm.label].filter(Boolean).join(' · ')+'</div></div><div style="text-align:right"><div class="mono" style="font-weight:600">'+(c?fmtMoney(c):'—')+'</div><span class="pill '+cm.pill+'">'+cm.label+'</span></div></div></div>'}
 function renderPipelineView(v){
