@@ -29,12 +29,15 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
           PLACES_API_KEY: ${{ secrets.PLACES_API_KEY }}
+          SHOPIFY_WEBHOOK_SECRET: ${{ secrets.SHOPIFY_WEBHOOK_SECRET }}
         run: |
           npm install -g firebase-tools
-          # Inject the Places key (stored as an encrypted repo secret) into the
-          # function's runtime env. functions/.env is gitignored, so the key is
-          # never committed to the repo — it only exists on the deploy runner.
-          if [ -n "$PLACES_API_KEY" ]; then echo "PLACES_API_KEY=$PLACES_API_KEY" > functions/.env; fi
+          # Inject secrets (stored as encrypted repo secrets) into the function's
+          # runtime env. functions/.env is gitignored, so keys are never committed
+          # to the repo — they only exist on the deploy runner.
+          : > functions/.env
+          if [ -n "$PLACES_API_KEY" ]; then echo "PLACES_API_KEY=$PLACES_API_KEY" >> functions/.env; fi
+          if [ -n "$SHOPIFY_WEBHOOK_SECRET" ]; then echo "SHOPIFY_WEBHOOK_SECRET=$SHOPIFY_WEBHOOK_SECRET" >> functions/.env; fi
           firebase deploy --only functions --project safewave-command-center --non-interactive --force
       - name: Deploy Firestore rules
         env:
