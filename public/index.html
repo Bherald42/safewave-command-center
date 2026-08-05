@@ -35,10 +35,20 @@
   --violet:#6A50DC;
   --hair:rgba(20,30,45,.03); /* faint fills that were white-on-dark */
   --shadow:0 1px 2px rgba(20,30,50,.05),0 10px 30px rgba(20,30,50,.08);
+  --bar-bg:rgba(255,255,255,.82); /* app bar + nav, translucent */
   --r:14px;
   --font-d:'Space Grotesk',sans-serif;
   --font-b:'Inter',sans-serif;
   --font-m:'JetBrains Mono',monospace;
+}
+:root[data-theme="dark"]{
+  --bg:#191C22;--bg-grad:radial-gradient(1200px 600px at 50% -10%, #21252D 0%, #191C22 60%);
+  --surface:#242932;--surface-2:#2C323D;--line:#3A414E;--text:#EEF1F4;--muted:#A2AAB6;--faint:#727B89;
+  --wave:#4FD8EC;--wave-dim:rgba(79,216,236,.14);--wave-ink:#053540;
+  --safety:#FF6B6B;--safety-dim:rgba(255,107,107,.14);--amber:#F2B04E;--amber-dim:rgba(242,176,78,.14);
+  --good:#54D9A0;--good-dim:rgba(84,217,160,.14);--violet:#A78BFA;
+  --hair:rgba(255,255,255,.02);--bar-bg:rgba(25,28,34,.92);
+  --shadow:0 1px 2px rgba(0,0,0,.28),0 10px 30px rgba(0,0,0,.34);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -242,7 +252,7 @@ input[type=date]{color-scheme:dark}
 
 /* ================= APP SHELL ================= */
 #app{display:none;min-height:100vh;padding-bottom:96px}
-.appbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.82);backdrop-filter:blur(12px);
+.appbar{position:sticky;top:0;z-index:40;background:var(--bar-bg);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--line);padding:13px 16px;display:flex;align-items:center;gap:12px}
 .appbar .logo{font-size:17px}
 .spacer{flex:1}
@@ -261,7 +271,7 @@ input[type=date]{color-scheme:dark}
 .screen.on{display:block}
 
 /* nav — bottom tabs on mobile, top bar on desktop */
-.nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--bar-bg);backdrop-filter:blur(12px);
   border-top:1px solid var(--line);display:flex;padding:6px 2px calc(9px + env(safe-area-inset-bottom));overflow-x:auto;scrollbar-width:none}
 .nav::-webkit-scrollbar{display:none}
 .tab{flex:1 0 auto;min-width:56px;background:none;border:0;color:var(--faint);font-family:var(--font-b);font-size:9.5px;font-weight:600;
@@ -531,7 +541,12 @@ input[type=date]{color-scheme:dark}
       <div class="kv"><span>Email sending</span><b id="acc-mail">Not connected</b></div>
       <div class="kv"><span>Session</span><b>Private to you</b></div>
     </div>
-    <button class="btn ghost" style="margin-top:12px" onclick="openProfile()">Edit profile</button>
+    <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Appearance</p>
+    <div class="rolepick" id="theme-pick">
+      <button data-v="light" onclick="setTheme('light')">☀︎ Light</button>
+      <button data-v="dark" onclick="setTheme('dark')">☾ Dark</button>
+    </div>
+    <button class="btn ghost" style="margin-top:14px" onclick="openProfile()">Edit profile</button>
     <button class="btn ghost" style="margin-top:8px" onclick="openMail()">Connect / manage your email</button>
     <button class="btn" id="acc-manage" style="display:none;margin-top:8px" onclick="openUsers()">Manage team &amp; roles</button>
     <button class="btn ghost" style="margin-top:8px" onclick="doSignOut()">Sign out</button>
@@ -2440,6 +2455,13 @@ document.addEventListener('keydown',function(e){
   else if(e.key==='ArrowUp'){e.preventDefault();cmdkSel=Math.max(0,cmdkSel-1);cmdkPaint();cmdkScroll()}
   else if(e.key==='Enter'){e.preventDefault();cmdkRun(cmdkSel)}
 });
+
+/* ================= THEME (light default, dark optional) ================= */
+function currentTheme(){return document.documentElement.getAttribute('data-theme')||'light'}
+function setTheme(t){document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('sw_theme',t)}catch(e){}
+  const m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='dark'?'#191C22':'#EDF1F5';
+  document.querySelectorAll('#theme-pick button').forEach(b=>b.classList.toggle('on',b.dataset.v===t));}
+(function(){try{const t=localStorage.getItem('sw_theme');setTheme(t==='dark'?'dark':'light')}catch(e){setTheme('light')}})();
 
 /* ================= UI HELPERS ================= */
 function openSheet(id){document.getElementById(id).classList.add('on')}
