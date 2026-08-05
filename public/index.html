@@ -2029,7 +2029,7 @@ function renderFundraise(v){
   let html='<div class="card"><div class="row"><div class="grow"><div class="t">'+(RAISE.round?esc(RAISE.round)+' round':'Round')+'</div><div class="d">'+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target)+' target':' committed')+' · '+s.investors+' investor'+(s.investors!==1?'s':'')+'</div></div><a onclick="editRaiseTarget()">Set target</a></div>'
     +'<div class="progress" style="margin-top:11px;height:10px"><i style="width:'+pct+'%;background:var(--good)"></i></div>'
     +'<div class="tiles" style="margin-top:12px"><div class="tile"><div class="n" style="color:var(--good)">'+fmtMoney(s.wired)+'</div><div class="l">Wired</div></div><div class="tile"><div class="n">'+fmtMoney(s.hard)+'</div><div class="l">Committed</div></div><div class="tile"><div class="n" style="color:var(--muted)">'+fmtMoney(s.soft)+'</div><div class="l">Soft</div></div></div></div>';
-  html+='<button class="btn" style="margin:14px 0" onclick="openAddInvestor()">＋ Add investor</button>';
+  html+='<div class="row" style="gap:8px;margin:14px 0"><button class="btn" style="flex:1" onclick="openAddInvestor()">＋ Add investor</button><button class="btn ghost" style="flex:1" onclick="newInvestorCampaign()">✉️ Investor outreach</button></div>';
   const list=raiseAccounts().slice().sort((a,b)=>(Number(b.commit)||0)-(Number(a.commit)||0));
   html+=list.length?list.map(fundraiseCard).join(''):'<div class="empty"><div class="ico">💰</div><div class="t">No investors yet</div><div class="d">Add investors and track outreach, commitments and next steps — email, sequences and call notes all work like the sales pipeline.</div></div>';
   v.innerHTML=html;
@@ -2247,6 +2247,15 @@ const PITCHES={
  k12:{label:'Schools & Deaf education',keyword:'school for the deaf',steps:[
    {day:0,subject:'Student-safety alerts for Deaf & hard-of-hearing students',body:'Hi {{firstName}},\n\nThe Safewave Band gives Deaf and hard-of-hearing students strong vibration alerts — fire alarms, bells, and staff notifications — in the classroom and the dorm. It supports IEP assistive-technology goals and keeps students safe and included at {{company}}.\n\nWe offer school pricing and a simple dashboard for staff to manage every band.\n\nCould we set up a short call?\n\nThanks,'},
    {day:6,subject:'Re: student safety at {{company}}',body:'Hi {{firstName}},\n\nFollowing up — I can arrange demo units so staff and students can try them, plus materials for your AT team.\n\nWho’s the right person to include?\n\nBest,'}]},
+ investor_seed:{label:'Investors — Seed & VC',keyword:'',kind:'investor',board:'Fundraise',steps:[
+   {day:0,subject:'Safewave — vibration-alert wearable for people who are Deaf or hard of hearing',body:'Hi {{firstName}},\n\nI’m reaching out because {{company}} backs founders building hardware with real-world impact. Safewave makes a wristband that turns critical sounds — smoke and CO alarms, the doorbell, alerts — into strong vibrations, so the millions of people who are Deaf or hard of hearing never miss what matters.\n\nWe’re shipping today on a hardware-plus-subscription model: direct-to-consumer bands and enterprise fleets for senior living, schools, and vocational rehab. We’re raising to scale manufacturing and enterprise sales.\n\nCould I share our deck and grab 20 minutes?\n\nThanks,'},
+   {day:5,subject:'Re: Safewave round',body:'Hi {{firstName}},\n\nFollowing up — happy to send the deck and a short demo so you can see the alert strength and the enterprise dashboard firsthand.\n\nWould this week or next be better for a quick call?\n\nBest,'}]},
+ investor_angel:{label:'Investors — Angels & pre-seed',keyword:'',kind:'investor',board:'Fundraise',steps:[
+   {day:0,subject:'Backing a wearable that keeps Deaf & hard-of-hearing people safe',body:'Hi {{firstName}},\n\nSafewave is a vibration-alert wristband for people who are Deaf or hard of hearing — it converts alarms and alerts into strong vibrations so they stay safe and independent at home, school, and work.\n\nWe’re shipping product, growing enterprise pilots, and raising a round to expand. Given your background, I’d love to have you involved — as a check and as a voice.\n\nOpen to a short call?\n\nThanks,'},
+   {day:4,subject:'Re: Safewave',body:'Hi {{firstName}},\n\nJust circling back — I can send the deck and put a demo band in your hands so you feel exactly what our users feel.\n\nWhat’s the best way to get 15 minutes?\n\nBest,'}]},
+ investor_impact:{label:'Investors — Impact & accessibility funds',keyword:'',kind:'investor',board:'Fundraise',steps:[
+   {day:0,subject:'An accessibility hardware company raising its round',body:'Hi {{firstName}},\n\nSafewave builds assistive technology — a vibration-alert wristband that gives people who are Deaf or hard of hearing equal access to the sounds that keep everyone else safe: alarms, alerts, and notifications.\n\nThe impact is measurable — safer homes, more independence, inclusion in classrooms and workplaces — and it scales through enterprise fleets and subscriptions. We’re raising to reach more people who need it.\n\nWould {{company}} be open to a conversation?\n\nThanks,'},
+   {day:6,subject:'Re: Safewave — accessibility impact',body:'Hi {{firstName}},\n\nFollowing up — I can share our deck, the impact metrics, and a demo. I’d value your perspective on where this creates the most access.\n\nCould we find 20 minutes?\n\nBest,'}]},
  custom:{label:'Custom / blank',keyword:'',steps:[{day:0,subject:'',body:'Hi {{firstName}},\n\n'}]}
 };
 
@@ -2271,6 +2280,7 @@ function renderCampaigns(v){
   v.innerHTML=html;
 }
 function newCampaign(){campDraft={id:'cmp'+Date.now().toString(36),name:'',useCase:'',ownerUid:CURRENT_USER.uid,ownerEmail:(CURRENT_USER.mail&&CURRENT_USER.mail.email)||CURRENT_USER.email,status:'paused',segment:{board:'all',stage:'all',tag:'all',owner:'all'},steps:[]};campMode='edit';renderCRM();window.scrollTo(0,0)}
+function newInvestorCampaign(){const k='investor_seed';crmTab='campaigns';campMode='edit';campDraft={id:'cmp'+Date.now().toString(36),name:'Investor outreach',useCase:k,ownerUid:CURRENT_USER.uid,ownerEmail:(CURRENT_USER.mail&&CURRENT_USER.mail.email)||CURRENT_USER.email,status:'paused',segment:{board:'Fundraise',stage:'all',tag:'all',owner:'all'},steps:JSON.parse(JSON.stringify(PITCHES[k].steps))};renderCRM();window.scrollTo(0,0)}
 function editCampaign(id){const c=CAMP.find(x=>x.id===id);if(!c)return;campDraft=JSON.parse(JSON.stringify(c));if(!campDraft.segment)campDraft.segment={board:'all',stage:'all',tag:'all',owner:'all'};campMode='edit';renderCRM();window.scrollTo(0,0)}
 function segSel(label,key,opts,cur){return '<select onchange="campDraft.segment.'+key+'=this.value" style="flex-shrink:0;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:99px;padding:7px 12px;font-family:var(--font-b);font-size:12px;font-weight:600"><option value="all"'+((cur||'all')==='all'?' selected':'')+'>'+label+': All</option>'+opts.map(o=>'<option'+(cur===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>'}
 function renderCampaignBuilder(v){const c=campDraft;
@@ -2299,7 +2309,7 @@ function renderCampaignBuilder(v){const c=campDraft;
 function syncCampaignForm(){const c=campDraft;if(!c)return;const nm=document.getElementById('cb-name');if(nm)c.name=nm.value;
   const days=document.querySelectorAll('.cs-day'),subs=document.querySelectorAll('.cs-sub'),bodies=document.querySelectorAll('.cs-body');
   if(days.length){const steps=[];for(let i=0;i<days.length;i++)steps.push({day:Number(days[i].value)||0,subject:subs[i]?subs[i].value:'',body:bodies[i]?bodies[i].value:''});c.steps=steps}}
-function pickUseCase(k){syncCampaignForm();campDraft.useCase=k;const has=(campDraft.steps||[]).some(s=>(s.subject||(s.body&&s.body.trim()&&s.body.trim()!=='Hi {{firstName}},')));if(!has&&PITCHES[k].steps)campDraft.steps=JSON.parse(JSON.stringify(PITCHES[k].steps));if(!campDraft.name&&PITCHES[k].label&&k!=='custom')campDraft.name=PITCHES[k].label.split(' & ')[0]+' outreach';renderCRM()}
+function pickUseCase(k){syncCampaignForm();campDraft.useCase=k;const has=(campDraft.steps||[]).some(s=>(s.subject||(s.body&&s.body.trim()&&s.body.trim()!=='Hi {{firstName}},')));if(!has&&PITCHES[k].steps)campDraft.steps=JSON.parse(JSON.stringify(PITCHES[k].steps));if(!campDraft.name&&PITCHES[k].label&&k!=='custom')campDraft.name=PITCHES[k].label.split(' & ')[0]+' outreach';if(PITCHES[k].board){campDraft.segment=campDraft.segment||{};campDraft.segment.board=PITCHES[k].board}renderCRM()}
 function addStep(){syncCampaignForm();const st=campDraft.steps||[];const last=st.length?st[st.length-1].day||0:0;st.push({day:last+3,subject:'',body:'Hi {{firstName}},\n\n'});campDraft.steps=st;renderCRM()}
 function rmStep(i){syncCampaignForm();campDraft.steps.splice(i,1);renderCRM()}
 function saveCampaign(){syncCampaignForm();const c=campDraft;
@@ -2340,7 +2350,7 @@ function unenroll(id){const a=CRMA.find(x=>x.id===id);if(!a)return;updateAccount
 let prospResults=[], prospUseCase='';
 function renderProspect(v){
   document.getElementById('crm-sub').innerHTML='Source new commercial contacts, then import them straight into the pipeline.';
-  const keys=Object.keys(PITCHES).filter(k=>k!=='custom'&&k!=='influencer');
+  const keys=Object.keys(PITCHES).filter(k=>k!=='custom'&&k!=='influencer'&&PITCHES[k].kind!=='investor');
   v.innerHTML=
     '<div class="note" style="margin-bottom:14px">Search real businesses in your target segments — audiology clinics, senior-living, schools, VR agencies — with name, address, phone and website. Pick a use case to prefill, add a location, then import the ones you want.</div>'
     +'<p class="d" style="font-weight:600;color:var(--text);margin-bottom:6px">Use case</p>'
