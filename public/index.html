@@ -180,6 +180,19 @@ input[type=date]{color-scheme:dark}
 .qc-row:last-child{border-bottom:0}
 .qc-row input{width:18px;height:18px;accent-color:var(--wave);flex-shrink:0}
 #notif-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--amber);color:#0B0C0E;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-b)}
+.cmdk{display:none;position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);align-items:flex-start;justify-content:center;padding:11vh 16px 16px}
+.cmdk.on{display:flex}
+.cmdk-box{width:100%;max-width:580px;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.55);max-height:74vh;display:flex;flex-direction:column}
+.cmdk-box input{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);font-family:var(--font-b);font-size:16px;padding:16px 18px;outline:none}
+.cmdk-box input::placeholder{color:var(--faint)}
+.cmdk-results{overflow-y:auto;flex:1}
+.cmdk-item{display:flex;gap:12px;align-items:center;padding:11px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03)}
+.cmdk-item.sel{background:var(--wave-dim)}
+.cmdk-item .type{font-family:var(--font-m);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--wave);min-width:54px;flex-shrink:0}
+.cmdk-item .ci-t{font-size:14px;color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmdk-item .ci-s{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmdk-empty{padding:22px 16px;color:var(--faint);font-size:13px}
+.cmdk-foot{display:flex;gap:18px;padding:9px 16px;border-top:1px solid var(--line);font-size:10.5px;color:var(--faint);font-family:var(--font-m);letter-spacing:.04em}
 .pcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--wave);border-radius:11px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .12s,transform .05s}
 .pcard:hover{border-color:#4a5361}
 .pcard:active{transform:scale(.99)}
@@ -313,7 +326,7 @@ input[type=date]{color-scheme:dark}
   <header class="appbar">
     <div class="logo"><span class="wv"><i></i><i></i><i></i></span> Safewave</div>
     <div class="spacer"></div>
-    <button class="iconbtn" aria-label="Search everything" onclick="goto('s-know')">
+    <button class="iconbtn" aria-label="Search everything (⌘K)" onclick="openCmdK()">
       <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
     </button>
     <button class="iconbtn" style="position:relative" aria-label="Notifications" onclick="openNotifs()">
@@ -748,6 +761,14 @@ input[type=date]{color-scheme:dark}
     <button class="btn" id="notif-enable" style="display:none;margin-bottom:12px" onclick="enableNotifs()">🔔 Enable phone / desktop alerts</button>
     <div id="notif-list"></div>
     <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
+<div id="cmdk" class="cmdk" onclick="if(event.target===this)closeCmdK()">
+  <div class="cmdk-box" role="dialog" aria-label="Command bar">
+    <input id="cmdk-input" placeholder="Search accounts, tickets, orders — or type a command…" oninput="cmdkRender()" autocomplete="off" spellcheck="false" aria-label="Search or command">
+    <div id="cmdk-results" class="cmdk-results"></div>
+    <div class="cmdk-foot"><span>↑ ↓ move</span><span>↵ open</span><span>esc close</span></div>
   </div>
 </div>
 
@@ -1964,6 +1985,41 @@ const SafewaveTriage=(function(){
   return {score:score,ranked:ranked,selfTest:selfTest,SAMPLE:SAMPLE};
 })();
 try{SafewaveTriage.selfTest()}catch(e){}
+
+/* ================= ⌘K COMMAND BAR — quick-add + search everything ================= */
+let cmdkItems=[], cmdkSel=0;
+function openCmdK(){const box=document.getElementById('cmdk');if(!box)return;box.classList.add('on');const i=document.getElementById('cmdk-input');i.value='';cmdkRender();setTimeout(()=>i.focus(),30)}
+function closeCmdK(){const box=document.getElementById('cmdk');if(box)box.classList.remove('on')}
+function cmdkBuild(q){q=(q||'').toLowerCase().trim();const out=[];
+  const nav=[['Today','s-pulse'],['Sell · CRM','s-crm'],['Fulfill · Stock','s-stock'],['Serve · Support','s-support'],['Build','s-build'],['Chat','s-chat'],['Knowledge','s-know']];
+  if(typeof financeAllowed==='function'&&financeAllowed())nav.push(['Financials','s-finance']);
+  nav.forEach(n=>{if(!q||n[0].toLowerCase().includes(q))out.push({type:'Go',t:n[0],s:'',run:function(){goto(n[1])}})});
+  const acts=[['Add account',function(){openAddAcct()}],['Add ticket',function(){openAddTicket()}],['Add build task',function(){openBuildTask()}],['New campaign',function(){crmGoTab('campaigns');newCampaign()}]];
+  acts.forEach(a=>{if(!q||a[0].toLowerCase().includes(q))out.push({type:'Add',t:a[0],s:'',run:a[1]})});
+  if(q){
+    (CRMA||[]).filter(a=>[displayName(a),a.owner,a.location,a.email].some(v=>(v||'').toLowerCase().includes(q))).slice(0,6).forEach(a=>out.push({type:'Deal',t:displayName(a),s:[a.owner,a.location].filter(Boolean).join(' · '),run:function(){openAcctFromPulse(a.id)}}));
+    (typeof TKTS!=='undefined'?TKTS:[]).filter(t=>[t.title,t.id,t.customer].some(v=>(v||'').toLowerCase().includes(q))).slice(0,5).forEach(t=>out.push({type:'Ticket',t:t.title,s:t.id+(t.assignee?' · '+t.assignee:''),run:function(){openTicketFromPulse(t.id)}}));
+    (typeof BUILDT!=='undefined'?BUILDT:[]).filter(t=>[t.title,t.assignee].some(v=>(v||'').toLowerCase().includes(q))).slice(0,5).forEach(t=>out.push({type:'Task',t:t.title,s:t.assignee||'',run:function(){openBuildFromPulse(t.id)}}));
+    (typeof ordersList==='function'?ordersList():[]).filter(o=>[o.n,o.name].some(v=>(v||'').toLowerCase().includes(q))).slice(0,5).forEach(o=>out.push({type:'Order',t:o.n+' · '+o.name,s:o.date||'',run:function(){goto('s-stock');stockGoTab('orders')}}));
+  }
+  return out;
+}
+function cmdkRender(){const q=document.getElementById('cmdk-input').value;cmdkItems=cmdkBuild(q);cmdkSel=0;
+  const el=document.getElementById('cmdk-results');
+  el.innerHTML=cmdkItems.length?cmdkItems.map((it,i)=>'<div class="cmdk-item'+(i===0?' sel':'')+'" data-i="'+i+'" onmousemove="cmdkHover('+i+')" onclick="cmdkRun('+i+')"><span class="type">'+esc(it.type)+'</span><div style="min-width:0"><div class="ci-t">'+esc(it.t)+'</div>'+(it.s?'<div class="ci-s">'+esc(it.s)+'</div>':'')+'</div></div>').join(''):'<div class="cmdk-empty">No matches. Try an account, ticket or order name — or a command like “Add ticket”.</div>';
+}
+function cmdkHover(i){if(i===cmdkSel)return;cmdkSel=i;cmdkPaint()}
+function cmdkPaint(){document.querySelectorAll('#cmdk-results .cmdk-item').forEach((el,i)=>el.classList.toggle('sel',i===cmdkSel))}
+function cmdkScroll(){const el=document.querySelectorAll('#cmdk-results .cmdk-item')[cmdkSel];if(el)el.scrollIntoView({block:'nearest'})}
+function cmdkRun(i){const it=cmdkItems[i];if(!it)return;closeCmdK();it.run()}
+document.addEventListener('keydown',function(e){
+  if((e.key==='k'||e.key==='K')&&(e.metaKey||e.ctrlKey)){const app=document.getElementById('app');if(app&&app.style.display!=='none'){e.preventDefault();openCmdK()}return}
+  const box=document.getElementById('cmdk');if(!box||!box.classList.contains('on'))return;
+  if(e.key==='Escape'){e.preventDefault();closeCmdK()}
+  else if(e.key==='ArrowDown'){e.preventDefault();cmdkSel=Math.min(cmdkItems.length-1,cmdkSel+1);cmdkPaint();cmdkScroll()}
+  else if(e.key==='ArrowUp'){e.preventDefault();cmdkSel=Math.max(0,cmdkSel-1);cmdkPaint();cmdkScroll()}
+  else if(e.key==='Enter'){e.preventDefault();cmdkRun(cmdkSel)}
+});
 
 /* ================= UI HELPERS ================= */
 function openSheet(id){document.getElementById(id).classList.add('on')}
