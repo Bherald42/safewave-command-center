@@ -556,7 +556,7 @@ input[type=date]{color-scheme:dark}
     <main class="screen" id="s-know">
       <p class="eyebrow">Assistant</p>
       <h1>Ask Safewave</h1>
-      <p class="sub">Ask anything about the business, or pull a report — answered over your live data.</p>
+      <p class="sub">Ask anything about the business, or pull a report — answered instantly from your live data. No setup.</p>
       <div id="agent-thread"></div>
       <div id="agent-suggest"></div>
       <div class="agent-inputrow">
@@ -1506,18 +1506,60 @@ function renderAgentThread(){const el=document.getElementById('agent-thread');if
   el.innerHTML=h;el.scrollTop=el.scrollHeight;renderAgentSuggest();
   const t=el.querySelector('.ag-typing');if(t)t.scrollIntoView({block:'nearest'});}
 function agentSend(){const inp=document.getElementById('agent-input');const q=(inp.value||'').trim();if(!q)return;inp.value='';inp.style.height='';agentAsk(q)}
-async function agentAsk(q){if(agentThinking)return;
-  if(!hasFirestore()){AGENT.push({role:'user',content:q},{role:'assistant',content:'The assistant runs on the live site once you’re signed in.'});renderAgentThread();return}
+function agentAsk(q){if(agentThinking)return;
   AGENT.push({role:'user',content:q});agentThinking=true;renderAgentThread();
-  const history=AGENT.slice(0,-1).map(m=>({role:m.role,content:m.content}));
-  try{
-    const r=await firebase.functions().httpsCallable('askAgent')({question:q,context:agentSnapshot(),history:history});
-    agentThinking=false;AGENT.push({role:'assistant',content:(r.data&&r.data.answer)||'I couldn’t find an answer.'});renderAgentThread();
-  }catch(e){agentThinking=false;const msg=(e&&e.message)||'';
-    const notWired=/connected yet|ANTHROPIC/i.test(msg)||(e&&e.code==='failed-precondition');
-    AGENT.push({role:'assistant',content:notWired?'⚙️ **The assistant isn’t switched on yet.** Add an `ANTHROPIC_API_KEY` as a repo secret (same way as the Places key) and the functions redeploy — then I can answer over your live data.':('Sorry — '+(msg||'something went wrong. Try again.'))});
-    renderAgentThread();}
+  setTimeout(()=>{agentThinking=false;let ans;try{ans=localAnswer(q)}catch(e){ans='Sorry — I hit a snag reading the data. Try a different question.'}AGENT.push({role:'assistant',content:ans});renderAgentThread();},300);
 }
+/* ---- On-device answer engine: no API, no key, works offline over live data ---- */
+function localAnswer(q){const s=agentSnapshot();const t=(''+q).toLowerCase();const has=(...w)=>w.some(x=>t.includes(x));
+  const fineOK=(typeof financeAllowed==='function'&&financeAllowed()&&s.financials);
+  const raiseOK=(typeof canFundraise==='function'&&canFundraise()&&s.fundraise);
+  if(has('help','what can you','what do you','who are you')||t.trim()==='hi'||t.trim()==='hello'||t.trim()==='hey')return agentHelp(fineOK,raiseOK);
+  if(has('weekly','ops report','full report','everything','digest','standup','stand-up','brief me','overview of the business'))return repWeekly(s,fineOK,raiseOK);
+  if(has('overdue','behind','late','due today','due this','what needs','needs attention','follow up','follow-up','followup'))return repOverdue(s);
+  if(fineOK&&has('runway','burn','cash','financ','mrr','p&l','pnl','profit','revenue','payroll','budget','net '))return repFinance(s);
+  if(raiseOK&&has('fundrais','raise','investor','cap table','round','committed','wired','pre-money','pre money'))return repRaise(s);
+  if(has('stock','inventory','reorder','re-order','china','covington','pace','ship','fulfil','fulfill','band'))return repStock(s);
+  if(has('ticket','support','customer issue','complaint','bug','rma','return'))return repSupport(s);
+  if(has('build','dev','roadmap','task','engineering','firmware','feature'))return repBuild(s);
+  if(has('pipeline','sales','deal','account','crm','won','stage','outreach','campaign','prospect'))return repPipeline(s);
+  return agentFallback(s,fineOK,raiseOK);
+}
+function M(n){return (typeof fmtMoney==='function')?fmtMoney(n||0):('$'+Math.round(n||0).toLocaleString())}
+function repPipeline(s){const c=s.crm;let o='### Sales pipeline\n**'+c.totalAccounts+' accounts** · **'+c.won+' won** · **'+c.needFollowUp+' need a next step** · '+c.inOutreach+' in outreach\n\n**By stage**\n'+STAGES.map(st=>'- '+st+': '+(c.byStage[st]||0)).join('\n');
+  o+='\n\n'+(c.overdueFollowups.length?'**Overdue follow-ups ('+c.overdueFollowups.length+')**\n'+c.overdueFollowups.slice(0,8).map(f=>'- '+f.name+' — '+(f.next||'follow up')+' _(owner: '+(f.owner||'unassigned')+', due '+f.due+')_').join('\n'):'No overdue follow-ups. 🎉');
+  if(c.needFollowUp)o+='\n\n> '+c.needFollowUp+' open accounts have **no next step** — set one so they don’t stall.';return o;}
+function repOverdue(s){const c=s.crm;const bt=(s.build.tasks||[]).filter(x=>x.due&&x.due<s.today&&x.status!=='done');
+  let o='### What needs attention\n';
+  o+='\n**Overdue follow-ups ('+c.overdueFollowups.length+')**\n'+(c.overdueFollowups.length?c.overdueFollowups.slice(0,10).map(f=>'- '+f.name+' — '+(f.next||'follow up')+' _(owner: '+(f.owner||'unassigned')+')_').join('\n'):'- none 🎉');
+  const sev=(s.support.tickets||[]).filter(x=>x.severity==='safety'||x.severity==='high');
+  o+='\n\n**Urgent tickets ('+sev.length+')**\n'+(sev.length?sev.map(x=>'- '+(x.severity==='safety'?'⚠️ ':'')+x.title+' _('+x.severity+', '+(x.assignee||'unassigned')+')_').join('\n'):'- none');
+  o+='\n\n**Overdue build tasks ('+bt.length+')**\n'+(bt.length?bt.map(x=>'- '+x.title+' _('+(x.assignee||'unassigned')+', due '+x.due+')_').join('\n'):'- none');
+  if(s.stock.unfulfilledOrders)o+='\n\n**Ops:** '+s.stock.unfulfilledOrders+' order(s) waiting to ship.';return o;}
+function repStock(s){const st=s.stock;let o='### Stock & fulfillment\n- **'+st.unfulfilledOrders+'** order(s) waiting to ship\n\n**Reorder outlook**\n'+(st.reorder||[]).map(r=>'- '+r.size+': '+r.covington+' in Covington, '+r.network+' network — '+(r.orderNow?'**order from China now**':(r.weeksCover!=null?'~'+r.weeksCover+' wk cover':'—'))).join('\n');
+  const inv=st.inventoryByLocation||{};const loc=k=>inv[k]?('S'+(inv[k].S||0)+' · M'+(inv[k].M||0)+' · L'+(inv[k].L||0)):'—';
+  o+='\n\n**Inventory**\n- Covington: '+loc('covington')+'\n- Pace: '+loc('pace')+'\n- China: '+loc('china');
+  const now=(st.reorder||[]).filter(r=>r.orderNow).map(r=>r.size);if(now.length)o+='\n\n> ⏰ Start a China order for **'+now.join(', ')+'** now (2-month lead).';return o;}
+function repSupport(s){const tk=s.support.tickets||[];const bySev=g=>tk.filter(x=>x.severity===g);
+  let o='### Support — '+s.support.openTickets+' open\n';['safety','high','medium','low'].forEach(g=>{const a=bySev(g);if(a.length)o+='\n**'+g.toUpperCase()+' ('+a.length+')**\n'+a.map(x=>'- '+x.title+' _('+(x.customer||'—')+' · '+(x.assignee||'unassigned')+')_').join('\n')+'\n'});
+  if(!tk.length)o+='\nNo open tickets. 🎉';return o;}
+function repBuild(s){const b=s.build.tasks||[];const rank={safety:0,high:1,medium:2,low:3};const sorted=b.slice().sort((x,y)=>(rank[x.priority]||2)-(rank[y.priority]||2));
+  let o='### Build — '+s.build.openTasks+' open task(s)\n';o+=sorted.length?sorted.slice(0,10).map(x=>'- '+x.title+' _('+(x.priority||'medium')+' · '+(x.assignee||'unassigned')+(x.due?' · due '+x.due:'')+')_').join('\n'):'No open tasks.';return o;}
+function repFinance(s){const f=s.financials;let o='### Financials\n- Cash on hand: **'+M(f.cashOnHand)+'**\n- Projected MRR: **'+M(f.projectedMRR)+'**\n- Monthly burn: **'+M(f.monthlyBurn)+'** (payroll '+M(f.payrollMonthly)+')\n- Net / month: **'+M(f.netPerMonth)+'**\n- Runway: **'+(f.monthsRunway==='infinite (net positive)'?'∞ (net positive)':(f.monthsRunway+' months'))+'**';
+  o+='\n\n'+(f.netPerMonth>=0?'> Net-positive at the current run-rate — runway holds while this does.':'> Burning '+M(-f.netPerMonth)+'/mo. Grow enterprise MRR or trim opex to extend.');return o;}
+function repRaise(s){const r=s.fundraise;const pct=r.target?Math.round(r.committed/r.target*100):0;let o='### Fundraise'+(r.round?' — '+r.round:'')+'\n- Committed: **'+M(r.committed)+'**'+(r.target?' of '+M(r.target)+' ('+pct+'%)':'')+'\n- Wired: **'+M(r.wired)+'** · Soft: '+M(r.soft)+'\n- Investors: **'+r.investors+'**'+(r.preMoney?'\n- Pre-money: '+M(r.preMoney)+' → post-money '+M(r.preMoney+r.committed):'');return o;}
+function repWeekly(s,fineOK,raiseOK){const c=s.crm;let o='### Safewave — Weekly Report\n_'+s.today+'_\n';
+  o+='\n**Sales** — '+c.totalAccounts+' accounts, '+c.won+' won, '+c.needFollowUp+' need a step, '+c.overdueFollowups.length+' overdue follow-ups, '+c.inOutreach+' in outreach.';
+  o+='\n\n**Support** — '+s.support.openTickets+' open ticket(s)'+((s.support.tickets||[]).some(x=>x.severity==='safety')?' incl. a **safety** issue':'')+'.';
+  const now=(s.stock.reorder||[]).filter(r=>r.orderNow).map(r=>r.size);
+  o+='\n\n**Stock** — '+s.stock.unfulfilledOrders+' to ship'+(now.length?', **order China for '+now.join('/')+'**':'')+'.';
+  o+='\n\n**Build** — '+s.build.openTasks+' open task(s).';
+  if(fineOK)o+='\n\n**Money** — '+M(s.financials.netPerMonth)+'/mo net, runway '+(s.financials.monthsRunway==='infinite (net positive)'?'∞':s.financials.monthsRunway+' mo')+', cash '+M(s.financials.cashOnHand)+'.';
+  if(raiseOK&&(s.fundraise.investors||s.fundraise.target))o+='\n\n**Raise** — '+M(s.fundraise.committed)+(s.fundraise.target?' of '+M(s.fundraise.target):'')+' committed across '+s.fundraise.investors+' investor(s).';
+  const todo=[];if(c.overdueFollowups.length)todo.push(c.overdueFollowups.length+' overdue follow-ups');if(now.length)todo.push('China reorder ('+now.join('/')+')');if((s.support.tickets||[]).some(x=>x.severity==='safety'))todo.push('the safety ticket');if(s.stock.unfulfilledOrders)todo.push(s.stock.unfulfilledOrders+' orders to ship');
+  o+='\n\n**This week:** '+(todo.length?'clear '+todo.join(', ')+'.':'no fires — keep the pipeline moving.');return o;}
+function agentHelp(fineOK,raiseOK){return '### I’m your Safewave copilot 🌊\nI answer from your **live data**, instantly and offline — no setup needed. Try:\n- **“Weekly ops report”** — the whole business\n- **“What’s overdue?”** — follow-ups, urgent tickets, late tasks\n- **“Pipeline summary”** · **“Stock to reorder”** · **“Open tickets”** · **“Build tasks”**'+(fineOK?'\n- **“Runway check”**':'')+(raiseOK?'\n- **“Fundraise status”**':'')+'\n\nAsk in your own words — I match the topic and pull the numbers.';}
+function agentFallback(s,fineOK,raiseOK){return 'I answer from your live data — I can pull:\n- **Weekly ops report**\n- **What’s overdue** / needs attention\n- **Pipeline** · **Stock & reorder** · **Support tickets** · **Build tasks**'+(fineOK?'\n- **Runway & financials**':'')+(raiseOK?'\n- **Fundraise status**':'')+'\n\nTry one of those, or tap a suggestion below. _(For open-ended questions in plain English, a connected AI model can be switched on later.)_';}
 function agentSnapshot(){try{
   const t=todayMs();
   const sc={};STAGES.forEach(s=>sc[s]=0);(CRMA||[]).forEach(a=>{const s=a.stage||'New';if(sc[s]!=null)sc[s]++});
