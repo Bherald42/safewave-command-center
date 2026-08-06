@@ -30,6 +30,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
           PLACES_API_KEY: ${{ secrets.PLACES_API_KEY }}
           SHOPIFY_WEBHOOK_SECRET: ${{ secrets.SHOPIFY_WEBHOOK_SECRET }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           npm install -g firebase-tools
           # Inject secrets (stored as encrypted repo secrets) into the function's
@@ -38,6 +39,7 @@ jobs:
           : > functions/.env
           if [ -n "$PLACES_API_KEY" ]; then echo "PLACES_API_KEY=$PLACES_API_KEY" >> functions/.env; fi
           if [ -n "$SHOPIFY_WEBHOOK_SECRET" ]; then echo "SHOPIFY_WEBHOOK_SECRET=$SHOPIFY_WEBHOOK_SECRET" >> functions/.env; fi
+          if [ -n "$ANTHROPIC_API_KEY" ]; then echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" >> functions/.env; fi
           firebase deploy --only functions --project safewave-command-center --non-interactive --force
       - name: Deploy Firestore + Storage rules
         env:

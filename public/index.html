@@ -311,6 +311,26 @@ input[type=date]{color-scheme:dark}
 #crm-queue{display:none;position:fixed;inset:0;z-index:150;background:rgba(13,27,36,.5);backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:16px}
 #crm-queue.on{display:flex}
 .q-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 64px rgba(0,0,0,.28);max-width:460px;width:100%;padding:22px}
+#agent-thread{display:flex;flex-direction:column;gap:12px;margin:6px 0}
+.ag-msg{max-width:min(760px,92%);border-radius:14px;padding:12px 15px;font-size:15px;line-height:1.55}
+.ag-msg.user{align-self:flex-end;background:var(--wave);color:#fff;border-bottom-right-radius:5px}
+.ag-msg.bot{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:5px}
+.ag-msg.bot h3{font-size:15px;margin:10px 0 4px;font-family:var(--font-d)}
+.ag-msg.bot h3:first-child{margin-top:0}
+.ag-msg.bot ul{margin:6px 0;padding-left:20px}
+.ag-msg.bot li{margin:3px 0}
+.ag-msg.bot p{margin:7px 0}
+.ag-msg.bot p:first-child{margin-top:0}.ag-msg.bot p:last-child{margin-bottom:0}
+.ag-msg.bot code{font-family:var(--font-m,ui-monospace,monospace);background:var(--surface-2,rgba(0,0,0,.05));padding:.05em .35em;border-radius:5px;font-size:.9em}
+.ag-typing{align-self:flex-start;display:inline-flex;gap:4px;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.ag-typing i{width:7px;height:7px;border-radius:50%;background:var(--faint);animation:agb 1s infinite}
+.ag-typing i:nth-child(2){animation-delay:.15s}.ag-typing i:nth-child(3){animation-delay:.3s}
+@keyframes agb{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+#agent-suggest{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.ag-sug{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:8px 13px;font-family:var(--font-b);font-size:13px;font-weight:600;color:var(--ink,var(--text));cursor:pointer}
+.ag-sug:hover{border-color:var(--wave);color:var(--wave)}
+.agent-inputrow{display:flex;gap:8px;align-items:flex-end;margin-top:12px;position:sticky;bottom:8px}
+#agent-input{flex:1;min-height:44px;max-height:180px;resize:none;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-family:var(--font-b);font-size:15px;color:var(--text)}
 .screen{display:none;padding:20px 16px 30px}
 .screen.on{display:block}
 
@@ -532,19 +552,30 @@ input[type=date]{color-scheme:dark}
       </div>
     </main>
 
-    <!-- KNOWLEDGE -->
+    <!-- KNOWLEDGE / ASSISTANT -->
     <main class="screen" id="s-know">
-      <p class="eyebrow">Knowledge</p>
-      <h1>One source of truth</h1>
-      <p class="sub">One search across accounts, tickets, orders, tasks, customers and decisions.</p>
-      <div class="searchbar">
-        <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
-        <input id="know-q" type="search" placeholder="Search everything…" aria-label="Search everything" oninput="renderKnow(this.value)">
+      <p class="eyebrow">Assistant</p>
+      <h1>Ask Safewave</h1>
+      <p class="sub">Ask anything about the business, or pull a report — answered over your live data.</p>
+      <div id="agent-thread"></div>
+      <div id="agent-suggest"></div>
+      <div class="agent-inputrow">
+        <textarea id="agent-input" rows="1" placeholder="Ask a question or request a report…" onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();agentSend()}"></textarea>
+        <button class="btn" id="agent-send" onclick="agentSend()" style="width:auto;flex:0 0 auto">Ask</button>
       </div>
-      <div id="know-results"></div>
-      <div class="sec" id="know-decisions">
-        <div class="sec-head"><h2>Decision log</h2><span class="pill dim">real decisions</span></div>
-        <div class="card" id="decision-log"></div>
+      <div class="sec" style="margin-top:22px">
+        <div class="sec-head"><h2>Search records</h2><a id="know-search-toggle" onclick="toggleKnowSearch()">Open</a></div>
+        <div id="know-search-body" style="display:none">
+          <div class="searchbar">
+            <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+            <input id="know-q" type="search" placeholder="Instant keyword search across accounts, tickets, orders, tasks…" aria-label="Search everything" oninput="renderKnow(this.value)">
+          </div>
+          <div id="know-results"></div>
+          <div class="sec" id="know-decisions">
+            <div class="sec-head"><h2>Decision log</h2><span class="pill dim">real decisions</span></div>
+            <div class="card" id="decision-log"></div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -1449,6 +1480,74 @@ function renderKnow(q){q=(q||'').trim();const res=document.getElementById('know-
   res.innerHTML=html||'<div class="empty"><div class="d">No matches for "'+esc(q)+'".</div></div>';
 }
 function knowRun(i){const it=(window.__knowItems||[])[i];if(it&&it.run)it.run()}
+function toggleKnowSearch(){const b=document.getElementById('know-search-body'),t=document.getElementById('know-search-toggle');if(!b)return;const open=b.style.display!=='none';b.style.display=open?'none':'block';if(t)t.textContent=open?'Open':'Close';if(!open){renderDecisions();const q=document.getElementById('know-q');if(q)q.focus()}}
+
+/* ================= ASK SAFEWAVE — in-app AI assistant over live data ================= */
+let AGENT=[], agentThinking=false;
+function agentSuggestions(){const s=[['📊 Pipeline summary','Give me a summary of the sales pipeline and what needs attention.'],['⏰ What’s overdue?','What follow-ups and tasks are overdue right now, and who owns them?'],['📦 Stock to reorder','Which band sizes are low or need a China reorder, and by when?'],['📝 Weekly ops report','Write a concise weekly ops report across sales, support, stock and build.']];
+  if(typeof financeAllowed==='function'&&financeAllowed())s.push(['💵 Runway check','What’s our current runway, burn and net per month? How do we extend it?']);
+  if(typeof canFundraise==='function'&&canFundraise())s.push(['💰 Fundraise status','Where does the raise stand — committed vs target, wired, and next steps?']);
+  return s;}
+function renderAgentSuggest(){const el=document.getElementById('agent-suggest');if(!el)return;el.innerHTML=(AGENT.length?[]:agentSuggestions()).map(s=>'<button class="ag-sug" onclick="agentAsk(decodeURIComponent(\''+encodeURIComponent(s[1])+'\'))">'+esc(s[0])+'</button>').join('')}
+function renderAgent(){renderAgentThread();renderAgentSuggest();renderDecisions()}
+function mdLite(s){s=esc(s);
+  s=s.replace(/```([\s\S]*?)```/g,(m,c)=>'<pre style="white-space:pre-wrap;background:var(--surface-2,rgba(0,0,0,.05));padding:10px;border-radius:8px;overflow:auto">'+c+'</pre>');
+  s=s.replace(/^###\s+(.+)$/gm,'<h3>$1</h3>').replace(/^##\s+(.+)$/gm,'<h3>$1</h3>').replace(/^#\s+(.+)$/gm,'<h3>$1</h3>');
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  const lines=s.split(/\n/);let out='',inList=false;
+  lines.forEach(ln=>{const li=ln.match(/^\s*[-*]\s+(.+)/);
+    if(li){if(!inList){out+='<ul>';inList=true}out+='<li>'+li[1]+'</li>'}
+    else{if(inList){out+='</ul>';inList=false}if(/<h3>/.test(ln))out+=ln;else if(ln.trim()==='')out+='';else out+='<p>'+ln+'</p>'}});
+  if(inList)out+='</ul>';return out;}
+function renderAgentThread(){const el=document.getElementById('agent-thread');if(!el)return;
+  let h=AGENT.map(m=>m.role==='user'?'<div class="ag-msg user">'+esc(m.content)+'</div>':'<div class="ag-msg bot">'+mdLite(m.content)+'</div>').join('');
+  if(agentThinking)h+='<div class="ag-typing"><i></i><i></i><i></i></div>';
+  if(!AGENT.length&&!agentThinking)h='<div class="card" style="color:var(--muted)">👋 I’m your Safewave copilot. Ask about the pipeline, tickets, stock, orders, the build board — or say “write a weekly report.” I answer over your live data. Tap a suggestion below to start.</div>';
+  el.innerHTML=h;el.scrollTop=el.scrollHeight;renderAgentSuggest();
+  const t=el.querySelector('.ag-typing');if(t)t.scrollIntoView({block:'nearest'});}
+function agentSend(){const inp=document.getElementById('agent-input');const q=(inp.value||'').trim();if(!q)return;inp.value='';inp.style.height='';agentAsk(q)}
+async function agentAsk(q){if(agentThinking)return;
+  if(!hasFirestore()){AGENT.push({role:'user',content:q},{role:'assistant',content:'The assistant runs on the live site once you’re signed in.'});renderAgentThread();return}
+  AGENT.push({role:'user',content:q});agentThinking=true;renderAgentThread();
+  const history=AGENT.slice(0,-1).map(m=>({role:m.role,content:m.content}));
+  try{
+    const r=await firebase.functions().httpsCallable('askAgent')({question:q,context:agentSnapshot(),history:history});
+    agentThinking=false;AGENT.push({role:'assistant',content:(r.data&&r.data.answer)||'I couldn’t find an answer.'});renderAgentThread();
+  }catch(e){agentThinking=false;const msg=(e&&e.message)||'';
+    const notWired=/connected yet|ANTHROPIC/i.test(msg)||(e&&e.code==='failed-precondition');
+    AGENT.push({role:'assistant',content:notWired?'⚙️ **The assistant isn’t switched on yet.** Add an `ANTHROPIC_API_KEY` as a repo secret (same way as the Places key) and the functions redeploy — then I can answer over your live data.':('Sorry — '+(msg||'something went wrong. Try again.'))});
+    renderAgentThread();}
+}
+function agentSnapshot(){try{
+  const t=todayMs();
+  const sc={};STAGES.forEach(s=>sc[s]=0);(CRMA||[]).forEach(a=>{const s=a.stage||'New';if(sc[s]!=null)sc[s]++});
+  const overdue=(CRMA||[]).filter(a=>a.dueAt&&dayMs(a.dueAt)!=null&&dayMs(a.dueAt)<t&&a.stage!=='Won'&&a.stage!=='Lost').map(a=>({name:displayName(a),owner:a.owner||'',next:a.nextStep||'',due:a.dueAt}));
+  const needStep=(CRMA||[]).filter(a=>a.stage!=='Won'&&a.stage!=='Lost'&&!a.dueAt&&isStale(a)).length;
+  const outreach=(CRMA||[]).filter(a=>a.campaign&&a.campaign.status==='active').length;
+  const tickets=(typeof TKTS!=='undefined'?TKTS:[]).filter(x=>x.status==='open').slice(0,30).map(x=>({id:x.id,title:x.title,severity:x.sev,assignee:x.assignee||'',customer:x.customer||'',due:x.due||''}));
+  let orders=[],unfilled=0,reorder=[];
+  try{orders=(typeof ordersList==='function'?ordersList():[]).slice(0,20).map(o=>({n:o.n,name:o.name,total:o.total,date:o.date,fulfilled:o.ful==='FULFILLED'}))}catch(e){}
+  try{unfilled=(typeof unfulfilledOrders==='function'?unfulfilledOrders().length:0)}catch(e){}
+  try{reorder=SIZES.map(z=>({size:SIZELABEL[z],covington:cov(z),network:net(z),weeksCover:isFinite(netWeeks(z))?Math.round(netWeeks(z)):null,orderNow:chinaByWeeks(z)<=0}))}catch(e){}
+  const build=(typeof BUILDT!=='undefined'?BUILDT:[]).filter(x=>taskStatus(x)!=='done');
+  const snap={
+    today:new Date(t).toISOString().slice(0,10),
+    company:'Safewave Technology — the Safewave Band, a vibration-alert wristband for people who are Deaf or hard of hearing.',
+    shopify:{gross90d:SHOP.gross90||SHOP.grosse90,revenueLastWeek:SHOP.lastWeekRev,ordersLastWeek:SHOP.lastWeekOrders,avgOrderValue:SHOP.aov},
+    crm:{totalAccounts:(CRMA||[]).length,byStage:sc,won:sc.Won||0,needFollowUp:needStep,inOutreach:outreach,overdueFollowups:overdue.slice(0,25)},
+    support:{openTickets:tickets.length,tickets:tickets},
+    stock:{inventoryByLocation:(typeof INV!=='undefined'?INV:{}),unfulfilledOrders:unfilled,reorder:reorder,recentOrders:orders},
+    build:{openTasks:build.length,tasks:build.slice(0,15).map(x=>({title:x.title,assignee:x.assignee||'',priority:x.priority,status:taskStatus(x),due:x.due||''}))}
+  };
+  if(typeof financeAllowed==='function'&&financeAllowed()&&typeof financeData!=='undefined'&&financeData){
+    const burn=financeBurn(),mrr=financeMRR(),n2=mrr-burn.total,cash=parseMoney(financeData.cashOnHand);
+    snap.financials={cashOnHand:cash,projectedMRR:mrr,monthlyBurn:burn.total,netPerMonth:n2,monthsRunway:n2>=0?'infinite (net positive)':Math.round((cash/(-n2))*10)/10,payrollMonthly:burn.payroll,pnl:financeData.pnl||[]};
+  }
+  if(typeof canFundraise==='function'&&canFundraise()&&typeof raiseStats==='function'){
+    const rs=raiseStats();snap.fundraise={round:RAISE.round||'',target:rs.target,committed:rs.committed,wired:rs.wired,soft:rs.soft,investors:rs.investors,preMoney:Number(RAISE.preMoney)||0};
+  }
+  return snap;
+}catch(e){return {error:'snapshot failed',note:'answer from general knowledge and say data was unavailable'}}}
 
 /* ================= FEEDBACK (every screen → Brad, the super admin) ================= */
 let FEEDBACK=[], fbUnsub=null;
@@ -1604,6 +1703,7 @@ function goto(id,btn){
   if(id==='s-chat')renderChat();
   if(id==='s-stock')renderStock();
   if(id==='s-feedback')renderFeedbackInbox();
+  if(id==='s-know')renderAgent();
 }
 
 /* ================= SESSION ================= */
