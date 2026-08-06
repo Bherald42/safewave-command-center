@@ -1506,9 +1506,19 @@ function renderAgentThread(){const el=document.getElementById('agent-thread');if
   el.innerHTML=h;el.scrollTop=el.scrollHeight;renderAgentSuggest();
   const t=el.querySelector('.ag-typing');if(t)t.scrollIntoView({block:'nearest'});}
 function agentSend(){const inp=document.getElementById('agent-input');const q=(inp.value||'').trim();if(!q)return;inp.value='';inp.style.height='';agentAsk(q)}
-function agentAsk(q){if(agentThinking)return;
+async function agentAsk(q){if(agentThinking)return;
   AGENT.push({role:'user',content:q});agentThinking=true;renderAgentThread();
-  setTimeout(()=>{agentThinking=false;let ans;try{ans=localAnswer(q)}catch(e){ans='Sorry — I hit a snag reading the data. Try a different question.'}AGENT.push({role:'assistant',content:ans});renderAgentThread();},300);
+  const history=AGENT.slice(0,-1).map(m=>({role:m.role,content:m.content}));
+  let ans=null,apiErr='';
+  if(hasFirestore()){
+    try{const r=await firebase.functions().httpsCallable('askAgent')({question:q,context:agentSnapshot(),history:history});ans=(r.data&&r.data.answer)||null;}
+    catch(e){apiErr=(e&&e.message)||'';}
+  }
+  if(!ans){let local;try{local=localAnswer(q)}catch(e){local='Sorry — I hit a snag reading the data.'}
+    const notWired=/connected yet|ANTHROPIC/i.test(apiErr)||!hasFirestore();
+    ans=local+(notWired?'\n\n_⚙️ Answered from the built-in engine. For open-ended questions, add an `ANTHROPIC_API_KEY` repo secret to switch on the full AI model._':(apiErr?'\n\n_(The AI model was unreachable just now — answered from the built-in engine.)_':''));
+  }
+  agentThinking=false;AGENT.push({role:'assistant',content:ans});renderAgentThread();
 }
 /* ---- On-device answer engine: no API, no key, works offline over live data ---- */
 function localAnswer(q){const s=agentSnapshot();const t=(''+q).toLowerCase();const has=(...w)=>w.some(x=>t.includes(x));
