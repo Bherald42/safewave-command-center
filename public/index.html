@@ -2942,6 +2942,8 @@ function finTrajectoryCard(){const s=finSeries();const net=financeMRR()-financeB
     +'<div class="row" style="justify-content:space-between;margin-top:8px"><span class="d">Now '+fmtMoney(s.cash[0])+'</span><span class="d" style="color:var(--text);font-weight:600">'+(s.runOut>=0?'Runs out ~month '+s.runOut:'Month '+s.h+' · '+fmtMoney(s.cash[s.cash.length-1]))+'</span></div>'
     +'<div class="note" style="margin-top:9px">Projected from current cash, monthly burn, and the MRR growth below. Edit the inputs to model scenarios.</div></div>';
 }
+let finTab='overview';
+function finGoTab(t){finTab=t;renderFinance()}
 function renderFinance(){
   const body=document.getElementById('fin-body');if(!body)return;
   if(!financeAllowed()){body.innerHTML='<div class="empty"><div class="ico">🔒</div><div class="t">Restricted</div><div class="d">Financials are visible only to approved teammates.</div></div>';return}
@@ -2953,14 +2955,14 @@ function renderFinance(){
   const gross=rev-cogs,pnlNet=gross-opex;
   const ps=projSeries();
   document.getElementById('fin-sub').innerHTML='Restricted to '+FINANCE_EMAILS.length+' teammate'+(FINANCE_EMAILS.length!==1?'s':'')+' · Shopify data + your projections';
-  body.innerHTML=
+  const SEC={};
+  SEC.overview=
     '<div class="tiles" style="margin-bottom:16px">'
       +ftile(SHOP.grosse90||SHOP.gross90,'Gross · 90 days','LIVE')
       +ftile(SHOP.lastWeekRev,'Revenue · last wk','LIVE')
       +ftile(SHOP.lastWeekOrders,'Orders · last wk','LIVE')
       +ftile(SHOP.aov,'Avg order value','LIVE')
     +'</div>'
-    /* Runway */
     +'<div class="card"><div class="sec-head"><h2>Runway &amp; burn</h2></div>'
       +'<div class="tiles">'
         +'<div class="tile"><div class="n">'+fmtMoney(mrr)+'</div><div class="l">Projected MRR</div></div>'
@@ -2971,12 +2973,22 @@ function renderFinance(){
       +'<div class="row" style="gap:8px;margin-top:12px;align-items:center"><span class="d" style="font-weight:600;color:var(--text)">Cash on hand</span><input class="field" id="fp-cash" type="number" value="'+(parseMoney(financeData.cashOnHand)||0)+'" style="margin:0;max-width:180px"><button class="btn ghost" onclick="saveCash()">Save</button></div>'
       +'<div class="note" style="margin-top:10px">'+(net>=0?'Net-positive at the current run-rate — runway is effectively unlimited while this holds.':'At '+fmtMoney(-net)+'/mo net burn, cash lasts ~'+(runway?runway.toFixed(1):'—')+' months. Grow enterprise MRR or trim opex to extend.')+'</div>'
     +'</div>'
-    /* Fundraise */
     +fundraiseFinCard(cash,net)
-    /* Trajectory charts */
-    +finTrajectoryCard()
-    /* Projections */
-    +'<div class="card"><div class="sec-head"><h2>Enterprise subscription projections</h2></div>'
+    +finTrajectoryCard();
+  SEC.pnl=
+    '<div class="card"><div class="sec-head"><h2>QuickBooks</h2><span class="pill dim">import</span></div>'
+      +'<p class="d" style="margin:0 0 10px;color:var(--muted)">Pull your books straight into the P&amp;L below. In QuickBooks, run <b>Reports → Profit &amp; Loss</b>, then <b>Export → Export to CSV</b>, and drop the file here.</p>'
+      +'<input type="file" id="qb-file" accept=".csv,text/csv" style="display:none" onchange="importQuickbooks(this)">'
+      +'<button class="btn" onclick="document.getElementById(\'qb-file\').click()">⬆︎ Import Profit &amp; Loss (CSV)</button>'
+      +'<div class="note" style="margin-top:10px">One click, no setup — income, COGS and expenses map into the P&amp;L for you to review and save. Automatic live QuickBooks Online sync is a larger connect (Intuit sign-in + secure link); say the word and we\'ll wire it. The CSV import keeps your P&amp;L current in the meantime.</div>'
+    +'</div>'
+    +'<div class="card"><div class="sec-head"><h2>P&amp;L builder</h2><a onclick="addPnl()">＋ Line</a></div>'
+      +pnl.map((l,i)=>'<div class="frow pnl-row"><input class="field fr-label" value="'+esc(l.label||'')+'" placeholder="Line item"><select class="fr-type field" style="max-width:120px">'+['rev','cogs','opex'].map(t=>'<option value="'+t+'"'+(l.type===t?' selected':'')+'>'+({rev:'Revenue',cogs:'COGS',opex:'Opex'}[t])+'</option>').join('')+'</select><input class="field fr-amt" type="number" value="'+(parseMoney(l.amount)||0)+'" style="max-width:120px"><a class="fr-x" onclick="rmPnl('+i+')">✕</a></div>').join('')
+      +'<button class="btn" onclick="savePnl()" style="margin:6px 0 12px">Save P&amp;L</button>'
+      +'<div class="kv"><span>Revenue</span><b>'+fmtMoney(rev)+'</b></div><div class="kv"><span>COGS</span><b>'+fmtMoney(cogs)+'</b></div><div class="kv"><span>Gross profit</span><b>'+fmtMoney(gross)+'</b></div><div class="kv"><span>Operating expenses (manual)</span><b>'+fmtMoney(opexManual)+'</b></div>'+(bs.totalSpent?'<div class="kv"><span>Build &amp; R&amp;D (from projects)</span><b>'+fmtMoney(bs.totalSpent)+'</b></div>':'')+'<div class="kv"><span style="font-weight:700">Net</span><b style="color:'+(pnlNet>=0?'var(--good)':'var(--amber)')+'">'+fmtMoney(pnlNet)+'</b></div>'
+    +'</div>';
+  SEC.projections=
+    '<div class="card"><div class="sec-head"><h2>Enterprise subscription projections</h2></div>'
       +'<div class="frow"><label class="fr-lbl">Enterprise customers</label><input class="field" id="fp-customers" type="number" value="'+(parseMoney((financeData.projections||{}).customers)||0)+'"></div>'
       +'<div class="frow"><label class="fr-lbl">Avg MRR per customer</label><input class="field" id="fp-mrr" type="number" value="'+(parseMoney((financeData.projections||{}).avgMrr)||0)+'"></div>'
       +'<div class="frow"><label class="fr-lbl">Monthly growth %</label><input class="field" id="fp-growth" type="number" value="'+(parseMoney((financeData.projections||{}).growthPct)||0)+'"></div>'
@@ -2984,41 +2996,31 @@ function renderFinance(){
       +'<button class="btn ghost" onclick="saveProjections()" style="margin:6px 0 12px">Save projections</button>'
       +'<div class="kv"><span>Baseline MRR</span><b>'+fmtMoney(ps.base)+'  ·  '+fmtMoney(ps.base*12)+' ARR</b></div>'
       +ps.pts.map(p=>'<div class="kv"><span>Month '+p.m+'</span><b>'+fmtMoney(p.mrr)+' MRR · '+fmtMoney(p.mrr*12)+' ARR</b></div>').join('')
-      +'<div class="note" style="margin-top:10px">Feeds the runway model above. Swap in live subscription counts once the Safewave enterprise dashboard is connected.</div>'
-    +'</div>'
-    /* P&L builder */
-    /* QuickBooks import */
-    +'<div class="card"><div class="sec-head"><h2>QuickBooks</h2><span class="pill dim">import</span></div>'
-      +'<p class="d" style="margin:0 0 10px;color:var(--muted)">Pull your books straight into the P&amp;L below. In QuickBooks, run <b>Reports → Profit &amp; Loss</b>, then <b>Export → Export to CSV</b>, and drop the file here.</p>'
-      +'<input type="file" id="qb-file" accept=".csv,text/csv" style="display:none" onchange="importQuickbooks(this)">'
-      +'<button class="btn" onclick="document.getElementById(\'qb-file\').click()">⬆︎ Import Profit &amp; Loss (CSV)</button>'
-      +'<div class="note" style="margin-top:10px">One click, no setup — income, COGS and expenses map into the P&amp;L for you to review and save. Automatic live QuickBooks Online sync is a larger connect (Intuit sign-in + secure link); say the word and we\'ll wire it. The CSV import keeps your P&amp;L current in the meantime.</div>'
-    +'</div>'
-    /* P&L builder */
-    +'<div class="card"><div class="sec-head"><h2>P&amp;L builder</h2><a onclick="addPnl()">＋ Line</a></div>'
-      +pnl.map((l,i)=>'<div class="frow pnl-row"><input class="field fr-label" value="'+esc(l.label||'')+'" placeholder="Line item"><select class="fr-type field" style="max-width:120px">'+['rev','cogs','opex'].map(t=>'<option value="'+t+'"'+(l.type===t?' selected':'')+'>'+({rev:'Revenue',cogs:'COGS',opex:'Opex'}[t])+'</option>').join('')+'</select><input class="field fr-amt" type="number" value="'+(parseMoney(l.amount)||0)+'" style="max-width:120px"><a class="fr-x" onclick="rmPnl('+i+')">✕</a></div>').join('')
-      +'<button class="btn" onclick="savePnl()" style="margin:6px 0 12px">Save P&amp;L</button>'
-      +'<div class="kv"><span>Revenue</span><b>'+fmtMoney(rev)+'</b></div><div class="kv"><span>COGS</span><b>'+fmtMoney(cogs)+'</b></div><div class="kv"><span>Gross profit</span><b>'+fmtMoney(gross)+'</b></div><div class="kv"><span>Operating expenses (manual)</span><b>'+fmtMoney(opexManual)+'</b></div>'+(bs.totalSpent?'<div class="kv"><span>Build &amp; R&amp;D (from projects)</span><b>'+fmtMoney(bs.totalSpent)+'</b></div>':'')+'<div class="kv"><span style="font-weight:700">Net</span><b style="color:'+(pnlNet>=0?'var(--good)':'var(--amber)')+'">'+fmtMoney(pnlNet)+'</b></div>'
-    +'</div>'
-    /* Build & R&D spend from the board */
-    +'<div class="card"><div class="sec-head"><h2>Build &amp; R&amp;D spend</h2><a onclick="goto(\'s-build\')">Board ↗</a></div>'
+      +'<div class="note" style="margin-top:10px">Feeds the runway model on Overview. Swap in live subscription counts once the Safewave enterprise dashboard is connected.</div>'
+    +'</div>';
+  SEC.build=
+    '<div class="card"><div class="sec-head"><h2>Build &amp; R&amp;D spend</h2><a onclick="goto(\'s-build\')">Board ↗</a></div>'
       +'<div class="tiles"><div class="tile"><div class="n">'+fmtMoney(bs.totalSpent)+'</div><div class="l">Spent to date</div></div><div class="tile"><div class="n">'+fmtMoney(bs.totalBudget)+'</div><div class="l">Budgeted</div></div><div class="tile"><div class="n" style="color:'+(bs.remaining?'var(--amber)':'var(--good)')+'">'+fmtMoney(bs.remaining)+'</div><div class="l">Remaining commitment</div></div></div>'
       +['hardware','consulting','other'].filter(k=>bs.cats[k].budget||bs.cats[k].spent).map(k=>'<div class="kv"><span>'+COSTCAT_LABEL[k]+'</span><b>'+fmtMoney(bs.cats[k].spent)+' spent'+(bs.cats[k].budget?' / '+fmtMoney(bs.cats[k].budget):'')+'</b></div>').join('')
-      +'<div class="note" style="margin-top:10px">Pulled from tasks on the Build board (hardware dev, 3rd-party consulting). Spend feeds Net above; the remaining commitment is drawn against the cash-runway projection.</div></div>'
-    /* Budget builder */
-    +'<div class="card"><div class="sec-head"><h2>Budget builder</h2><a onclick="addBudget()">＋ Line</a></div>'
+      +'<div class="note" style="margin-top:10px">Pulled from tasks on the Build board (hardware dev, 3rd-party consulting). Spend feeds Net on the P&amp;L; the remaining commitment is drawn against the cash-runway projection.</div></div>';
+  SEC.budget=
+    '<div class="card"><div class="sec-head"><h2>Budget builder</h2><a onclick="addBudget()">＋ Line</a></div>'
       +(financeData.budget||[]).map((b,i)=>{const v=parseMoney(b.actual)-parseMoney(b.budget);return '<div class="frow bud-row"><input class="field fr-label" value="'+esc(b.label||'')+'" placeholder="Category"><input class="field fr-bud" type="number" placeholder="Budget" value="'+(parseMoney(b.budget)||0)+'" style="max-width:110px"><input class="field fr-act" type="number" placeholder="Actual" value="'+(parseMoney(b.actual)||0)+'" style="max-width:110px"><span class="d" style="min-width:70px;text-align:right;color:'+(v>0?'var(--amber)':'var(--good)')+'">'+fmtMoney(v)+'</span><a class="fr-x" onclick="rmBudget('+i+')">✕</a></div>'}).join('')
       +'<button class="btn" onclick="saveBudget()" style="margin-top:6px">Save budget</button>'
       +(!(financeData.budget||[]).length?'<div class="d" style="color:var(--faint);margin-top:8px">Add budget lines to track plan vs actual (variance in the right column).</div>':'')
-    +'</div>'
-    /* Payroll */
-    +'<div class="card"><div class="sec-head"><h2>Payroll</h2><a onclick="addPay()">＋ Person</a></div>'
+    +'</div>';
+  SEC.payroll=
+    '<div class="card"><div class="sec-head"><h2>Payroll</h2><a onclick="addPay()">＋ Person</a></div>'
       +(financeData.payroll||[]).map((p,i)=>'<div class="frow pay-row"><input class="field fr-name" value="'+esc(p.name||'')+'" placeholder="Name"><input class="field fr-role" value="'+esc(p.role||'')+'" placeholder="Role"><input class="field fr-monthly" type="number" placeholder="Monthly" value="'+(parseMoney(p.monthly)||0)+'" style="max-width:120px"><a class="fr-x" onclick="rmPay('+i+')">✕</a></div>').join('')
       +'<button class="btn" onclick="savePay()" style="margin:6px 0 10px">Save payroll</button>'
       +'<div class="kv"><span style="font-weight:700">Total monthly payroll</span><b>'+fmtMoney(burn.payroll)+'</b></div>'
       +'<div class="note" style="margin-top:10px">Manual entry today — feeds the burn model. Live Gusto / ADP payroll sync connects here next.</div>'
-    +'</div>'
-    +financeAccessHTML();
+    +'</div>';
+  SEC.access=financeAccessHTML();
+  const tabs=[['overview','Overview'],['pnl','P&L'],['projections','Projections'],['budget','Budget'],['payroll','Payroll'],['build','Build spend'],['access','Access']];
+  if(!SEC[finTab])finTab='overview';
+  const strip='<div class="chips" style="margin-bottom:16px">'+tabs.map(t=>'<button class="chip'+(finTab===t[0]?' on':'')+'" onclick="finGoTab(\''+t[0]+'\')">'+t[1]+'</button>').join('')+'</div>';
+  body.innerHTML=strip+SEC[finTab];
 }
 function ftile(v,l,badge){return '<div class="tile"><div class="n">'+esc(String(v==null?'—':v))+'</div><div class="l">'+esc(l)+(badge?' <span class="pill wave" style="font-size:9px;padding:1px 6px">'+badge+'</span>':'')+'</div></div>'}
 function saveCash(){saveFinance({cashOnHand:Number(document.getElementById('fp-cash').value)||0},'✓ Saved');renderFinance()}
