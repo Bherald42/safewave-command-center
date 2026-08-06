@@ -68,6 +68,73 @@ exports.sendUserEmail = onCall({ region: REGION }, async (request) => {
 });
 
 /* ------------------------------------------------------------------ *
+ * ASK AGENT — the in-app assistant ("Ask Safewave")
+ * Answers questions & writes reports over a company-data snapshot the
+ * client assembles from what the signed-in user is already allowed to see.
+ * The Anthropic key lives only here (server-side), never in the client.
+ * ------------------------------------------------------------------ */
+exports.askAgent = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to ask the assistant.");
+  const key = process.env.ANTHROPIC_API_KEY || "";
+  if (!key) throw new HttpsError("failed-precondition", "The assistant isn't connected yet — add an ANTHROPIC_API_KEY secret to enable it.");
+
+  const { question, context, history } = request.data || {};
+  if (!question || !("" + question).trim()) throw new HttpsError("invalid-argument", "Ask a question.");
+
+  const snapshot = typeof context === "string" ? context : JSON.stringify(context || {});
+  const sys =
+    "You are the Safewave Command Center assistant — an internal ops copilot for Safewave Technology, " +
+    "maker of the Safewave Band (a vibration-alert wristband for people who are Deaf or hard of hearing).\n\n" +
+    "Answer the user's question, or write the report they ask for, using ONLY the company data snapshot below. " +
+    "It is a live view of what this user is allowed to see (CRM pipeline, support tickets, stock & orders, build tasks" +
+    ", and — only if present — financials and the fundraise).\n\n" +
+    "Rules:\n" +
+    "- Be concise and specific; cite real numbers from the snapshot.\n" +
+    "- Format with short Markdown (headings, bullets, bold figures). No preamble like 'Certainly'.\n" +
+    "- If the answer isn't in the snapshot, say what's missing and where in the app to find it — do not invent data.\n" +
+    "- Money is USD. 'Need follow-up' means an open account with no next step. Red is reserved for life-safety.\n\n" +
+    "=== COMPANY DATA SNAPSHOT ===\n" + snapshot.slice(0, 90000);
+
+  const msgs = [];
+  (Array.isArray(history) ? history.slice(-8) : []).forEach((m) => {
+    if (m && (m.role === "user" || m.role === "assistant") && m.content) {
+      msgs.push({ role: m.role, content: ("" + m.content).slice(0, 4000) });
+    }
+  });
+  msgs.push({ role: "user", content: ("" + question).slice(0, 4000) });
+
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 1500,
+        system: sys,
+        messages: msgs,
+      }),
+    });
+    if (!resp.ok) {
+      const body = await resp.text();
+      logger.error("askAgent Anthropic error", resp.status, body.slice(0, 500));
+      throw new HttpsError("internal", "The assistant hit an error (" + resp.status + "). Try again in a moment.");
+    }
+    const data = await resp.json();
+    const answer = (data && Array.isArray(data.content) ? data.content : [])
+      .filter((b) => b && b.type === "text").map((b) => b.text).join("\n").trim();
+    return { answer: answer || "I couldn't find an answer in the current data." };
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    logger.error("askAgent failed", e && e.message);
+    throw new HttpsError("internal", "The assistant is unavailable right now.");
+  }
+});
+
+/* ------------------------------------------------------------------ *
  * SOURCE PROSPECTS — Google Places business directory
  * ------------------------------------------------------------------ */
 exports.sourceProspects = onCall({ region: REGION }, async (request) => {
