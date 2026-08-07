@@ -391,6 +391,12 @@ input[type=date]{color-scheme:dark}
 
     <input class="field" id="email" type="email" placeholder="Work email" autocomplete="email" aria-label="Work email">
     <input class="field" id="pass" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
+    <select class="field" id="signup-dept" aria-label="Your role" style="display:none">
+      <option value="">Select your role…</option>
+      <option value="ops">Ops — stock, inventory &amp; tickets</option>
+      <option value="sales">Sales — CRM &amp; pipeline</option>
+      <option value="tech">Tech — tickets &amp; build board</option>
+    </select>
     <button class="btn" id="signin-btn" onclick="doEmailAuth()">Sign in</button>
     <button class="btn ghost gbtn" style="margin-top:9px" onclick="doGoogle()">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.64-.06-1.25-.16-1.84H12v3.49h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.24c1.9-1.75 2.98-4.33 2.98-7.17z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.43l-3.24-2.5c-.9.6-2.05.96-3.38.96-2.6 0-4.8-1.76-5.58-4.12H3.06v2.58A9.99 9.99 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.42 13.91a5.99 5.99 0 0 1 0-3.82V7.51H3.06a10 10 0 0 0 0 8.98l3.36-2.58z"/><path fill="#EA4335" d="M12 5.98c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.96 9.96 0 0 0 12 2 9.99 9.99 0 0 0 3.06 7.51l3.36 2.58C7.2 7.74 9.4 5.98 12 5.98z"/></svg>
@@ -1907,9 +1913,27 @@ const FINANCE_NAV={id:'s-finance',label:'Financials',roles:[],svg:'<path d="M3 3
 const FEEDBACK_NAV={id:'s-feedback',label:'Feedback',roles:[],svg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'};
 let FINANCE_EMAILS=[];
 function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;if(u.role==='superadmin')return true;return FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase())}
+/* Department layer: a sign-up role (Ops/Sales/Tech) that scopes which work
+   tabs a member sees. It sits ON TOP of the role hierarchy — admins, managers
+   and the super admin are unaffected and still see everything. Members with no
+   dept (Google sign-ups, legacy accounts) keep the classic member nav. */
+const DEPTS=['ops','sales','tech'];
+const DEPT_COMMON=['s-pulse','s-chat','s-know']; // everyone gets these
+const DEPT_TABS={ops:['s-stock','s-support'], sales:['s-crm'], tech:['s-support','s-build']};
+function deptLabel(d){return {ops:'Ops',sales:'Sales',tech:'Tech'}[d]||''}
+function navAllowedIds(user){
+  user=user||CURRENT_USER; if(!user)return null;
+  // Full-access roles + dept-less members fall through to the classic nav.
+  if(user.role==='admin'||user.role==='superadmin'||user.role==='manager')return null;
+  if(!DEPTS.includes(user.dept))return null;
+  return DEPT_COMMON.concat(DEPT_TABS[user.dept]||[]);
+}
 function buildNav(role){
   const nav=document.getElementById('nav');nav.innerHTML='';
-  const items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(role)));
+  const allowed=navAllowedIds(CURRENT_USER);
+  let items;
+  if(allowed){const set=new Set(allowed);items=NAV_ITEMS.filter(n=>set.has(n.id));}
+  else items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(role)));
   if(financeAllowed())items.splice(1,0,FINANCE_NAV);
   if(isSuperAdmin())items.push(FEEDBACK_NAV);
   const current=document.querySelector('.screen.on');const curId=current?current.id:'s-pulse';
@@ -1938,6 +1962,7 @@ function goto(id,btn){
 /* ================= SESSION ================= */
 function navRole(r){return r==='superadmin'?'admin':r}
 function roleLabel(r){return {superadmin:'Super Admin',admin:'Admin',manager:'Manager',member:'Team member'}[r]||r}
+function userRoleText(u){if(u&&u.role==='member'&&deptLabel(u.dept))return deptLabel(u.dept);return roleLabel(u.role)}
 function hasFirestore(){return typeof firebase!=='undefined'&&firebase.firestore&&!window.__noFirebase}
 function fallbackRole(email){return (email||'').toLowerCase()===SUPER_EMAIL?'superadmin':'admin'}
 async function resolveUser(u){
@@ -1948,11 +1973,12 @@ async function resolveUser(u){
     const snap=await ref.get();
     if(!snap.exists){
       const role=(u.email||'').toLowerCase()===SUPER_EMAIL?'superadmin':'member';
-      await ref.set({email:u.email,name:base.name,title:'',phone:'',role:role,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
-      return Object.assign(base,{role:role});
+      const dept=DEPTS.includes(PENDING_DEPT)?PENDING_DEPT:'';PENDING_DEPT='';
+      await ref.set({email:u.email,name:base.name,title:'',phone:'',role:role,dept:dept,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      return Object.assign(base,{role:role,dept:dept});
     }
     const d=snap.data()||{};
-    return Object.assign(base,{role:d.role||'member',name:d.name||base.name,title:d.title||'',phone:d.phone||''});
+    return Object.assign(base,{role:d.role||'member',dept:d.dept||'',name:d.name||base.name,title:d.title||'',phone:d.phone||''});
   }catch(e){
     return Object.assign(base,{role:fallbackRole(u.email),fsOff:true,fsErr:(e&&e.code)||''});
   }
@@ -1963,10 +1989,10 @@ function enterApp(user){
   document.getElementById('login').hidden=true;
   document.getElementById('app').style.display='block';
   document.getElementById('who-av').textContent=initials(user.name,user.email);
-  document.getElementById('who-nm').innerHTML=(user.name||user.email.split('@')[0])+'<small>'+roleLabel(user.role)+'</small>';
+  document.getElementById('who-nm').innerHTML=(user.name||user.email.split('@')[0])+'<small>'+userRoleText(user)+'</small>';
   document.getElementById('acc-name').textContent=user.name||user.email.split('@')[0];
   document.getElementById('acc-email').textContent=user.email;
-  document.getElementById('acc-role').textContent=roleLabel(user.role)+(user.fsOff?' · Firestore off':'');
+  document.getElementById('acc-role').textContent=userRoleText(user)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
   buildNav(user.role);renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
   loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();loadPOs();subscribeReturns();subscribeNotifications();subscribeOrders();
@@ -1993,10 +2019,17 @@ function toggleMode(){
   document.getElementById('toggle-text').textContent=MODE==='signin'?'First time here? ':'Already have an account? ';
   document.getElementById('toggle-link').textContent=MODE==='signin'?'Create your account':'Sign in';
   document.getElementById('pass').setAttribute('autocomplete',MODE==='signin'?'current-password':'new-password');
+  document.getElementById('signup-dept').style.display=MODE==='signup'?'block':'none';
 }
+let PENDING_DEPT='';
 function doEmailAuth(){
   const email=document.getElementById('email').value.trim(),pass=document.getElementById('pass').value;
   if(!email||!pass){loginErr('Enter your email and password.');return}
+  if(MODE==='signup'){
+    const dept=document.getElementById('signup-dept').value;
+    if(!dept && email.toLowerCase()!==SUPER_EMAIL){loginErr('Pick your role so we can set up the right tabs for you.');return}
+    PENDING_DEPT=dept;
+  }
   if(!fbReady()){loginErr('Sign-in runs on the live site (safewave-command-center.web.app). Ask an admin to enable the Email/Password provider in Firebase if it isn\'t on yet.');return}
   const btn=document.getElementById('signin-btn');btn.disabled=true;btn.textContent='…';
   const p=MODE==='signin'?firebase.auth().signInWithEmailAndPassword(email,pass):firebase.auth().createUserWithEmailAndPassword(email,pass);
