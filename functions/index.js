@@ -229,17 +229,33 @@ exports.shopifyOrderWebhook = onRequest({ region: REGION }, async (req, res) => 
 
 function shopShortDate(iso) { try { return new Date(iso || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric" }); } catch (e) { return ""; } }
 
-async function handleShopifyOrder(o) {
+// Shared Shopify order → orders/{id} mapping, used by BOTH the real-time
+// webhook and the pull-based sync so the two paths write identical docs.
+function mapShopifyOrder(o) {
   const cust = o.customer || {}, ship = o.shipping_address || {};
   const name = [cust.first_name, cust.last_name].filter(Boolean).join(" ") || ship.name || o.email || "Customer";
   const n = o.name || ("#" + (o.order_number || o.id || ""));
   const id = String(o.id || n).replace(/[^\w-]/g, "") || String(Date.now());
+  const f0 = (o.fulfillments && o.fulfillments[0]) || null;
   const rec = {
     n: n, name: name, email: o.email || "", total: Number(o.total_price || 0),
     date: shopShortDate(o.created_at),
     ful: String(o.fulfillment_status || "").toLowerCase() === "fulfilled" ? "FULFILLED" : "UNFULFILLED",
-    source: "shopify", at: new Date().toISOString(),
+    source: "shopify",
+    at: o.created_at ? new Date(o.created_at).toISOString() : new Date().toISOString(),
   };
+  if (f0) {
+    rec.tracking = f0.tracking_number || (f0.tracking_numbers && f0.tracking_numbers[0]) || "";
+    rec.trackingUrl = f0.tracking_url || (f0.tracking_urls && f0.tracking_urls[0]) || "";
+    rec.carrier = f0.tracking_company || "";
+  }
+  return { id: id, rec: rec };
+}
+
+async function handleShopifyOrder(o) {
+  const mapped = mapShopifyOrder(o);
+  const id = mapped.id, rec = mapped.rec;
+  rec.at = new Date().toISOString(); // real-time arrival stamp for webhook orders
   await db.collection("orders").doc(id).set(rec, { merge: true });
   await db.collection("notifications").add({
     to: "all", title: "New order " + rec.n, body: rec.name + " · $" + rec.total,
@@ -294,6 +310,100 @@ async function handleShopifyReturn(topic, body) {
     });
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * SHOPIFY PULL SYNC  →  keep orders/ in step with Shopify without a webhook
+ *
+ * Webhooks only push new events and can be dropped, so the Command Center
+ * can silently fall behind. This reads the Shopify Admin API directly to
+ * backfill order history and self-heal past any missed delivery. Needs two
+ * secrets (injected into functions/.env at deploy, never committed):
+ *   SHOPIFY_STORE_DOMAIN   e.g. safewavetech.myshopify.com
+ *   SHOPIFY_ADMIN_TOKEN    an Admin API access token with read_orders
+ * Without them the callable returns a clear "connect Shopify" message and
+ * the scheduled job no-ops, so nothing breaks before they're set.
+ * ------------------------------------------------------------------ */
+const SHOPIFY_API_VERSION = "2024-10";
+
+function shopifyCreds() {
+  const domain = (process.env.SHOPIFY_STORE_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  const token = process.env.SHOPIFY_ADMIN_TOKEN || "";
+  return { domain: domain, token: token };
+}
+
+// Fetch one page of orders; returns { orders, next } where next is the
+// cursor URL from Shopify's Link header (null when there are no more pages).
+async function fetchShopifyOrdersPage(pageUrl) {
+  const c = shopifyCreds();
+  if (!c.domain || !c.token) throw new Error("Shopify Admin API not configured");
+  const url = pageUrl || ("https://" + c.domain + "/admin/api/" + SHOPIFY_API_VERSION +
+    "/orders.json?status=any&limit=250");
+  const r = await fetch(url, { headers: { "X-Shopify-Access-Token": c.token, "content-type": "application/json" } });
+  if (!r.ok) throw new Error("Shopify API " + r.status + " " + r.statusText);
+  const data = await r.json();
+  let next = null;
+  const link = r.headers.get("link") || "";
+  const m = link.match(/<([^>]+)>;\s*rel="next"/);
+  if (m) next = m[1];
+  return { orders: data.orders || [], next: next };
+}
+
+// Pull orders and upsert into orders/{id}. backfill:true walks every page
+// (history); backfill:false pulls just the most-recent page (cheap reconcile).
+async function pullShopifyOrders(opts) {
+  opts = opts || {};
+  const maxPages = opts.backfill ? 40 : 1; // 40 * 250 = 10k-order ceiling
+  let page = null, pages = 0;
+  const items = [];
+  do {
+    const res = await fetchShopifyOrdersPage(page);
+    res.orders.forEach((o) => items.push(mapShopifyOrder(o)));
+    page = res.next;
+    pages++;
+  } while (page && pages < maxPages);
+  // Commit in batches (Firestore caps a batch at 500 writes).
+  for (let i = 0; i < items.length; i += 400) {
+    const batch = db.batch();
+    items.slice(i, i + 400).forEach((it) => batch.set(db.collection("orders").doc(it.id), it.rec, { merge: true }));
+    await batch.commit();
+  }
+  await db.collection("settings").doc("shopify").set({
+    lastSyncAt: new Date().toISOString(), lastSyncCount: items.length, lastSyncBy: opts.by || "system",
+  }, { merge: true });
+  return items.length;
+}
+
+// Callable: "Sync now" / "Backfill history" from the Stock screen.
+exports.syncShopifyOrders = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to sync orders.");
+  const c = shopifyCreds();
+  if (!c.domain || !c.token) {
+    throw new HttpsError("failed-precondition",
+      "Shopify isn't connected yet — add SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_TOKEN secrets to enable order sync.");
+  }
+  try {
+    const by = (request.auth.token && request.auth.token.email) || request.auth.uid;
+    const synced = await pullShopifyOrders({ backfill: !!(request.data && request.data.backfill), by: by });
+    const s = await db.collection("settings").doc("shopify").get();
+    return { synced: synced, lastSyncAt: (s.exists && s.data().lastSyncAt) || null };
+  } catch (e) {
+    logger.error("syncShopifyOrders failed", e && e.message);
+    throw new HttpsError("internal", "Sync failed — " + ((e && e.message) || "check the Shopify token"));
+  }
+});
+
+// Scheduled reconcile: pulls the most-recent page every 15 minutes so new
+// orders and fulfilment/tracking changes land even if a webhook was missed.
+exports.scheduledShopifySync = onSchedule({ schedule: "every 15 minutes", region: REGION }, async () => {
+  const c = shopifyCreds();
+  if (!c.domain || !c.token) { logger.info("scheduledShopifySync skipped — Shopify not configured"); return; }
+  try {
+    const n = await pullShopifyOrders({ backfill: false, by: "schedule" });
+    logger.info("scheduledShopifySync upserted " + n + " orders");
+  } catch (e) {
+    logger.error("scheduledShopifySync failed", e && e.message);
+  }
+});
 
 /* ------------------------------------------------------------------ *
  * RUN CAMPAIGNS  →  send next due step of each active campaign
