@@ -30,6 +30,8 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
           PLACES_API_KEY: ${{ secrets.PLACES_API_KEY }}
           SHOPIFY_WEBHOOK_SECRET: ${{ secrets.SHOPIFY_WEBHOOK_SECRET }}
+          SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
+          SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           npm install -g firebase-tools
@@ -39,6 +41,8 @@ jobs:
           : > functions/.env
           if [ -n "$PLACES_API_KEY" ]; then echo "PLACES_API_KEY=$PLACES_API_KEY" >> functions/.env; fi
           if [ -n "$SHOPIFY_WEBHOOK_SECRET" ]; then echo "SHOPIFY_WEBHOOK_SECRET=$SHOPIFY_WEBHOOK_SECRET" >> functions/.env; fi
+          if [ -n "$SHOPIFY_STORE_DOMAIN" ]; then echo "SHOPIFY_STORE_DOMAIN=$SHOPIFY_STORE_DOMAIN" >> functions/.env; fi
+          if [ -n "$SHOPIFY_ADMIN_TOKEN" ]; then echo "SHOPIFY_ADMIN_TOKEN=$SHOPIFY_ADMIN_TOKEN" >> functions/.env; fi
           if [ -n "$ANTHROPIC_API_KEY" ]; then echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" >> functions/.env; fi
           firebase deploy --only functions --project safewave-command-center --non-interactive --force
       - name: Deploy Firestore + Storage rules

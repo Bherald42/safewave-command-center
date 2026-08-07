@@ -1144,11 +1144,15 @@ function openReturns(){return Object.values(RETURNS).filter(r=>r.status!=='resto
 /* Live orders from Shopify (via the order webhook → orders/{id}); falls back to
    the snapshot until the webhook is connected. */
 let LIVEORDERS=[], ordersUnsub=null;
+/* DEMO holds walkthrough orders injected by "Demo walkthrough" — in-memory
+   only, never written to Shopify or Firestore; cleared on reload or Clear. */
+let DEMO=[];
+function isDemoOrder(n){return /^DEMO/.test(n||'')}
 function ordersList(){
-  if(!LIVEORDERS.length)return SHOP.orders;
   const seen={},out=[];
-  LIVEORDERS.forEach(o=>{seen[o.n]=1;out.push(o)});
-  SHOP.orders.forEach(o=>{if(!seen[o.n])out.push(o)});
+  DEMO.forEach(o=>{seen[o.n]=1;out.push(o)});
+  if(LIVEORDERS.length){LIVEORDERS.forEach(o=>{if(!seen[o.n]){seen[o.n]=1;out.push(o)}})}
+  else{SHOP.orders.forEach(o=>{if(!seen[o.n]){seen[o.n]=1;out.push(o)}})}
   return out;
 }
 function subscribeOrders(){if(!hasFirestore()){return}
@@ -1193,6 +1197,51 @@ function renderPOs(){const open=PO.filter(o=>o.status!=='received').sort((a,b)=>
   return html;}
 async function loadFulfillments(){if(!hasFirestore())return;try{const qs=await firebase.firestore().collection('fulfillments').get();FULF={};qs.forEach(d=>{FULF[d.id]=d.data();const o=SHOP.orders.find(x=>x.n===d.id);if(o&&d.data().status==='fulfilled')o.ful='FULFILLED'})}catch(e){FULF={}}
   const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();}
+/* ---- Shopify sync: pull orders from Shopify so the board can't fall behind.
+   The scheduled backend job keeps this fresh automatically; these buttons let
+   the team reconcile on demand. Orders land via the live orders/ subscription. */
+let syncing=false;
+async function syncShopify(backfill){
+  if(syncing)return;
+  if(!hasFirestore()){toast('Sign in to sync live orders');return}
+  syncing=true;renderStock();
+  toast(backfill?'Backfilling order history from Shopify…':'Syncing from Shopify…');
+  try{
+    const r=await firebase.functions().httpsCallable('syncShopifyOrders')({backfill:!!backfill});
+    const n=(r&&r.data&&r.data.synced)||0;
+    toast('✓ Synced '+n+' order'+(n===1?'':'s')+' from Shopify');
+  }catch(e){
+    const m=(e&&e.message)||'';
+    toast(/connected yet|SHOPIFY|precondition/i.test(m)?'Shopify isn’t connected yet — add the Shopify Admin token, then Sync':'Sync failed — '+m);
+  }
+  syncing=false;renderStock();
+}
+/* ---- Demo walkthrough: watch orders "arrive" and fulfil one, end to end,
+   without touching Shopify or the database. Everything here stays in memory. */
+const DEMO_SEED=[
+  {n:'DEMO-#2001',name:'Priya Nair',   date:'just now',total:150,ful:'UNFULFILLED'},
+  {n:'DEMO-#2002',name:'Marcus Webb',  date:'just now',total:150,ful:'UNFULFILLED'},
+  {n:'DEMO-#2003',name:'Elena Rossi',  date:'just now',total:150,ful:'UNFULFILLED'},
+];
+function demoSync(){
+  clearDemo(true);
+  stockGoTab('fulfill');
+  toast('▶ Demo — watch orders arrive from Shopify');
+  let i=0;
+  (function add(){
+    if(i>=DEMO_SEED.length){toast('Demo: '+DEMO_SEED.length+' orders arrived — hit “Fulfill this order” to walk the flow');return}
+    DEMO.push(Object.assign({},DEMO_SEED[i]));i++;renderStock();
+    setTimeout(add,750);
+  })();
+}
+function clearDemo(quiet){
+  DEMO=[];
+  Object.keys(FULF).forEach(k=>{if(isDemoOrder(k))delete FULF[k]});
+  Object.keys(BANDS).forEach(k=>{if(BANDS[k]&&isDemoOrder(BANDS[k].order))delete BANDS[k]});
+  Object.keys(RETURNS).forEach(k=>{if(isDemoOrder(k)||isDemoOrder(RETURNS[k]&&RETURNS[k].order))delete RETURNS[k]});
+  renderStock();
+  if(!quiet)toast('Demo cleared');
+}
 function cov(z){return (INV.covington[z]||0)}
 function net(z){return (INV.covington[z]||0)+(INV.pace[z]||0)+(INV.china[z]||0)}
 function covWeeks(z){return BURN[z]>0?cov(z)/BURN[z]:Infinity}
@@ -1225,6 +1274,12 @@ function renderFulfillTab(body){
   const unf=unfulfilledOrders();
   const done=ordersList().filter(o=>FULF[o.n]&&FULF[o.n].status==='fulfilled');
   let html='';
+  html+='<div class="row" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+    +'<button class="btn ghost" style="flex:1;min-width:132px"'+(syncing?' disabled':'')+' onclick="syncShopify(false)">'+(syncing?'Syncing…':'⟳ Sync now')+'</button>'
+    +'<button class="btn ghost" style="flex:1;min-width:132px"'+(syncing?' disabled':'')+' onclick="syncShopify(true)">⤓ Backfill history</button>'
+    +'<button class="btn ghost" style="flex:1;min-width:132px" onclick="demoSync()">▶ Demo walkthrough</button>'
+    +'</div>';
+  if(DEMO.length)html+='<div class="card" style="border-color:var(--wave)"><div class="row"><div class="grow"><div class="t">Demo mode</div><div class="d">These orders are a walkthrough — nothing is sent to Shopify or saved to the database.</div></div><button class="btn ghost" onclick="clearDemo()">Clear demo</button></div></div>';
   const blocks=stockBlocks();
   if(blocks.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>CAN’T SHIP</span><div class="t" style="margin-top:7px">'+blocks.map(z=>SIZELABEL[z]).join(', ')+' — 0 in Covington</div><div class="d">Transfer from Pace before these ship. Pace has '+blocks.map(z=>SIZELABEL[z]+' '+(INV.pace[z]||0)).join(', ')+'.</div></div>';
   html+='<div class="sec-head"><h2>To fulfill</h2><span class="pill '+(unf.length?'amber':'good')+'">'+unf.length+'</span></div>';
@@ -1261,22 +1316,25 @@ function completeFulfillment(){const o=ordersList().find(x=>x.n===ffOrder);if(!o
   const serial=reuse?reuse.serial:('SW-'+size+'-'+Date.now().toString(36).toUpperCase().slice(-5));
   const band=Object.assign(reuse||{serial:serial,size:size,firstShippedAt:now,history:[]},{status:'shipped',order:ffOrder,customer:o.name,firmware:firmware,tracking:tracking,shippedAt:now,shippedBy:by});
   band.history=(band.history||[]).concat([{at:now,event:reuse?'reissued':'shipped',order:ffOrder,customer:o.name,by:by}]);
-  BANDS[serial]=band;persistBand(band);
+  const demo=isDemoOrder(ffOrder);
+  BANDS[serial]=band;if(!demo)persistBand(band);
   const rec={order:ffOrder,name:o.name,size:size,assignee:document.getElementById('ff-assignee').value,qc:qc,firmware:firmware,tracking:tracking,serial:serial,reissued:!!reuse,signoffBy:by,signoffAt:now,status:'fulfilled'};
   FULF[ffOrder]=rec;o.ful='FULFILLED';INV.covington[size]=Math.max(0,cov(size)-1);
-  if(hasFirestore())firebase.firestore().collection('fulfillments').doc(ffOrder).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
-  saveInventory();closeSheets();renderStock();refreshPulse();printLabel(ffOrder);
-  toast('✓ '+ffOrder+' shipped · '+serial+(reuse?' (reissued)':'')+' · '+SIZELABEL[size]+' -1');
+  if(hasFirestore()&&!demo)firebase.firestore().collection('fulfillments').doc(ffOrder).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
+  if(!demo)saveInventory();
+  closeSheets();renderStock();refreshPulse();printLabel(ffOrder);
+  toast('✓ '+ffOrder+' shipped · '+serial+(reuse?' (reissued)':'')+' · '+SIZELABEL[size]+' -1'+(demo?' · demo':''));
 }
 /* ---- returns lifecycle: request → issue label → inspect → back to inventory ---- */
 function startReturn(n){const f=FULF[n];if(!f)return;
   const existing=Object.values(RETURNS).find(r=>r.order===n&&r.status!=='restocked');
   if(existing){stockGoTab('returns');toast('Return already open for '+n);return}
   if(!confirm('Start a return for '+n+'? This alerts the team and creates a return label to issue.'))return;
-  const id='RMA-'+Date.now().toString(36).toUpperCase().slice(-6);
+  const demo=isDemoOrder(n);
+  const id=(demo?'DEMO-RMA-':'RMA-')+Date.now().toString(36).toUpperCase().slice(-6);
   const r={id:id,order:n,serial:f.serial||'',size:f.size,customer:f.name||'',status:'requested',requestedBy:(CURRENT_USER&&CURRENT_USER.name)||'',at:new Date().toISOString()};
-  RETURNS[id]=r;persistReturn(r);
-  if(BANDS[f.serial]){BANDS[f.serial].status='return-requested';persistBand(BANDS[f.serial])}
+  RETURNS[id]=r;if(!demo)persistReturn(r);
+  if(BANDS[f.serial]){BANDS[f.serial].status='return-requested';if(!demo)persistBand(BANDS[f.serial])}
   notifyAll('Return requested · '+n,(r.customer||'')+' · '+SIZELABEL[f.size]+' band '+r.serial,'s-stock');
   stockGoTab('returns');toast('✓ Return '+id+' opened — issue the label next');
 }
@@ -1365,7 +1423,7 @@ function renderForecastTab(body){
   body.innerHTML=html;
 }
 function renderOrdersTab(body){
-  body.innerHTML='<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input id="lookup" type="search" placeholder="Order # or customer name" oninput="renderOrderList(this.value)"></div><button class="btn ghost" style="margin-bottom:12px" onclick="exportOrders()">⬇︎ Export orders CSV</button><div id="order-list"></div><div class="note" style="margin-top:8px">Shopify order + fulfilment status. Live orders + tracking flow in from the Shopify webhook.</div>';
+  body.innerHTML='<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input id="lookup" type="search" placeholder="Order # or customer name" oninput="renderOrderList(this.value)"></div><button class="btn ghost" style="margin-bottom:12px" onclick="exportOrders()">⬇︎ Export orders CSV</button><div id="order-list"></div><div class="note" style="margin-top:8px">Shopify order + fulfilment status. Orders sync from Shopify automatically every 15 min — or hit ⟳ Sync now / ⤓ Backfill history on the Fulfill tab.</div>';
   renderOrderList('');
 }
 function renderOrderList(q){q=(q||'').trim().toLowerCase();const wrap=document.getElementById('order-list');if(!wrap)return;
