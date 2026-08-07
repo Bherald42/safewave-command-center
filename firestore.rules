@@ -158,5 +158,13 @@ service cloud.firestore {
     match /settings/raise {
       allow read, write: if canRaise();
     }
+
+    // Tools & passwords vault — shared team logins, gated to leadership
+    // (super admin / admin / manager), same as the fundraise config. Members
+    // can't read or write it. The UI hides the tab too, but this is the real
+    // enforcement. Never store these in the repo — only here.
+    match /vault/{id} {
+      allow read, write: if canRaise();
+    }
   }
 }
