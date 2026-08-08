@@ -436,6 +436,24 @@ input[type=date]{color-scheme:dark}
 .qbtn.attn{border-color:var(--amber)}
 .qbtn.attn .qic{background:rgba(232,160,40,.16);color:var(--amber)}
 .qbtn.attn .qn{color:var(--amber)}
+/* pulse insights — charts (single-hue teal, recessive grid, theme-aware) */
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.chart-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+.chart-card .cc-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.chart-card .cc-t{font-family:var(--font-d);font-weight:700;font-size:15px}
+.chart-card .cc-big{font-family:var(--font-d);font-weight:800;font-size:21px;color:var(--text)}
+.chart-card .cc-sub{font-size:12px;color:var(--muted);margin:2px 0 11px}
+.chart-svg{width:100%;height:auto;display:block;overflow:visible;margin-top:2px}
+.chart-note{font-size:11.5px;color:var(--faint);margin-top:9px}
+.chart-empty{font-size:13px;color:var(--faint);padding:22px 0;text-align:center}
+.chart-svg .cbar{fill:var(--wave)}
+.chart-svg .cgrid{stroke:var(--line);stroke-width:1}
+.chart-svg .caxis{fill:var(--faint);font-size:8.5px;font-family:var(--font-b)}
+.chart-svg .clabel{fill:var(--muted);font-size:9.5px;font-weight:700;font-family:var(--font-b)}
+.chart-svg .carea{fill:var(--wave-dim)}
+.chart-svg .cline{stroke:var(--wave);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.chart-svg .cdot{fill:var(--wave)}
+.chart-svg .cref{stroke:var(--faint);stroke-width:1.4;stroke-dasharray:4 4}
 
 /* nav — bottom tabs on mobile, top bar on desktop */
 .nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--bar-bg);backdrop-filter:blur(12px);
@@ -552,6 +570,11 @@ input[type=date]{color-scheme:dark}
       <div class="sec">
         <div class="sec-head"><h2>Top priorities</h2><span class="pill dim" id="pulse-actcount"></span></div>
         <div id="pulse-attn"></div>
+      </div>
+
+      <div class="sec" id="pulse-insights-sec">
+        <div class="sec-head"><h2>Insights</h2><span class="pill dim">your view</span></div>
+        <div class="chart-grid" id="pulse-insights"></div>
       </div>
 
       <div class="sec">
@@ -1320,7 +1343,7 @@ function ordersList(){
 function subscribeOrders(){if(!hasFirestore()){return}
   if(ordersUnsub){try{ordersUnsub()}catch(e){}}
   try{ordersUnsub=firebase.firestore().collection('orders').orderBy('at','desc').limit(150).onSnapshot(qs=>{
-    LIVEORDERS=qs.docs.map(d=>{const o=d.data();return {n:o.n,name:o.name||'',total:o.total||0,date:o.date||'',ful:o.ful||'UNFULFILLED',email:o.email||'',tracking:o.tracking||'',trackingUrl:o.trackingUrl||'',carrier:o.carrier||''}});
+    LIVEORDERS=qs.docs.map(d=>{const o=d.data();return {n:o.n,name:o.name||'',total:o.total||0,date:o.date||'',at:o.at||'',ful:o.ful||'UNFULFILLED',email:o.email||'',tracking:o.tracking||'',trackingUrl:o.trackingUrl||'',carrier:o.carrier||''}});
     const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
   },e=>{})}catch(e){}}
 async function loadInventory(){if(!hasFirestore())return;try{const d=await firebase.firestore().collection('inventory').doc('main').get();if(d.exists&&d.data().locations){SIZES.forEach(z=>0);INV=Object.assign({covington:{},pace:{},china:{}},d.data().locations)}}catch(e){}
@@ -1721,6 +1744,83 @@ function renderPulseQuick(user,needYou){
   if(canSee('s-chat'))q+=qbtn(svgOf('s-chat'),chatUn,'Chat',"goto('s-chat')",chatUn>0);
   el.innerHTML=q;
 }
+/* ---- Insights charts (inline SVG, single-hue teal, theme-aware). Role-scoped:
+   leadership sees all; others see what maps to their tabs. Financials chart
+   stays gated to the finance allow-list, not all leadership. ---- */
+function svgBars(data,opts){opts=opts||{};const n=data.length;if(!n)return '';
+  const W=300,H=138,padL=4,padR=4,padT=14,padB=18;const max=Math.max(1,...data.map(d=>d.v));
+  const plotW=W-padL-padR,plotH=H-padT-padB,base=padT+plotH,gap=5,bw=Math.max(4,(plotW-gap*(n-1))/n);
+  let s='<svg class="chart-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(opts.aria||'bar chart')+'">';
+  s+='<line class="cgrid" x1="'+padL+'" y1="'+base+'" x2="'+(W-padR)+'" y2="'+base+'"/>';
+  data.forEach((d,i)=>{const x=padL+i*(bw+gap),h=Math.round(plotH*(d.v/max)),y=base-h;
+    s+='<rect class="cbar" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(1,h)+'" rx="3"><title>'+esc((d.title||d.label+': '+d.v))+'</title></rect>';
+    if(d.v>0&&(opts.labelAll||(opts.labelLast&&i===n-1)))s+='<text class="clabel" x="'+(x+bw/2).toFixed(1)+'" y="'+(y-4).toFixed(1)+'" text-anchor="middle">'+esc(String(d.v))+'</text>';
+    if(opts.everyOther?i%2===n%2:true)s+='<text class="caxis" x="'+(x+bw/2).toFixed(1)+'" y="'+(H-5)+'" text-anchor="middle">'+esc(d.label)+'</text>';});
+  return s+'</svg>';}
+function svgArea(pts,opts){opts=opts||{};const n=pts.length;if(n<2)return '';
+  const W=300,H=138,padL=4,padR=4,padT=16,padB=18;const max=Math.max(1,...pts.map(p=>p.v),opts.ref||0);
+  const plotW=W-padL-padR,plotH=H-padT-padB,base=padT+plotH;const X=i=>padL+plotW*i/(n-1),Y=v=>base-plotH*(v/max);
+  let d='',area='M'+padL+' '+base.toFixed(1);
+  pts.forEach((p,i)=>{const x=X(i).toFixed(1),y=Y(p.v).toFixed(1);d+=(i?'L':'M')+x+' '+y+' ';area+=' L'+x+' '+y;});
+  area+=' L'+(W-padR)+' '+base.toFixed(1)+' Z';
+  let s='<svg class="chart-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(opts.aria||'line chart')+'">';
+  s+='<line class="cgrid" x1="'+padL+'" y1="'+base.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+base.toFixed(1)+'"/>';
+  if(opts.ref>0){const ry=Y(opts.ref).toFixed(1);s+='<line class="cref" x1="'+padL+'" y1="'+ry+'" x2="'+(W-padR)+'" y2="'+ry+'"/><text class="caxis" x="'+(W-padR)+'" y="'+(Y(opts.ref)-3).toFixed(1)+'" text-anchor="end">'+esc(opts.refLabel||'')+'</text>';}
+  s+='<path class="carea" d="'+area+'"/><path class="cline" d="'+d.trim()+'"/>';
+  s+='<circle class="cdot" cx="'+X(n-1).toFixed(1)+'" cy="'+Y(pts[n-1].v).toFixed(1)+'" r="3"><title>'+esc(pts[n-1].title||'')+'</title></circle>';
+  s+='<text class="caxis" x="'+padL+'" y="'+(H-5)+'">'+esc(pts[0].label)+'</text>';
+  s+='<text class="caxis" x="'+(W-padR)+'" y="'+(H-5)+'" text-anchor="end">'+esc(pts[n-1].label)+'</text>';
+  return s+'</svg>';}
+function chartCard(title,big,sub,body,note){
+  return '<div class="chart-card"><div class="cc-h"><span class="cc-t">'+esc(title)+'</span>'+(big!=null?'<span class="cc-big">'+esc(String(big))+'</span>':'')+'</div>'
+    +(sub?'<div class="cc-sub">'+esc(sub)+'</div>':'<div style="height:6px"></div>')+body+(note?'<div class="chart-note">'+esc(note)+'</div>':'')+'</div>';}
+function weekBuckets(msList,n){n=n||8;const now=todayMs()+864e5,wk=7*864e5,b=new Array(n).fill(0);
+  msList.forEach(ms=>{if(ms==null)return;const idx=Math.floor((now-ms)/wk);if(idx>=0&&idx<n)b[n-1-idx]++;});
+  return b.map((v,i)=>{const end=new Date(now-(n-1-i)*wk);return {label:end.toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),v:v}});}
+function chartFinanceCard(){
+  if(!financeData){if(typeof loadFinance==='function')loadFinance();return chartCard('Revenue trajectory','—','Projected MRR vs monthly burn','<div class="chart-empty">Loading financials…</div>','');}
+  const mrr=financeMRR(),burn=financeBurn().total;
+  const ps=(typeof projSeries==='function')?projSeries():null;let body;
+  if(ps&&ps.base>0){const pts=[{m:0,mrr:ps.base}].concat(ps.pts).map(p=>({label:p.m===0?'now':'m'+p.m,v:Math.round(p.mrr),title:'Month '+p.m+' · '+fmtMoney(p.mrr)+' MRR'}));
+    body=svgArea(pts,{ref:burn,refLabel:'burn',aria:'Projected MRR versus monthly burn'});}
+  else body='<div class="chart-empty">Add projections in Financials to see the trajectory.</div>';
+  return chartCard('Revenue trajectory',fmtMoney(mrr),'Projected MRR vs monthly burn',body,(ps&&ps.base>0&&burn)?('Line crosses the burn mark ('+fmtMoney(burn)+'/mo) when net-positive'):'');}
+function chartOrdersCard(){
+  const list=(typeof ordersList==='function')?ordersList():[];const ms=list.map(o=>o.at?dayMs(o.at):null).filter(x=>x!=null);
+  const weeks=weekBuckets(ms,8);const has=ms.length>0;const thisWk=weeks.length?weeks[weeks.length-1].v:0;
+  const body=has?svgBars(weeks,{aria:'Orders per week',labelLast:true,everyOther:true}):'<div class="chart-empty">Order trend appears as Shopify orders sync in.</div>';
+  return chartCard('Orders / week',has?thisWk:'—','Paid orders, last 8 weeks',body,has?('This week · '+thisWk+' order'+(thisWk===1?'':'s')):'');}
+function chartReturnsCard(){
+  const rs=Object.values(RETURNS||{});const ms=rs.map(r=>r.at?dayMs(r.at):null).filter(x=>x!=null);
+  const weeks=weekBuckets(ms,8);const has=ms.length>0;const open=(typeof openReturns==='function')?openReturns().length:rs.filter(r=>r.status!=='restocked').length;
+  const body=has?svgBars(weeks,{aria:'Returns per week',labelLast:true,everyOther:true}):'<div class="chart-empty">No returns yet — this trends as returns come in.</div>';
+  return chartCard('Returns / week',open,'Opened per week · '+open+' open now',body,'');}
+function chartProjectsCard(){
+  const tasks=BUILDT||[];const done=tasks.filter(t=>taskStatus(t)==='done').length,total=tasks.length,pct=total?Math.round(done/total*100):0;let body;
+  if(total){body='<div class="progress" style="height:8px;margin:2px 0 13px"><i style="width:'+pct+'%"></i></div>';
+    const projs=(BUILDP||[]).map(p=>{const pt=tasks.filter(t=>t.projectId===p.id),d=pt.filter(t=>taskStatus(t)==='done').length;return {name:p.name||p.id,d:d,t:pt.length,pct:pt.length?Math.round(d/pt.length*100):0}}).filter(p=>p.t>0).sort((a,b)=>b.t-a.t).slice(0,4);
+    body+=projs.map(p=>'<div style="margin-bottom:9px"><div class="row" style="justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="font-weight:600;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+'</span><span style="color:var(--faint);flex-shrink:0">'+p.d+'/'+p.t+'</span></div><div class="progress" style="height:6px"><i style="width:'+p.pct+'%"></i></div></div>').join('');}
+  else body='<div class="chart-empty">Add tasks on the Build board to track progress.</div>';
+  return chartCard('Project progress',total?pct+'%':'—','Tasks complete across projects',body,total?(done+' of '+total+' tasks done'):'');}
+function chartFundraiseCard(){
+  const s=raiseStats();const pct=s.target?Math.min(100,Math.round(s.committed/s.target*100)):0;let body;
+  if(s.target||s.committed||s.investors){body='<div class="progress" style="height:9px;margin:2px 0 13px"><i style="width:'+pct+'%"></i></div>';
+    [['Committed',s.committed],['Soft-circled',s.soft],['Wired',s.wired]].filter(r=>r[1]).forEach(r=>{body+='<div class="kv"><span>'+r[0]+'</span><b>'+fmtMoney(r[1])+'</b></div>';});
+    body+='<div class="kv"><span>Investors in pipeline</span><b>'+s.investors+'</b></div>';}
+  else body='<div class="chart-empty">Set a target and add investors to track the raise.</div>';
+  return chartCard('Fundraise',fmtMoney(s.committed),s.target?(pct+'% of '+fmtMoney(s.target)+(RAISE.round?' · '+RAISE.round:'')):'Committed so far',body,'');}
+function renderPulseInsights(user){
+  const el=document.getElementById('pulse-insights'),sec=document.getElementById('pulse-insights-sec');if(!el)return;
+  const A=navAllowedIds(user);const canSee=id=>!A||A.indexOf(id)>=0;const lead=canFundraise();
+  const cards=[];
+  if(financeAllowed())cards.push(chartFinanceCard());
+  if(canSee('s-stock')||canSee('s-crm'))cards.push(chartOrdersCard());
+  if(canSee('s-stock'))cards.push(chartReturnsCard());
+  if(canSee('s-build'))cards.push(chartProjectsCard());
+  if(lead)cards.push(chartFundraiseCard());
+  if(sec)sec.style.display=cards.length?'':'none';
+  el.innerHTML=cards.join('');
+}
 function renderPulse(user){
   const first=(user.name||'there').split(' ')[0];
   const canMoney=(user.role==='admin'||user.role==='manager'||user.role==='superadmin');
@@ -1760,6 +1860,7 @@ function renderPulse(user){
   document.getElementById('pulse-actcount').textContent=needYou?needYou+' need you':(mine.length?mine.length+' ongoing':'clear');
   renderPulseHero(user,first,needYou,mine.length,ops.length);
   renderPulseQuick(user,needYou);
+  renderPulseInsights(user);
   // team past due + stalling — everyone sees, to check in / offer help
   const teamOver=tasks.filter(x=>x.overdue).sort(byDue);
   let teamHtml=teamOver.map(x=>'<div class="card tap" tabindex="0" onclick="goto(\''+x.screen+'\')"><div class="row"><div class="grow"><div class="t">'+esc(x.title)+'</div><div class="d">'+esc(x.who||'Unassigned')+' · '+esc(x.kind)+'</div></div><span class="pill amber">'+esc(dueMeta(x.dueMs).label||'past due')+'</span></div></div>').join('');
