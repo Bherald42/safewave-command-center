@@ -166,5 +166,16 @@ service cloud.firestore {
     match /vault/{id} {
       allow read, write: if canRaise();
     }
+
+    // Compliance / GRC — our own SOC 2 + HIPAA control tracker, PHI map, and the
+    // monthly "standard-watch" log. Admin & super admin only (the UI hides the
+    // tab too, but this is the real enforcement). The scheduled standard-watch
+    // job writes here via the Admin SDK, which bypasses these rules.
+    function canComply() {
+      return signedIn() && (myRole() == 'superadmin' || myRole() == 'admin');
+    }
+    match /compliance/{id} {
+      allow read, write: if canComply();
+    }
   }
 }
