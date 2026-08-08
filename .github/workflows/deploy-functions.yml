@@ -10,6 +10,7 @@ on:
       - 'functions/**'
       - 'firebase.json'
       - 'firestore.rules'
+      - 'storage.rules'
       - '.github/workflows/deploy-functions.yml'
   workflow_dispatch:
 
