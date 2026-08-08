@@ -176,8 +176,35 @@ input[type=date]{color-scheme:dark}
 .chat-msg .bub{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:14px;display:inline-block;overflow-wrap:anywhere;white-space:pre-wrap}
 .chat-msg.me{align-self:flex-end;text-align:right}
 .chat-msg.me .bub{background:var(--wave-dim);border-color:var(--wave)}
-.chat-compose{display:flex;gap:8px;align-items:center}
+.chat-compose{display:flex;gap:8px;align-items:flex-end}
+.chat-inwrap{position:relative;flex:1}
 .chat-compose .field{flex:1}
+/* grouped message stream */
+.c-day{align-self:center;font-size:11px;color:var(--faint);background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:2px 12px;margin:4px 0}
+.c-group{display:flex;gap:10px;align-items:flex-start;max-width:88%}
+.c-group.me{flex-direction:row-reverse;align-self:flex-end}
+.c-av{width:32px;height:32px;border-radius:50%;background:var(--wave-dim);color:var(--wave);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;border:1px solid var(--line)}
+.c-body{min-width:0}
+.c-head{font-size:11px;color:var(--faint);margin-bottom:3px;display:flex;gap:6px;align-items:baseline}
+.c-group.me .c-head{justify-content:flex-end}
+.c-name{font-weight:700;color:var(--text)}
+.c-bubbles{display:flex;flex-direction:column;gap:3px}
+.c-group.me .c-bubbles{align-items:flex-end}
+.c-line{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:14px;overflow-wrap:anywhere;white-space:pre-wrap;width:fit-content;max-width:100%}
+.c-line a{color:var(--wave)}
+.c-group.me .c-line{background:var(--wave-dim);border-color:var(--wave)}
+.c-line.hasme{border-color:var(--wave);box-shadow:0 0 0 1px var(--wave) inset}
+.men{color:var(--wave);font-weight:600;background:var(--wave-dim);border-radius:5px;padding:0 3px}
+.c-group.me .men{color:var(--text);background:rgba(127,127,127,.18)}
+/* @mention autocomplete */
+.mention-pop{position:absolute;bottom:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;z-index:30;max-height:210px;overflow-y:auto}
+.mention-pop button{display:flex;gap:9px;align-items:center;width:100%;text-align:left;padding:9px 12px;background:none;border:none;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:var(--text)}
+.mention-pop button:last-child{border-bottom:none}
+.mention-pop button.on,.mention-pop button:hover{background:var(--surface-2)}
+.mention-pop .c-av{width:26px;height:26px;font-size:11px}
+/* unread indicators */
+.chip .udot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--wave);margin-left:6px;vertical-align:middle}
+.tab .navdot{display:inline-block;min-width:8px;height:8px;border-radius:5px;background:var(--wave);margin-left:5px;vertical-align:middle}
 .inv-table{border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .inv-row{display:grid;grid-template-columns:1.7fr .6fr .6fr .6fr .7fr;gap:6px;padding:11px 12px;align-items:center;border-bottom:1px solid var(--line);font-family:var(--font-m);font-size:14px}
 .inv-row:last-child{border-bottom:0}
@@ -552,13 +579,16 @@ input[type=date]{color-scheme:dark}
     <!-- CHAT -->
     <main class="screen" id="s-chat">
       <p class="eyebrow">Chat · team</p>
-      <h1 id="chat-h1">Team chat</h1>
+      <h1 id="chat-h1">#general</h1>
       <p class="sub" id="chat-sub">Real-time, for the whole team.</p>
       <div class="chips" id="chat-channels" style="margin-bottom:12px"></div>
       <div id="chat-stream" class="chat-stream"></div>
       <div class="chat-compose">
-        <input class="field" id="chat-input" placeholder="Message…" style="margin:0" onkeydown="if(event.key==='Enter'){event.preventDefault();sendChat()}">
-        <button class="btn" onclick="sendChat()">Send</button>
+        <div class="chat-inwrap">
+          <textarea class="field" id="chat-input" rows="1" placeholder="Message…  (type @ to notify a teammate)" style="margin:0;resize:none;min-height:44px;max-height:140px;font-family:var(--font-b)" oninput="chatOnInput()" onkeydown="chatKey(event)"></textarea>
+          <div id="chat-mentions" class="mention-pop" style="display:none"></div>
+        </div>
+        <button class="btn" style="width:auto" onclick="sendChat()">Send</button>
       </div>
     </main>
 
@@ -1955,6 +1985,7 @@ function buildNav(role){
     b.innerHTML='<svg viewBox="0 0 24 24">'+n.svg+'</svg>'+n.label;
     nav.appendChild(b);
   });
+  if(typeof updateChatBadge==='function')updateChatBadge();
 }
 function goto(id,btn){
   const el=document.getElementById(id);if(!el)return;
@@ -2630,25 +2661,114 @@ function openAcctFromPulse(id){goto('s-crm');openAcct(id)}
 function rottingCard(x){const open=x.kind==='Build'?"openBuildFromPulse('"+x.id+"')":x.kind==='Ticket'?"openTicketFromPulse('"+x.id+"')":"openAcctFromPulse('"+x.id+"')";
   return '<div class="card tap" tabindex="0" onclick="'+open+'"><div class="row"><div class="grow"><div class="t">'+esc(x.title)+'</div><div class="d">'+esc(x.kind)+(x.who&&x.who!=='Unassigned'?' · '+esc(x.who):'')+'</div></div><span class="pill amber">SET NEXT STEP</span></div></div>'}
 
-/* team chat (chat_channels/{ch}/messages) — real-time */
+/* team chat (chat_channels/{ch}/messages) — real-time, with @mentions that
+   notify teammates, per-channel + nav unread badges, avatars, grouped
+   messages, day dividers, clickable links and an @-autocomplete. */
 let chatChannels=['general','sales','build'], chatChannel='general', chatUnsub=null, CHATMSGS=[];
-async function loadChatChannels(){if(!hasFirestore())return;try{const d=await firebase.firestore().collection('settings').doc('chat').get();if(d.exists&&Array.isArray(d.data().channels)&&d.data().channels.length)chatChannels=d.data().channels}catch(e){}}
-function renderChat(){renderChatChannels();subscribeChat()}
-function renderChatChannels(){const el=document.getElementById('chat-channels');if(!el)return;el.innerHTML=chatChannels.map(c=>'<button class="chip'+(c===chatChannel?' on':'')+'" onclick="switchChannel(decodeURIComponent(\''+encodeURIComponent(c)+'\'))">#'+esc(c)+'</button>').join('')+'<button class="chip" onclick="addChannel()" title="New channel">＋</button>';const h=document.getElementById('chat-h1');if(h)h.textContent='#'+chatChannel}
+let chatMeta={}, chatMetaUnsub={}, chatSeen={}, chatMentionSel=0, chatMentionMatches=[];
+function chatLoadSeen(){try{chatSeen=JSON.parse(localStorage.getItem('sw_chat_seen')||'{}')||{}}catch(e){chatSeen={}}}
+function chatSaveSeen(){try{localStorage.setItem('sw_chat_seen',JSON.stringify(chatSeen))}catch(e){}}
+async function loadChatChannels(){chatLoadSeen();if(!hasFirestore())return;try{const d=await firebase.firestore().collection('settings').doc('chat').get();if(d.exists&&Array.isArray(d.data().channels)&&d.data().channels.length)chatChannels=d.data().channels}catch(e){}
+  subscribeChatMeta();}
+function renderChat(){renderChatChannels();subscribeChat();markChannelRead(chatChannel);chatAutosize();}
+function renderChatChannels(){const el=document.getElementById('chat-channels');if(!el)return;
+  el.innerHTML=chatChannels.map(c=>{const un=channelUnread(c)&&c!==chatChannel;return '<button class="chip'+(c===chatChannel?' on':'')+'" onclick="switchChannel(decodeURIComponent(\''+encodeURIComponent(c)+'\'))">#'+esc(c)+(un?'<span class="udot"></span>':'')+'</button>'}).join('')+'<button class="chip" onclick="addChannel()" title="New channel">＋</button>';
+  const h=document.getElementById('chat-h1');if(h)h.textContent='#'+chatChannel;
+  const inp=document.getElementById('chat-input');if(inp)inp.placeholder='Message #'+chatChannel+'…  (type @ to notify a teammate)';
+  const sub=document.getElementById('chat-sub');if(sub){const n=(TEAM||[]).length;sub.textContent='Real-time · '+(n?n+' teammate'+(n===1?'':'s'):'the whole team')+' · @mention to notify'}
+}
 function switchChannel(c){chatChannel=c;renderChat()}
-function addChannel(){const n=(prompt('New channel name:')||'').trim().toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/^-+|-+$/g,'');if(!n)return;if(!chatChannels.includes(n))chatChannels.push(n);if(hasFirestore())firebase.firestore().collection('settings').doc('chat').set({channels:chatChannels},{merge:true}).catch(()=>{});chatChannel=n;renderChat()}
+function addChannel(){const n=(prompt('New channel name:')||'').trim().toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/^-+|-+$/g,'');if(!n)return;if(!chatChannels.includes(n))chatChannels.push(n);if(hasFirestore())firebase.firestore().collection('settings').doc('chat').set({channels:chatChannels},{merge:true}).catch(()=>{});chatChannel=n;subscribeChatMeta();renderChat()}
+
+/* --- unread: one light listener per channel tracks its latest message --- */
+function subscribeChatMeta(){if(!hasFirestore())return;
+  chatChannels.forEach(c=>{if(chatMetaUnsub[c])return;
+    try{chatMetaUnsub[c]=firebase.firestore().collection('chat_channels').doc(c).collection('messages').orderBy('at','desc').limit(1).onSnapshot(qs=>{
+      const d=qs.docs[0]&&qs.docs[0].data();chatMeta[c]={at:(d&&d.at&&d.at.toMillis)?d.at.toMillis():0,uid:d&&d.uid};
+      renderChatChannels();updateChatBadge();
+    },e=>{})}catch(e){}});
+}
+function channelUnread(c){const m=chatMeta[c];if(!m||!m.at)return false;if(m.uid&&CURRENT_USER&&m.uid===CURRENT_USER.uid)return false;return m.at>(chatSeen[c]||0)}
+function chatUnreadCount(){return chatChannels.filter(channelUnread).length}
+function markChannelRead(c){chatSeen[c]=Date.now();chatSaveSeen();renderChatChannels();updateChatBadge()}
+function updateChatBadge(){const btn=document.querySelector('.tab[data-s="s-chat"]');if(!btn)return;
+  let dot=btn.querySelector('.navdot');const un=chatUnreadCount();
+  if(un){if(!dot){dot=document.createElement('span');dot.className='navdot';btn.appendChild(dot)}}else if(dot){dot.remove()}}
+
 function subscribeChat(){if(!hasFirestore()){document.getElementById('chat-stream').innerHTML='<div class="d" style="color:var(--faint);margin:auto">Chat runs on the live site.</div>';return}
   if(chatUnsub){try{chatUnsub()}catch(e){}chatUnsub=null}
-  try{chatUnsub=firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').orderBy('at','desc').limit(80).onSnapshot(qs=>{CHATMSGS=qs.docs.map(d=>d.data()).reverse();renderChatMessages()},e=>{document.getElementById('chat-stream').innerHTML='<div class="d" style="color:var(--amber);margin:auto">Chat error — '+((e&&e.code)||'')+'</div>'})}catch(e){}}
+  try{chatUnsub=firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').orderBy('at','desc').limit(120).onSnapshot(qs=>{CHATMSGS=qs.docs.map(d=>d.data()).reverse();renderChatMessages();markChannelRead(chatChannel);},e=>{document.getElementById('chat-stream').innerHTML='<div class="d" style="color:var(--amber);margin:auto">Chat error — '+((e&&e.code)||'')+'</div>'})}catch(e){}}
+
+/* --- @mentions: match tokens against the team roster + @all/@here --- */
+function teamHandles(){const map={};(TEAM||[]).forEach(t=>{if(!t.uid)return;const first=((t.name||'').trim().split(/\s+/)[0]||'').toLowerCase();const full=(t.name||'').trim().toLowerCase().replace(/\s+/g,'');if(first)(map[first]=map[first]||[]).push(t);if(full&&full!==first)(map[full]=map[full]||[]).push(t)});return map}
+function parseMentions(text){const uids={},map=teamHandles();let all=false;(String(text||'').match(/@[\w.-]+/g)||[]).forEach(tok=>{const h=tok.slice(1).toLowerCase();if(h==='all'||h==='everyone'||h==='here'){all=true;return}(map[h]||[]).forEach(t=>{if(t.uid)uids[t.uid]=t.name})});return {uids:Object.keys(uids),names:uids,all:all}}
+function msgHitsMe(m){if(!CURRENT_USER)return false;const p=parseMentions(m.text||'');return p.all||p.uids.indexOf(CURRENT_USER.uid)>=0}
+function chatText(m){let s=esc(m.text||'');const map=teamHandles();
+  s=s.replace(/@([\w.-]+)/g,(full,h)=>{const k=h.toLowerCase();return (k==='all'||k==='everyone'||k==='here'||map[k])?'<span class="men">'+full+'</span>':full});
+  s=s.replace(/\bhttps?:\/\/[^\s<]+/g,u=>'<a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>');
+  return s;}
+function chatDayLabel(ms){const d=new Date(ms),t=new Date(),y=new Date(t.getTime()-864e5);if(d.toDateString()===t.toDateString())return 'Today';if(d.toDateString()===y.toDateString())return 'Yesterday';return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
+function chatTime(ms){return new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
+function msgMs(m){return (m.at&&m.at.toMillis)?m.at.toMillis():((m.at&&m.at.toDate)?m.at.toDate().getTime():0)}
 function renderChatMessages(){const el=document.getElementById('chat-stream');if(!el)return;
-  el.innerHTML=CHATMSGS.length?CHATMSGS.map(m=>{const me=CURRENT_USER&&m.uid===CURRENT_USER.uid;const time=(m.at&&m.at.toDate)?m.at.toDate().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
-    return '<div class="chat-msg'+(me?' me':'')+'"><div class="who">'+esc(m.name||'')+(time?' · '+time:'')+'</div><div class="bub">'+esc(m.text||'')+'</div></div>'}).join(''):'<div class="d" style="color:var(--faint);margin:auto;text-align:center">No messages yet in #'+esc(chatChannel)+'. Say hi 👋</div>';
-  el.scrollTop=el.scrollHeight;
-}
+  if(!CHATMSGS.length){el.innerHTML='<div class="d" style="color:var(--faint);margin:auto;text-align:center">No messages yet in #'+esc(chatChannel)+'.<br>Say hi 👋 — type @ to notify a teammate.</div>';return}
+  let html='',lastDay='',curUid=null,curTime=0,open=false;
+  const close=()=>{if(open){html+='</div></div></div>';open=false}};
+  CHATMSGS.forEach(m=>{
+    const ms=msgMs(m);const day=ms?new Date(ms).toDateString():'';
+    if(day&&day!==lastDay){close();lastDay=day;curUid=null;html+='<div class="c-day">'+chatDayLabel(ms)+'</div>'}
+    const mine=CURRENT_USER&&m.uid===CURRENT_USER.uid;
+    const grouped=open&&(m.uid===curUid)&&(ms-curTime<5*60000);
+    if(!grouped){close();
+      html+='<div class="c-group'+(mine?' me':'')+'"><div class="c-av">'+esc(initials(m.name||'',''))+'</div><div class="c-body"><div class="c-head"><span class="c-name">'+esc(mine?'You':(m.name||'—'))+'</span><span>'+(ms?chatTime(ms):'')+'</span></div><div class="c-bubbles">';
+      open=true;}
+    html+='<div class="c-line'+(!mine&&msgHitsMe(m)?' hasme':'')+'">'+chatText(m)+'</div>';
+    curUid=m.uid;curTime=ms;});
+  close();el.innerHTML=html;el.scrollTop=el.scrollHeight;}
+
 function sendChat(){const inp=document.getElementById('chat-input');const text=(inp.value||'').trim();if(!text)return;
   if(!hasFirestore()){toast('Chat runs on the live site');return}
-  inp.value='';
-  firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').add({text:text,uid:CURRENT_USER.uid,name:CURRENT_USER.name||CURRENT_USER.email,at:firebase.firestore.FieldValue.serverTimestamp()}).catch(e=>{toast('Send failed — '+((e&&e.code)||''));inp.value=text})}
+  inp.value='';chatAutosize();hideMentions();
+  const men=parseMentions(text);
+  const rec={text:text,uid:CURRENT_USER.uid,name:CURRENT_USER.name||CURRENT_USER.email,at:firebase.firestore.FieldValue.serverTimestamp()};
+  if(men.uids.length)rec.mentions=men.uids;if(men.all)rec.mentionAll=true;
+  firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').add(rec).then(()=>{
+    const who=CURRENT_USER.name||'A teammate',preview=text.slice(0,120);
+    if(men.all){notify('all','#'+chatChannel+' · '+who,preview,'s-chat')}
+    else{men.uids.forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,'#'+chatChannel+' · '+who+' mentioned you',preview,'s-chat')})}
+  }).catch(e=>{toast('Send failed — '+((e&&e.code)||''));inp.value=text})}
+
+/* --- compose: Enter sends, Shift+Enter newline, @-autocomplete --- */
+function chatAutosize(){const t=document.getElementById('chat-input');if(!t)return;t.style.height='auto';t.style.height=Math.min(140,Math.max(44,t.scrollHeight))+'px'}
+function chatOnInput(){chatAutosize();updateMentionPop()}
+function chatKey(e){
+  const pop=document.getElementById('chat-mentions');const popOpen=pop&&pop.style.display!=='none'&&chatMentionMatches.length;
+  if(popOpen){
+    if(e.key==='ArrowDown'){e.preventDefault();chatMentionSel=Math.min(chatMentionMatches.length-1,chatMentionSel+1);renderMentionPop();return}
+    if(e.key==='ArrowUp'){e.preventDefault();chatMentionSel=Math.max(0,chatMentionSel-1);renderMentionPop();return}
+    if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();pickMention(chatMentionSel);return}
+    if(e.key==='Escape'){e.preventDefault();hideMentions();return}
+  }
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat()}
+}
+function currentMentionToken(){const t=document.getElementById('chat-input');if(!t)return null;const pos=t.selectionStart;const before=t.value.slice(0,pos);const m=before.match(/(^|\s)@([\w.-]*)$/);return m?{q:m[2],start:pos-m[2].length-1}:null}
+function updateMentionPop(){const tok=currentMentionToken();if(!tok){hideMentions();return}
+  const q=tok.q.toLowerCase();
+  let list=(TEAM||[]).filter(t=>t.uid&&(!q||(t.name||'').toLowerCase().includes(q)||(t.email||'').toLowerCase().includes(q)));
+  const everyone={uid:'@all',name:'Everyone',email:'notify the whole channel',handle:'all'};
+  const specials=(!q||'everyone here all'.indexOf(q)>=0)?[everyone]:[];
+  chatMentionMatches=specials.concat(list).slice(0,6);
+  if(!chatMentionMatches.length){hideMentions();return}
+  chatMentionSel=0;renderMentionPop();}
+function renderMentionPop(){const el=document.getElementById('chat-mentions');if(!el)return;
+  el.innerHTML=chatMentionMatches.map((t,i)=>'<button class="'+(i===chatMentionSel?'on':'')+'" onmousedown="event.preventDefault()" onclick="pickMention('+i+')"><span class="c-av">'+esc(t.handle==='all'?'@':initials(t.name||'',''))+'</span><span style="min-width:0"><div style="font-weight:600">'+esc(t.name||'')+'</div><div class="d" style="font-size:11px">'+esc(t.email||'')+'</div></span></button>').join('');
+  el.style.display='block';}
+function pickMention(i){const t=chatMentionMatches[i];if(!t)return;const inp=document.getElementById('chat-input');const tok=currentMentionToken();if(!tok){hideMentions();return}
+  const handle=t.handle||((t.name||'').trim().split(/\s+/)[0]);
+  const before=inp.value.slice(0,tok.start),after=inp.value.slice(inp.selectionStart),ins='@'+handle+' ';
+  inp.value=before+ins+after;const caret=(before+ins).length;inp.focus();inp.setSelectionRange(caret,caret);
+  hideMentions();chatAutosize();}
+function hideMentions(){const el=document.getElementById('chat-mentions');if(el){el.style.display='none';el.innerHTML=''}chatMentionMatches=[];}
 
 /* ================= CRM — enterprise sales pipeline (pre-loaded; Firestore-shared) ================= */
 const STAGES=['New','Contacted','Engaged','Meeting','Proposal','Won','Lost'];
