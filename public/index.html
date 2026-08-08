@@ -205,6 +205,40 @@ input[type=date]{color-scheme:dark}
 /* unread indicators */
 .chip .udot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--wave);margin-left:6px;vertical-align:middle}
 .tab .navdot{display:inline-block;min-width:8px;height:8px;border-radius:5px;background:var(--wave);margin-left:5px;vertical-align:middle}
+/* composer + attachments */
+.chat-composer{display:flex;flex-direction:column;gap:8px}
+.chat-tools{display:flex;gap:3px;align-items:flex-end}
+.ic-btn{width:40px;height:44px;border:1px solid var(--line);background:var(--surface);border-radius:11px;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text);flex-shrink:0}
+.ic-btn:hover{background:var(--surface-2)}
+.chat-tray{display:flex;gap:8px;flex-wrap:wrap;padding:8px;border:1px dashed var(--line);border-radius:12px;background:var(--surface-2)}
+.tray-item{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);display:flex;align-items:center}
+.tray-item img{width:60px;height:60px;object-fit:cover;display:block}
+.tray-file{padding:8px 10px;font-size:12px;min-width:0;max-width:170px}
+.tray-file .tf-n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tray-x{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;cursor:pointer;font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center}
+.tray-up{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4);color:#fff;font-size:10px;font-weight:600}
+.c-atts{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.c-group.me .c-atts{justify-content:flex-end}
+.c-img{max-width:260px;max-height:240px;border-radius:12px;border:1px solid var(--line);cursor:zoom-in;display:block}
+.c-file{display:flex;gap:9px;align-items:center;text-decoration:none;color:var(--text);border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:8px 12px;max-width:260px}
+.c-file:hover{border-color:var(--wave)}
+.c-fic{font-size:20px;flex-shrink:0}
+.c-fmeta{min-width:0;display:flex;flex-direction:column}
+.c-fname{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.c-fsz{font-size:11px;color:var(--faint)}
+.c-msg{position:relative;width:fit-content;max-width:100%}
+.c-group.me .c-msg{margin-left:auto}
+.c-react{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.c-group.me .c-react{justify-content:flex-end}
+.re-chip{display:inline-flex;gap:4px;align-items:center;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:1px 8px;font-size:12px;cursor:pointer;user-select:none}
+.re-chip.mine{border-color:var(--wave);background:var(--wave-dim)}
+.c-act{position:absolute;top:-14px;display:flex;gap:1px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:2px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:5}
+.c-group:not(.me) .c-act{left:6px}
+.c-group.me .c-act{right:6px}
+.c-msg:hover .c-act{opacity:1;pointer-events:auto}
+.c-act button{border:none;background:none;cursor:pointer;font-size:15px;padding:2px 5px;border-radius:7px;color:var(--text);line-height:1}
+.c-act button:hover{background:var(--surface-2)}
+.chat-drop{outline:2px dashed var(--wave);outline-offset:-8px}
 .inv-table{border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .inv-row{display:grid;grid-template-columns:1.7fr .6fr .6fr .6fr .7fr;gap:6px;padding:11px 12px;align-items:center;border-bottom:1px solid var(--line);font-family:var(--font-m);font-size:14px}
 .inv-row:last-child{border-bottom:0}
@@ -583,12 +617,22 @@ input[type=date]{color-scheme:dark}
       <p class="sub" id="chat-sub">Real-time, for the whole team.</p>
       <div class="chips" id="chat-channels" style="margin-bottom:12px"></div>
       <div id="chat-stream" class="chat-stream"></div>
-      <div class="chat-compose">
-        <div class="chat-inwrap">
-          <textarea class="field" id="chat-input" rows="1" placeholder="Message…  (type @ to notify a teammate)" style="margin:0;resize:none;min-height:44px;max-height:140px;font-family:var(--font-b)" oninput="chatOnInput()" onkeydown="chatKey(event)"></textarea>
-          <div id="chat-mentions" class="mention-pop" style="display:none"></div>
+      <div class="chat-composer">
+        <div id="chat-tray" class="chat-tray" style="display:none"></div>
+        <div class="chat-compose">
+          <div class="chat-tools">
+            <button class="ic-btn" type="button" title="Screenshot &amp; annotate" onclick="chatScreenshot()">📷</button>
+            <button class="ic-btn" type="button" title="Attach image" onclick="chatPick('image')">🖼️</button>
+            <button class="ic-btn" type="button" title="Attach file" onclick="chatPick('file')">📎</button>
+          </div>
+          <div class="chat-inwrap">
+            <textarea class="field" id="chat-input" rows="1" placeholder="Message…  (type @ to notify · paste or drop files)" style="margin:0;resize:none;min-height:44px;max-height:140px;font-family:var(--font-b)" oninput="chatOnInput()" onkeydown="chatKey(event)" onpaste="chatPaste(event)"></textarea>
+            <div id="chat-mentions" class="mention-pop" style="display:none"></div>
+          </div>
+          <button class="btn" style="width:auto" onclick="sendChat()">Send</button>
         </div>
-        <button class="btn" style="width:auto" onclick="sendChat()">Send</button>
+        <input type="file" id="chat-file-img" accept="image/*" multiple style="display:none" onchange="chatFilesPicked(this)">
+        <input type="file" id="chat-file-any" multiple style="display:none" onchange="chatFilesPicked(this)">
       </div>
     </main>
 
@@ -967,7 +1011,7 @@ input[type=date]{color-scheme:dark}
     <div class="rolepick" id="fb-type"><button data-v="Idea" class="on">💡 Idea</button><button data-v="Issue">🐞 Issue</button><button data-v="Question">❓ Question</button></div>
     <textarea class="field" id="fb-text" placeholder="What's working, what's not, what would help…" style="min-height:130px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
     <div id="fb-shot-wrap" style="display:none;margin:2px 0 4px"><img id="fb-shot-img" alt="screenshot" style="max-width:100%;border-radius:10px;border:1px solid var(--line);display:block"><button class="btn ghost" style="margin-top:6px" onclick="removeShot()">Remove screenshot</button></div>
-    <button class="btn ghost" id="fb-shot-btn" style="margin-bottom:10px" onclick="captureScreenshot()">📷 Add annotated screenshot</button>
+    <button class="btn ghost" id="fb-shot-btn" style="margin-bottom:10px" onclick="captureScreenshot('feedback')">📷 Add annotated screenshot</button>
     <input type="file" id="fb-shot-file" accept="image/*" style="display:none" onchange="shotFilePicked(this)">
     <button class="btn" onclick="sendFeedback()">Send to Brad</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
@@ -1877,9 +1921,9 @@ function setFeedbackStatus(id,st){if(hasFirestore())firebase.firestore().collect
 function replyFeedback(email){if(!email)return;window.location.href='mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent('Re: your Safewave feedback')}
 
 /* ---- Snip & annotate: capture the page, crop a region, draw arrows/circles/pen ---- */
-let fbShot=null,shotBase=null,shotOps=[],shotMode='pen',shotColor='#ff3b30',shotDrawing=false,shotStart=null,shotTemp=null,shotWired=false;
+let fbShot=null,shotBase=null,shotOps=[],shotMode='pen',shotColor='#ff3b30',shotDrawing=false,shotStart=null,shotTemp=null,shotWired=false,shotTarget='feedback';
 const SHOT_COLORS=['#ff3b30','#ffcc00','#34c759','#0a84ff','#ffffff','#111111'];
-async function captureScreenshot(){closeSheets();
+async function captureScreenshot(target){shotTarget=target||'feedback';closeSheets();
   const gdm=navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia;
   if(!gdm){shotFileFallback();return}
   try{
@@ -1902,7 +1946,7 @@ function openShotEditor(cv,mode){const mx=1600;if(cv.width>mx){const h=Math.roun
   shotBase=cv;shotOps=[];shotTemp=null;renderShotColors();document.getElementById('shot-editor').classList.add('on');
   wireShotCanvas();shotResizeCanvas();shotSetMode(mode||'pen');shotRedraw()}
 function closeShotEditor(){document.getElementById('shot-editor').classList.remove('on');reopenFeedback()}
-function reopenFeedback(){openSheet('sh-feedback')}
+function reopenFeedback(){if(shotTarget==='chat'){shotTarget='feedback';return}openSheet('sh-feedback')}
 function shotSetMode(m){shotMode=m;document.querySelectorAll('.shot-tool[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
   const hint=document.getElementById('shot-hint');if(hint)hint.textContent=m==='crop'?'Drag to select the area to keep — it crops to that. Or pick a draw tool to mark up.':'Drag to draw. Undo removes the last mark. Attach when done.'}
 function renderShotColors(){const el=document.getElementById('shot-colors');if(!el)return;el.innerHTML=SHOT_COLORS.map(c=>'<button class="shot-sw'+(c===shotColor?' on':'')+'" style="background:'+c+'" onclick="shotPickColor(\''+c+'\')" aria-label="color"></button>').join('')}
@@ -1937,7 +1981,9 @@ function drawCropSel(ctx,r){const x=Math.min(r.x1,r.x2),y=Math.min(r.y1,r.y2),w=
   ctx.strokeStyle='#0a84ff';ctx.lineWidth=shotLW();ctx.setLineDash([9,6]);ctx.strokeRect(x,y,w,h);ctx.restore()}
 function shotDone(){if(!shotBase){closeShotEditor();return}
   const out=document.createElement('canvas');out.width=shotBase.width;out.height=shotBase.height;const ctx=out.getContext('2d');ctx.drawImage(shotBase,0,0);shotOps.forEach(o=>drawOp(ctx,o));
-  fbShot=encodeShot(out);document.getElementById('shot-editor').classList.remove('on');showShotThumb();reopenFeedback()}
+  const data=encodeShot(out);document.getElementById('shot-editor').classList.remove('on');
+  if(shotTarget==='chat'){shotTarget='feedback';chatAddImageAttachment(data);return}
+  fbShot=data;showShotThumb();reopenFeedback()}
 function encodeShot(cv){const LIMIT=680000;
   for(const s of [1,0.8,0.66,0.5]){let c=cv;if(s<1){c=document.createElement('canvas');c.width=Math.max(1,Math.round(cv.width*s));c.height=Math.max(1,Math.round(cv.height*s));c.getContext('2d').drawImage(cv,0,0,c.width,c.height)}
     for(const q of [0.72,0.6,0.45]){const d=c.toDataURL('image/jpeg',q);if(d.length<=LIMIT)return d}}
@@ -2670,11 +2716,11 @@ function chatLoadSeen(){try{chatSeen=JSON.parse(localStorage.getItem('sw_chat_se
 function chatSaveSeen(){try{localStorage.setItem('sw_chat_seen',JSON.stringify(chatSeen))}catch(e){}}
 async function loadChatChannels(){chatLoadSeen();if(!hasFirestore())return;try{const d=await firebase.firestore().collection('settings').doc('chat').get();if(d.exists&&Array.isArray(d.data().channels)&&d.data().channels.length)chatChannels=d.data().channels}catch(e){}
   subscribeChatMeta();}
-function renderChat(){renderChatChannels();subscribeChat();markChannelRead(chatChannel);chatAutosize();}
+function renderChat(){renderChatChannels();subscribeChat();markChannelRead(chatChannel);chatAutosize();renderChatTray();chatWireDrop();}
 function renderChatChannels(){const el=document.getElementById('chat-channels');if(!el)return;
   el.innerHTML=chatChannels.map(c=>{const un=channelUnread(c)&&c!==chatChannel;return '<button class="chip'+(c===chatChannel?' on':'')+'" onclick="switchChannel(decodeURIComponent(\''+encodeURIComponent(c)+'\'))">#'+esc(c)+(un?'<span class="udot"></span>':'')+'</button>'}).join('')+'<button class="chip" onclick="addChannel()" title="New channel">＋</button>';
   const h=document.getElementById('chat-h1');if(h)h.textContent='#'+chatChannel;
-  const inp=document.getElementById('chat-input');if(inp)inp.placeholder='Message #'+chatChannel+'…  (type @ to notify a teammate)';
+  const inp=document.getElementById('chat-input');if(inp)inp.placeholder='Message #'+chatChannel+'…  (@ to notify · paste or drop files)';
   const sub=document.getElementById('chat-sub');if(sub){const n=(TEAM||[]).length;sub.textContent='Real-time · '+(n?n+' teammate'+(n===1?'':'s'):'the whole team')+' · @mention to notify'}
 }
 function switchChannel(c){chatChannel=c;renderChat()}
@@ -2697,7 +2743,7 @@ function updateChatBadge(){const btn=document.querySelector('.tab[data-s="s-chat
 
 function subscribeChat(){if(!hasFirestore()){document.getElementById('chat-stream').innerHTML='<div class="d" style="color:var(--faint);margin:auto">Chat runs on the live site.</div>';return}
   if(chatUnsub){try{chatUnsub()}catch(e){}chatUnsub=null}
-  try{chatUnsub=firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').orderBy('at','desc').limit(120).onSnapshot(qs=>{CHATMSGS=qs.docs.map(d=>d.data()).reverse();renderChatMessages();markChannelRead(chatChannel);},e=>{document.getElementById('chat-stream').innerHTML='<div class="d" style="color:var(--amber);margin:auto">Chat error — '+((e&&e.code)||'')+'</div>'})}catch(e){}}
+  try{chatUnsub=firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').orderBy('at','desc').limit(120).onSnapshot(qs=>{CHATMSGS=qs.docs.map(d=>Object.assign({id:d.id},d.data())).reverse();renderChatMessages();markChannelRead(chatChannel);},e=>{document.getElementById('chat-stream').innerHTML='<div class="d" style="color:var(--amber);margin:auto">Chat error — '+((e&&e.code)||'')+'</div>'})}catch(e){}}
 
 /* --- @mentions: match tokens against the team roster + @all/@here --- */
 function teamHandles(){const map={};(TEAM||[]).forEach(t=>{if(!t.uid)return;const first=((t.name||'').trim().split(/\s+/)[0]||'').toLowerCase();const full=(t.name||'').trim().toLowerCase().replace(/\s+/g,'');if(first)(map[first]=map[first]||[]).push(t);if(full&&full!==first)(map[full]=map[full]||[]).push(t)});return map}
@@ -2722,21 +2768,98 @@ function renderChatMessages(){const el=document.getElementById('chat-stream');if
     if(!grouped){close();
       html+='<div class="c-group'+(mine?' me':'')+'"><div class="c-av">'+esc(initials(m.name||'',''))+'</div><div class="c-body"><div class="c-head"><span class="c-name">'+esc(mine?'You':(m.name||'—'))+'</span><span>'+(ms?chatTime(ms):'')+'</span></div><div class="c-bubbles">';
       open=true;}
-    html+='<div class="c-line'+(!mine&&msgHitsMe(m)?' hasme':'')+'">'+chatText(m)+'</div>';
+    const bubble=(m.text&&m.text.trim())?('<div class="c-line'+(!mine&&msgHitsMe(m)?' hasme':'')+'">'+chatText(m)+'</div>'):'';
+    html+='<div class="c-msg">'+bubble+chatAttHtml(m)+chatReactHtml(m)+chatActHtml(m,mine)+'</div>';
     curUid=m.uid;curTime=ms;});
   close();el.innerHTML=html;el.scrollTop=el.scrollHeight;}
 
-function sendChat(){const inp=document.getElementById('chat-input');const text=(inp.value||'').trim();if(!text)return;
+function sendChat(){const inp=document.getElementById('chat-input');const text=(inp.value||'').trim();
+  const atts=chatAtts.map(a=>({kind:a.kind,url:a.url,name:a.name||'',type:a.type||'',size:a.size||0}));
+  if(!text&&!atts.length)return;
+  if(chatAtts.some(a=>a.uploading)){toast('Hang on — an attachment is still uploading');return}
   if(!hasFirestore()){toast('Chat runs on the live site');return}
-  inp.value='';chatAutosize();hideMentions();
+  inp.value='';chatAtts=[];renderChatTray();chatAutosize();hideMentions();
   const men=parseMentions(text);
   const rec={text:text,uid:CURRENT_USER.uid,name:CURRENT_USER.name||CURRENT_USER.email,at:firebase.firestore.FieldValue.serverTimestamp()};
+  if(atts.length)rec.att=atts;
   if(men.uids.length)rec.mentions=men.uids;if(men.all)rec.mentionAll=true;
   firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').add(rec).then(()=>{
-    const who=CURRENT_USER.name||'A teammate',preview=text.slice(0,120);
+    const who=CURRENT_USER.name||'A teammate';
+    const preview=text?text.slice(0,120):('📎 shared '+(atts[0]&&atts[0].kind==='image'?'a screenshot':(atts[0]?atts[0].name||'a file':'an attachment')));
     if(men.all){notify('all','#'+chatChannel+' · '+who,preview,'s-chat')}
     else{men.uids.forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,'#'+chatChannel+' · '+who+' mentioned you',preview,'s-chat')})}
   }).catch(e=>{toast('Send failed — '+((e&&e.code)||''));inp.value=text})}
+
+/* --- attachments: screenshots (reusing the annotate tool), images & files;
+   added via the toolbar, clipboard paste, or drag-and-drop. Everything goes to
+   Firebase Storage; images fall back to a compressed inline copy if Storage is
+   off, so screenshots always work. --- */
+let chatAtts=[], chatDropWired=false;
+function chatPick(kind){const el=document.getElementById(kind==='image'?'chat-file-img':'chat-file-any');if(el)el.click()}
+function chatFilesPicked(input){const fs=input.files;if(fs&&fs.length)chatOnFiles(fs);input.value=''}
+function chatScreenshot(){captureScreenshot('chat')}
+function chatOnFiles(files){Array.prototype.slice.call(files).forEach(f=>{if((f.type||'').indexOf('image/')===0)chatIngestImage(f);else chatIngestFile(f)})}
+function chatPaste(e){const items=(e.clipboardData&&e.clipboardData.items)||[];let hit=false;for(let i=0;i<items.length;i++){const it=items[i];if(it.type&&it.type.indexOf('image/')===0){const f=it.getAsFile();if(f){hit=true;chatIngestImage(f)}}}if(hit)e.preventDefault()}
+function chatWireDrop(){if(chatDropWired)return;const zone=document.getElementById('s-chat');if(!zone)return;chatDropWired=true;
+  const has=e=>e.dataTransfer&&Array.prototype.indexOf.call(e.dataTransfer.types||[],'Files')>=0;
+  zone.addEventListener('dragover',e=>{if(has(e)){e.preventDefault();zone.classList.add('chat-drop')}});
+  zone.addEventListener('dragleave',e=>{if(e.target===zone)zone.classList.remove('chat-drop')});
+  zone.addEventListener('drop',e=>{zone.classList.remove('chat-drop');if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length){e.preventDefault();chatOnFiles(e.dataTransfer.files)}});
+}
+function dataURItoBlob(d){const parts=d.split(',');const mime=((parts[0]||'').match(/:(.*?);/)||[])[1]||'image/jpeg';const bin=atob(parts[1]||'');const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime})}
+function imgFileToCanvas(file){return new Promise((res,rej)=>{const url=URL.createObjectURL(file);const im=new Image();im.onload=()=>{let w=im.naturalWidth,h=im.naturalHeight;const mx=1600;if(w>mx){h=Math.round(h*mx/w);w=mx}const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(im,0,0,w,h);URL.revokeObjectURL(url);res(cv)};im.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('img'))};im.src=url})}
+async function chatUploadBlob(blob,name){if(!(typeof firebase!=='undefined'&&firebase.storage&&hasFirestore()))return null;
+  try{const clean=(name||'file').replace(/[^\w.\-]/g,'_');const path='chat/'+chatChannel+'/'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'_'+clean;
+    const ref=firebase.storage().ref(path);await ref.put(blob);return await ref.getDownloadURL();}catch(e){return null}}
+function trayAdd(att){chatAtts.push(att);renderChatTray();return att}
+async function chatIngestImage(file){let cv;try{cv=await imgFileToCanvas(file)}catch(e){toast('Could not read that image');return}
+  const data=encodeShot(cv);const item=trayAdd({kind:'image',url:data,name:file.name||'image.jpg',type:'image/jpeg',size:data.length,uploading:true});
+  const url=await chatUploadBlob(dataURItoBlob(data),item.name);
+  if(url){item.url=url;item.size=data.length}item.uploading=false;renderChatTray();}
+async function chatAddImageAttachment(data){const item=trayAdd({kind:'image',url:data,name:'screenshot.jpg',type:'image/jpeg',size:(data||'').length,uploading:true});
+  const url=await chatUploadBlob(dataURItoBlob(data),'screenshot.jpg');if(url)item.url=url;item.uploading=false;renderChatTray();}
+async function chatIngestFile(file){if(file.size>25*1024*1024){toast(file.name+' is over 25 MB');return}
+  const item=trayAdd({kind:'file',url:'',name:file.name||'file',type:file.type||'',size:file.size||0,uploading:true});
+  const url=await chatUploadBlob(file,file.name);
+  if(!url){chatAtts=chatAtts.filter(a=>a!==item);renderChatTray();toast('Enable Firebase Storage (Firebase console → Storage) to share files');return}
+  item.url=url;item.uploading=false;renderChatTray();}
+function removeChatAtt(i){chatAtts.splice(i,1);renderChatTray()}
+function renderChatTray(){const el=document.getElementById('chat-tray');if(!el)return;
+  if(!chatAtts.length){el.style.display='none';el.innerHTML='';return}
+  el.style.display='flex';
+  el.innerHTML=chatAtts.map((a,i)=>{const inner=a.kind==='image'?'<img src="'+esc(a.url)+'" alt="">':'<div class="tray-file"><div class="tf-n">'+esc(a.name||'file')+'</div><div class="c-fsz">'+chatSize(a.size)+'</div></div>';
+    return '<div class="tray-item">'+inner+(a.uploading?'<div class="tray-up">Uploading…</div>':'')+'<button class="tray-x" onclick="removeChatAtt('+i+')" aria-label="remove">✕</button></div>';}).join('');
+}
+function chatSize(b){b=Number(b)||0;if(b<1024)return b+' B';if(b<1024*1024)return Math.round(b/1024)+' KB';return (b/1048576).toFixed(1)+' MB'}
+function fileIcon(type,name){type=(type||'').toLowerCase();const ext=((name||'').split('.').pop()||'').toLowerCase();
+  if(type.indexOf('pdf')>=0||ext==='pdf')return '📕';if(type.indexOf('image/')===0)return '🖼️';if(type.indexOf('video/')===0)return '🎬';if(type.indexOf('audio/')===0)return '🎵';
+  if(['zip','rar','7z','gz','tar'].indexOf(ext)>=0)return '🗜️';if(['xls','xlsx','csv','numbers'].indexOf(ext)>=0)return '📊';if(['doc','docx','pages','txt','md','rtf'].indexOf(ext)>=0)return '📄';if(['ppt','pptx','key'].indexOf(ext)>=0)return '📽️';return '📎'}
+function chatAttHtml(m){const a=m.att||[];if(!a.length)return '';
+  return '<div class="c-atts">'+a.map(x=>{
+    if(x.kind==='image')return '<img class="c-img" src="'+esc(x.url)+'" alt="image" loading="lazy" onclick="viewShot(this.src)">';
+    const meta=((x.type||'').split('/').pop()||'file')+(x.size?' · '+chatSize(x.size):'');
+    return '<a class="c-file" href="'+esc(x.url)+'" target="_blank" rel="noopener"><span class="c-fic">'+fileIcon(x.type,x.name)+'</span><span class="c-fmeta"><span class="c-fname">'+esc(x.name||'file')+'</span><span class="c-fsz">'+esc(meta)+'</span></span></a>';
+  }).join('')+'</div>';
+}
+/* reactions + per-message actions */
+const REACTS=['👍','✅','🎉','❤️','👀'];
+function jattr(fn,a,bb){return 'onclick="'+(fn+'('+JSON.stringify(a)+(bb!==undefined?','+JSON.stringify(bb):'')+')').replace(/"/g,'&quot;')+'"'}
+function chatReactHtml(m){const r=m.reactions||{};const keys=Object.keys(r).filter(k=>(r[k]||[]).length);if(!keys.length)return '';
+  return '<div class="c-react">'+keys.map(k=>{const mine=CURRENT_USER&&r[k].indexOf(CURRENT_USER.uid)>=0;return '<span class="re-chip'+(mine?' mine':'')+'" '+jattr('chatReact',m.id,k)+'>'+k+' '+r[k].length+'</span>'}).join('')+'</div>';}
+function chatActHtml(m,mine){if(!m.id)return '';
+  let h='<div class="c-act">'+REACTS.map(e=>'<button type="button" title="React '+e+'" '+jattr('chatReact',m.id,e)+'>'+e+'</button>').join('');
+  if(m.text)h+='<button type="button" title="Copy" '+jattr('chatCopyMsg',m.id)+'>⧉</button>';
+  if(mine)h+='<button type="button" title="Delete" '+jattr('chatDeleteMsg',m.id)+'>🗑</button>';
+  return h+'</div>';}
+function chatReact(id,emoji){if(!hasFirestore()||!CURRENT_USER)return;const m=CHATMSGS.find(x=>x.id===id);if(!m)return;
+  const r={};Object.keys(m.reactions||{}).forEach(k=>r[k]=(m.reactions[k]||[]).slice());
+  const arr=r[emoji]||[];const i=arr.indexOf(CURRENT_USER.uid);if(i>=0)arr.splice(i,1);else arr.push(CURRENT_USER.uid);
+  if(arr.length)r[emoji]=arr;else delete r[emoji];
+  firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').doc(id).update({reactions:r}).catch(e=>toast('Reaction failed — '+((e&&e.code)||'')));}
+function chatCopyMsg(id){const m=CHATMSGS.find(x=>x.id===id);if(!m)return;const v=m.text||'';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v).then(()=>toast('✓ Copied')).catch(()=>toast('Copy failed'))}else toast('Copy not available')}
+function chatDeleteMsg(id){const m=CHATMSGS.find(x=>x.id===id);if(!m)return;if(!CURRENT_USER||m.uid!==CURRENT_USER.uid){toast('You can only delete your own messages');return}
+  if(!confirm('Delete this message for everyone?'))return;
+  firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').doc(id).delete().then(()=>toast('Message deleted')).catch(e=>toast('Delete failed — '+((e&&e.code)||'')));}
 
 /* --- compose: Enter sends, Shift+Enter newline, @-autocomplete --- */
 function chatAutosize(){const t=document.getElementById('chat-input');if(!t)return;t.style.height='auto';t.style.height=Math.min(140,Math.max(44,t.scrollHeight))+'px'}
