@@ -1820,8 +1820,17 @@ function rangeChips(kind,opts){const cur=chartOpts[kind];
 function horizonChips(){const cur=chartOpts.finance.horizon;
   return '<div class="cc-filters">'+[['6mo',6],['12mo',12],['24mo',24]].map(o=>'<button class="cf-chip'+(cur===o[1]?' on':'')+'" onclick="setChartOpt(\'finance\',{horizon:'+o[1]+'})">'+o[0]+'</button>').join('')+'</div>';}
 function financeSeries(horizon){const p=financeData.projections||{};const base=financeMRR();const g=parseMoney(p.growthPct)/100;const h=Math.max(1,Math.min(60,horizon||parseMoney(p.horizon)||12));const pts=[];for(let m=0;m<=h;m++)pts.push({m:m,mrr:base*Math.pow(1+g,m)});return {base:base,h:h,pts:pts};}
-function ordersMs(){const list=(typeof ordersList==='function')?ordersList():[];return list.map(o=>o.at?dayMs(o.at):null).filter(x=>x!=null);}
-function returnsMs(){return Object.values(RETURNS||{}).map(r=>r.at?dayMs(r.at):null).filter(x=>x!=null);}
+/* Pull a timestamp off an order/return from EITHER the ISO `at` (synced) or the
+   short `date` string ("Aug 4") that every order carries — otherwise orders
+   without an `at` (the current set) were silently dropped and charts read 0. */
+function parseLooseDate(s){s=(''+s).trim();if(!s)return null;const yr=new Date().getFullYear();
+  const hasYear=/\b\d{4}\b/.test(s);            // "Aug 4" has no year — Date.parse would guess 2001, so pin the current year
+  let d=Date.parse(hasYear?s:(s+', '+yr));if(isNaN(d))d=Date.parse(s);if(isNaN(d))return null;
+  if(!hasYear&&d>Date.now()+2*864e5){const p=Date.parse(s+', '+(yr-1));if(!isNaN(p))d=p;} // a date past today → last year
+  return isNaN(d)?null:d;}
+function recMs(o){if(o&&o.at){const m=dayMs(o.at);if(m!=null)return m;}return o?parseLooseDate(o.date):null;}
+function ordersMs(){const list=(typeof ordersList==='function')?ordersList():[];return list.map(recMs).filter(x=>x!=null);}
+function returnsMs(){return Object.values(RETURNS||{}).map(recMs).filter(x=>x!=null);}
 function unitWord(u){return u==='month'?'month':'week';}
 function chartFinanceCard(){
   if(!financeData){if(typeof loadFinance==='function')loadFinance();return chartCard('Revenue trajectory','—','Projected MRR vs monthly burn','<div class="chart-empty">Loading financials…</div>','');}
@@ -1869,10 +1878,14 @@ function renderPulseInsights(user){
    always exists). Recomputes from the same live data + current filters. */
 function trows(rows){return rows.map(r=>'<tr><td>'+esc(r[0])+'</td><td>'+esc(String(r[1]))+'</td></tr>').join('');}
 function chartDetail(kind){
-  if(kind==='orders'){const o=chartOpts.orders,d=bucketTime(ordersMs(),o.unit,o.count);
-    return {title:'Orders per '+unitWord(o.unit),sub:'Paid orders · '+d.reduce((s,x)=>s+x.v,0)+' total in view',body:svgBars(d,{aria:'Orders',labelAll:d.length<=12}),cols:[unitWord(o.unit)==='month'?'Month':'Week ending','Orders'],table:trows(d.map(x=>[x.label,x.v])),filters:rangeChips('orders',[['8w','week',8],['12w','week',12],['6mo','month',6],['1yr','month',12]])};}
-  if(kind==='returns'){const o=chartOpts.returns,d=bucketTime(returnsMs(),o.unit,o.count);
-    return {title:'Returns per '+unitWord(o.unit),sub:d.reduce((s,x)=>s+x.v,0)+' opened in view',body:svgBars(d,{aria:'Returns',labelAll:d.length<=12}),cols:[unitWord(o.unit)==='month'?'Month':'Week ending','Returns'],table:trows(d.map(x=>[x.label,x.v])),filters:rangeChips('returns',[['8w','week',8],['12w','week',12],['6mo','month',6],['1yr','month',12]])};}
+  if(kind==='orders'){const o=chartOpts.orders,ms=ordersMs(),d=bucketTime(ms,o.unit,o.count),has=ms.length>0;
+    return {title:'Orders per '+unitWord(o.unit),sub:has?('Paid orders · '+d.reduce((s,x)=>s+x.v,0)+' total in view'):'No orders in view',
+      body:has?svgBars(d,{aria:'Orders',labelAll:d.length<=12}):'<div class="chart-empty">No orders in this range yet. Order history fills in as Shopify orders sync — run <b>Backfill history</b> on Stock → Fulfill to pull past orders.</div>',
+      cols:[unitWord(o.unit)==='month'?'Month':'Week ending','Orders'],table:has?trows(d.map(x=>[x.label,x.v])):'',filters:rangeChips('orders',[['8w','week',8],['12w','week',12],['6mo','month',6],['1yr','month',12]])};}
+  if(kind==='returns'){const o=chartOpts.returns,ms=returnsMs(),d=bucketTime(ms,o.unit,o.count),has=ms.length>0;
+    return {title:'Returns per '+unitWord(o.unit),sub:has?(d.reduce((s,x)=>s+x.v,0)+' opened in view'):'No returns in view',
+      body:has?svgBars(d,{aria:'Returns',labelAll:d.length<=12}):'<div class="chart-empty">No returns in this range yet — this fills in as returns are opened.</div>',
+      cols:[unitWord(o.unit)==='month'?'Month':'Week ending','Returns'],table:has?trows(d.map(x=>[x.label,x.v])):'',filters:rangeChips('returns',[['8w','week',8],['12w','week',12],['6mo','month',6],['1yr','month',12]])};}
   if(kind==='finance'){if(!financeData)return null;const fs=financeSeries(chartOpts.finance.horizon),burn=financeBurn().total;
     const pts=fs.pts.map(p=>({label:p.m===0?'now':'m'+p.m,v:Math.round(p.mrr),title:'Month '+p.m+' · '+fmtMoney(p.mrr)}));
     return {title:'Revenue trajectory',sub:'Projected MRR vs '+fmtMoney(burn)+'/mo burn',body:svgArea(pts,{ref:burn,refLabel:'burn',aria:'MRR'}),cols:['Month','Projected MRR'],table:trows(fs.pts.map(p=>['Month '+p.m,fmtMoney(p.mrr)])),filters:horizonChips()};}
