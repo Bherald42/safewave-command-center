@@ -640,7 +640,7 @@ input[type=date]{color-scheme:dark}
             <button class="ic-btn" type="button" title="Attach file" onclick="chatPick('file')">📎</button>
           </div>
           <div class="chat-inwrap">
-            <textarea class="field" id="chat-input" rows="1" placeholder="Message…  (type @ to notify · paste or drop files)" style="margin:0;resize:none;min-height:44px;max-height:140px;font-family:var(--font-b)" oninput="chatOnInput()" onkeydown="chatKey(event)" onpaste="chatPaste(event)"></textarea>
+            <textarea class="field" id="chat-input" rows="1" placeholder="Message…" style="margin:0;resize:none;min-height:44px;max-height:140px;font-family:var(--font-b)" oninput="chatOnInput()" onkeydown="chatKey(event)" onpaste="chatPaste(event)" onfocus="chatFocus()" onblur="chatBlur()"></textarea>
             <div id="chat-mentions" class="mention-pop" style="display:none"></div>
           </div>
           <button class="btn" style="width:auto" onclick="sendChat()">Send</button>
@@ -2730,11 +2730,26 @@ function chatLoadSeen(){try{chatSeen=JSON.parse(localStorage.getItem('sw_chat_se
 function chatSaveSeen(){try{localStorage.setItem('sw_chat_seen',JSON.stringify(chatSeen))}catch(e){}}
 async function loadChatChannels(){chatLoadSeen();if(!hasFirestore())return;try{const d=await firebase.firestore().collection('settings').doc('chat').get();if(d.exists&&Array.isArray(d.data().channels)&&d.data().channels.length)chatChannels=d.data().channels}catch(e){}
   subscribeChatMeta();}
-function renderChat(){renderChatChannels();subscribeChat();markChannelRead(chatChannel);chatAutosize();renderChatTray();chatWireDrop();}
+function renderChat(){renderChatChannels();subscribeChat();markChannelRead(chatChannel);chatAutosize();renderChatTray();chatWireDrop();chatWireViewport();chatKeyboardFit();}
+/* iOS/Android soft-keyboard fit: position:fixed doesn't know the keyboard is
+   there, so the pinned composer would hide behind it. Use the VisualViewport
+   API to raise the chat area's bottom edge to just above the keyboard. */
+let chatVVWired=false;
+function chatKeyboardFit(){const el=document.getElementById('s-chat');if(!el)return;const vv=window.visualViewport;
+  if(!vv||window.innerWidth>=860||!el.classList.contains('on')){el.style.bottom='';return}
+  const kb=Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop));
+  el.style.bottom=kb>2?(kb+'px'):'';
+  const st=document.getElementById('chat-stream');if(st)st.scrollTop=st.scrollHeight;}
+function chatWireViewport(){if(chatVVWired||!window.visualViewport)return;chatVVWired=true;
+  window.visualViewport.addEventListener('resize',chatKeyboardFit);
+  window.visualViewport.addEventListener('scroll',chatKeyboardFit);
+  window.addEventListener('orientationchange',function(){setTimeout(chatKeyboardFit,250)});}
+function chatFocus(){setTimeout(function(){chatKeyboardFit();const st=document.getElementById('chat-stream');if(st)st.scrollTop=st.scrollHeight},60)}
+function chatBlur(){setTimeout(chatKeyboardFit,60)}
 function renderChatChannels(){const el=document.getElementById('chat-channels');if(!el)return;
   el.innerHTML=chatChannels.map(c=>{const un=channelUnread(c)&&c!==chatChannel;return '<button class="chip'+(c===chatChannel?' on':'')+'" onclick="switchChannel(decodeURIComponent(\''+encodeURIComponent(c)+'\'))">#'+esc(c)+(un?'<span class="udot"></span>':'')+'</button>'}).join('')+'<button class="chip" onclick="addChannel()" title="New channel">＋</button>';
   const h=document.getElementById('chat-h1');if(h)h.textContent='#'+chatChannel;
-  const inp=document.getElementById('chat-input');if(inp)inp.placeholder='Message #'+chatChannel+'…  (@ to notify · paste or drop files)';
+  const inp=document.getElementById('chat-input');if(inp)inp.placeholder='Message #'+chatChannel+'…';
   const sub=document.getElementById('chat-sub');if(sub){const n=(TEAM||[]).length;sub.textContent='Real-time · '+(n?n+' teammate'+(n===1?'':'s'):'the whole team')+' · @mention to notify'}
 }
 function switchChannel(c){chatChannel=c;renderChat()}
