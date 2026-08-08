@@ -239,6 +239,20 @@ input[type=date]{color-scheme:dark}
 .c-act button{border:none;background:none;cursor:pointer;font-size:15px;padding:2px 5px;border-radius:7px;color:var(--text);line-height:1}
 .c-act button:hover{background:var(--surface-2)}
 .chat-drop{outline:2px dashed var(--wave);outline-offset:-8px}
+/* mobile: chat becomes a full-height app screen — header + channels fixed,
+   stream fills and scrolls, composer pinned above the bottom nav so it never
+   collides with it (this is the screen most of the team lives in on phones). */
+@media(max-width:859px){
+  #s-chat.on{position:fixed;top:60px;left:0;right:0;bottom:calc(62px + env(safe-area-inset-bottom));display:flex;flex-direction:column;padding:10px 12px 0;overflow:hidden}
+  #s-chat .eyebrow,#s-chat #chat-sub{display:none}
+  #s-chat #chat-h1{font-size:19px;margin:0 0 8px}
+  #s-chat #chat-channels{flex-shrink:0;margin-bottom:8px}
+  #s-chat #chat-stream{flex:1 1 auto;height:auto;min-height:0;margin-bottom:8px}
+  #s-chat .chat-composer{flex-shrink:0;padding-bottom:8px;background:var(--bg)}
+  #s-chat .ic-btn{width:38px;height:44px;font-size:16px}
+  .c-img{max-height:210px}
+  .c-group{max-width:94%}
+}
 .inv-table{border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .inv-row{display:grid;grid-template-columns:1.7fr .6fr .6fr .6fr .7fr;gap:6px;padding:11px 12px;align-items:center;border-bottom:1px solid var(--line);font-family:var(--font-m);font-size:14px}
 .inv-row:last-child{border-bottom:0}
@@ -2862,7 +2876,7 @@ function chatDeleteMsg(id){const m=CHATMSGS.find(x=>x.id===id);if(!m)return;if(!
   firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').doc(id).delete().then(()=>toast('Message deleted')).catch(e=>toast('Delete failed — '+((e&&e.code)||'')));}
 
 /* --- compose: Enter sends, Shift+Enter newline, @-autocomplete --- */
-function chatAutosize(){const t=document.getElementById('chat-input');if(!t)return;t.style.height='auto';t.style.height=Math.min(140,Math.max(44,t.scrollHeight))+'px'}
+function chatAutosize(){const t=document.getElementById('chat-input');if(!t)return;if(!t.value){t.style.height='';return}t.style.height='auto';t.style.height=Math.min(140,Math.max(44,t.scrollHeight))+'px'}
 function chatOnInput(){chatAutosize();updateMentionPop()}
 function chatKey(e){
   const pop=document.getElementById('chat-mentions');const popOpen=pop&&pop.style.display!=='none'&&chatMentionMatches.length;
