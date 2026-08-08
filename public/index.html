@@ -252,6 +252,7 @@ input[type=date]{color-scheme:dark}
   #s-chat .ic-btn{width:38px;height:44px;font-size:16px}
   .c-img{max-height:210px}
   .c-group{max-width:94%}
+  .nav.kb-hide{display:none}
 }
 .inv-table{border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .inv-row{display:grid;grid-template-columns:1.7fr .6fr .6fr .6fr .7fr;gap:6px;padding:11px 12px;align-items:center;border-bottom:1px solid var(--line);font-family:var(--font-m);font-size:14px}
@@ -2735,10 +2736,11 @@ function renderChat(){renderChatChannels();subscribeChat();markChannelRead(chatC
    there, so the pinned composer would hide behind it. Use the VisualViewport
    API to raise the chat area's bottom edge to just above the keyboard. */
 let chatVVWired=false;
-function chatKeyboardFit(){const el=document.getElementById('s-chat');if(!el)return;const vv=window.visualViewport;
-  if(!vv||window.innerWidth>=860||!el.classList.contains('on')){el.style.bottom='';return}
+function chatKeyboardFit(){const el=document.getElementById('s-chat');if(!el)return;const vv=window.visualViewport;const nav=document.querySelector('.nav');
+  if(!vv||window.innerWidth>=860||!el.classList.contains('on')){el.style.bottom='';if(nav)nav.classList.remove('kb-hide');return}
   const kb=Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop));
-  el.style.bottom=kb>2?(kb+'px'):'';
+  if(kb>60){el.style.bottom=kb+'px';if(nav)nav.classList.add('kb-hide');}      // keyboard up: sit the composer right on it, hide the tab bar
+  else{el.style.bottom='';if(nav)nav.classList.remove('kb-hide');}
   const st=document.getElementById('chat-stream');if(st)st.scrollTop=st.scrollHeight;}
 function chatWireViewport(){if(chatVVWired||!window.visualViewport)return;chatVVWired=true;
   window.visualViewport.addEventListener('resize',chatKeyboardFit);
