@@ -409,6 +409,26 @@ input[type=date]{color-scheme:dark}
 #agent-input{flex:1;min-height:44px;max-height:180px;resize:none;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-family:var(--font-b);font-size:15px;color:var(--text)}
 .screen{display:none;padding:20px 16px 30px}
 .screen.on{display:block}
+/* pulse home — hero + quick-action buttons */
+.pulse-hero{position:relative;overflow:hidden;background:var(--wave);background-image:linear-gradient(135deg,rgba(255,255,255,.15),rgba(0,0,0,.12));color:#fff;border-radius:20px;padding:22px 20px 20px;margin-bottom:16px}
+.pulse-hero h1{color:#fff;font-family:var(--font-d);font-size:25px;line-height:1.1;margin:9px 0 5px}
+.pulse-hero .ph-date{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;opacity:.85}
+.pulse-hero .ph-line{font-size:14.5px;opacity:.96;margin:0 0 15px;max-width:40ch}
+.ph-cta{display:inline-flex;align-items:center;gap:7px;background:#fff;color:var(--wave);border:none;border-radius:12px;padding:11px 17px;font-family:var(--font-b);font-weight:700;font-size:14px;cursor:pointer}
+.ph-cta:active{transform:translateY(1px)}
+.ph-streak{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.2);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700}
+.quick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:11px;margin-bottom:22px}
+.qbtn{display:flex;flex-direction:column;align-items:flex-start;gap:9px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:15px;cursor:pointer;transition:transform .1s ease,border-color .1s ease;min-height:116px;box-shadow:var(--shadow)}
+.qbtn:hover{border-color:var(--wave);transform:translateY(-2px)}
+.qbtn:active{transform:translateY(0)}
+.qbtn:focus-visible{outline:2px solid var(--wave);outline-offset:2px}
+.qbtn .qic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--wave-dim);color:var(--wave)}
+.qbtn .qic svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
+.qbtn .qn{font-family:var(--font-d);font-weight:800;font-size:27px;line-height:.95}
+.qbtn .ql{font-size:13px;font-weight:600;color:var(--muted)}
+.qbtn.attn{border-color:var(--amber)}
+.qbtn.attn .qic{background:rgba(232,160,40,.16);color:var(--amber)}
+.qbtn.attn .qn{color:var(--amber)}
 
 /* nav — bottom tabs on mobile, top bar on desktop */
 .nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--bar-bg);backdrop-filter:blur(12px);
@@ -519,17 +539,17 @@ input[type=date]{color-scheme:dark}
 
     <!-- PULSE -->
     <main class="screen on" id="s-pulse">
-      <p class="eyebrow" id="pulse-date">Today</p>
-      <h1 id="pulse-hi">Welcome</h1>
-      <p class="sub" id="pulse-sub">Your command center.</p>
-
-      <div class="tiles" id="pulse-kpis" style="margin-bottom:18px"></div>
-
-      <div id="pulse-streak" style="margin-bottom:18px"></div>
+      <div id="pulse-hero"></div>
+      <div class="quick-grid" id="pulse-quick"></div>
 
       <div class="sec">
-        <div class="sec-head"><h2>Your action items</h2><span class="pill dim" id="pulse-actcount"></span></div>
+        <div class="sec-head"><h2>Top priorities</h2><span class="pill dim" id="pulse-actcount"></span></div>
         <div id="pulse-attn"></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head"><h2>Across the business</h2></div>
+        <div class="tiles" id="pulse-roll"></div>
       </div>
 
       <div class="sec">
@@ -541,12 +561,6 @@ input[type=date]{color-scheme:dark}
         <div class="sec-head"><h2>Team · past due</h2><span class="pill dim" id="pulse-team-count"></span></div>
         <div id="pulse-team"></div>
       </div>
-
-      <div class="sec">
-        <div class="sec-head"><h2>Across the business</h2></div>
-        <div class="tiles" id="pulse-roll"></div>
-      </div>
-
     </main>
 
     <!-- FINANCIALS (restricted) -->
@@ -1661,17 +1675,48 @@ const SAFEWAVE={totalUsers:null,online:null};
 function refreshPulse(){if(CURRENT_USER)renderPulse(CURRENT_USER)}
 function ptile(v,l,badge,to){const inner='<div class="n">'+(v==null?'—':esc(String(v)))+'</div><div class="l">'+esc(l)+(badge?' <span class="pill '+(badge==='LIVE'?'wave':'amber')+'" style="font-size:9px;padding:1px 6px">'+(badge==='LIVE'?'LIVE':'LINK')+'</span>':'')+'</div>';
   return to?'<div class="tile tap" tabindex="0" onclick="goto(\''+to+'\')">'+inner+'</div>':'<div class="tile">'+inner+'</div>'}
+function pulseJumpTasks(){const el=document.getElementById('pulse-attn');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}
+function renderPulseHero(user,first,needYou,ongoing,opsCount){
+  const el=document.getElementById('pulse-hero');if(!el)return;
+  const hr=(new Date()).getHours();const greet=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
+  const s=user.streak||0;
+  const line=needYou
+    ?(needYou+' thing'+(needYou>1?'s':'')+' need'+(needYou>1?'':'s')+' your attention'+(opsCount?'':' · ops are healthy'))
+    :(ongoing?('You’re on track — '+ongoing+' item'+(ongoing>1?'s':'')+' in progress'):'Your tasks are clear 🎉 — tap through below');
+  el.innerHTML='<div class="pulse-hero">'
+    +(s>0?'<span class="ph-streak">🔥 '+s+'d</span>':'')
+    +'<div class="ph-date">'+esc(SNAPSHOT_DATE.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}))+'</div>'
+    +'<h1>'+esc(greet)+', '+esc(first)+'</h1>'
+    +'<p class="ph-line">'+esc(line)+'</p>'
+    +'<button class="ph-cta" onclick="pulseJumpTasks()">'+(needYou?'See what needs you':'Review my work')+' →</button>'
+    +'</div>';
+}
+function qbtn(svg,n,label,onclick,attn){
+  return '<button class="qbtn'+(attn&&n?' attn':'')+'" onclick="'+onclick+'">'
+    +'<span class="qic">'+(svg?'<svg viewBox="0 0 24 24">'+svg+'</svg>':'')+'</span>'
+    +'<span class="qn">'+esc(String(n))+'</span>'
+    +'<span class="ql">'+esc(label)+'</span></button>';
+}
+function renderPulseQuick(user,needYou){
+  const el=document.getElementById('pulse-quick');if(!el)return;
+  const A=navAllowedIds(user);const canSee=id=>!A||A.indexOf(id)>=0;
+  const svgOf=id=>{const n=NAV_ITEMS.find(x=>x.id===id);return n?n.svg:''};
+  const unfulfilled=(typeof unfulfilledOrders==='function')?unfulfilledOrders().length:0;
+  const crmFollow=(CRMA||[]).filter(isStale).length;
+  const openTk=(typeof TKTS!=='undefined'?TKTS:[]).filter(t=>t.status==='open').length;
+  const myBuild=collectTasks().filter(x=>x.kind==='Build'&&isMine(x.who)).length;
+  const chatUn=(typeof chatUnreadCount==='function')?chatUnreadCount():0;
+  let q=qbtn('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',needYou,'My tasks','pulseJumpTasks()',needYou>0);
+  if(canSee('s-stock'))q+=qbtn(svgOf('s-stock'),unfulfilled,'To fulfill',"goto('s-stock')",unfulfilled>0);
+  if(canSee('s-crm'))q+=qbtn(svgOf('s-crm'),crmFollow,'Follow-ups',"goto('s-crm')",crmFollow>0);
+  if(canSee('s-support'))q+=qbtn(svgOf('s-support'),openTk,'Open tickets',"goto('s-support')",openTk>0);
+  if(canSee('s-build'))q+=qbtn(svgOf('s-build'),myBuild,'Build tasks',"goto('s-build')",false);
+  if(canSee('s-chat'))q+=qbtn(svgOf('s-chat'),chatUn,'Chat',"goto('s-chat')",chatUn>0);
+  el.innerHTML=q;
+}
 function renderPulse(user){
   const first=(user.name||'there').split(' ')[0];
-  document.getElementById('pulse-hi').textContent='Welcome, '+first;
-  document.getElementById('pulse-date').textContent=SNAPSHOT_DATE.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
   const canMoney=(user.role==='admin'||user.role==='manager'||user.role==='superadmin');
-  // top-line KPIs
-  document.getElementById('pulse-kpis').innerHTML=
-    ptile(SAFEWAVE.totalUsers,'Total users',SAFEWAVE.totalUsers==null?'LINK':'LIVE')
-    +ptile(SAFEWAVE.online,'Users online',SAFEWAVE.online==null?'LINK':'LIVE')
-    +(canMoney?ptile(SHOP.lastWeekRev,'Revenue · last wk','LIVE'):ptile(totalAvail(),'Bands available',null,'s-stock'))
-    +ptile(SHOP.lastWeekOrders,'New orders · wk','LIVE','s-stock');
   // your tasks — assigned to me, grouped by urgency
   const byDue=(a,b)=>((a.dueMs==null?Infinity:a.dueMs)-(b.dueMs==null?Infinity:b.dueMs));
   const tasks=collectTasks();
@@ -1706,6 +1751,8 @@ function renderPulse(user){
   document.getElementById('pulse-attn').innerHTML=html||'<div class="empty"><div class="ico">✓</div><div class="t">You\'re clear</div><div class="d">Nothing assigned to you is due, nothing is stalling, and ops are healthy. Nice.</div></div>';
   const needYou=overdue.length+soon.length+myRotTasks.length+(myDealRot?1:0);
   document.getElementById('pulse-actcount').textContent=needYou?needYou+' need you':(mine.length?mine.length+' ongoing':'clear');
+  renderPulseHero(user,first,needYou,mine.length,ops.length);
+  renderPulseQuick(user,needYou);
   // team past due + stalling — everyone sees, to check in / offer help
   const teamOver=tasks.filter(x=>x.overdue).sort(byDue);
   let teamHtml=teamOver.map(x=>'<div class="card tap" tabindex="0" onclick="goto(\''+x.screen+'\')"><div class="row"><div class="grow"><div class="t">'+esc(x.title)+'</div><div class="d">'+esc(x.who||'Unassigned')+' · '+esc(x.kind)+'</div></div><span class="pill amber">'+esc(dueMeta(x.dueMs).label||'past due')+'</span></div></div>').join('');
