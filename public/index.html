@@ -165,6 +165,13 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .frow #fp-cash,.frow #fp-customers,.frow #fp-mrr,.frow #fp-growth,.frow #fp-horizon{flex:1;max-width:200px}
 .frow .fr-x{color:var(--faint);cursor:pointer;padding:0 4px;flex-shrink:0;text-decoration:none}
 .frow select.fr-type{-webkit-appearance:none;appearance:none}
+/* mobile: let multi-input finance rows (P&L / budget / payroll) wrap instead
+   of overflowing — the label takes the top line, the numbers sit below. */
+@media(max-width:600px){
+  .frow{flex-wrap:wrap}
+  .frow .fr-label,.frow .fr-name{flex:1 1 100%}
+  .frow .fr-role,.frow .fr-amt,.frow .fr-bud,.frow .fr-act,.frow .fr-monthly,.frow select.fr-type{flex:1 1 auto;max-width:none}
+}
 .tile.tap{cursor:pointer;transition:border-color .12s}
 .tile.tap:hover{border-color:#4a5361}
 .tile.tap:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
