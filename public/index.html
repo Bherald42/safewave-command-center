@@ -454,6 +454,23 @@ input[type=date]{color-scheme:dark}
 .chart-svg .cline{stroke:var(--wave);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .chart-svg .cdot{fill:var(--wave)}
 .chart-svg .cref{stroke:var(--faint);stroke-width:1.4;stroke-dasharray:4 4}
+.chart-svg .clabel{fill:var(--muted)}
+.cc-hr{display:flex;align-items:center;gap:8px}
+.cc-exp{background:none;border:1px solid var(--line);border-radius:8px;width:26px;height:26px;cursor:pointer;color:var(--muted);font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cc-exp:hover{border-color:var(--wave);color:var(--wave)}
+.cc-filters{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 10px}
+.cf-chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:3px 11px;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer}
+.cf-chip.on{border-color:var(--wave);background:var(--wave-dim);color:var(--wave)}
+.chart-modal{display:none;position:fixed;inset:0;z-index:120;background:rgba(13,27,36,.5);backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:16px}
+.chart-modal.on{display:flex}
+.cm-box{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 64px rgba(0,0,0,.28);max-width:640px;width:100%;max-height:88vh;overflow-y:auto;padding:20px}
+.cm-close{float:right;background:none;border:1px solid var(--line);border-radius:8px;width:30px;height:30px;cursor:pointer;color:var(--muted);font-size:14px}
+.cm-chart{margin-top:10px}
+.cm-chart .chart-svg{max-height:300px}
+.cm-table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
+.cm-table th{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:700}
+.cm-table td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+.cm-table td:last-child,.cm-table th:last-child{text-align:right;font-variant-numeric:tabular-nums}
 
 /* nav — bottom tabs on mobile, top bar on desktop */
 .nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--bar-bg);backdrop-filter:blur(12px);
@@ -592,6 +609,11 @@ input[type=date]{color-scheme:dark}
         <div id="pulse-team"></div>
       </div>
     </main>
+
+    <!-- chart expand modal -->
+    <div id="chart-modal" class="chart-modal" onclick="if(event.target===this)closeChartModal()">
+      <div class="cm-box"><div id="cm-body"></div></div>
+    </div>
 
     <!-- FINANCIALS (restricted) -->
     <main class="screen" id="s-finance">
@@ -1771,44 +1793,66 @@ function svgArea(pts,opts){opts=opts||{};const n=pts.length;if(n<2)return '';
   s+='<text class="caxis" x="'+padL+'" y="'+(H-5)+'">'+esc(pts[0].label)+'</text>';
   s+='<text class="caxis" x="'+(W-padR)+'" y="'+(H-5)+'" text-anchor="end">'+esc(pts[n-1].label)+'</text>';
   return s+'</svg>';}
-function chartCard(title,big,sub,body,note){
-  return '<div class="chart-card"><div class="cc-h"><span class="cc-t">'+esc(title)+'</span>'+(big!=null?'<span class="cc-big">'+esc(String(big))+'</span>':'')+'</div>'
-    +(sub?'<div class="cc-sub">'+esc(sub)+'</div>':'<div style="height:6px"></div>')+body+(note?'<div class="chart-note">'+esc(note)+'</div>':'')+'</div>';}
-function weekBuckets(msList,n){n=n||8;const now=todayMs()+864e5,wk=7*864e5,b=new Array(n).fill(0);
-  msList.forEach(ms=>{if(ms==null)return;const idx=Math.floor((now-ms)/wk);if(idx>=0&&idx<n)b[n-1-idx]++;});
-  return b.map((v,i)=>{const end=new Date(now-(n-1-i)*wk);return {label:end.toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),v:v}});}
+function chartCard(title,big,sub,body,note,filters,expandKey){
+  const exp=expandKey?'<button class="cc-exp" title="Expand" aria-label="Expand chart" onclick="expandChart(\''+expandKey+'\')">⤢</button>':'';
+  return '<div class="chart-card"><div class="cc-h"><span class="cc-t">'+esc(title)+'</span><span class="cc-hr">'+(big!=null?'<span class="cc-big">'+esc(String(big))+'</span>':'')+exp+'</span></div>'
+    +(sub?'<div class="cc-sub">'+esc(sub)+'</div>':'<div style="height:4px"></div>')+(filters||'')+body+(note?'<div class="chart-note">'+esc(note)+'</div>':'')+'</div>';}
+/* robust time bucketing — week (7-day windows ending today) or calendar month.
+   Future/partial-week timestamps clamp into the current bucket instead of being
+   dropped, which was making "orders this week" read low. */
+function bucketTime(msList,unit,count){
+  if(unit==='month'){
+    const now=new Date();const keys=[];
+    for(let i=count-1;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);keys.push({y:d.getFullYear(),m:d.getMonth(),label:d.toLocaleDateString('en-US',{month:'short'}),v:0});}
+    msList.forEach(ms=>{if(ms==null)return;const d=new Date(ms);const k=keys.find(x=>x.y===d.getFullYear()&&x.m===d.getMonth());if(k)k.v++;});
+    return keys.map(k=>({label:k.label,v:k.v}));
+  }
+  const wk=7*864e5,end=todayMs()+864e5,b=new Array(count).fill(0);
+  msList.forEach(ms=>{if(ms==null)return;let idx=Math.floor((end-ms)/wk);if(idx<0)idx=0;if(idx<count)b[count-1-idx]++;});
+  return b.map((v,i)=>{const e=new Date(end-(count-1-i)*wk);return {label:e.toLocaleDateString('en-US',{month:'numeric',day:'numeric'}),v:v}});
+}
+let chartOpts={orders:{unit:'week',count:8},returns:{unit:'week',count:8},finance:{horizon:12}};
+let chartModalKind=null;
+function setChartOpt(kind,patch){Object.assign(chartOpts[kind],patch);renderPulseInsights(CURRENT_USER);
+  if(chartModalKind===kind&&document.getElementById('chart-modal')&&document.getElementById('chart-modal').classList.contains('on'))expandChart(kind);}
+function rangeChips(kind,opts){const cur=chartOpts[kind];
+  return '<div class="cc-filters">'+opts.map(o=>'<button class="cf-chip'+((cur.unit===o[1]&&cur.count===o[2])?' on':'')+'" onclick="setChartOpt(\''+kind+'\',{unit:\''+o[1]+'\',count:'+o[2]+'})">'+esc(o[0])+'</button>').join('')+'</div>';}
+function horizonChips(){const cur=chartOpts.finance.horizon;
+  return '<div class="cc-filters">'+[['6mo',6],['12mo',12],['24mo',24]].map(o=>'<button class="cf-chip'+(cur===o[1]?' on':'')+'" onclick="setChartOpt(\'finance\',{horizon:'+o[1]+'})">'+o[0]+'</button>').join('')+'</div>';}
+function financeSeries(horizon){const p=financeData.projections||{};const base=financeMRR();const g=parseMoney(p.growthPct)/100;const h=Math.max(1,Math.min(60,horizon||parseMoney(p.horizon)||12));const pts=[];for(let m=0;m<=h;m++)pts.push({m:m,mrr:base*Math.pow(1+g,m)});return {base:base,h:h,pts:pts};}
+function ordersMs(){const list=(typeof ordersList==='function')?ordersList():[];return list.map(o=>o.at?dayMs(o.at):null).filter(x=>x!=null);}
+function returnsMs(){return Object.values(RETURNS||{}).map(r=>r.at?dayMs(r.at):null).filter(x=>x!=null);}
+function unitWord(u){return u==='month'?'month':'week';}
 function chartFinanceCard(){
   if(!financeData){if(typeof loadFinance==='function')loadFinance();return chartCard('Revenue trajectory','—','Projected MRR vs monthly burn','<div class="chart-empty">Loading financials…</div>','');}
-  const mrr=financeMRR(),burn=financeBurn().total;
-  const ps=(typeof projSeries==='function')?projSeries():null;let body;
-  if(ps&&ps.base>0){const pts=[{m:0,mrr:ps.base}].concat(ps.pts).map(p=>({label:p.m===0?'now':'m'+p.m,v:Math.round(p.mrr),title:'Month '+p.m+' · '+fmtMoney(p.mrr)+' MRR'}));
+  const mrr=financeMRR(),burn=financeBurn().total;const fs=financeSeries(chartOpts.finance.horizon);let body;
+  if(fs.base>0){const pts=fs.pts.map(p=>({label:p.m===0?'now':'m'+p.m,v:Math.round(p.mrr),title:'Month '+p.m+' · '+fmtMoney(p.mrr)+' MRR'}));
     body=svgArea(pts,{ref:burn,refLabel:'burn',aria:'Projected MRR versus monthly burn'});}
   else body='<div class="chart-empty">Add projections in Financials to see the trajectory.</div>';
-  return chartCard('Revenue trajectory',fmtMoney(mrr),'Projected MRR vs monthly burn',body,(ps&&ps.base>0&&burn)?('Line crosses the burn mark ('+fmtMoney(burn)+'/mo) when net-positive'):'');}
+  return chartCard('Revenue trajectory',fmtMoney(mrr),'Projected MRR vs monthly burn',body,(fs.base>0&&burn)?('Crosses the burn mark ('+fmtMoney(burn)+'/mo) when net-positive'):'',fs.base>0?horizonChips():'',fs.base>0?'finance':'');}
 function chartOrdersCard(){
-  const list=(typeof ordersList==='function')?ordersList():[];const ms=list.map(o=>o.at?dayMs(o.at):null).filter(x=>x!=null);
-  const weeks=weekBuckets(ms,8);const has=ms.length>0;const thisWk=weeks.length?weeks[weeks.length-1].v:0;
-  const body=has?svgBars(weeks,{aria:'Orders per week',labelLast:true,everyOther:true}):'<div class="chart-empty">Order trend appears as Shopify orders sync in.</div>';
-  return chartCard('Orders / week',has?thisWk:'—','Paid orders, last 8 weeks',body,has?('This week · '+thisWk+' order'+(thisWk===1?'':'s')):'');}
+  const o=chartOpts.orders;const ms=ordersMs();const data=bucketTime(ms,o.unit,o.count);const has=ms.length>0;const last=data.length?data[data.length-1].v:0;
+  const body=has?svgBars(data,{aria:'Orders per '+unitWord(o.unit),labelLast:true,everyOther:data.length>9}):'<div class="chart-empty">Order trend appears as Shopify orders sync in.</div>';
+  return chartCard('Orders',has?last:'—','Paid orders per '+unitWord(o.unit),body,has?('Latest '+unitWord(o.unit)+' · '+last+' order'+(last===1?'':'s')):'',rangeChips('orders',[['8w','week',8],['12w','week',12],['6mo','month',6],['1yr','month',12]]),'orders');}
 function chartReturnsCard(){
-  const rs=Object.values(RETURNS||{});const ms=rs.map(r=>r.at?dayMs(r.at):null).filter(x=>x!=null);
-  const weeks=weekBuckets(ms,8);const has=ms.length>0;const open=(typeof openReturns==='function')?openReturns().length:rs.filter(r=>r.status!=='restocked').length;
-  const body=has?svgBars(weeks,{aria:'Returns per week',labelLast:true,everyOther:true}):'<div class="chart-empty">No returns yet — this trends as returns come in.</div>';
-  return chartCard('Returns / week',open,'Opened per week · '+open+' open now',body,'');}
+  const o=chartOpts.returns;const ms=returnsMs();const data=bucketTime(ms,o.unit,o.count);const has=ms.length>0;
+  const open=(typeof openReturns==='function')?openReturns().length:Object.values(RETURNS||{}).filter(r=>r.status!=='restocked').length;
+  const body=has?svgBars(data,{aria:'Returns per '+unitWord(o.unit),labelLast:true,everyOther:data.length>9}):'<div class="chart-empty">No returns yet — this trends as returns come in.</div>';
+  return chartCard('Returns',open,'Opened per '+unitWord(o.unit)+' · '+open+' open now',body,'',rangeChips('returns',[['8w','week',8],['12w','week',12],['6mo','month',6],['1yr','month',12]]),'returns');}
 function chartProjectsCard(){
   const tasks=BUILDT||[];const done=tasks.filter(t=>taskStatus(t)==='done').length,total=tasks.length,pct=total?Math.round(done/total*100):0;let body;
   if(total){body='<div class="progress" style="height:8px;margin:2px 0 13px"><i style="width:'+pct+'%"></i></div>';
     const projs=(BUILDP||[]).map(p=>{const pt=tasks.filter(t=>t.projectId===p.id),d=pt.filter(t=>taskStatus(t)==='done').length;return {name:p.name||p.id,d:d,t:pt.length,pct:pt.length?Math.round(d/pt.length*100):0}}).filter(p=>p.t>0).sort((a,b)=>b.t-a.t).slice(0,4);
     body+=projs.map(p=>'<div style="margin-bottom:9px"><div class="row" style="justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="font-weight:600;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+'</span><span style="color:var(--faint);flex-shrink:0">'+p.d+'/'+p.t+'</span></div><div class="progress" style="height:6px"><i style="width:'+p.pct+'%"></i></div></div>').join('');}
   else body='<div class="chart-empty">Add tasks on the Build board to track progress.</div>';
-  return chartCard('Project progress',total?pct+'%':'—','Tasks complete across projects',body,total?(done+' of '+total+' tasks done'):'');}
+  return chartCard('Project progress',total?pct+'%':'—','Tasks complete across projects',body,total?(done+' of '+total+' tasks done'):'','',total?'projects':'');}
 function chartFundraiseCard(){
   const s=raiseStats();const pct=s.target?Math.min(100,Math.round(s.committed/s.target*100)):0;let body;
   if(s.target||s.committed||s.investors){body='<div class="progress" style="height:9px;margin:2px 0 13px"><i style="width:'+pct+'%"></i></div>';
     [['Committed',s.committed],['Soft-circled',s.soft],['Wired',s.wired]].filter(r=>r[1]).forEach(r=>{body+='<div class="kv"><span>'+r[0]+'</span><b>'+fmtMoney(r[1])+'</b></div>';});
     body+='<div class="kv"><span>Investors in pipeline</span><b>'+s.investors+'</b></div>';}
   else body='<div class="chart-empty">Set a target and add investors to track the raise.</div>';
-  return chartCard('Fundraise',fmtMoney(s.committed),s.target?(pct+'% of '+fmtMoney(s.target)+(RAISE.round?' · '+RAISE.round:'')):'Committed so far',body,'');}
+  return chartCard('Fundraise',fmtMoney(s.committed),s.target?(pct+'% of '+fmtMoney(s.target)+(RAISE.round?' · '+RAISE.round:'')):'Committed so far',body,'','',(s.target||s.committed||s.investors)?'fundraise':'');}
 function renderPulseInsights(user){
   const el=document.getElementById('pulse-insights'),sec=document.getElementById('pulse-insights-sec');if(!el)return;
   const A=navAllowedIds(user);const canSee=id=>!A||A.indexOf(id)>=0;const lead=canFundraise();
@@ -1821,6 +1865,34 @@ function renderPulseInsights(user){
   if(sec)sec.style.display=cards.length?'':'none';
   el.innerHTML=cards.join('');
 }
+/* expand a chart into a larger modal with a data table (dataviz: a table view
+   always exists). Recomputes from the same live data + current filters. */
+function trows(rows){return rows.map(r=>'<tr><td>'+esc(r[0])+'</td><td>'+esc(String(r[1]))+'</td></tr>').join('');}
+function chartDetail(kind){
+  if(kind==='orders'){const o=chartOpts.orders,d=bucketTime(ordersMs(),o.unit,o.count);
+    return {title:'Orders per '+unitWord(o.unit),sub:'Paid orders · '+d.reduce((s,x)=>s+x.v,0)+' total in view',body:svgBars(d,{aria:'Orders',labelAll:d.length<=12}),cols:[unitWord(o.unit)==='month'?'Month':'Week ending','Orders'],table:trows(d.map(x=>[x.label,x.v])),filters:rangeChips('orders',[['8w','week',8],['12w','week',12],['6mo','month',6],['1yr','month',12]])};}
+  if(kind==='returns'){const o=chartOpts.returns,d=bucketTime(returnsMs(),o.unit,o.count);
+    return {title:'Returns per '+unitWord(o.unit),sub:d.reduce((s,x)=>s+x.v,0)+' opened in view',body:svgBars(d,{aria:'Returns',labelAll:d.length<=12}),cols:[unitWord(o.unit)==='month'?'Month':'Week ending','Returns'],table:trows(d.map(x=>[x.label,x.v])),filters:rangeChips('returns',[['8w','week',8],['12w','week',12],['6mo','month',6],['1yr','month',12]])};}
+  if(kind==='finance'){if(!financeData)return null;const fs=financeSeries(chartOpts.finance.horizon),burn=financeBurn().total;
+    const pts=fs.pts.map(p=>({label:p.m===0?'now':'m'+p.m,v:Math.round(p.mrr),title:'Month '+p.m+' · '+fmtMoney(p.mrr)}));
+    return {title:'Revenue trajectory',sub:'Projected MRR vs '+fmtMoney(burn)+'/mo burn',body:svgArea(pts,{ref:burn,refLabel:'burn',aria:'MRR'}),cols:['Month','Projected MRR'],table:trows(fs.pts.map(p=>['Month '+p.m,fmtMoney(p.mrr)])),filters:horizonChips()};}
+  if(kind==='projects'){const tasks=BUILDT||[];const rows=(BUILDP||[]).map(p=>{const pt=tasks.filter(t=>t.projectId===p.id),dn=pt.filter(t=>taskStatus(t)==='done').length;return [p.name||p.id,dn+'/'+pt.length+(pt.length?' ('+Math.round(dn/pt.length*100)+'%)':'')];}).filter((r,i)=>tasks.filter(t=>t.projectId===(BUILDP[i]||{}).id).length);
+    return {title:'Project progress',sub:tasks.filter(t=>taskStatus(t)==='done').length+' of '+tasks.length+' tasks done',body:chartProjectsBody(),cols:['Project','Done'],table:trows(rows)};}
+  if(kind==='fundraise'){const s=raiseStats();const rows=[['Committed',fmtMoney(s.committed)],['Soft-circled',fmtMoney(s.soft)],['Hard-circled',fmtMoney(s.hard)],['Wired',fmtMoney(s.wired)],['Target',fmtMoney(s.target)],['Investors',s.investors]];
+    return {title:'Fundraise',sub:s.target?(Math.round(s.committed/s.target*100)+'% of '+fmtMoney(s.target)):'Committed so far',body:'<div class="progress" style="height:10px;margin:6px 0"><i style="width:'+(s.target?Math.min(100,Math.round(s.committed/s.target*100)):0)+'%"></i></div>',cols:['Stage','Amount'],table:trows(rows)};}
+  return null;
+}
+function chartProjectsBody(){const tasks=BUILDT||[];const done=tasks.filter(t=>taskStatus(t)==='done').length,total=tasks.length,pct=total?Math.round(done/total*100):0;
+  let body='<div class="progress" style="height:9px;margin:6px 0 13px"><i style="width:'+pct+'%"></i></div>';
+  (BUILDP||[]).map(p=>{const pt=tasks.filter(t=>t.projectId===p.id),d=pt.filter(t=>taskStatus(t)==='done').length;return {name:p.name||p.id,d:d,t:pt.length,pct:pt.length?Math.round(d/pt.length*100):0};}).filter(p=>p.t>0).sort((a,b)=>b.t-a.t).forEach(p=>{body+='<div style="margin-bottom:9px"><div class="row" style="justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="font-weight:600;color:var(--text)">'+esc(p.name)+'</span><span style="color:var(--faint)">'+p.d+'/'+p.t+'</span></div><div class="progress" style="height:6px"><i style="width:'+p.pct+'%"></i></div></div>';});
+  return body;}
+function expandChart(kind){const d=chartDetail(kind);if(!d)return;chartModalKind=kind;
+  document.getElementById('cm-body').innerHTML='<button class="cm-close" onclick="closeChartModal()" aria-label="Close">✕</button>'
+    +'<div class="cc-t" style="font-size:18px">'+esc(d.title)+'</div>'+(d.sub?'<div class="cc-sub">'+esc(d.sub)+'</div>':'')
+    +(d.filters||'')+'<div class="cm-chart">'+d.body+'</div>'
+    +(d.table?'<table class="cm-table"><thead><tr><th>'+esc(d.cols[0])+'</th><th>'+esc(d.cols[1])+'</th></tr></thead><tbody>'+d.table+'</tbody></table>':'');
+  document.getElementById('chart-modal').classList.add('on');}
+function closeChartModal(){chartModalKind=null;document.getElementById('chart-modal').classList.remove('on');}
 function renderPulse(user){
   const first=(user.name||'there').split(' ')[0];
   const canMoney=(user.role==='admin'||user.role==='manager'||user.role==='superadmin');
