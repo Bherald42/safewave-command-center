@@ -406,6 +406,140 @@ exports.scheduledShopifySync = onSchedule({ schedule: "every 15 minutes", region
 });
 
 /* ------------------------------------------------------------------ *
+ * COMPLIANCE STANDARD-WATCH — monthly (and on-demand) web check for
+ * changes to the standards Safewave certifies against: SOC 2 (the AICPA
+ * Trust Services Criteria) and HIPAA (HHS Security & Privacy Rules,
+ * 45 CFR Part 164). Uses the Anthropic Messages API with the web-search
+ * tool, appends the result to compliance/updates, and notifies admins
+ * when a standard has actually changed. No Drata / third-party GRC vendor.
+ * ------------------------------------------------------------------ */
+const COMPLIANCE_LOG_CAP = 24;
+
+// Pull the first balanced JSON object out of a model reply (tolerates
+// ```json fences and any prose the model adds around it).
+function firstJsonObject(s) {
+  if (!s) return null;
+  const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const body = fenced ? fenced[1] : s;
+  const start = body.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  for (let i = start; i < body.length; i++) {
+    const c = body[i];
+    if (c === "{") depth++;
+    else if (c === "}") { depth--; if (depth === 0) { try { return JSON.parse(body.slice(start, i + 1)); } catch (e) { return null; } } }
+  }
+  return null;
+}
+
+function normStd(x) {
+  x = x && typeof x === "object" ? x : {};
+  return {
+    changed: !!x.changed,
+    summary: ("" + (x.summary || "")).slice(0, 600),
+    asOf: ("" + (x.asOf || "")).slice(0, 80),
+    sources: (Array.isArray(x.sources) ? x.sources : []).filter((u) => typeof u === "string").slice(0, 5),
+  };
+}
+
+async function runComplianceCheck(by) {
+  const key = process.env.ANTHROPIC_API_KEY || "";
+  if (!key) { const err = new Error("no-key"); err.code = "no-key"; throw err; }
+  const today = new Date().toISOString().slice(0, 10);
+  const sys =
+    "You are a GRC compliance analyst for Safewave Technology (maker of the Safewave Band, a life-safety wearable " +
+    "for people who are Deaf or hard of hearing). Your job: determine whether the two standards this company is " +
+    "certifying against have had any published updates, revisions, errata, or notable regulatory changes recently.\n" +
+    "  1. SOC 2 — the AICPA Trust Services Criteria (TSC).\n" +
+    "  2. HIPAA — the HHS Security Rule and Privacy Rule, 45 CFR Part 164 (including any NPRM / final rules).\n" +
+    "Use web search against authoritative sources (aicpa-cima.com, hhs.gov, federalregister.gov). Today is " + today + ".\n" +
+    "Respond with ONLY a JSON object, no prose and no markdown fences, of exactly this shape:\n" +
+    '{"soc2":{"changed":boolean,"summary":"1-2 sentences","asOf":"date or revision label","sources":["url"]},' +
+    '"hipaa":{"changed":boolean,"summary":"1-2 sentences","asOf":"date or revision label","sources":["url"]},' +
+    '"headline":"one short line summarising both"}\n' +
+    "Set changed:true ONLY for a genuine change to the standard itself (not vendor blog chatter). If nothing has " +
+    "changed, changed:false and the summary should state the current in-force revision and that no change was found.";
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model: "claude-sonnet-5",
+      max_tokens: 1500,
+      system: sys,
+      messages: [{ role: "user", content: "Run the standards check for SOC 2 and HIPAA now. Search the web for the latest status of each, then return the JSON." }],
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }],
+    }),
+  });
+  if (!resp.ok) {
+    const b = await resp.text();
+    logger.error("compliance check Anthropic error", resp.status, b.slice(0, 400));
+    const err = new Error("api-" + resp.status); err.code = "api"; throw err;
+  }
+  const data = await resp.json();
+  const text = (data && Array.isArray(data.content) ? data.content : [])
+    .filter((b) => b && b.type === "text").map((b) => b.text).join("\n").trim();
+  const parsed = firstJsonObject(text) || {};
+  const rec = {
+    at: new Date().toISOString(),
+    by: by || "system",
+    model: "claude-sonnet-5",
+    soc2: normStd(parsed.soc2),
+    hipaa: normStd(parsed.hipaa),
+    headline: ("" + (parsed.headline || "Standards check completed.")).slice(0, 300),
+  };
+
+  const ref = db.collection("compliance").doc("updates");
+  const snap = await ref.get();
+  const log = (snap.exists && Array.isArray(snap.data().log)) ? snap.data().log : [];
+  log.unshift(rec);
+  await ref.set({ log: log.slice(0, COMPLIANCE_LOG_CAP), lastCheckAt: rec.at, lastCheckBy: rec.by }, { merge: true });
+
+  if (rec.soc2.changed || rec.hipaa.changed) {
+    try {
+      const admins = await db.collection("users").where("role", "in", ["admin", "superadmin"]).get();
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const batch = db.batch();
+      admins.forEach((u) => {
+        batch.set(db.collection("notifications").doc(), {
+          to: u.id, title: "Compliance: standard updated", body: rec.headline.slice(0, 140),
+          link: "s-comply", by: "Standard watch", at: now,
+        });
+      });
+      await batch.commit();
+    } catch (e) { logger.error("compliance notify failed", e && e.message); }
+  }
+  return rec;
+}
+
+// Callable: "Check for standard updates" button on the Comply screen.
+exports.checkComplianceUpdates = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to run the compliance check.");
+  try {
+    const by = (request.auth.token && request.auth.token.email) || request.auth.uid;
+    const rec = await runComplianceCheck(by);
+    return { ok: true, rec: rec };
+  } catch (e) {
+    if (e && e.code === "no-key") {
+      throw new HttpsError("failed-precondition",
+        "The standard-watch needs the assistant — add an ANTHROPIC_API_KEY secret to enable the web check.");
+    }
+    logger.error("checkComplianceUpdates failed", e && e.message);
+    throw new HttpsError("internal", "Standard check failed — try again in a moment.");
+  }
+});
+
+// Scheduled: the 1st of every month, quietly re-check the standards.
+exports.scheduledComplianceCheck = onSchedule({ schedule: "1 of month 09:00", region: REGION }, async () => {
+  if (!process.env.ANTHROPIC_API_KEY) { logger.info("scheduledComplianceCheck skipped — ANTHROPIC_API_KEY not set"); return; }
+  try {
+    const rec = await runComplianceCheck("schedule");
+    logger.info("scheduledComplianceCheck: soc2 changed=" + rec.soc2.changed + " hipaa changed=" + rec.hipaa.changed);
+  } catch (e) {
+    logger.error("scheduledComplianceCheck failed", e && e.message);
+  }
+});
+
+/* ------------------------------------------------------------------ *
  * RUN CAMPAIGNS  →  send next due step of each active campaign
  * ------------------------------------------------------------------ */
 exports.runCampaigns = onSchedule({ schedule: "every day 15:00", region: REGION }, async () => {

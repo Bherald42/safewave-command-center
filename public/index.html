@@ -141,6 +141,10 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .rolepick button{background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font-family:var(--font-b);font-size:11.5px;font-weight:600;padding:7px 11px;border-radius:9px;cursor:pointer}
 .rolepick button.on{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
 .rolepick button:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
+.comply-pick button.on[data-v="met"]{background:var(--good-dim);border-color:var(--good);color:var(--good)}
+.comply-pick button.on[data-v="progress"]{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
+.comply-pick button.on[data-v="gap"]{background:var(--amber-dim);border-color:var(--amber);color:var(--amber)}
+.comply-pick button.on[data-v="na"]{background:var(--surface-2);border-color:var(--line);color:var(--muted)}
 .rec-on{background:var(--safety-dim)!important;border-color:var(--safety)!important;color:var(--safety)!important}
 /* pipeline board */
 .pipe{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px}
@@ -725,16 +729,14 @@ input[type=date]{color-scheme:dark}
       <div id="crm-body"></div>
     </main>
 
-    <!-- COMPLY -->
+    <!-- COMPLY · our own GRC tracker (admin only) -->
     <main class="screen" id="s-comply">
       <p class="eyebrow">Comply · admin only</p>
       <h1>Compliance</h1>
-      <p class="sub">SOC 2 Type II + HIPAA — decided platform: Drata.</p>
-      <div class="empty">
-        <div class="ico">🛡️</div>
-        <div class="t">Drata isn't connected yet</div>
-        <div class="d">Integrate Drata's API (read-only) to load live control status. We build the issue-raising, evidence tracker and HIPAA PHI map on top — never rebuild GRC.</div>
-      </div>
+      <p class="sub" id="comply-sub">SOC 2 Type II + HIPAA — tracked in-house.</p>
+      <div class="note" style="margin:0 0 12px">🛡️ Our own lightweight GRC tracker — no Drata, no third-party vendor. Track each control's status, owner and evidence, map where PHI lives, and let the monthly <b>standard-watch</b> flag any change to the SOC&nbsp;2 or HIPAA standards themselves. Admin only.</div>
+      <div class="chips" id="comply-tabs" style="margin-bottom:14px"></div>
+      <div id="comply-body"></div>
     </main>
 
     <!-- KNOWLEDGE / ASSISTANT -->
@@ -889,6 +891,42 @@ input[type=date]{color-scheme:dark}
     </div>
     <textarea class="field" id="vlt-notes" placeholder="Notes (2FA on Brad's phone, recovery codes location, who owns it…)" style="min-height:70px;resize:vertical;font-family:var(--font-b)"></textarea>
     <button class="btn" style="margin-top:12px" onclick="saveVault()">Save tool</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-comply" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave" id="cmp-tag">CONTROL</span>
+    <h1 style="font-size:19px;margin:11px 0 4px" id="cmp-h">Control</h1>
+    <p class="d" id="cmp-desc" style="margin:0 0 12px"></p>
+    <input type="hidden" id="cmp-id">
+    <p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Owner</p>
+    <input class="field" id="cmp-owner" placeholder="Who owns this control? (name)">
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Evidence</p>
+    <input class="field" id="cmp-evidence" placeholder="Link or where the evidence lives">
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Notes</p>
+    <textarea class="field" id="cmp-note" placeholder="Status notes, remediation plan, review date…" style="min-height:64px;resize:vertical;font-family:var(--font-b)"></textarea>
+    <button class="btn" style="margin-top:12px" onclick="saveControlMeta()">Save</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-comply-phi" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill amber" id="phi-tag">PHI SYSTEM</span>
+    <h1 style="font-size:19px;margin:11px 0 4px" id="phi-h">System</h1>
+    <p class="d" id="phi-desc" style="margin:0 0 12px"></p>
+    <input type="hidden" id="phi-id">
+    <p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Classification</p>
+    <select class="field" id="phi-class"><option>PHI</option><option>ePHI</option><option>PII</option><option>None</option></select>
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Owner</p>
+    <input class="field" id="phi-owner" placeholder="Data owner (name)">
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Safeguards / notes</p>
+    <textarea class="field" id="phi-notes" placeholder="Encryption, access limits, BAA, retention…" style="min-height:64px;resize:vertical;font-family:var(--font-b)"></textarea>
+    <button class="btn" style="margin-top:12px" onclick="savePhi()">Save</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
   </div>
 </div>
@@ -1301,7 +1339,7 @@ const SHOP = {
 
 /* Real project decisions (not fabricated data — actual calls made during the build) */
 const DECISIONS = [
-  ['Compliance platform','Drata over Vanta — better API for this dashboard; cross-maps SOC 2 → HIPAA → ISO 27001. Integrate read-only.'],
+  ['Compliance platform','Built in-house — a lightweight SOC 2 + HIPAA control tracker inside the Command Center instead of Drata/Vanta. A monthly job web-checks the standards themselves for changes and alerts admins.'],
   ['Sizing / returns','XS strap SKU approved for fall — sizing is a top return driver; first China PO due by Aug 15.'],
   ['QC firmware','Always verify & flash to latest at QC regardless of how Pace ships — never trust upstream firmware on a life-safety device.'],
   ['Enterprise fulfilment','Ship from our Covington pool so every band clears our QC; Pace drop-ship stays a configurable fallback.'],
@@ -1721,6 +1759,191 @@ function saveVault(){
 }
 function deleteVault(id){const o=VAULT[id];if(!o)return;if(!confirm('Delete '+(o.name||'this tool')+' from the vault?'))return;delete VAULT[id];if(hasFirestore())firebase.firestore().collection('vault').doc(id).delete().catch(()=>{});renderVault();toast('Deleted '+(o.name||''));}
 
+/* ================= COMPLIANCE (our own GRC — SOC 2 + HIPAA) ================= */
+/* The control catalog lives in code (versioned here); Firestore stores only the
+   mutable per-control status/owner/evidence and the standard-watch log. Each
+   control carries a sensible starting posture `s` reflecting what the platform
+   already does, which admins can override. Gap = amber (never red — red is
+   reserved for life-safety on this device). */
+const COMPLY_STATUS=[['met','Met','good'],['progress','In progress','wave'],['gap','Gap','amber'],['na','N/A','dim']];
+const SOC2_CONTROLS=[
+ {id:'CC1.1',cat:'Control environment',title:'Integrity & ethical values',desc:'Code of conduct, background checks and org values documented and acknowledged.',s:'progress'},
+ {id:'CC2.1',cat:'Communication',title:'Internal & external comms',desc:'Security responsibilities and policies communicated to staff and customers.',s:'progress'},
+ {id:'CC3.1',cat:'Risk assessment',title:'Risk identification',desc:'Documented risk assessment of threats to objectives, refreshed at least annually.',s:'gap'},
+ {id:'CC4.1',cat:'Monitoring',title:'Control monitoring',desc:'Ongoing / periodic evaluations confirm controls are present and operating.',s:'progress'},
+ {id:'CC5.2',cat:'Control activities',title:'Technology controls',desc:'Control activities over technology implemented to support objectives.',s:'met'},
+ {id:'CC6.1',cat:'Access',title:'Logical access provisioning',desc:'Access is least-privilege, approved, and tied to a unique identity (SSO / MFA).',s:'met'},
+ {id:'CC6.2',cat:'Access',title:'Access review & removal',desc:'Access reviewed periodically and revoked on role change / offboarding.',s:'progress'},
+ {id:'CC6.6',cat:'Access',title:'Boundary protection',desc:'External access protected; Firestore security rules enforce authorization server-side.',s:'met'},
+ {id:'CC6.7',cat:'Access',title:'Data in transit & at rest',desc:'Data encrypted in transit (TLS) and at rest; secrets never live in the repo.',s:'met'},
+ {id:'CC7.2',cat:'Operations',title:'Security monitoring',desc:'Logging and alerting detect anomalies and security events.',s:'progress'},
+ {id:'CC7.3',cat:'Operations',title:'Incident response plan',desc:'Documented incident-response plan with roles, severity levels and comms.',s:'gap'},
+ {id:'CC7.4',cat:'Operations',title:'Incident recovery',desc:'Incidents contained, remediated and reviewed with a post-mortem.',s:'gap'},
+ {id:'CC8.1',cat:'Change management',title:'Change management',desc:'Changes reviewed, tested and approved (PR review + CI) before production.',s:'met'},
+ {id:'CC9.1',cat:'Risk mitigation',title:'Business continuity & vendor risk',desc:'BCP/DR and vendor-risk mitigation for disruptions.',s:'gap'},
+ {id:'A1.2',cat:'Availability',title:'Backup & recovery',desc:'Backups and restore tested; capacity monitored against availability commitments.',s:'progress'},
+ {id:'C1.1',cat:'Confidentiality',title:'Confidential data handling',desc:'Confidential data identified, retained and disposed of per policy.',s:'progress'},
+ {id:'PI1.1',cat:'Processing integrity',title:'Accurate processing',desc:'Order / fulfilment data processed completely and accurately (orders are server-write only).',s:'met'},
+];
+const HIPAA_CONTROLS=[
+ {id:'§164.308(a)(1)',cat:'Administrative',title:'Security management process',desc:'Risk analysis + risk management; sanction policy; information-system activity review.',s:'progress'},
+ {id:'§164.308(a)(3)',cat:'Administrative',title:'Workforce security',desc:'Authorization / supervision, clearance and termination procedures for PHI access.',s:'progress'},
+ {id:'§164.308(a)(4)',cat:'Administrative',title:'Information access management',desc:'Access to PHI restricted by role (least privilege).',s:'met'},
+ {id:'§164.308(a)(5)',cat:'Administrative',title:'Security awareness & training',desc:'Workforce trained on security, phishing and PHI handling.',s:'gap'},
+ {id:'§164.308(b)(1)',cat:'Administrative',title:'Business associate agreements',desc:'BAAs in place with any vendor that touches PHI (cloud provider, etc.).',s:'gap'},
+ {id:'§164.310(a)(1)',cat:'Physical',title:'Facility access controls',desc:'Physical safeguards for systems and PHI (cloud provider + office).',s:'met'},
+ {id:'§164.310(d)(1)',cat:'Physical',title:'Device & media controls',desc:'Disposal, reuse and movement of media / devices holding PHI.',s:'progress'},
+ {id:'§164.312(a)(1)',cat:'Technical',title:'Access control',desc:'Unique user IDs, automatic logoff and encryption of ePHI.',s:'met'},
+ {id:'§164.312(b)',cat:'Technical',title:'Audit controls',desc:'Record and examine activity in systems containing ePHI.',s:'progress'},
+ {id:'§164.312(e)(1)',cat:'Technical',title:'Transmission security',desc:'ePHI encrypted end-to-end in transit (TLS).',s:'met'},
+ {id:'§164.400',cat:'Breach notification',title:'Breach notification',desc:'Process to detect, assess and notify on breaches of unsecured PHI.',s:'gap'},
+ {id:'§164.520',cat:'Privacy',title:'Notice of privacy practices',desc:'Privacy practices documented and provided as required.',s:'progress'},
+];
+const PHI_SYSTEMS=[
+ {id:'band',system:'Safewave Band telemetry',data:'Alert events, wear / usage signals',where:'Device → app → Firestore'},
+ {id:'aware',system:'Aware health integration',data:'Dexcom glucose / health readings',where:'Partner API → app'},
+ {id:'app',system:'Mobile app',data:'Account, alert history, health prefs',where:'On-device + Firestore'},
+ {id:'firestore',system:'Firestore (Command Center)',data:'CRM, tickets, orders, users',where:'Google Cloud (Firebase)'},
+ {id:'mail',system:'Support email / tickets',data:'Customer messages (may contain PHI)',where:'Mail provider → tickets'},
+ {id:'backups',system:'Backups & exports',data:'Any of the above, at rest',where:'Cloud storage'},
+];
+let COMPLY={items:{},phi:{},updates:{log:[],lastCheckAt:'',lastCheckBy:''}}, complyTab='ready', complyUnsub1=null, complyUnsub2=null, complyChecking=false;
+function canComply(){const r=CURRENT_USER&&CURRENT_USER.role;return r==='admin'||r==='superadmin'}
+function subscribeCompliance(){
+  if(!hasFirestore()||!canComply())return;
+  if(complyUnsub1){try{complyUnsub1()}catch(e){}}
+  if(complyUnsub2){try{complyUnsub2()}catch(e){}}
+  try{complyUnsub1=firebase.firestore().collection('compliance').doc('controls').onSnapshot(d=>{
+    const v=d.exists?(d.data()||{}):{};COMPLY.items=v.items||{};COMPLY.phi=v.phi||{};
+    const scr=document.getElementById('s-comply');if(scr&&scr.classList.contains('on'))renderComply();else refreshPulse();
+  },e=>{});}catch(e){}
+  try{complyUnsub2=firebase.firestore().collection('compliance').doc('updates').onSnapshot(d=>{
+    const v=d.exists?(d.data()||{}):{};COMPLY.updates={log:Array.isArray(v.log)?v.log:[],lastCheckAt:v.lastCheckAt||'',lastCheckBy:v.lastCheckBy||''};
+    const scr=document.getElementById('s-comply');if(scr&&scr.classList.contains('on'))renderComply();
+  },e=>{});}catch(e){}
+}
+function allControls(){return SOC2_CONTROLS.map(c=>Object.assign({fw:'soc2'},c)).concat(HIPAA_CONTROLS.map(c=>Object.assign({fw:'hipaa'},c)))}
+function ctrlState(id){return COMPLY.items[id]||{}}
+function ctrlStatus(c){return (COMPLY.items[c.id]&&COMPLY.items[c.id].status)||c.s||'progress'}
+function fwStats(fw){const list=(fw==='soc2'?SOC2_CONTROLS:HIPAA_CONTROLS);let met=0,prog=0,gap=0,na=0;
+  list.forEach(c=>{const s=ctrlStatus(c);if(s==='met')met++;else if(s==='progress')prog++;else if(s==='gap')gap++;else na++;});
+  const scored=Math.max(1,list.length-na);const pct=Math.round((met+prog*0.5)/scored*100);
+  return {total:list.length,met:met,prog:prog,gap:gap,na:na,pct:pct};}
+function complyReadiness(){const a=fwStats('soc2'),b=fwStats('hipaa');const met=a.met+b.met,prog=a.prog+b.prog,gap=a.gap+b.gap;
+  const scored=Math.max(1,(a.total-a.na)+(b.total-b.na));const pct=Math.round((met+prog*0.5)/scored*100);
+  return {pct:pct,gaps:gap,met:met,prog:prog,soc2:a,hipaa:b};}
+function complyWhen(iso){try{return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}catch(e){return iso||''}}
+function renderComply(){
+  const tabs=[['ready','Readiness'],['soc2','SOC 2'],['hipaa','HIPAA'],['phi','PHI map'],['watch','Standard watch']];
+  const tb=document.getElementById('comply-tabs');
+  if(tb)tb.innerHTML=tabs.map(t=>'<button class="chip'+(complyTab===t[0]?' on':'')+'" onclick="setComplyTab('+JSON.stringify(t[0])+')">'+t[1]+'</button>').join('');
+  const r=complyReadiness();
+  const sub=document.getElementById('comply-sub');
+  if(sub)sub.textContent='SOC 2 Type II + HIPAA · '+r.pct+'% ready · '+r.gaps+' gap'+(r.gaps===1?'':'s')+' open';
+  const body=document.getElementById('comply-body');if(!body)return;
+  if(complyTab==='ready')body.innerHTML=complyReadyView();
+  else if(complyTab==='soc2')body.innerHTML=complyControlsView('soc2');
+  else if(complyTab==='hipaa')body.innerHTML=complyControlsView('hipaa');
+  else if(complyTab==='phi')body.innerHTML=complyPhiView();
+  else if(complyTab==='watch')body.innerHTML=complyWatchView();
+}
+function setComplyTab(t){complyTab=t;renderComply()}
+function complyBar(st){const t=st.total||1;const seg=(w,c)=>w>0?'<i style="width:'+(w/t*100)+'%;background:var(--'+c+')"></i>':'';
+  return '<div class="progress" style="height:8px;display:flex;overflow:hidden">'+seg(st.met,'good')+seg(st.prog,'wave')+seg(st.gap,'amber')+'</div>';}
+function complyReadyView(){
+  const a=fwStats('soc2'),b=fwStats('hipaa');
+  const card=(name,st)=>'<div class="card"><div class="row"><div class="grow"><div class="t">'+name+'</div><div class="d">'+st.met+' met · '+st.prog+' in progress · '+st.gap+' gap'+(st.gap===1?'':'s')+' · '+st.total+' controls</div></div><div class="n" style="font-size:22px">'+st.pct+'%</div></div><div style="margin-top:10px">'+complyBar(st)+'</div></div>';
+  const gaps=allControls().filter(c=>ctrlStatus(c)==='gap');
+  const gapList=gaps.length
+    ? '<div class="card"><div class="t">Open gaps <span class="pill amber" style="font-size:10px">'+gaps.length+'</span></div>'+gaps.slice(0,8).map(c=>'<div class="row tap" onclick="openControl('+JSON.stringify(c.id)+')" style="gap:8px;margin-top:8px;align-items:flex-start;cursor:pointer"><span class="pill dim" style="font-size:10px;white-space:nowrap">'+esc(c.id)+'</span><div class="d" style="flex:1;color:var(--text)">'+esc(c.title)+'</div><span class="d" style="color:var(--faint);white-space:nowrap">'+(c.fw==='soc2'?'SOC 2':'HIPAA')+'</span></div>').join('')+(gaps.length>8?'<div class="d" style="margin-top:8px;color:var(--faint)">+'+(gaps.length-8)+' more</div>':'')+'</div>'
+    : '<div class="card"><div class="d">No open gaps — every control is met, in progress, or marked N/A. 🎉</div></div>';
+  const lc=COMPLY.updates.lastCheckAt;
+  const watch='<div class="card"><div class="row"><div class="grow"><div class="t">Standard watch</div><div class="d">'+(lc?'Last checked '+complyWhen(lc)+' · '+esc(COMPLY.updates.lastCheckBy||''):'Not run yet — checks the SOC 2 & HIPAA standards for changes, monthly.')+'</div></div></div><button class="btn ghost" style="margin-top:10px;width:auto;padding:8px 12px"'+(complyChecking?' disabled':'')+' onclick="runComplyCheck()">'+(complyChecking?'Checking…':'🔎 Check for standard updates')+'</button></div>';
+  return card('SOC 2 Type II',a)+'<div style="height:10px"></div>'+card('HIPAA',b)+'<div style="height:10px"></div>'+gapList+'<div style="height:10px"></div>'+watch;
+}
+function complyControlsView(fw){
+  const list=(fw==='soc2'?SOC2_CONTROLS:HIPAA_CONTROLS);
+  const cats={},order=[];list.forEach(c=>{if(!cats[c.cat]){cats[c.cat]=[];order.push(c.cat)}cats[c.cat].push(c)});
+  return order.map(cat=>'<p class="eyebrow" style="margin:14px 0 8px">'+esc(cat)+'</p>'+cats[cat].map(c=>complyControlCard(c,fw)).join('')).join('');
+}
+function complyControlCard(c,fw){
+  const cur=ctrlStatus(c);const st=ctrlState(c.id);
+  const btns=COMPLY_STATUS.map(s=>'<button data-v="'+s[0]+'"'+(cur===s[0]?' class="on"':'')+' onclick="setControlStatus('+JSON.stringify(c.id)+','+JSON.stringify(s[0])+')">'+s[1]+'</button>').join('');
+  const meta=[];if(st.owner)meta.push('Owner: '+esc(st.owner));if(st.evidence)meta.push('Evidence: '+esc(st.evidence));
+  return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(c.title)+' <span class="pill dim" style="font-size:10px">'+esc(c.id)+'</span></div><div class="d">'+esc(c.desc)+'</div></div></div>'
+    +'<div class="rolepick comply-pick" style="margin-top:10px">'+btns+'</div>'
+    +(meta.length?'<div class="d" style="margin-top:8px;color:var(--faint)">'+meta.join(' · ')+(st.note?' — '+esc(st.note):'')+'</div>':'')
+    +'<div class="row" style="margin-top:8px"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="openControl('+JSON.stringify(c.id)+')">Owner &amp; evidence</button></div>'
+    +'</div>';
+}
+function complyPhiView(){
+  return '<div class="note" style="margin:0 0 12px">Where regulated health data (PHI / ePHI) lives across Safewave. Treat Aware / Dexcom health readings and band telemetry as PHI. Assign an owner and note the safeguards for each system.</div>'
+   +PHI_SYSTEMS.map(sys=>{const p=COMPLY.phi[sys.id]||{};const cls=p.classification||'PHI';
+     return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(sys.system)+' <span class="pill '+(cls==='None'?'dim':'amber')+'" style="font-size:10px">'+esc(cls)+'</span></div><div class="d">'+esc(sys.data)+' · '+esc(sys.where)+'</div></div></div>'
+      +((p.owner||p.notes)?'<div class="d" style="margin-top:8px;color:var(--faint)">'+[p.owner?'Owner: '+esc(p.owner):'',p.notes?esc(p.notes):''].filter(Boolean).join(' — ')+'</div>':'')
+      +'<div class="row" style="margin-top:8px"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="openPhi('+JSON.stringify(sys.id)+')">Edit</button></div></div>';}).join('');
+}
+function complyWatchView(){
+  const u=COMPLY.updates;const lc=u.lastCheckAt;
+  const head='<div class="card"><div class="row"><div class="grow"><div class="t">Monthly standard-watch</div><div class="d">Checks whether the SOC 2 (AICPA TSC) and HIPAA (45 CFR Part 164) standards themselves have changed. Runs automatically on the 1st of each month; run it now anytime.</div></div></div>'
+    +'<div class="d" style="margin-top:8px;color:var(--faint)">'+(lc?'Last checked '+complyWhen(lc)+' by '+esc(u.lastCheckBy||'system'):'Never run yet.')+'</div>'
+    +'<button class="btn" style="margin-top:10px"'+(complyChecking?' disabled':'')+' onclick="runComplyCheck()">'+(complyChecking?'Checking the standards…':'🔎 Check for standard updates now')+'</button></div>';
+  const log=(u.log||[]);
+  const body=log.length?log.map(complyLogCard).join(''):'<div class="empty"><div class="ico">🔎</div><div class="t">No checks logged yet</div><div class="d">Run the standard-watch to record the current status of SOC 2 and HIPAA. Any future change to a standard shows up here and notifies admins.</div></div>';
+  return head+'<div style="height:12px"></div>'+body;
+}
+function complyLogCard(rec){
+  const std=(name,s)=>{const changed=s&&s.changed;const srcs=((s&&s.sources)||[]).slice(0,3).map(u=>'<a href="'+esc(u)+'" target="_blank" rel="noopener" style="color:var(--wave)">source ↗</a>').join(' · ');
+    return '<div style="margin-top:8px"><span class="pill '+(changed?'amber':'good')+'" style="font-size:10px">'+name+' · '+(changed?'CHANGED':'No change')+'</span><div class="d" style="margin-top:4px">'+esc((s&&s.summary)||'—')+((s&&s.asOf)?' <span style="color:var(--faint)">('+esc(s.asOf)+')</span>':'')+'</div>'+(srcs?'<div class="d" style="margin-top:2px">'+srcs+'</div>':'')+'</div>';};
+  return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(rec.headline||'Standards check')+'</div><div class="d">'+complyWhen(rec.at)+' · '+esc(rec.by||'system')+'</div></div></div>'+std('SOC 2',rec.soc2)+std('HIPAA',rec.hipaa)+'</div>';
+}
+function persistCompliance(){if(hasFirestore())firebase.firestore().collection('compliance').doc('controls').set({items:COMPLY.items,phi:COMPLY.phi,updatedAt:new Date().toISOString(),updatedBy:(CURRENT_USER&&CURRENT_USER.name)||''},{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+function setControlStatus(id,status){if(!canComply()){toast('Admin only');return}const cur=COMPLY.items[id]||{};cur.status=status;cur.updatedBy=(CURRENT_USER&&CURRENT_USER.name)||'';cur.updatedAt=new Date().toISOString();COMPLY.items[id]=cur;persistCompliance();renderComply();}
+function openControl(id){const c=allControls().find(x=>x.id===id);if(!c)return;const st=ctrlState(id);
+  document.getElementById('cmp-id').value=id;
+  document.getElementById('cmp-tag').textContent=(c.fw==='soc2'?'SOC 2':'HIPAA')+' · '+c.id;
+  document.getElementById('cmp-h').textContent=c.title;
+  document.getElementById('cmp-desc').textContent=c.desc;
+  document.getElementById('cmp-owner').value=st.owner||'';
+  document.getElementById('cmp-evidence').value=st.evidence||'';
+  document.getElementById('cmp-note').value=st.note||'';
+  closeSheets();openSheet('sh-comply');}
+function saveControlMeta(){if(!canComply()){toast('Admin only');return}const id=document.getElementById('cmp-id').value;if(!id)return;const cur=COMPLY.items[id]||{};
+  cur.owner=document.getElementById('cmp-owner').value.trim();
+  cur.evidence=document.getElementById('cmp-evidence').value.trim();
+  cur.note=document.getElementById('cmp-note').value.trim();
+  cur.updatedBy=(CURRENT_USER&&CURRENT_USER.name)||'';cur.updatedAt=new Date().toISOString();
+  COMPLY.items[id]=cur;persistCompliance();closeSheets();renderComply();toast('✓ Saved');}
+function openPhi(id){const sys=PHI_SYSTEMS.find(x=>x.id===id);if(!sys)return;const p=COMPLY.phi[id]||{};
+  document.getElementById('phi-id').value=id;
+  document.getElementById('phi-h').textContent=sys.system;
+  document.getElementById('phi-desc').textContent=sys.data+' · '+sys.where;
+  document.getElementById('phi-class').value=p.classification||'PHI';
+  document.getElementById('phi-owner').value=p.owner||'';
+  document.getElementById('phi-notes').value=p.notes||'';
+  closeSheets();openSheet('sh-comply-phi');}
+function savePhi(){if(!canComply()){toast('Admin only');return}const id=document.getElementById('phi-id').value;if(!id)return;
+  COMPLY.phi[id]={classification:document.getElementById('phi-class').value,owner:document.getElementById('phi-owner').value.trim(),notes:document.getElementById('phi-notes').value.trim()};
+  persistCompliance();closeSheets();renderComply();toast('✓ Saved');}
+async function runComplyCheck(){
+  if(complyChecking)return;
+  if(!hasFirestore()){toast('Sign in to run the check');return}
+  if(!canComply()){toast('Admin only');return}
+  complyChecking=true;renderComply();
+  toast('🔎 Checking SOC 2 & HIPAA standards…');
+  try{
+    const r=await firebase.functions().httpsCallable('checkComplianceUpdates')({});
+    const rec=r&&r.data&&r.data.rec;
+    const changed=rec&&((rec.soc2&&rec.soc2.changed)||(rec.hipaa&&rec.hipaa.changed));
+    toast(changed?'⚠︎ A standard changed — see Standard watch':'✓ Checked — no standard changes');
+    complyTab='watch';
+  }catch(e){
+    const m=(e&&e.message)||'';
+    toast(/ANTHROPIC|assistant|precondition/i.test(m)?'Standard-watch needs the assistant — add ANTHROPIC_API_KEY, then retry':'Check failed — '+m);
+  }
+  complyChecking=false;renderComply();
+}
+
 /* ================= PULSE ================= */
 /* Safewave product telemetry — lights up when the enterprise dashboard is linked. */
 const SAFEWAVE={totalUsers:null,online:null};
@@ -1962,7 +2185,7 @@ function renderPulse(user){
     +rtile('s-crm',total+' accounts',stale+' follow-up · '+outreach+' in outreach',stale?'amber':'wave')
     +rtile('s-support',openTk+' open',openTk?'Support tickets':'Support · all clear',openTk?'wave':'good');
   if(user.role==='admin'||user.role==='manager')roll+=rtile('s-build',top?top.id:'Build',top?'Top: '+top.title:'Project triage','wave');
-  if(user.role==='admin')roll+=rtile('s-comply','SOC 2 + HIPAA','Comply · Drata','dim');
+  if(user.role==='admin'||user.role==='superadmin'){const cr=complyReadiness();roll+=rtile('s-comply',cr.pct+'% ready',cr.gaps?'Comply · '+cr.gaps+' gap'+(cr.gaps===1?'':'s'):'Comply · SOC 2 + HIPAA',cr.gaps?'amber':'good');}
   if(financeAllowed()&&financeData){const b=financeBurn(),net=financeMRR()-b.total;roll+=rtile('s-finance',fmtMoney(net)+'/mo',net>=0?'Financials · net positive':'Financials · burn',net>=0?'good':'amber')}
   if(canMoney){const rs=raiseStats();if(rs.investors||rs.target){const pct=rs.target?Math.round(rs.committed/rs.target*100):0;const lbl=(RAISE.round?RAISE.round+' · ':'Raise · ')+(rs.target?pct+'% of '+fmtMoney(rs.target):fmtMoney(rs.committed)+' committed');roll+=raiseTile(fmtMoney(rs.committed),lbl,rs.target&&pct>=100?'good':'wave',rs.target?pct:0);}}
   document.getElementById('pulse-roll').innerHTML=roll;
@@ -2300,6 +2523,7 @@ function goto(id,btn){
   if(id==='s-stock')renderStock();
   if(id==='s-feedback')renderFeedbackInbox();
   if(id==='s-vault')renderVault();
+  if(id==='s-comply')renderComply();
   if(id==='s-users')renderUsers();
   if(id==='s-know')renderAgent();
 }
@@ -2344,6 +2568,7 @@ function enterApp(user){
   if(canFundraise())loadRaise().then(()=>{refreshPulse();if(crmTab==='fundraise')renderCRM();});
   if(isSuperAdmin())subscribeFeedback();
   if(canVault())subscribeVault();
+  if(canComply())subscribeCompliance();
   recordActivity();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
