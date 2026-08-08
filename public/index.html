@@ -504,6 +504,16 @@ input[type=date]{color-scheme:dark}
       <div id="vault-list"></div>
     </main>
 
+    <!-- USERS & ACCESS (super admin only) -->
+    <main class="screen" id="s-users">
+      <p class="eyebrow">Admin</p>
+      <h1>Users &amp; Access</h1>
+      <p class="sub" id="users-sub">Everyone who has signed in.</p>
+      <div class="note" style="margin:0 0 12px">Set each teammate's <b>role</b> (admin powers) and <b>department</b> (which work tabs they see), and grant <b>Financials</b> access. Role &amp; department changes take effect on their next sign-in. The “Sees” line previews their tabs.</div>
+      <div class="searchbar" style="margin-bottom:12px"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input id="users-q" type="search" placeholder="Search name or email" oninput="renderUsersList()"></div>
+      <div id="users-screen-body"></div>
+    </main>
+
     <!-- SUPPORT -->
     <main class="screen" id="s-support">
       <p class="eyebrow">Support</p>
@@ -663,7 +673,7 @@ input[type=date]{color-scheme:dark}
     </div>
     <button class="btn ghost" style="margin-top:14px" onclick="openProfile()">Edit profile</button>
     <button class="btn ghost" style="margin-top:8px" onclick="openMail()">Connect / manage your email</button>
-    <button class="btn" id="acc-manage" style="display:none;margin-top:8px" onclick="openUsers()">Manage team &amp; roles</button>
+    <button class="btn" id="acc-manage" style="display:none;margin-top:8px" onclick="manageUsers()">Manage users &amp; access</button>
     <button class="btn ghost" id="acc-feedback" style="display:none;margin-top:8px" onclick="openFeedbackInbox()">Team feedback <span id="acc-fb-count"></span></button>
     <button class="btn ghost" style="margin-top:8px" onclick="doSignOut()">Sign out</button>
   </div>
@@ -1911,6 +1921,7 @@ function viewShot(src){if(!src)return;const v=document.getElementById('shot-view
 let CURRENT_USER=null;
 const FINANCE_NAV={id:'s-finance',label:'Financials',roles:[],svg:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>'};
 const FEEDBACK_NAV={id:'s-feedback',label:'Feedback',roles:[],svg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'};
+const USERS_NAV={id:'s-users',label:'Users',roles:[],svg:'<circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 12 0"/><circle cx="17.5" cy="8.5" r="2.4"/><path d="M15.5 20a5 5 0 0 1 6.5-3.8"/>'};
 let FINANCE_EMAILS=[];
 function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;if(u.role==='superadmin')return true;return FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase())}
 /* Department layer: a sign-up role (Ops/Sales/Tech) that scopes which work
@@ -1936,6 +1947,7 @@ function buildNav(role){
   else items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(role)));
   if(financeAllowed())items.splice(1,0,FINANCE_NAV);
   if(isSuperAdmin())items.push(FEEDBACK_NAV);
+  if(isSuperAdmin())items.push(USERS_NAV);
   const current=document.querySelector('.screen.on');const curId=current?current.id:'s-pulse';
   items.forEach((n)=>{
     const b=document.createElement('button');b.className='tab'+(n.id===curId?' on':'');b.dataset.s=n.id;
@@ -1956,6 +1968,7 @@ function goto(id,btn){
   if(id==='s-stock')renderStock();
   if(id==='s-feedback')renderFeedbackInbox();
   if(id==='s-vault')renderVault();
+  if(id==='s-users')renderUsers();
   if(id==='s-know')renderAgent();
 }
 
@@ -2178,6 +2191,84 @@ function setUserRole(uid,role,btn){
     const g=btn.closest('.rolepick');g.querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
     toast('✓ Role set to '+roleLabel(role)+' — applies on their next sign-in');
   }).catch(e=>toast('Could not update — '+((e&&e.code)||'check Firestore rules')));
+}
+
+/* ---- Users & Access screen (super admin): role + department + financials,
+   with a live preview of the tabs each teammate will see. ---- */
+let USERS_ADMIN=[];
+function manageUsers(){if(isSuperAdmin()){closeSheets();goto('s-users')}else{openUsers()}}
+/* Pure computation of the nav labels a given user would see — mirrors buildNav
+   so the preview is honest (role hierarchy + department + finance/feedback). */
+function navItemsForUser(u){
+  const allowed=navAllowedIds(u);
+  let items;
+  if(allowed){const set=new Set(allowed);items=NAV_ITEMS.filter(n=>set.has(n.id));}
+  else items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(u.role||'member')));
+  const isSuperU=u.role==='superadmin';
+  const fineOK=isSuperU||FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase());
+  const labels=items.map(n=>n.label);
+  if(fineOK)labels.splice(1,0,'Financials');
+  if(isSuperU){labels.push('Feedback');labels.push('Users');}
+  return labels;
+}
+function renderUsers(){
+  const body=document.getElementById('users-screen-body');if(!body)return;
+  if(!isSuperAdmin()){body.innerHTML='<div class="empty"><div class="d">Super admin only.</div></div>';return}
+  if(!hasFirestore()){body.innerHTML=fsSetupNote();return}
+  body.innerHTML='<div class="d">Loading…</div>';
+  firebase.firestore().collection('users').get().then(qs=>{
+    USERS_ADMIN=qs.docs.map(d=>Object.assign({uid:d.id},d.data()));
+    renderUsersList();
+  }).catch(e=>{body.innerHTML=fsSetupNote((e&&e.code)||'permission-denied')});
+}
+function renderUsersList(){
+  const body=document.getElementById('users-screen-body');if(!body)return;
+  const sub=document.getElementById('users-sub');if(sub)sub.textContent=USERS_ADMIN.length+' teammate'+(USERS_ADMIN.length===1?'':'s')+' · super admin only';
+  const q=((document.getElementById('users-q')||{}).value||'').trim().toLowerCase();
+  let list=USERS_ADMIN.slice().sort((a,b)=>((a.name||a.email||'')+'').localeCompare((b.name||b.email||'')));
+  if(q)list=list.filter(u=>[u.name,u.email].some(v=>(v||'').toLowerCase().includes(q)));
+  body.innerHTML=list.length?list.map(userAdminCard).join(''):'<div class="empty"><div class="d">No teammate matches.</div></div>';
+}
+function userAdminCard(u){
+  const me=u.uid===CURRENT_USER.uid;
+  const role=u.role||'member';
+  const fineOK=(role==='superadmin')||FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase());
+  const sees=navItemsForUser(u).join(' · ');
+  let h='<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(u.name||u.email||u.uid)+(me?' <span class="pill dim">you</span>':'')+'</div><div class="d">'+esc(u.email||'')+'</div></div></div>';
+  h+='<div class="d" style="font-weight:600;color:var(--text);margin:10px 0 6px">Role</div>';
+  if(me){h+='<div class="d">'+roleLabel(role)+' — you can’t change your own role</div>';}
+  else{h+='<div class="rolepick">'+ROLES.map(r=>'<button data-v="'+r+'" class="'+(role===r?'on':'')+'" onclick="adminSetRole('+JSON.stringify(u.uid)+',\''+r+'\')">'+roleLabel(r)+'</button>').join('')+'</div>';}
+  h+='<div class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Department <span style="font-weight:400;color:var(--faint)">· scopes work tabs for members</span></div>';
+  const depts=[['','None'],['ops','Ops'],['sales','Sales'],['tech','Tech']];
+  h+='<div class="rolepick">'+depts.map(d=>'<button data-v="'+d[0]+'" class="'+((u.dept||'')===d[0]?'on':'')+'" onclick="adminSetDept('+JSON.stringify(u.uid)+',\''+d[0]+'\')">'+d[1]+'</button>').join('')+'</div>';
+  h+='<div class="row" style="justify-content:space-between;align-items:center;margin-top:12px"><div class="d" style="font-weight:600;color:var(--text)">Financials access</div>'+(role==='superadmin'?'<span class="pill dim">always on</span>':'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="adminToggleFinance('+JSON.stringify(u.email||'')+')">'+(fineOK?'Remove':'Grant')+'</button>')+'</div>';
+  h+='<div class="note" style="margin:12px 0 0"><b>Sees:</b> '+esc(sees)+'</div>';
+  h+='</div>';
+  return h;
+}
+function adminSetRole(uid,role){
+  if(!isSuperAdmin()){toast('Super admin only');return}
+  firebase.firestore().collection('users').doc(uid).update({role:role}).then(()=>{
+    const u=USERS_ADMIN.find(x=>x.uid===uid);if(u)u.role=role;renderUsersList();
+    toast('✓ Role set to '+roleLabel(role)+' — applies on their next sign-in');
+  }).catch(e=>toast('Could not update — '+((e&&e.code)||'check Firestore rules')));
+}
+function adminSetDept(uid,dept){
+  if(!isSuperAdmin()){toast('Super admin only');return}
+  firebase.firestore().collection('users').doc(uid).update({dept:dept}).then(()=>{
+    const u=USERS_ADMIN.find(x=>x.uid===uid);if(u)u.dept=dept;renderUsersList();
+    toast('✓ '+(deptLabel(dept)||'No department')+' — applies on their next sign-in');
+  }).catch(e=>toast('Could not update — '+((e&&e.code)||'check Firestore rules')));
+}
+function adminToggleFinance(email){
+  if(!isSuperAdmin()){toast('Super admin only');return}
+  email=(email||'').trim();if(!email){toast('This teammate has no email on file');return}
+  const has=FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes(email.toLowerCase());
+  FINANCE_EMAILS=has?FINANCE_EMAILS.filter(e=>(e||'').toLowerCase()!==email.toLowerCase()):FINANCE_EMAILS.concat([email]);
+  firebase.firestore().collection('settings').doc('finance').set({emails:FINANCE_EMAILS},{merge:true}).then(()=>{
+    renderUsersList();buildNav(CURRENT_USER.role);
+    toast(has?'Removed Financials access for '+email:'✓ Financials access granted to '+email);
+  }).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
 }
 
 /* ================= NOTIFICATIONS (in-app + browser) ================= */
