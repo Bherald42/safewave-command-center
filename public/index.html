@@ -1032,7 +1032,7 @@ input[type=date]{color-scheme:dark}
         <button class="btn" onclick="addUpdate()">Post</button>
       </div>
     </div>
-    <button class="btn" style="margin-top:14px" onclick="saveBuildTask()">Save task</button>
+    <button class="btn" style="margin-top:14px" id="bt-save" onclick="saveBuildTask()">Save task</button>
     <button class="btn ghost" style="margin-top:8px" id="bt-del" onclick="deleteBuildTask()">Delete</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
   </div>
@@ -1057,7 +1057,7 @@ input[type=date]{color-scheme:dark}
     <div class="rolepick" id="pj-status">
       <button data-v="planning" class="on">Planning</button><button data-v="active">Active</button><button data-v="paused">Paused</button><button data-v="done">Done</button>
     </div>
-    <button class="btn" style="margin-top:14px" onclick="saveProject()">Save project</button>
+    <button class="btn" style="margin-top:14px" id="pj-save" onclick="saveProject()">Save project</button>
     <button class="btn ghost" style="margin-top:8px" id="pj-del" onclick="deleteProject()">Delete</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
   </div>
@@ -1864,7 +1864,7 @@ const PHI_SYSTEMS=[
  {id:'backups',system:'Backups & exports',data:'Any of the above, at rest',where:'Cloud storage'},
 ];
 let COMPLY={items:{},phi:{},updates:{log:[],lastCheckAt:'',lastCheckBy:''}}, complyTab='ready', complyUnsub1=null, complyUnsub2=null, complyChecking=false;
-function canComply(){const r=CURRENT_USER&&CURRENT_USER.role;return r==='admin'||r==='superadmin'}
+function canComply(){const r=CURRENT_USER&&CURRENT_USER.role;return r==='admin'||r==='superadmin'||isOversight()}
 function subscribeCompliance(){
   if(!hasFirestore()||!canComply())return;
   if(complyUnsub1){try{complyUnsub1()}catch(e){}}
@@ -2013,7 +2013,7 @@ const QC_RELSTATUS={draft:{label:'Draft',pill:'dim'},testing:{label:'In QC',pill
 let RELEASES={}, QCRUNS={}, SETTINGS_QC={}, qcUnsubR=null, qcUnsubRun=null, qcTab='releases', qcRelView=null, qcProdFilter='all';
 let qcBench={running:false,run:null,dev:null,tickTimer:null,alertTimer:null,connected:false,connectedMs:0,lastTickAt:0,t0:0,downSince:0,selRel:null};
 let qcSerial={port:null,reader:null,reading:false};
-function canQC(){const u=CURRENT_USER;if(!u)return false;const r=u.role;return r==='admin'||r==='manager'||r==='superadmin'||u.dept==='tech'}
+function canQC(){const u=CURRENT_USER;if(!u)return false;const r=u.role;return r==='admin'||r==='manager'||r==='superadmin'||u.dept==='tech'||isOversight(u)}
 function subscribeQC(){
   if(!hasFirestore()||!canQC())return;
   firebase.firestore().collection('settings').doc('qc').get().then(d=>{if(d&&d.exists)SETTINGS_QC=d.data()||{}}).catch(()=>{});
@@ -2733,6 +2733,13 @@ let fbxFilter='open';
 function currentScreenId(){const el=document.querySelector('.screen.on');return el?el.id:'s-pulse'}
 function currentScreenLabel(){return SCREEN_LABELS[currentScreenId()]||'App'}
 function isSuperAdmin(){return !!(CURRENT_USER&&CURRENT_USER.role==='superadmin')}
+/* Oversight accounts (Jared & Trevon): see every tab, but read-only on the
+   Build board and the Users board. Identified by their sign-in email so the
+   grant applies the moment they log in. Real enforcement is in firestore.rules
+   (build writes + user-role changes blocked); the UI mirrors it. */
+const OVERSIGHT_EMAILS=['jared@safewavetech.com','trevon@safewavetech.com'];
+function isOversight(u){u=u||CURRENT_USER;return !!(u&&u.email&&OVERSIGHT_EMAILS.indexOf((''+u.email).toLowerCase())>=0)}
+function buildReadOnly(){return isOversight()}
 function notifySuper(title,body,link){const t=(TEAM||[]).find(x=>(x.email||'').toLowerCase()===SUPER_EMAIL);if(t&&t.uid)notify(t.uid,title,body,link||'')}
 function openFeedback(){if(!CURRENT_USER)return;document.getElementById('fb-screen').textContent=currentScreenLabel();document.getElementById('fb-text').value='';
   fbShot=null;showShotThumb();
@@ -2858,7 +2865,7 @@ const FINANCE_NAV={id:'s-finance',label:'Financials',roles:[],svg:'<path d="M3 3
 const FEEDBACK_NAV={id:'s-feedback',label:'Feedback',roles:[],svg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'};
 const USERS_NAV={id:'s-users',label:'Users',roles:[],svg:'<circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 12 0"/><circle cx="17.5" cy="8.5" r="2.4"/><path d="M15.5 20a5 5 0 0 1 6.5-3.8"/>'};
 let FINANCE_EMAILS=[];
-function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;if(u.role==='superadmin')return true;return FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase())}
+function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;if(u.role==='superadmin')return true;if(isOversight(u))return true;return FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase())}
 /* Department layer: a sign-up role (Ops/Sales/Tech) that scopes which work
    tabs a member sees. It sits ON TOP of the role hierarchy — admins, managers
    and the super admin are unaffected and still see everything. Members with no
@@ -2869,7 +2876,8 @@ const DEPT_TABS={ops:['s-stock','s-support'], sales:['s-crm'], tech:['s-support'
 function deptLabel(d){return {ops:'Ops',sales:'Sales',tech:'Tech'}[d]||''}
 function navAllowedIds(user){
   user=user||CURRENT_USER; if(!user)return null;
-  // Full-access roles + dept-less members fall through to the classic nav.
+  // Full-access roles + oversight + dept-less members fall through to classic nav.
+  if(isOversight(user))return null;
   if(user.role==='admin'||user.role==='superadmin'||user.role==='manager')return null;
   if(!DEPTS.includes(user.dept))return null;
   return DEPT_COMMON.concat(DEPT_TABS[user.dept]||[]);
@@ -2878,11 +2886,12 @@ function buildNav(role){
   const nav=document.getElementById('nav');nav.innerHTML='';
   const allowed=navAllowedIds(CURRENT_USER);
   let items;
-  if(allowed){const set=new Set(allowed);items=NAV_ITEMS.filter(n=>set.has(n.id));}
+  if(isOversight())items=NAV_ITEMS.slice();                 // oversight sees every tab
+  else if(allowed){const set=new Set(allowed);items=NAV_ITEMS.filter(n=>set.has(n.id));}
   else items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(role)));
   if(financeAllowed())items.splice(1,0,FINANCE_NAV);
   if(isSuperAdmin())items.push(FEEDBACK_NAV);
-  if(isSuperAdmin())items.push(USERS_NAV);
+  if(isSuperAdmin()||isOversight())items.push(USERS_NAV);
   const current=document.querySelector('.screen.on');const curId=current?current.id:'s-pulse';
   items.forEach((n)=>{
     const b=document.createElement('button');b.className='tab'+(n.id===curId?' on':'');b.dataset.s=n.id;
@@ -3142,18 +3151,20 @@ function manageUsers(){if(isSuperAdmin()){closeSheets();goto('s-users')}else{ope
 function navItemsForUser(u){
   const allowed=navAllowedIds(u);
   let items;
-  if(allowed){const set=new Set(allowed);items=NAV_ITEMS.filter(n=>set.has(n.id));}
+  if(isOversight(u))items=NAV_ITEMS.slice();
+  else if(allowed){const set=new Set(allowed);items=NAV_ITEMS.filter(n=>set.has(n.id));}
   else items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(u.role||'member')));
   const isSuperU=u.role==='superadmin';
-  const fineOK=isSuperU||FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase());
+  const fineOK=isSuperU||isOversight(u)||FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase());
   const labels=items.map(n=>n.label);
   if(fineOK)labels.splice(1,0,'Financials');
   if(isSuperU){labels.push('Feedback');labels.push('Users');}
+  else if(isOversight(u))labels.push('Users');
   return labels;
 }
 function renderUsers(){
   const body=document.getElementById('users-screen-body');if(!body)return;
-  if(!isSuperAdmin()){body.innerHTML='<div class="empty"><div class="d">Super admin only.</div></div>';return}
+  if(!isSuperAdmin()&&!isOversight()){body.innerHTML='<div class="empty"><div class="d">Super admin only.</div></div>';return}
   if(!hasFirestore()){body.innerHTML=fsSetupNote();return}
   body.innerHTML='<div class="d">Loading…</div>';
   firebase.firestore().collection('users').get().then(qs=>{
@@ -3163,7 +3174,7 @@ function renderUsers(){
 }
 function renderUsersList(){
   const body=document.getElementById('users-screen-body');if(!body)return;
-  const sub=document.getElementById('users-sub');if(sub)sub.textContent=USERS_ADMIN.length+' teammate'+(USERS_ADMIN.length===1?'':'s')+' · super admin only';
+  const sub=document.getElementById('users-sub');if(sub)sub.textContent=USERS_ADMIN.length+' teammate'+(USERS_ADMIN.length===1?'':'s')+(isSuperAdmin()?' · super admin only':' · read-only (oversight)');
   const q=((document.getElementById('users-q')||{}).value||'').trim().toLowerCase();
   let list=USERS_ADMIN.slice().sort((a,b)=>((a.name||a.email||'')+'').localeCompare((b.name||b.email||'')));
   if(q)list=list.filter(u=>[u.name,u.email].some(v=>(v||'').toLowerCase().includes(q)));
@@ -3172,16 +3183,22 @@ function renderUsersList(){
 function userAdminCard(u){
   const me=u.uid===CURRENT_USER.uid;
   const role=u.role||'member';
-  const fineOK=(role==='superadmin')||FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase());
+  const ro=!isSuperAdmin();  // oversight (and anyone non-super) sees the roster read-only
+  const fineOK=(role==='superadmin')||isOversight(u)||FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase());
   const sees=navItemsForUser(u).join(' · ');
   let h='<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(u.name||u.email||u.uid)+(me?' <span class="pill dim">you</span>':'')+'</div><div class="d">'+esc(u.email||'')+'</div></div></div>';
   h+='<div class="d" style="font-weight:600;color:var(--text);margin:10px 0 6px">Role</div>';
-  if(me){h+='<div class="d">'+roleLabel(role)+' — you can’t change your own role</div>';}
+  if(ro){h+='<div class="d">'+roleLabel(role)+(deptLabel(u.dept)?' · '+deptLabel(u.dept):'')+'</div>';}
+  else if(me){h+='<div class="d">'+roleLabel(role)+' — you can’t change your own role</div>';}
   else{h+='<div class="rolepick">'+ROLES.map(r=>'<button data-v="'+r+'" class="'+(role===r?'on':'')+'" onclick="adminSetRole('+JSON.stringify(u.uid)+',\''+r+'\')">'+roleLabel(r)+'</button>').join('')+'</div>';}
-  h+='<div class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Department <span style="font-weight:400;color:var(--faint)">· scopes work tabs for members</span></div>';
-  const depts=[['','None'],['ops','Ops'],['sales','Sales'],['tech','Tech']];
-  h+='<div class="rolepick">'+depts.map(d=>'<button data-v="'+d[0]+'" class="'+((u.dept||'')===d[0]?'on':'')+'" onclick="adminSetDept('+JSON.stringify(u.uid)+',\''+d[0]+'\')">'+d[1]+'</button>').join('')+'</div>';
-  h+='<div class="row" style="justify-content:space-between;align-items:center;margin-top:12px"><div class="d" style="font-weight:600;color:var(--text)">Financials access</div>'+(role==='superadmin'?'<span class="pill dim">always on</span>':'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="adminToggleFinance('+JSON.stringify(u.email||'')+')">'+(fineOK?'Remove':'Grant')+'</button>')+'</div>';
+  if(!ro){
+    h+='<div class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Department <span style="font-weight:400;color:var(--faint)">· scopes work tabs for members</span></div>';
+    const depts=[['','None'],['ops','Ops'],['sales','Sales'],['tech','Tech']];
+    h+='<div class="rolepick">'+depts.map(d=>'<button data-v="'+d[0]+'" class="'+((u.dept||'')===d[0]?'on':'')+'" onclick="adminSetDept('+JSON.stringify(u.uid)+',\''+d[0]+'\')">'+d[1]+'</button>').join('')+'</div>';
+    h+='<div class="row" style="justify-content:space-between;align-items:center;margin-top:12px"><div class="d" style="font-weight:600;color:var(--text)">Financials access</div>'+(role==='superadmin'?'<span class="pill dim">always on</span>':'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="adminToggleFinance('+JSON.stringify(u.email||'')+')">'+(fineOK?'Remove':'Grant')+'</button>')+'</div>';
+  } else {
+    h+='<div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><div class="d" style="font-weight:600;color:var(--text)">Financials access</div><span class="pill '+(fineOK?'good':'dim')+'">'+(fineOK?'On':'Off')+'</span></div>';
+  }
   h+='<div class="note" style="margin:12px 0 0"><b>Sees:</b> '+esc(sees)+'</div>';
   h+='</div>';
   return h;
@@ -3344,7 +3361,7 @@ function renderBuild(){
 function renderFocus(body,sub){
   const active=BUILDT.filter(t=>taskStatus(t)!=='done').map(t=>({t:t,s:taskScore(t)})).sort((a,b)=>b.s-a.s);
   if(sub)sub.innerHTML=active.length+' open · ranked by customer impact, deadline &amp; duration';
-  let html='<button class="btn" style="margin-bottom:14px" onclick="openBuildTask()">＋ Add task</button>';
+  let html=buildReadOnly()?'':'<button class="btn" style="margin-bottom:14px" onclick="openBuildTask()">＋ Add task</button>';
   html+=active.length?active.map(x=>focusCard(x.t,x.s)).join(''):'<div class="empty"><div class="ico">🔧</div><div class="t">Nothing queued</div><div class="d">Add a task or push a support ticket to the board.</div></div>';
   const done=BUILDT.filter(t=>taskStatus(t)==='done');
   if(done.length)html+='<div class="sec-head" style="margin-top:18px"><h2>Recently done</h2><span class="pill good">'+done.length+'</span></div>'+done.slice(0,8).map(t=>focusCard(t,0)).join('');
@@ -3360,13 +3377,13 @@ function focusCard(t,score){const pr=BPRI[t.priority]||BPRI.medium;const st=TSTA
   return '<div class="card tap" tabindex="0" onclick="openBuildTask(\''+t.id+'\')"'+(done?' style="opacity:.55"':'')+'><div class="row"><div class="grow"><div class="t"'+(done?' style="text-decoration:line-through"':'')+'>'+esc(t.title)+'</div><div class="d">'+[esc(t.assignee||'Unassigned'),st.label].join(' · ')+'</div></div>'
     +(done?'<span class="pill good">DONE</span>':'<span class="pill '+pr.pill+'">'+pr.label+(score?' · '+score:'')+'</span>')+'</div>'
     +(chips.length?'<div class="pc-chips" style="padding-left:0;margin-top:9px">'+chips.join('')+'</div>':'')
-    +(!done?'<div style="margin-top:9px"><button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="event.stopPropagation();cycleStatus(\''+t.id+'\')">'+(taskStatus(t)==='todo'?'▶ Start':taskStatus(t)==='doing'?'✓ Mark done':taskStatus(t)==='blocked'?'▶ Unblock':'Reopen')+'</button></div>':'')+'</div>';
+    +(!done&&!buildReadOnly()?'<div style="margin-top:9px"><button class="btn ghost" style="padding:5px 12px;font-size:12px" onclick="event.stopPropagation();cycleStatus(\''+t.id+'\')">'+(taskStatus(t)==='todo'?'▶ Start':taskStatus(t)==='doing'?'✓ Mark done':taskStatus(t)==='blocked'?'▶ Unblock':'Reopen')+'</button></div>':'')+'</div>';
 }
-function cycleStatus(id){const t=BUILDT.find(x=>x.id===id);if(!t)return;const s=taskStatus(t);t.status=s==='todo'?'doing':s==='doing'?'done':s==='blocked'?'doing':'todo';persistBuild(t);renderBuild();refreshPulse();toast('→ '+TSTATUS[taskStatus(t)].label)}
+function cycleStatus(id){if(buildReadOnly()){toast('Read-only — oversight access');return}const t=BUILDT.find(x=>x.id===id);if(!t)return;const s=taskStatus(t);t.status=s==='todo'?'doing':s==='doing'?'done':s==='blocked'?'doing':'todo';persistBuild(t);renderBuild();refreshPulse();toast('→ '+TSTATUS[taskStatus(t)].label)}
 /* PROJECTS — list + drill-in with Gantt */
 function renderProjects(body,sub){
   if(sub)sub.innerHTML=BUILDP.length+' project'+(BUILDP.length!==1?'s':'')+' · own the work end to end';
-  let html='<button class="btn" style="margin-bottom:14px" onclick="openProject()">＋ New project</button>';
+  let html=buildReadOnly()?'':'<button class="btn" style="margin-bottom:14px" onclick="openProject()">＋ New project</button>';
   if(!BUILDP.length){html+='<div class="empty"><div class="ico">🗂️</div><div class="t">No projects yet</div><div class="d">Create a project with a vision and target date, then add tasks and a timeline.</div></div>';body.innerHTML=html;return}
   const order={now:0,next:1,later:2};
   html+=BUILDP.slice().sort((a,b)=>(order[a.horizon]||0)-(order[b.horizon]||0)).map(p=>{const h=projectHealth(p),prog=projectProgress(p),ts=projectTasks(p.id);
@@ -3379,7 +3396,7 @@ function renderProjectDetail(body,pid){
   const h=projectHealth(p),prog=projectProgress(p);const ts=projectTasks(pid);
   document.getElementById('build-h1').textContent=p.name;
   document.getElementById('build-sub').innerHTML='<a onclick="buildProj=null;renderBuild()" style="color:var(--wave);cursor:pointer;font-weight:600">← All projects</a>';
-  let html='<div class="acct-actions"><button class="btn" onclick="openBuildTask(null,\''+pid+'\')">＋ Add task</button><button class="btn ghost" onclick="openProject(\''+pid+'\')">Edit project</button></div>';
+  let html=buildReadOnly()?'':'<div class="acct-actions"><button class="btn" onclick="openBuildTask(null,\''+pid+'\')">＋ Add task</button><button class="btn ghost" onclick="openProject(\''+pid+'\')">Edit project</button></div>';
   html+='<div class="card"><div class="row"><div class="grow"><span class="pill dim">'+(p.horizon||'now').toUpperCase()+'</span> <span class="pill '+h.pill+'" style="margin-left:4px">'+h.label+'</span></div><b class="mono">'+prog+'%</b></div>'
     +(p.vision?'<div class="d" style="margin-top:10px;color:var(--text)">'+esc(p.vision)+'</div>':'')
     +'<div class="kv" style="margin-top:10px"><span>Owner</span><b>'+esc(p.owner||'Unassigned')+'</b></div>'
@@ -3417,7 +3434,7 @@ function ganttHTML(p,ts){
 function renderRoadmap(body,sub){
   if(sub)sub.innerHTML='Where the product is headed — health &amp; progress update automatically as tasks move';
   const groups=[['now','Now'],['next','Next'],['later','Later']];
-  let html='<button class="btn" style="margin-bottom:14px" onclick="openProject()">＋ New project</button>';
+  let html=buildReadOnly()?'':'<button class="btn" style="margin-bottom:14px" onclick="openProject()">＋ New project</button>';
   if(!BUILDP.length){html+='<div class="empty"><div class="ico">🧭</div><div class="t">No roadmap yet</div><div class="d">Create projects and set each to Now / Next / Later to build the roadmap.</div></div>';body.innerHTML=html;return}
   groups.forEach(g=>{const ps=BUILDP.filter(p=>(p.horizon||'now')===g[0]);
     html+='<div class="pulse-sub-h">'+g[1]+' · '+ps.length+'</div>';
@@ -3438,16 +3455,17 @@ function openProject(id){pjEditId=id||null;const p=id?BUILDP.find(x=>x.id===id):
   document.getElementById('pj-end').value=p&&p.end?String(p.end).slice(0,10):'';
   document.querySelectorAll('#pj-status button').forEach(b=>b.classList.toggle('on',b.dataset.v===((p&&p.status)||'planning')));
   document.getElementById('pj-del').style.display=p?'':'none';
+  buildApplySheetRO('sh-project','pj-save','pj-del');
   closeSheets();openSheet('sh-project');
 }
-function saveProject(){const name=document.getElementById('pj-name').value.trim();if(!name){toast('Name the project');return}
+function saveProject(){if(buildReadOnly()){toast('Read-only — oversight access');return}const name=document.getElementById('pj-name').value.trim();if(!name){toast('Name the project');return}
   const stb=document.querySelector('#pj-status button.on');
   const data={name:name,vision:document.getElementById('pj-vision').value.trim(),owner:document.getElementById('pj-owner').value,horizon:document.getElementById('pj-horizon').value,start:document.getElementById('pj-start').value||'',end:document.getElementById('pj-end').value||'',status:stb?stb.dataset.v:'planning'};
   if(pjEditId){const p=BUILDP.find(x=>x.id===pjEditId);if(p)Object.assign(p,data),persistProject(p)}
   else{const p=Object.assign({id:'p'+Date.now().toString(36),createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()},data);BUILDP.unshift(p)}
   const savedId=pjEditId||BUILDP[0].id;persistProject(BUILDP.find(x=>x.id===savedId));
   closeSheets();renderBuild();toast('✓ Project saved')}
-function deleteProject(){if(!pjEditId)return;const id=pjEditId;BUILDP=BUILDP.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('build_projects').doc(id).delete().catch(()=>{});if(buildProj===id)buildProj=null;closeSheets();renderBuild();toast('Project deleted')}
+function deleteProject(){if(buildReadOnly()){toast('Read-only — oversight access');return}if(!pjEditId)return;const id=pjEditId;BUILDP=BUILDP.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('build_projects').doc(id).delete().catch(()=>{});if(buildProj===id)buildProj=null;closeSheets();renderBuild();toast('Project deleted')}
 /* ---- task create/edit with status, watchers, updates, files ---- */
 function projectOptions(sel){return '<option value="">— No project —</option><option value="support"'+(sel==='support'?' selected':'')+'>Customer support</option>'+BUILDP.map(p=>'<option value="'+p.id+'"'+(sel===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')}
 function watcherChips(sel){sel=sel||[];return (TEAM||[]).map(m=>'<button type="button" data-v="'+esc(m.name)+'" class="'+(sel.indexOf(m.name)>=0?'on':'')+'" onclick="this.classList.toggle(\'on\')">'+esc(m.name)+'</button>').join('')||'<span class="d" style="color:var(--faint)">No teammates yet</span>'}
@@ -3471,13 +3489,26 @@ function openBuildTask(id,presetProj){btEditId=id||null;btFile=null;const t=id?B
   document.getElementById('bt-file-name').textContent='';document.getElementById('bt-update-text').value='';
   const uw=document.getElementById('bt-updates-wrap');uw.style.display=t?'':'none';if(t)renderUpdates(t);
   document.getElementById('bt-del').style.display=t?'':'none';
+  buildApplySheetRO('sh-buildtask','bt-save','bt-del');
   closeSheets();openSheet('sh-buildtask');
+}
+/* Oversight users get the Build edit sheets read-only: inputs disabled, Save &
+   Delete hidden, a small banner shown. Real block is in firestore.rules. */
+function buildApplySheetRO(sheetId,saveId,delId){
+  const ro=buildReadOnly();const s=document.getElementById(sheetId);if(!s)return;
+  s.querySelectorAll('input,textarea,select').forEach(el=>{el.disabled=ro});
+  s.querySelectorAll('.rolepick button').forEach(el=>{el.disabled=ro});
+  const sv=document.getElementById(saveId);if(sv)sv.style.display=ro?'none':'';
+  if(ro){const dl=document.getElementById(delId);if(dl)dl.style.display='none';}
+  let note=s.querySelector('.ro-note');
+  if(ro&&!note){note=document.createElement('div');note.className='note ro-note';note.style.margin='0 0 10px';note.innerHTML='👁 <b>Read-only</b> — oversight access. You can view the build board but not change it.';const body=s.querySelector('.sheet-body');const grab=body.querySelector('.grab');if(grab&&grab.nextSibling)body.insertBefore(note,grab.nextSibling);else body.appendChild(note);}
+  if(note)note.style.display=ro?'':'none';
 }
 function renderUpdates(t){const el=document.getElementById('bt-updates');if(!el)return;const us=(t.updates||[]);
   el.innerHTML=us.length?us.slice().reverse().map(u=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([u.by,u.at].filter(Boolean).join(' · '))+'</div>'+(u.text?esc(u.text):'')+((u.files||[]).length?'<div class="upd-files">'+u.files.map(f=>/^image\//.test(f.type)?'<a href="'+esc(f.url)+'" target="_blank" rel="noopener"><img src="'+esc(f.url)+'" alt="'+esc(f.name)+'"></a>':'<a href="'+esc(f.url)+'" target="_blank" rel="noopener" class="upd-file">📎 '+esc(f.name)+'</a>').join('')+'</div>':'')+'</div>').join(''):'<div class="d" style="color:var(--faint)">No updates yet.</div>';
 }
 function btFilePicked(){const f=document.getElementById('bt-update-file').files[0];btFile=f||null;document.getElementById('bt-file-name').textContent=f?f.name:''}
-async function addUpdate(){if(!btEditId){toast('Save the task first');return}const t=BUILDT.find(x=>x.id===btEditId);if(!t)return;
+async function addUpdate(){if(buildReadOnly()){toast('Read-only — oversight access');return}if(!btEditId){toast('Save the task first');return}const t=BUILDT.find(x=>x.id===btEditId);if(!t)return;
   const text=document.getElementById('bt-update-text').value.trim();if(!text&&!btFile){toast('Write an update or attach a file');return}
   let files=[];
   if(btFile){try{toast('Uploading…');files=[await uploadBuildFile(t.id,btFile)]}catch(e){toast((e&&e.message)==='storage-unavailable'?'Turn on Firebase Storage to attach files':'Upload failed');return}}
@@ -3494,7 +3525,7 @@ async function uploadBuildFile(taskId,file){
   const ref=firebase.storage().ref(path);await ref.put(file);const url=await ref.getDownloadURL();
   return {name:file.name,url:url,type:file.type||''};
 }
-function saveBuildTask(){const title=document.getElementById('bt-title').value.trim();if(!title){toast('Give the task a title');return}
+function saveBuildTask(){if(buildReadOnly()){toast('Read-only — oversight access');return}const title=document.getElementById('bt-title').value.trim();if(!title){toast('Give the task a title');return}
   const pr=document.querySelector('#bt-priority button.on');const stb=document.querySelector('#bt-status button.on');
   const watchers=Array.from(document.querySelectorAll('#bt-watchers button.on')).map(b=>b.dataset.v);
   const deps=Array.from(document.querySelectorAll('#bt-deps button.on')).map(b=>b.dataset.v);
@@ -3507,7 +3538,7 @@ function saveBuildTask(){const title=document.getElementById('bt-title').value.t
   watchers.filter(w=>prevW.indexOf(w)<0&&w!==data.assignee).forEach(w=>notifyAssignee(w,'You were tagged on a task',data.title,'s-build'));
   closeSheets();renderBuild();refreshPulse();toast('✓ Task saved')}
 function markBuildDone(id){const t=BUILDT.find(x=>x.id===id);if(!t)return;t.status=taskStatus(t)==='done'?'todo':'done';persistBuild(t);renderBuild();refreshPulse();toast(taskStatus(t)==='done'?'✓ Done':'Reopened')}
-function deleteBuildTask(){if(!btEditId)return;const id=btEditId;BUILDT=BUILDT.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('build_tasks').doc(id).delete().catch(()=>{});closeSheets();renderBuild();refreshPulse();toast('Task deleted')}
+function deleteBuildTask(){if(buildReadOnly()){toast('Read-only — oversight access');return}if(!btEditId)return;const id=btEditId;BUILDT=BUILDT.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('build_tasks').doc(id).delete().catch(()=>{});closeSheets();renderBuild();refreshPulse();toast('Task deleted')}
 
 /* unified task feed for Pulse (build + tickets + CRM follow-ups) */
 function collectTasks(){const out=[];const t=todayMs();
@@ -3863,7 +3894,7 @@ let crmTab='pipeline';
 let addAcctBoard='Added';
 function crmGoTab(t){crmTab=t;if(t!=='account')acctId=null;campMode='list';renderCRM()}
 function backToPipeline(){crmTab='pipeline';acctId=null;renderCRM()}
-function canFundraise(){const r=CURRENT_USER&&CURRENT_USER.role;return r==='admin'||r==='manager'||r==='superadmin'}
+function canFundraise(){const r=CURRENT_USER&&CURRENT_USER.role;return r==='admin'||r==='manager'||r==='superadmin'||isOversight()}
 function crmTabsHTML(){
   const tab=(id,l,ic)=>'<button class="chip'+(crmTab===id?' on':'')+'" onclick="crmGoTab(\''+id+'\')">'+ic+' '+l+'</button>';
   return '<div class="chips" style="margin-bottom:16px">'+tab('pipeline','Pipeline','▦')+tab('campaigns','Campaigns','🚀')+tab('prospect','Prospect','🔎')+(canFundraise()?tab('fundraise','Fundraise','💰'):'')+'</div>';

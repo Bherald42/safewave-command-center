@@ -19,6 +19,15 @@ service cloud.firestore {
     function isSuperEmail() {
       return signedIn() && request.auth.token.email == 'brad.herald@safewavetech.com';
     }
+    // Oversight accounts (Jared & Trevon): full read/write everywhere they can
+    // reach, EXCEPT read-only on the build board and the user roster. They see
+    // all tabs; the read-only enforcement lives on build_tasks/build_projects
+    // (below) and on the users collection (they aren't super, so they can't
+    // change anyone's role/department).
+    function isOversightEmail() {
+      return signedIn() && (request.auth.token.email == 'jared@safewavetech.com'
+        || request.auth.token.email == 'trevon@safewavetech.com');
+    }
 
     match /users/{uid} {
       // Any signed-in teammate can read the roster (needed for the manage-team screen).
@@ -56,11 +65,14 @@ service cloud.firestore {
     }
 
     // Build tasks + projects — shared project board (assignee, dates, status).
+    // Everyone signed in can read; oversight accounts are read-only here.
     match /build_tasks/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if signedIn() && !isOversightEmail();
     }
     match /build_projects/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if signedIn() && !isOversightEmail();
     }
 
     // Inventory (locations) + order fulfillment records — shared ops.
@@ -135,7 +147,7 @@ service cloud.firestore {
     // finance allow-list (settings/finance). The UI hides the tab too, but
     // this is the real enforcement.
     function financeOK() {
-      return isSuper() || (signedIn()
+      return isSuper() || isOversightEmail() || (signedIn()
         && exists(/databases/$(database)/documents/settings/finance)
         && request.auth.token.email in get(/databases/$(database)/documents/settings/finance).data.emails);
     }
@@ -153,7 +165,7 @@ service cloud.firestore {
     // lives in crm_accounts (team-shared); this doc holds only the round total,
     // gated to leadership (admins/managers) who run the raise.
     function canRaise() {
-      return signedIn() && (myRole() == 'superadmin' || myRole() == 'admin' || myRole() == 'manager');
+      return signedIn() && (isOversightEmail() || myRole() == 'superadmin' || myRole() == 'admin' || myRole() == 'manager');
     }
     match /settings/raise {
       allow read, write: if canRaise();
@@ -172,7 +184,7 @@ service cloud.firestore {
     // tab too, but this is the real enforcement). The scheduled standard-watch
     // job writes here via the Admin SDK, which bypasses these rules.
     function canComply() {
-      return signedIn() && (myRole() == 'superadmin' || myRole() == 'admin');
+      return signedIn() && (isOversightEmail() || myRole() == 'superadmin' || myRole() == 'admin');
     }
     match /compliance/{id} {
       allow read, write: if canComply();
