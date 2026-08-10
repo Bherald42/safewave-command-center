@@ -540,6 +540,65 @@ exports.scheduledComplianceCheck = onSchedule({ schedule: "1 of month 09:00", re
 });
 
 /* ------------------------------------------------------------------ *
+ * RELEASE QC SAFETY NET — daily scan that makes sure no release slips
+ * out the door untested and nothing sits half-tested forever. The soak
+ * test itself runs in the tester's browser (Web Bluetooth / Web Serial
+ * to a real band); this backend job is the memory so the process isn't
+ * "we think it works": it flags releases that are testing but have no
+ * passing run, or were released without a passing soak, and nudges
+ * leadership. Read-only over releases/qc_runs; writes only notifications.
+ * ------------------------------------------------------------------ */
+exports.scanReleaseTesting = onSchedule({ schedule: "every day 14:00", region: REGION }, async () => {
+  const now = Date.now();
+  const rels = await db.collection("releases").get();
+  if (rels.empty) { logger.info("scanReleaseTesting: no releases"); return null; }
+
+  // Which releases have a passing soak run for their current version?
+  const passByRelease = {};
+  const runs = await db.collection("qc_runs").where("verdict", "==", "pass").get();
+  runs.forEach((r) => { const d = r.data() || {}; if (d.releaseId) passByRelease[d.releaseId + "@" + (d.version || "")] = true; });
+
+  const flags = [];
+  rels.forEach((doc) => {
+    const r = doc.data() || {};
+    const key = doc.id + "@" + (r.version || "");
+    const passed = !!passByRelease[key];
+    const label = (r.product || "build") + " " + (r.version || "");
+    if (r.status === "released" && !passed) {
+      flags.push({ sev: "gap", title: "Released without a passing soak", body: label + " is marked Released but has no passing QC run." });
+    } else if (r.status === "testing") {
+      const started = Date.parse(r.testingSince || r.createdAt || "") || now;
+      const days = Math.floor((now - started) / 864e5);
+      if (!passed && days >= 3) flags.push({ sev: "warn", title: "Release stuck in testing", body: label + " has been in QC " + days + " days with no passing run." });
+    } else if (r.status === "failed") {
+      flags.push({ sev: "warn", title: "Release failed QC", body: label + " failed its last soak test — needs a fix + re-test." });
+    }
+  });
+
+  await db.collection("nudges").doc("releaseQc").set({
+    at: new Date().toISOString(), count: flags.length, flags: flags.slice(0, 20),
+  }, { merge: true });
+
+  if (flags.length) {
+    try {
+      const leads = await db.collection("users").where("role", "in", ["admin", "manager", "superadmin"]).get();
+      const stamp = admin.firestore.FieldValue.serverTimestamp();
+      const batch = db.batch();
+      const top = flags[0];
+      leads.forEach((u) => {
+        batch.set(db.collection("notifications").doc(), {
+          to: u.id, title: "Release QC: " + top.title, body: top.body + (flags.length > 1 ? " (+" + (flags.length - 1) + " more)" : ""),
+          link: "s-qc", by: "Release QC", at: stamp,
+        });
+      });
+      await batch.commit();
+    } catch (e) { logger.error("scanReleaseTesting notify failed", e && e.message); }
+  }
+  logger.info("scanReleaseTesting: " + flags.length + " flag(s)");
+  return null;
+});
+
+/* ------------------------------------------------------------------ *
  * RUN CAMPAIGNS  →  send next due step of each active campaign
  * ------------------------------------------------------------------ */
 exports.runCampaigns = onSchedule({ schedule: "every day 15:00", region: REGION }, async () => {

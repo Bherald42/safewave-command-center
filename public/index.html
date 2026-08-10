@@ -145,6 +145,17 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .comply-pick button.on[data-v="progress"]{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
 .comply-pick button.on[data-v="gap"]{background:var(--amber-dim);border-color:var(--amber);color:var(--amber)}
 .comply-pick button.on[data-v="na"]{background:var(--surface-2);border-color:var(--line);color:var(--muted)}
+.qc-log{max-height:300px;overflow:auto;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-family:var(--font-m);font-size:11.5px;line-height:1.7}
+.qc-log .ln{display:flex;gap:8px;white-space:nowrap}
+.qc-log .ln .ts{color:var(--faint);flex-shrink:0}
+.qc-log .ln .msg{color:var(--muted);white-space:normal}
+.qc-stat{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center;flex:1;min-width:88px}
+.qc-stat .n{font-size:20px;font-weight:700;font-family:var(--font-b)}
+.qc-stat .l{font-size:10.5px;color:var(--faint);margin-top:2px;letter-spacing:.03em}
+.qc-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--faint);vertical-align:middle;margin-right:6px}
+.qc-dot.up{background:var(--good)}.qc-dot.down{background:var(--amber)}
+.qc-dot.live{box-shadow:0 0 0 0 var(--good);animation:qcpulse 1.6s infinite}
+@keyframes qcpulse{0%{box-shadow:0 0 0 0 rgba(28,153,104,.5)}70%{box-shadow:0 0 0 7px rgba(28,153,104,0)}100%{box-shadow:0 0 0 0 rgba(28,153,104,0)}}
 .rec-on{background:var(--safety-dim)!important;border-color:var(--safety)!important;color:var(--safety)!important}
 /* pipeline board */
 .pipe{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px}
@@ -695,6 +706,15 @@ input[type=date]{color-scheme:dark}
       <div id="build-body"></div>
     </main>
 
+    <!-- RELEASE QC · firmware & app soak-testing before release -->
+    <main class="screen" id="s-qc">
+      <p class="eyebrow">Release QC · firmware &amp; app</p>
+      <h1 id="qc-h1">Release QC</h1>
+      <p class="sub" id="qc-sub">Every build earns its release — soak-tested on a real band before it ships.</p>
+      <div class="chips" id="qc-tabs" style="margin-bottom:14px"></div>
+      <div id="qc-body"></div>
+    </main>
+
     <!-- CHAT -->
     <main class="screen" id="s-chat">
       <p class="eyebrow">Chat · team</p>
@@ -928,6 +948,41 @@ input[type=date]{color-scheme:dark}
     <textarea class="field" id="phi-notes" placeholder="Encryption, access limits, BAA, retention…" style="min-height:64px;resize:vertical;font-family:var(--font-b)"></textarea>
     <button class="btn" style="margin-top:12px" onclick="savePhi()">Save</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-release" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave" id="rel-tag">NEW RELEASE</span>
+    <h1 style="font-size:20px;margin:11px 0 12px" id="rel-h">New release</h1>
+    <input type="hidden" id="rel-id">
+    <p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Product</p>
+    <div class="rolepick" id="rel-product">
+      <button data-v="firmware" class="on">Band firmware</button><button data-v="app">Mobile app</button>
+    </div>
+    <div class="row" style="gap:8px;margin-top:12px">
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Version</p><input class="field" id="rel-version" placeholder="e.g. 1.4.0" style="margin:0"></div>
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Channel</p><select class="field" id="rel-channel" style="margin:0"><option value="dev">Dev</option><option value="beta">Beta</option><option value="prod">Production</option></select></div>
+    </div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Release notes <span style="color:var(--faint);font-weight:400">(what changed)</span></p>
+    <textarea class="field" id="rel-notes" placeholder="• Fixed BLE reconnect after sleep&#10;• Stronger alert vibration profile&#10;• Battery reporting accuracy" style="min-height:96px;resize:vertical;font-family:var(--font-b)"></textarea>
+    <button class="btn" style="margin-top:12px" onclick="saveRelease()">Save release</button>
+    <button class="btn ghost" id="rel-del" onclick="deleteRelease()" style="margin-top:8px;display:none">Delete</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-qcrun" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill dim" id="qcrun-tag">SOAK RUN</span>
+    <h1 style="font-size:19px;margin:11px 0 4px" id="qcrun-h">Run</h1>
+    <p class="d" id="qcrun-meta" style="margin:0 0 12px"></p>
+    <div id="qcrun-summary"></div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Event log</p>
+    <div id="qcrun-log" class="qc-log"></div>
+    <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
   </div>
 </div>
 
@@ -1361,6 +1416,7 @@ const NAV_ITEMS = [
   {id:'s-stock',   label:'Stock',    roles:['admin','manager','member'], svg:'<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v10"/>'},
   {id:'s-support', label:'Support',  roles:['admin','manager','member'], svg:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4a3.5 3.5 0 0 1 0 7"/>'},
   {id:'s-build',   label:'Build',    roles:['admin','manager'],          svg:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.4-2.4z"/>'},
+  {id:'s-qc',      label:'Release QC',roles:['admin','manager'],         svg:'<path d="M12 2l3 3 4 .5.5 4 3 3-3 3-.5 4-4 .5-3 3-3-3-4-.5-.5-4-3-3 3-3 .5-4 4-.5z"/><path d="M9 12l2 2 4-4"/>'},
   {id:'s-crm',     label:'CRM',      roles:['admin','manager','member'], svg:'<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>'},
   {id:'s-chat',    label:'Chat',     roles:['admin','manager','member'], svg:'<path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.6A8.5 8.5 0 1 1 21 11.5z"/>'},
   {id:'s-comply',  label:'Comply',   roles:['admin'],                    svg:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'},
@@ -1944,6 +2000,330 @@ async function runComplyCheck(){
   complyChecking=false;renderComply();
 }
 
+/* ================= RELEASE QC (firmware + app soak-testing before release) ================= */
+/* The system of record for every firmware/app release and the soak-test runs
+   that gate it. The soak test runs in the tester's browser and talks to a real
+   band over Web Bluetooth (alerts + connection) with Web Serial for the boot
+   monitor; a fully-working Simulated band lets the whole flow run without
+   hardware. A release can't be marked Released without a passing soak run
+   (super-admin override is logged). Amber = fail/disconnect — never red. */
+const QC_PRODUCTS={firmware:'Band firmware',app:'Mobile app'};
+const QC_CHAN={dev:{label:'Dev',pill:'dim'},beta:{label:'Beta',pill:'wave'},prod:{label:'Production',pill:'wave'}};
+const QC_RELSTATUS={draft:{label:'Draft',pill:'dim'},testing:{label:'In QC',pill:'wave'},passed:{label:'Passed QC',pill:'good'},failed:{label:'Failed QC',pill:'amber'},released:{label:'Released ✓',pill:'good'}};
+let RELEASES={}, QCRUNS={}, SETTINGS_QC={}, qcUnsubR=null, qcUnsubRun=null, qcTab='releases', qcRelView=null, qcProdFilter='all';
+let qcBench={running:false,run:null,dev:null,tickTimer:null,alertTimer:null,connected:false,connectedMs:0,lastTickAt:0,t0:0,downSince:0,selRel:null};
+let qcSerial={port:null,reader:null,reading:false};
+function canQC(){const u=CURRENT_USER;if(!u)return false;const r=u.role;return r==='admin'||r==='manager'||r==='superadmin'||u.dept==='tech'}
+function subscribeQC(){
+  if(!hasFirestore()||!canQC())return;
+  firebase.firestore().collection('settings').doc('qc').get().then(d=>{if(d&&d.exists)SETTINGS_QC=d.data()||{}}).catch(()=>{});
+  if(qcUnsubR){try{qcUnsubR()}catch(e){}}
+  if(qcUnsubRun){try{qcUnsubRun()}catch(e){}}
+  try{qcUnsubR=firebase.firestore().collection('releases').onSnapshot(qs=>{
+    RELEASES={};qs.forEach(d=>RELEASES[d.id]=Object.assign({id:d.id},d.data()));
+    const scr=document.getElementById('s-qc');if(scr&&scr.classList.contains('on')){if(!qcBench.running)renderQC()}else refreshPulse();
+  },e=>{});}catch(e){}
+  try{qcUnsubRun=firebase.firestore().collection('qc_runs').orderBy('startedAt','desc').limit(200).onSnapshot(qs=>{
+    QCRUNS={};qs.forEach(d=>QCRUNS[d.id]=Object.assign({id:d.id},d.data()));
+    const scr=document.getElementById('s-qc');if(scr&&scr.classList.contains('on')&&!qcBench.running)renderQC();
+  },e=>{});}catch(e){}
+}
+function persistRelease(r){if(hasFirestore())firebase.firestore().collection('releases').doc(r.id).set(r,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+function persistRun(run){if(hasFirestore())firebase.firestore().collection('qc_runs').doc(run.id).set(run,{merge:true}).catch(e=>{})}
+function qcThresholds(){return {minDurationMin:SETTINGS_QC.minDurationMin||30,alertSec:SETTINGS_QC.alertSec||20,maxDisconnects:(SETTINGS_QC.maxDisconnects!=null?SETTINGS_QC.maxDisconnects:0),minDeliveryPct:SETTINGS_QC.minDeliveryPct||99}}
+function fmtDur(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;if(h)return h+'h '+m+'m';if(m)return m+'m '+(s<10?'0':'')+s+'s';return s+'s'}
+function qcTime(iso){try{return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}catch(e){return iso||''}}
+function qcVerdictChip(v){const m=({pass:['good','PASS'],fail:['amber','FAIL'],running:['wave','RUNNING'],aborted:['dim','ABORTED']})[v]||['dim',(v||'—').toUpperCase()];return '<span class="pill '+m[0]+'" style="font-size:10px">'+m[1]+'</span>'}
+function releaseRuns(id){return Object.values(QCRUNS).filter(x=>x.releaseId===id).sort((a,b)=>(b.startedAt||'').localeCompare(a.startedAt||''))}
+function releasePassed(r){return Object.values(QCRUNS).some(x=>x.releaseId===r.id&&x.version===r.version&&x.verdict==='pass')}
+function qcNotifyLeads(title,body){if(typeof notifyAll==='function')notifyAll(title,body,'s-qc')}
+function setQcTab(t){qcTab=t;qcRelView=null;renderQC()}
+function qcSetProd(p){qcProdFilter=p;renderQC()}
+function renderQC(){
+  const tabs=[['releases','Releases'],['bench','Test bench'],['flash','Flash & monitor']];
+  const tb=document.getElementById('qc-tabs');
+  if(tb)tb.innerHTML=tabs.map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+JSON.stringify(t[0])+')">'+t[1]+'</button>').join('');
+  const n=Object.keys(RELEASES).length;
+  const testing=Object.values(RELEASES).filter(r=>r.status==='testing').length,ready=Object.values(RELEASES).filter(r=>r.status==='passed').length;
+  const sub=document.getElementById('qc-sub');
+  if(sub)sub.textContent=n?(n+' release'+(n===1?'':'s')+' · '+testing+' in QC · '+ready+' ready to ship'):'Every build earns its release — soak-tested on a real band before it ships.';
+  const body=document.getElementById('qc-body');if(!body)return;
+  if(qcRelView){renderQcReleaseDetail(body);return}
+  if(qcTab==='bench')body.innerHTML=qcBenchView();
+  else if(qcTab==='flash')body.innerHTML=qcFlashView();
+  else body.innerHTML=qcReleasesView();
+}
+function qcReleasesView(){
+  const prods=[['all','All'],['firmware','Firmware'],['app','App']];
+  const filt='<div class="row" style="gap:8px;margin-bottom:12px;align-items:center"><div class="chips" style="margin:0">'+prods.map(p=>'<button class="chip'+(qcProdFilter===p[0]?' on':'')+'" onclick="qcSetProd('+JSON.stringify(p[0])+')">'+p[1]+'</button>').join('')+'</div><div class="grow"></div><button class="btn" style="width:auto;white-space:nowrap" onclick="openRelease()">＋ New release</button></div>';
+  let list=Object.values(RELEASES);
+  if(qcProdFilter!=='all')list=list.filter(r=>r.product===qcProdFilter);
+  list.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  const body=list.length?list.map(qcReleaseCard).join(''):'<div class="empty"><div class="ico">🚀</div><div class="t">No releases yet</div><div class="d">Create a firmware or app release, write the notes, then soak-test it on a band before it ships.</div></div>';
+  return filt+body;
+}
+function qcReleaseCard(r){
+  const st=QC_RELSTATUS[r.status]||QC_RELSTATUS.draft;const passed=releasePassed(r);const last=releaseRuns(r.id)[0];
+  const notesPrev=(r.notes||'').split('\n').map(l=>l.trim()).filter(Boolean).slice(0,2).map(esc).join('<br>');
+  return '<div class="card tap" tabindex="0" onclick="openQcRelease('+JSON.stringify(r.id)+')">'
+    +'<div class="row"><div class="grow"><div class="t">'+esc((QC_PRODUCTS[r.product]||r.product)+' '+(r.version||''))+' <span class="pill '+((QC_CHAN[r.channel]||{}).pill||'dim')+'" style="font-size:10px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+'</span></div>'
+    +(notesPrev?'<div class="d" style="margin-top:4px">'+notesPrev+'</div>':'<div class="d" style="color:var(--faint)">No notes yet</div>')+'</div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
+    +'<div class="d" style="margin-top:8px;color:var(--faint)">'+(last?('Last soak: '+qcVerdictChip(last.verdict)+' · '+fmtDur(last.durationSec||0)+' · '+(last.disconnects||0)+' disconnect'+(last.disconnects===1?'':'s')):'Not soak-tested yet')+(passed||r.status==='released'?'':' · <span style="color:var(--amber)">release blocked</span>')+'</div>'
+    +'</div>';
+}
+function openQcRelease(id){qcRelView=id;renderQC();window.scrollTo(0,0)}
+function qcBackReleases(){qcRelView=null;renderQC()}
+function renderQcReleaseDetail(body){
+  const r=RELEASES[qcRelView];if(!r){qcRelView=null;return renderQC()}
+  const st=QC_RELSTATUS[r.status]||QC_RELSTATUS.draft;const passed=releasePassed(r);const runs=releaseRuns(r.id);
+  const passRun=runs.find(x=>x.verdict==='pass');
+  const gate=passed
+    ? '<div class="card" style="border-color:var(--good)"><div class="t" style="color:var(--good)">✓ Ready to release</div><div class="d" style="margin-top:2px">Passed a soak test on '+esc((passRun&&passRun.device)||'a band')+' — held the connection and delivered alerts for the full window.</div>'+(r.status!=='released'?'<button class="btn" style="margin-top:10px" onclick="markReleased('+JSON.stringify(r.id)+')">🚀 Mark released</button>':'<div class="d" style="margin-top:8px;color:var(--good)">Released '+qcTime(r.releasedAt)+' by '+esc(r.releasedBy||'')+'</div>')+'</div>'
+    : (r.status==='released'
+      ? '<div class="card" style="border-color:var(--amber)"><div class="t" style="color:var(--amber)">Released without passing QC</div><div class="d" style="margin-top:2px">'+esc(r.overrideReason?('Override: '+r.overrideReason+' — '+(r.overrideBy||'')):'No passing soak on record.')+'</div></div>'
+      : '<div class="card" style="border-color:var(--amber)"><div class="t" style="color:var(--amber)">Release blocked</div><div class="d" style="margin-top:2px">No passing soak test for '+esc(r.version||'this version')+' yet. Run one on a band — a release ships only after it holds the connection and delivers alerts for the full window.</div><button class="btn" style="margin-top:10px" onclick="qcStartFromRelease('+JSON.stringify(r.id)+')">▶ Start soak test</button>'+(isSuperAdmin()?'<button class="btn ghost" style="margin-top:8px" onclick="overrideRelease('+JSON.stringify(r.id)+')">Override &amp; release anyway (logged)</button>':'')+'</div>');
+  const notes=(r.notes||'').trim();
+  body.innerHTML=''
+    +'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;margin-bottom:12px" onclick="qcBackReleases()">← All releases</button>'
+    +'<div class="row" style="align-items:flex-start"><div class="grow"><h2 style="margin:0;font-size:20px">'+esc((QC_PRODUCTS[r.product]||r.product)+' '+(r.version||''))+'</h2><div class="d" style="margin-top:2px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+' channel · created '+qcTime(r.createdAt)+' · '+esc(r.createdBy||'')+'</div></div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
+    +'<div class="row" style="gap:8px;margin:12px 0"><button class="btn ghost" style="flex:1" onclick="openRelease('+JSON.stringify(r.id)+')">Edit / notes</button><button class="btn ghost" style="flex:1" onclick="qcStartFromRelease('+JSON.stringify(r.id)+')">Soak test</button></div>'
+    +gate
+    +'<p class="eyebrow" style="margin:16px 0 8px">Release notes</p><div class="card"><div class="d" style="white-space:pre-wrap;color:var(--text)">'+(notes?esc(notes):'<span style="color:var(--faint)">No notes yet — add what changed.</span>')+'</div></div>'
+    +'<p class="eyebrow" style="margin:16px 0 8px">Soak test history <span class="pill dim" style="font-size:10px">'+runs.length+'</span></p>'
+    +(runs.length?runs.map(qcRunRow).join(''):'<div class="empty"><div class="d">No soak runs yet.</div></div>');
+}
+function qcRunRow(run){
+  return '<div class="card tap" tabindex="0" onclick="openQcRun('+JSON.stringify(run.id)+')"><div class="row"><div class="grow"><div class="t">'+qcVerdictChip(run.verdict)+' '+fmtDur(run.durationSec||0)+' soak</div><div class="d" style="margin-top:4px">'+esc(run.device||'device')+' · '+(run.alertsAcked||0)+'/'+(run.alertsSent||0)+' alerts · '+(run.disconnects||0)+' disconnect'+(run.disconnects===1?'':'s')+(run.uptimePct!=null?' · '+run.uptimePct+'% uptime':'')+'</div></div><div class="d" style="color:var(--faint);white-space:nowrap">'+qcTime(run.startedAt)+'</div></div></div>';
+}
+function markReleased(id){const r=RELEASES[id];if(!r)return;if(!releasePassed(r)){toast('Blocked — needs a passing soak test first');return}
+  r.status='released';r.releasedAt=new Date().toISOString();r.releasedBy=(CURRENT_USER&&CURRENT_USER.name)||'';RELEASES[id]=r;persistRelease(r);renderQC();
+  toast('🚀 '+(QC_PRODUCTS[r.product]||r.product)+' '+r.version+' released');
+  qcNotifyLeads('Release shipped',(QC_PRODUCTS[r.product]||r.product)+' '+r.version+' released after passing QC');
+}
+function overrideRelease(id){const r=RELEASES[id];if(!r)return;if(!isSuperAdmin()){toast('Super admin only');return}
+  const reason=prompt('Releasing WITHOUT a passing soak test — this is logged. Why?');if(!reason||!reason.trim())return;
+  r.status='released';r.releasedAt=new Date().toISOString();r.releasedBy=(CURRENT_USER&&CURRENT_USER.name)||'';r.overrideReason=reason.trim();r.overrideBy=(CURRENT_USER&&CURRENT_USER.name)||'';RELEASES[id]=r;persistRelease(r);renderQC();
+  toast('Released with override — logged');
+  qcNotifyLeads('Release override',(QC_PRODUCTS[r.product]||r.product)+' '+r.version+' released WITHOUT passing QC by '+((CURRENT_USER&&CURRENT_USER.name)||'')+' — '+reason.trim());
+}
+/* ---- Test bench ---- */
+function qcStartFromRelease(id){qcBench.selRel=id;qcTab='bench';qcRelView=null;renderQC();window.scrollTo(0,0)}
+function qcModePick(v){const so=document.getElementById('qc-simopt');if(so)so.style.display=(v==='sim')?'':'none'}
+function qcBenchView(){
+  if(qcBench.running)return qcRunningPanel();
+  const rels=Object.values(RELEASES).filter(r=>r.status!=='released').sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  const opts=rels.map(r=>'<option value="'+esc(r.id)+'"'+(qcBench.selRel===r.id?' selected':'')+'>'+esc((QC_PRODUCTS[r.product]||r.product)+' '+r.version+' ('+((QC_CHAN[r.channel]||{}).label||r.channel)+')')+'</option>').join('');
+  const th=qcThresholds();const bleOK=(typeof navigator!=='undefined'&&navigator.bluetooth);
+  return '<div class="note" style="margin:0 0 12px">The soak test connects a band, then for the whole window keeps the link open and fires alerts on a set interval — logging every disconnect and every alert sent → acknowledged. It passes only if it holds the connection and delivers alerts for the full window. That verdict gates the release.</div>'
+   +'<div class="card">'
+   +'<p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Release under test</p>'
+   +(opts?'<select class="field" id="qc-rel" style="margin:0 0 12px">'+opts+'</select>':'<div class="d" style="color:var(--faint);margin-bottom:12px">No draft releases — create one on the Releases tab first.</div>')
+   +'<p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Band connection</p>'
+   +'<div class="rolepick" id="qc-mode"><button data-v="sim" class="on" onclick="qcModePick(\'sim\')">Simulated band</button><button data-v="ble" onclick="qcModePick(\'ble\')"'+(bleOK?'':' disabled title="Web Bluetooth needs desktop Chrome/Edge"')+'>Real band (Bluetooth)</button></div>'
+   +'<div id="qc-simopt" style="margin-top:10px"><label class="d" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="qc-flaky"> Simulate a flaky band (to see a failing run)</label></div>'
+   +'<div class="row" style="gap:8px;margin-top:12px"><div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Duration (min)</p><input class="field" id="qc-dur" type="number" min="1" value="'+th.minDurationMin+'" style="margin:0"></div><div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Alert every (sec)</p><input class="field" id="qc-int" type="number" min="1" value="'+th.alertSec+'" style="margin:0"></div></div>'
+   +'<div class="row" style="gap:8px;margin-top:10px"><div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Max disconnects</p><input class="field" id="qc-maxdc" type="number" min="0" value="'+th.maxDisconnects+'" style="margin:0"></div><div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Min delivery %</p><input class="field" id="qc-mindel" type="number" min="1" max="100" value="'+th.minDeliveryPct+'" style="margin:0"></div></div>'
+   +'<div style="margin-top:10px"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Device label</p><input class="field" id="qc-devlabel" placeholder="e.g. Band SN SW-0421" style="margin:0"></div>'
+   +'<button class="btn" style="margin-top:14px"'+(opts?'':' disabled')+' onclick="qcStartFromForm()">▶ Start soak test</button>'
+   +'</div>';
+}
+function qcStartFromForm(){
+  const relId=(document.getElementById('qc-rel')||{}).value;if(!relId){toast('Pick a release');return}
+  const mb=document.querySelector('#qc-mode button.on');const mode=(mb&&mb.dataset&&mb.dataset.v)||'sim';
+  const flaky=!!(document.getElementById('qc-flaky')||{}).checked;
+  const durMin=Math.max(1,parseInt((document.getElementById('qc-dur')||{}).value||'30',10)||30);
+  const intSec=Math.max(1,parseInt((document.getElementById('qc-int')||{}).value||'20',10)||20);
+  const maxdc=Math.max(0,parseInt((document.getElementById('qc-maxdc')||{}).value||'0',10)||0);
+  const mindel=Math.min(100,Math.max(1,parseInt((document.getElementById('qc-mindel')||{}).value||'99',10)||99));
+  const devlabel=((document.getElementById('qc-devlabel')||{}).value||'').trim();
+  qcStartRun({releaseId:relId,mode:mode,flaky:flaky,durationSec:durMin*60,alertMs:intSec*1000,maxDisconnects:maxdc,minDeliveryPct:mindel,device:devlabel});
+}
+function qcSimDevice(opts){opts=opts||{};const dev={label:'Simulated band',connected:true,onDisconnect:null,onReconnect:null,_timers:[]};
+  dev.sendAlert=function(){return new Promise(res=>{const lat=40+Math.random()*160;const tm=setTimeout(()=>res(!!dev.connected),lat);dev._timers.push(tm);});};
+  dev.disconnect=function(){dev.connected=false;dev._timers.forEach(clearTimeout);dev._timers=[]};
+  if(opts.flaky){const cycle=()=>{const upFor=4000+Math.random()*6000;const t1=setTimeout(()=>{dev.connected=false;if(dev.onDisconnect)dev.onDisconnect();const downFor=1500+Math.random()*4000;const t2=setTimeout(()=>{dev.connected=true;if(dev.onReconnect)dev.onReconnect();cycle();},downFor);dev._timers.push(t2);},upFor);dev._timers.push(t1);};cycle();}
+  return dev;
+}
+function qcBleConfig(){const s=SETTINGS_QC||{};return {service:s.bleService||'',alertChar:s.bleAlertChar||'',ackChar:s.bleAckChar||''}}
+async function qcConnectBLE(){
+  if(!(typeof navigator!=='undefined'&&navigator.bluetooth))throw new Error('Web Bluetooth not available');
+  const cfg=qcBleConfig();
+  const options=cfg.service?{filters:[{services:[cfg.service]}],optionalServices:[cfg.service]}:{acceptAllDevices:true};
+  const btdev=await navigator.bluetooth.requestDevice(options);
+  const dev={label:btdev.name||'Band',connected:false,onDisconnect:null,onReconnect:null,_bt:btdev,_alertCh:null};
+  const server=await btdev.gatt.connect();dev.connected=true;
+  btdev.addEventListener('gattserverdisconnected',()=>{dev.connected=false;if(dev.onDisconnect)dev.onDisconnect();qcTryReconnect(dev);});
+  if(cfg.service&&cfg.alertChar){try{const svc=await server.getPrimaryService(cfg.service);dev._alertCh=await svc.getCharacteristic(cfg.alertChar);}catch(e){}}
+  dev.sendAlert=async function(){if(!dev.connected)return false;if(dev._alertCh){try{await dev._alertCh.writeValue(new Uint8Array([1]));return true;}catch(e){return false;}}return !!dev.connected;};
+  dev.disconnect=function(){try{if(btdev.gatt&&btdev.gatt.connected)btdev.gatt.disconnect()}catch(e){}};
+  return dev;
+}
+function qcTryReconnect(dev){if(!qcBench.running)return;try{dev._bt.gatt.connect().then(()=>{dev.connected=true;if(dev.onReconnect)dev.onReconnect();}).catch(()=>{});}catch(e){}}
+function qcLog(run,type,detail){run.events.push({t:new Date().toISOString(),type:type,detail:detail});if(run.events.length>240)run.events=run.events.slice(-240);qcAppendLiveLog(type,detail);}
+async function qcStartRun(cfg){
+  if(qcBench.running)return;
+  const rel=RELEASES[cfg.releaseId];if(!rel){toast('Release not found');return}
+  let dev;
+  try{dev=cfg.mode==='ble'?await qcConnectBLE():qcSimDevice({flaky:cfg.flaky});}
+  catch(e){toast('Could not connect — '+((e&&e.message)||''));return;}
+  const now=new Date();
+  const run={id:'QR'+Date.now().toString(36).toUpperCase().slice(-8),releaseId:rel.id,product:rel.product,version:rel.version||'',
+    device:cfg.device||dev.label||(cfg.mode==='ble'?'Bluetooth band':'Simulated band'),mode:cfg.mode,startedAt:now.toISOString(),
+    durationTargetSec:Math.round(cfg.durationSec),alertMs:cfg.alertMs,
+    thresholds:{minDurationSec:Math.round(cfg.durationSec),maxDisconnects:cfg.maxDisconnects,minDeliveryPct:cfg.minDeliveryPct},
+    alertsSent:0,alertsAcked:0,disconnects:0,maxGapMs:0,by:(CURRENT_USER&&CURRENT_USER.name)||'',verdict:'running',events:[]};
+  qcBench={running:true,run:run,dev:dev,selRel:rel.id,connected:true,connectedMs:0,downSince:0,lastTickAt:Date.now(),t0:Date.now(),tickTimer:null,alertTimer:null};
+  qcLog(run,'connect',run.device+' connected');
+  if(rel.status!=='released'){rel.status='testing';rel.testingSince=rel.testingSince||now.toISOString();RELEASES[rel.id]=rel;persistRelease(rel);}
+  QCRUNS[run.id]=run;persistRun(run);
+  dev.onDisconnect=()=>{if(!qcBench.running)return;if(qcBench.connected){qcBench.connected=false;qcBench.downSince=Date.now();run.disconnects++;qcLog(run,'disconnect','link dropped');qcUpdateLivePanel((Date.now()-qcBench.t0)/1000);}};
+  dev.onReconnect=()=>{if(!qcBench.running)return;if(!qcBench.connected){const gap=Date.now()-qcBench.downSince;run.maxGapMs=Math.max(run.maxGapMs,gap);qcBench.connected=true;qcBench.downSince=0;qcLog(run,'connect','reconnected after '+Math.round(gap/1000)+'s');qcUpdateLivePanel((Date.now()-qcBench.t0)/1000);}};
+  renderQC();
+  qcBench.tickTimer=setInterval(qcTick,500);
+  qcBench.alertTimer=setInterval(qcFireAlert,cfg.alertMs);
+  qcFireAlert();
+}
+function qcTick(){const b=qcBench;if(!b.running)return;const nowT=Date.now();const dt=nowT-b.lastTickAt;b.lastTickAt=nowT;if(b.connected)b.connectedMs+=dt;const elapsed=(nowT-b.t0)/1000;qcUpdateLivePanel(elapsed);if(elapsed>=b.run.durationTargetSec)qcFinish('done');}
+async function qcFireAlert(){const b=qcBench;if(!b.running)return;const run=b.run;run.alertsSent++;let ack=false;try{ack=await b.dev.sendAlert();}catch(e){ack=false;}if(!b.running)return;if(ack){run.alertsAcked++;qcLog(run,'alert_ack','alert #'+run.alertsSent+' delivered');}else{qcLog(run,'alert_miss','alert #'+run.alertsSent+' NOT delivered');}qcUpdateLivePanel((Date.now()-b.t0)/1000);}
+function qcFinish(reason){
+  const b=qcBench;if(!b.running)return;b.running=false;
+  if(b.tickTimer)clearInterval(b.tickTimer);if(b.alertTimer)clearInterval(b.alertTimer);
+  const run=b.run;const endT=Date.now();const elapsed=(endT-b.t0)/1000;
+  if(b.connected)b.connectedMs+=Math.max(0,endT-b.lastTickAt);
+  run.endedAt=new Date().toISOString();run.durationSec=Math.round(elapsed);
+  run.uptimePct=elapsed>0?Math.round(b.connectedMs/1000/elapsed*100):0;
+  const deliveryPct=run.alertsSent?Math.round(run.alertsAcked/run.alertsSent*100):0;run.deliveryPct=deliveryPct;
+  const th=run.thresholds;const reasons=[];
+  if(reason==='abort'){run.verdict='aborted';reasons.push('Stopped early by tester');}
+  else{
+    if(run.durationSec<th.minDurationSec-2)reasons.push('Ran '+fmtDur(run.durationSec)+' of '+fmtDur(th.minDurationSec));
+    if(run.disconnects>th.maxDisconnects)reasons.push(run.disconnects+' disconnects (max '+th.maxDisconnects+')');
+    if(deliveryPct<th.minDeliveryPct)reasons.push('Alert delivery '+deliveryPct+'% (min '+th.minDeliveryPct+'%)');
+    if(!b.connected)reasons.push('Not connected at finish');
+    run.verdict=reasons.length?'fail':'pass';
+  }
+  run.reasons=reasons;
+  qcLog(run,run.verdict==='pass'?'pass':(run.verdict==='aborted'?'note':'fail'),run.verdict==='pass'?'Soak PASSED':(run.verdict==='aborted'?'Run aborted':'Soak FAILED — '+reasons.join('; ')));
+  if(run.events.length>240)run.events=run.events.slice(-240);
+  QCRUNS[run.id]=run;persistRun(run);
+  const rel=RELEASES[run.releaseId];
+  if(rel&&rel.status!=='released'){rel.status=(run.verdict==='pass')?'passed':(run.verdict==='fail'?'failed':'testing');rel.latestVerdict=run.verdict;RELEASES[rel.id]=rel;persistRelease(rel);}
+  try{b.dev&&b.dev.disconnect&&b.dev.disconnect();}catch(e){}
+  const relName=(QC_PRODUCTS[run.product]||run.product)+' '+run.version;
+  if(run.verdict==='pass')qcNotifyLeads('QC passed · '+relName,'Soak passed — '+fmtDur(run.durationSec)+', '+run.disconnects+' disconnects, '+deliveryPct+'% delivery');
+  else if(run.verdict==='fail')qcNotifyLeads('QC failed · '+relName,reasons.join('; '));
+  renderQC();
+  toast(run.verdict==='pass'?'✓ Soak PASSED — release unblocked':(run.verdict==='aborted'?'Run stopped':'⚠︎ Soak FAILED — '+(reasons[0]||'')));
+}
+function qcStopRun(){if(qcBench.running)qcFinish('abort')}
+function qcRunningPanel(){
+  const run=qcBench.run;
+  return '<div class="card">'
+   +'<div class="row"><div class="grow"><div class="t">'+esc((QC_PRODUCTS[run.product]||run.product)+' '+run.version)+' · soak test</div><div class="d">'+esc(run.device)+' · target '+fmtDur(run.durationTargetSec)+'</div></div><button class="btn ghost" style="width:auto;padding:8px 12px" onclick="qcStopRun()">Stop</button></div>'
+   +'<div class="row" id="qc-conn" style="margin-top:10px;align-items:center"><span class="qc-dot live up"></span><span class="d" id="qc-conntxt" style="color:var(--good)">Connected</span><span class="grow"></span><span class="d" id="qc-elapsed" style="font-family:var(--font-m)">0s / '+fmtDur(run.durationTargetSec)+'</span></div>'
+   +'<div class="progress" style="height:8px;margin-top:10px"><i id="qc-prog" style="width:0%"></i></div>'
+   +'<div class="row" style="gap:8px;margin-top:12px"><div class="qc-stat"><div class="n" id="qc-sent">0</div><div class="l">alerts sent</div></div><div class="qc-stat"><div class="n" id="qc-ack" style="color:var(--good)">0</div><div class="l">delivered</div></div><div class="qc-stat"><div class="n" id="qc-dc">0</div><div class="l">disconnects</div></div><div class="qc-stat"><div class="n" id="qc-up">100%</div><div class="l">uptime</div></div></div>'
+   +'<p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Live log</p><div id="qc-livelog" class="qc-log"></div>'
+   +'</div>';
+}
+function qcUpdateLivePanel(elapsed){
+  const run=qcBench.run;if(!run)return;const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v};
+  set('qc-sent',run.alertsSent);set('qc-ack',run.alertsAcked);set('qc-dc',run.disconnects);
+  const up=elapsed>0?Math.round(qcBench.connectedMs/1000/elapsed*100):100;set('qc-up',up+'%');
+  set('qc-elapsed',fmtDur(Math.floor(elapsed))+' / '+fmtDur(run.durationTargetSec));
+  const prog=document.getElementById('qc-prog');if(prog)prog.style.width=Math.min(100,elapsed/run.durationTargetSec*100)+'%';
+  const dot=document.querySelector('#qc-conn .qc-dot'),txt=document.getElementById('qc-conntxt');
+  if(dot&&txt){if(qcBench.connected){dot.className='qc-dot live up';txt.textContent='Connected';txt.style.color='var(--good)';}else{dot.className='qc-dot down';txt.textContent='Reconnecting…';txt.style.color='var(--amber)';}}
+}
+function qcAppendLiveLog(type,detail){
+  const box=document.getElementById('qc-livelog');if(!box)return;
+  const cls=(type==='disconnect'||type==='alert_miss'||type==='fail')?'var(--amber)':((type==='pass'||type==='alert_ack'||type==='connect')?'var(--good)':'var(--muted)');
+  const t=new Date().toLocaleTimeString('en-US',{hour12:false});
+  const div=document.createElement('div');div.className='ln';div.innerHTML='<span class="ts">'+t+'</span><span class="msg" style="color:'+cls+'">'+esc(detail)+'</span>';
+  box.appendChild(div);while(box.childElementCount>300)box.removeChild(box.firstChild);box.scrollTop=box.scrollHeight;
+}
+/* ---- Flash & serial monitor ---- */
+function qcFirmwareOptions(){const fw=Object.values(RELEASES).filter(r=>r.product==='firmware').sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));return fw.length?fw.map(r=>'<option value="'+esc(r.id)+'">'+esc('Firmware '+r.version+' ('+((QC_CHAN[r.channel]||{}).label||r.channel)+')')+'</option>').join(''):'<option value="">No firmware releases yet</option>'}
+function qcFlashView(){
+  const serialOK=(typeof navigator!=='undefined'&&navigator.serial);const connected=!!qcSerial.port;
+  return '<div class="note" style="margin:0 0 12px">Connect a band over USB to watch its serial output and record a flash. '+(serialOK?'Live boot &amp; runtime logs stream below — the honest confirmation that a flash took and the band came up.':'This browser doesn’t support Web Serial (use desktop Chrome/Edge); you can still record flash outcomes below.')+' Automated programming (esptool / DFU) drops in once you share the band’s chip + bootloader.</div>'
+   +'<div class="card"><div class="row" style="align-items:center"><div class="grow"><div class="t">Serial monitor</div><div class="d" id="qc-serial-state">'+(connected?'Connected':'Not connected')+'</div></div>'
+   +(connected?'<button class="btn ghost" style="width:auto;padding:8px 12px" onclick="qcSerialClose()">Disconnect</button>':'<button class="btn" style="width:auto;padding:8px 12px"'+(serialOK?'':' disabled')+' onclick="qcSerialConnect()">Connect USB</button>')+'</div>'
+   +'<div id="qc-seriallog" class="qc-log" style="margin-top:10px">'+(connected?'':'<div class="ln"><span class="msg" style="color:var(--faint)">Serial output appears here once connected.</span></div>')+'</div></div>'
+   +'<div class="card" style="margin-top:12px"><div class="t">Record a flash</div><div class="d" style="margin:2px 0 10px">Log which firmware you put on a band so it’s traceable against the soak test.</div>'
+   +'<select class="field" id="qc-flash-rel">'+qcFirmwareOptions()+'</select>'
+   +'<input class="field" id="qc-flash-dev" placeholder="Band serial / label (e.g. SW-0421)">'
+   +'<div class="rolepick" id="qc-flash-res"><button data-v="ok" class="on">Flashed OK</button><button data-v="fail">Flash failed</button></div>'
+   +'<button class="btn" style="margin-top:12px" onclick="qcRecordFlash()">Save flash record</button></div>';
+}
+async function qcSerialConnect(){
+  if(!(typeof navigator!=='undefined'&&navigator.serial)){toast('Web Serial not supported here');return}
+  try{const port=await navigator.serial.requestPort();await port.open({baudRate:(SETTINGS_QC.baud||115200)});qcSerial.port=port;qcSerial.reading=true;renderQC();qcSerialLog('— connected @ '+(SETTINGS_QC.baud||115200)+' baud —');qcSerialReadLoop(port);}
+  catch(e){toast('Serial connect failed — '+((e&&e.message)||''));}
+}
+async function qcSerialReadLoop(port){
+  try{const dec=new TextDecoder();while(port.readable&&qcSerial.reading){const reader=port.readable.getReader();qcSerial.reader=reader;try{while(true){const r=await reader.read();if(r.done)break;if(r.value)qcSerialLog(dec.decode(r.value));}}catch(e){}finally{try{reader.releaseLock()}catch(e){}}}}catch(e){}
+}
+async function qcSerialClose(){qcSerial.reading=false;try{if(qcSerial.reader)await qcSerial.reader.cancel()}catch(e){}try{if(qcSerial.port)await qcSerial.port.close()}catch(e){}qcSerial.port=null;qcSerial.reader=null;renderQC();}
+function qcSerialLog(txt){const box=document.getElementById('qc-seriallog');if(!box)return;const t=new Date().toLocaleTimeString('en-US',{hour12:false});String(txt).split(/\r?\n/).forEach((line,i)=>{if(line===''&&i>0)return;const div=document.createElement('div');div.className='ln';div.innerHTML='<span class="ts">'+t+'</span><span class="msg">'+esc(line)+'</span>';box.appendChild(div);});while(box.childElementCount>500)box.removeChild(box.firstChild);box.scrollTop=box.scrollHeight;}
+function qcRecordFlash(){
+  const relId=(document.getElementById('qc-flash-rel')||{}).value;if(!relId){toast('No firmware release selected');return}
+  const dev=((document.getElementById('qc-flash-dev')||{}).value||'').trim();
+  const rb=document.querySelector('#qc-flash-res button.on');const res=(rb&&rb.dataset&&rb.dataset.v)||'ok';
+  const rel=RELEASES[relId];if(!rel)return;
+  rel.flashes=(rel.flashes||[]).concat([{at:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'',device:dev,result:res}]).slice(-30);
+  RELEASES[relId]=rel;persistRelease(rel);toast(res==='ok'?'✓ Flash recorded':'Flash failure recorded');
+}
+/* ---- Release editor + run viewer sheets ---- */
+function openRelease(id){
+  const r=id?RELEASES[id]:null;
+  document.getElementById('rel-id').value=r?r.id:'';
+  document.getElementById('rel-tag').textContent=r?'EDIT RELEASE':'NEW RELEASE';
+  document.getElementById('rel-h').textContent=r?'Edit release':'New release';
+  const pg=document.getElementById('rel-product');pg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===((r&&r.product)||'firmware')));
+  document.getElementById('rel-version').value=r?(r.version||''):'';
+  document.getElementById('rel-channel').value=r?(r.channel||'dev'):'dev';
+  document.getElementById('rel-notes').value=r?(r.notes||''):'';
+  document.getElementById('rel-del').style.display=r?'block':'none';
+  closeSheets();openSheet('sh-release');
+}
+function saveRelease(){
+  if(!canQC()){toast('Tech / leadership only');return}
+  const id=document.getElementById('rel-id').value||('RL'+Date.now().toString(36).toUpperCase().slice(-7));
+  const pb=document.querySelector('#rel-product button.on');const product=(pb&&pb.dataset&&pb.dataset.v)||'firmware';
+  const version=document.getElementById('rel-version').value.trim();if(!version){toast('Give it a version');return}
+  const prev=RELEASES[id]||{};
+  const r=Object.assign({},prev,{id:id,product:product,version:version,channel:document.getElementById('rel-channel').value,notes:document.getElementById('rel-notes').value.trim(),createdBy:prev.createdBy||((CURRENT_USER&&CURRENT_USER.name)||''),createdAt:prev.createdAt||new Date().toISOString(),status:prev.status||'draft'});
+  RELEASES[id]=r;persistRelease(r);closeSheets();renderQC();toast('✓ '+(QC_PRODUCTS[product]||product)+' '+version+' saved');
+}
+function deleteRelease(){const id=document.getElementById('rel-id').value;const r=RELEASES[id];if(!r)return;
+  if(!confirm('Delete '+(QC_PRODUCTS[r.product]||r.product)+' '+r.version+'? Soak history stays.'))return;
+  delete RELEASES[id];if(hasFirestore())firebase.firestore().collection('releases').doc(id).delete().catch(()=>{});qcRelView=null;closeSheets();renderQC();toast('Release deleted');
+}
+function openQcRun(id){const run=QCRUNS[id];if(!run)return;
+  document.getElementById('qcrun-tag').textContent=(run.verdict||'run').toUpperCase();
+  document.getElementById('qcrun-h').textContent=(QC_PRODUCTS[run.product]||run.product)+' '+run.version+' soak';
+  document.getElementById('qcrun-meta').textContent=(run.device||'device')+' · '+qcTime(run.startedAt)+' · by '+(run.by||'');
+  const deliv=run.deliveryPct!=null?run.deliveryPct:(run.alertsSent?Math.round(run.alertsAcked/run.alertsSent*100):0);
+  document.getElementById('qcrun-summary').innerHTML='<div class="row" style="gap:8px;flex-wrap:wrap">'
+    +'<div class="qc-stat"><div class="n">'+qcVerdictChip(run.verdict)+'</div><div class="l">verdict</div></div>'
+    +'<div class="qc-stat"><div class="n">'+fmtDur(run.durationSec||0)+'</div><div class="l">duration</div></div>'
+    +'<div class="qc-stat"><div class="n">'+(run.alertsAcked||0)+'/'+(run.alertsSent||0)+'</div><div class="l">alerts</div></div>'
+    +'<div class="qc-stat"><div class="n">'+(run.disconnects||0)+'</div><div class="l">disconnects</div></div>'
+    +'<div class="qc-stat"><div class="n">'+(run.uptimePct!=null?run.uptimePct:'—')+'%</div><div class="l">uptime</div></div></div>'
+    +(run.reasons&&run.reasons.length?'<div class="note" style="margin-top:10px;border-color:var(--amber);color:var(--amber)">'+run.reasons.map(esc).join(' · ')+'</div>':'');
+  document.getElementById('qcrun-log').innerHTML=(run.events||[]).map(e=>{const cls=(e.type==='disconnect'||e.type==='alert_miss'||e.type==='fail')?'var(--amber)':((e.type==='pass'||e.type==='alert_ack'||e.type==='connect')?'var(--good)':'var(--muted)');const t=e.t?new Date(e.t).toLocaleTimeString('en-US',{hour12:false}):'';return '<div class="ln"><span class="ts">'+t+'</span><span class="msg" style="color:'+cls+'">'+esc(e.detail||e.type)+'</span></div>';}).join('')||'<div class="ln"><span class="msg" style="color:var(--faint)">No events.</span></div>';
+  closeSheets();openSheet('sh-qcrun');
+}
+function qcPulseTile(){
+  if(!canQC())return '';const rels=Object.values(RELEASES);if(!rels.length)return '';
+  const testing=rels.filter(r=>r.status==='testing').length,failed=rels.filter(r=>r.status==='failed').length,ready=rels.filter(r=>r.status==='passed').length;
+  if(!testing&&!failed&&!ready)return '';
+  if(failed)return rtile('s-qc',failed+' to fix','Release QC · '+failed+' failed','amber');
+  if(testing)return rtile('s-qc',testing+' in QC','Release QC · soak-testing','wave');
+  return rtile('s-qc',ready+' ready','Release QC · passed, ship it','good');
+}
+
 /* ================= PULSE ================= */
 /* Safewave product telemetry — lights up when the enterprise dashboard is linked. */
 const SAFEWAVE={totalUsers:null,online:null};
@@ -2185,6 +2565,7 @@ function renderPulse(user){
     +rtile('s-crm',total+' accounts',stale+' follow-up · '+outreach+' in outreach',stale?'amber':'wave')
     +rtile('s-support',openTk+' open',openTk?'Support tickets':'Support · all clear',openTk?'wave':'good');
   if(user.role==='admin'||user.role==='manager')roll+=rtile('s-build',top?top.id:'Build',top?'Top: '+top.title:'Project triage','wave');
+  roll+=qcPulseTile();
   if(user.role==='admin'||user.role==='superadmin'){const cr=complyReadiness();roll+=rtile('s-comply',cr.pct+'% ready',cr.gaps?'Comply · '+cr.gaps+' gap'+(cr.gaps===1?'':'s'):'Comply · SOC 2 + HIPAA',cr.gaps?'amber':'good');}
   if(financeAllowed()&&financeData){const b=financeBurn(),net=financeMRR()-b.total;roll+=rtile('s-finance',fmtMoney(net)+'/mo',net>=0?'Financials · net positive':'Financials · burn',net>=0?'good':'amber')}
   if(canMoney){const rs=raiseStats();if(rs.investors||rs.target){const pct=rs.target?Math.round(rs.committed/rs.target*100):0;const lbl=(RAISE.round?RAISE.round+' · ':'Raise · ')+(rs.target?pct+'% of '+fmtMoney(rs.target):fmtMoney(rs.committed)+' committed');roll+=raiseTile(fmtMoney(rs.committed),lbl,rs.target&&pct>=100?'good':'wave',rs.target?pct:0);}}
@@ -2347,7 +2728,7 @@ function agentSnapshot(){try{
 
 /* ================= FEEDBACK (every screen → Brad, the super admin) ================= */
 let FEEDBACK=[], fbUnsub=null;
-const SCREEN_LABELS={'s-pulse':'Pulse','s-finance':'Financials','s-stock':'Stock','s-support':'Tickets','s-build':'Build','s-chat':'Chat','s-crm':'CRM','s-comply':'Compliance','s-know':'Knowledge'};
+const SCREEN_LABELS={'s-pulse':'Pulse','s-finance':'Financials','s-stock':'Stock','s-support':'Tickets','s-build':'Build','s-qc':'Release QC','s-chat':'Chat','s-crm':'CRM','s-comply':'Compliance','s-know':'Knowledge'};
 let fbxFilter='open';
 function currentScreenId(){const el=document.querySelector('.screen.on');return el?el.id:'s-pulse'}
 function currentScreenLabel(){return SCREEN_LABELS[currentScreenId()]||'App'}
@@ -2484,7 +2865,7 @@ function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;if(u.role==='sup
    dept (Google sign-ups, legacy accounts) keep the classic member nav. */
 const DEPTS=['ops','sales','tech'];
 const DEPT_COMMON=['s-pulse','s-chat','s-know']; // everyone gets these
-const DEPT_TABS={ops:['s-stock','s-support'], sales:['s-crm'], tech:['s-support','s-build']};
+const DEPT_TABS={ops:['s-stock','s-support'], sales:['s-crm'], tech:['s-support','s-build','s-qc']};
 function deptLabel(d){return {ops:'Ops',sales:'Sales',tech:'Tech'}[d]||''}
 function navAllowedIds(user){
   user=user||CURRENT_USER; if(!user)return null;
@@ -2524,6 +2905,7 @@ function goto(id,btn){
   if(id==='s-feedback')renderFeedbackInbox();
   if(id==='s-vault')renderVault();
   if(id==='s-comply')renderComply();
+  if(id==='s-qc')renderQC();
   if(id==='s-users')renderUsers();
   if(id==='s-know')renderAgent();
 }
@@ -2569,6 +2951,7 @@ function enterApp(user){
   if(isSuperAdmin())subscribeFeedback();
   if(canVault())subscribeVault();
   if(canComply())subscribeCompliance();
+  if(canQC())subscribeQC();
   recordActivity();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
