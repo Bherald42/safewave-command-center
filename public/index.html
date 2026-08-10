@@ -145,6 +145,10 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .comply-pick button.on[data-v="progress"]{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
 .comply-pick button.on[data-v="gap"]{background:var(--amber-dim);border-color:var(--amber);color:var(--amber)}
 .comply-pick button.on[data-v="na"]{background:var(--surface-2);border-color:var(--line);color:var(--muted)}
+.multipick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.multipick button{background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font-family:var(--font-b);font-size:11.5px;font-weight:600;padding:7px 11px;border-radius:9px;cursor:pointer}
+.multipick button.on{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
+.multipick button:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
 .qc-log{max-height:300px;overflow:auto;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-family:var(--font-m);font-size:11.5px;line-height:1.7}
 .qc-log .ln{display:flex;gap:8px;white-space:nowrap}
 .qc-log .ln .ts{color:var(--faint);flex-shrink:0}
@@ -983,6 +987,36 @@ input[type=date]{color-scheme:dark}
     <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Event log</p>
     <div id="qcrun-log" class="qc-log"></div>
     <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-newchannel" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">NEW CHANNEL</span>
+    <h1 style="font-size:20px;margin:11px 0 12px">New channel</h1>
+    <input class="field" id="nc-name" placeholder="channel-name (e.g. firmware-v3)" autocomplete="off">
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Visibility</p>
+    <div class="rolepick" id="nc-priv">
+      <button data-v="private" class="on" onclick="ncTogglePriv('private')">🔒 Private</button>
+      <button data-v="public" onclick="ncTogglePriv('public')"># Public (whole team)</button>
+    </div>
+    <div id="nc-members-wrap">
+      <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Add people <span style="font-weight:400;color:var(--faint)">· only they (and you) can see it</span></p>
+      <div class="multipick" id="nc-members"></div>
+    </div>
+    <button class="btn" style="margin-top:14px" onclick="createChannel()">Create channel</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-chanmembers" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill dim">CHANNEL</span>
+    <h1 style="font-size:20px;margin:11px 0 12px" id="cm-title">#channel</h1>
+    <div id="cm-body"></div>
+    <button class="btn ghost" style="margin-top:14px" onclick="closeSheets()">Done</button>
   </div>
 </div>
 
@@ -3604,12 +3638,53 @@ function rottingCard(x){const open=x.kind==='Build'?"openBuildFromPulse('"+x.id+
 /* team chat (chat_channels/{ch}/messages) — real-time, with @mentions that
    notify teammates, per-channel + nav unread badges, avatars, grouped
    messages, day dividers, clickable links and an @-autocomplete. */
-let chatChannels=['general','sales','build'], chatChannel='general', chatUnsub=null, CHATMSGS=[];
-let chatMeta={}, chatMetaUnsub={}, chatSeen={}, chatMentionSel=0, chatMentionMatches=[];
+let CHANNELS={general:{name:'general',private:false,members:{}}}, chatChannels=['general'], chatChannel='general', chatUnsub=null, CHATMSGS=[];
+let chatMeta={}, chatMetaUnsub={}, chatSeen={}, chatMentionSel=0, chatMentionMatches=[], chanPubUnsub=null, chanMineUnsub=null, chanNewMembers={};
 function chatLoadSeen(){try{chatSeen=JSON.parse(localStorage.getItem('sw_chat_seen')||'{}')||{}}catch(e){chatSeen={}}}
 function chatSaveSeen(){try{localStorage.setItem('sw_chat_seen',JSON.stringify(chatSeen))}catch(e){}}
-async function loadChatChannels(){chatLoadSeen();if(!hasFirestore())return;try{const d=await firebase.firestore().collection('settings').doc('chat').get();if(d.exists&&Array.isArray(d.data().channels)&&d.data().channels.length)chatChannels=d.data().channels}catch(e){}
-  subscribeChatMeta();}
+async function loadChatChannels(){chatLoadSeen();
+  if(!hasFirestore()){CHANNELS={general:{name:'general',private:false,members:{}}};chatChannels=['general'];return}
+  await migrateChatChannels();
+  subscribeChannels();
+}
+/* One-time: make sure the team-wide public channels exist as docs so message
+   access (now gated by the channel doc) keeps working. Idempotent — only
+   creates a doc if it's missing; never downgrades an existing one. */
+async function migrateChatChannels(){
+  const uid=(CURRENT_USER&&CURRENT_USER.uid)||'',nm=(CURRENT_USER&&CURRENT_USER.name)||'';
+  if(!uid)return;
+  let names=['general','sales','build'];
+  try{const d=await firebase.firestore().collection('settings').doc('chat').get();if(d.exists&&Array.isArray(d.data().channels))names=Array.from(new Set(names.concat(d.data().channels)));}catch(e){}
+  for(const c of names){try{const ref=firebase.firestore().collection('chat_channels').doc(c);const snap=await ref.get();
+    if(!snap.exists)await ref.set({name:c,private:false,members:{},createdBy:uid,createdByName:nm,createdAt:new Date().toISOString()});
+  }catch(e){}}
+}
+/* Live channel list = every public channel + the private ones I'm a member of.
+   Two queries the rules allow; a private channel I'm not in never comes back. */
+function subscribeChannels(){
+  const uid=CURRENT_USER&&CURRENT_USER.uid;if(!uid)return;
+  if(chanPubUnsub){try{chanPubUnsub()}catch(e){}}
+  if(chanMineUnsub){try{chanMineUnsub()}catch(e){}}
+  const apply=()=>{
+    const names=Object.keys(CHANNELS);
+    const pub=names.filter(n=>!CHANNELS[n].private&&n!=='general').sort();
+    const priv=names.filter(n=>CHANNELS[n].private).sort();
+    chatChannels=(CHANNELS.general?['general']:[]).concat(pub).concat(priv);
+    if(!CHANNELS[chatChannel]&&chatChannels.length)chatChannel=chatChannels[0];
+    subscribeChatMeta();
+    const scr=document.getElementById('s-chat');if(scr&&scr.classList.contains('on'))renderChatChannels();
+    updateChatBadge();
+  };
+  try{chanPubUnsub=firebase.firestore().collection('chat_channels').where('private','==',false).onSnapshot(qs=>{
+    Object.keys(CHANNELS).forEach(k=>{if(!CHANNELS[k].private)delete CHANNELS[k]});
+    qs.forEach(d=>CHANNELS[d.id]=Object.assign({name:d.id},d.data()));apply();
+  },e=>{});}catch(e){}
+  try{chanMineUnsub=firebase.firestore().collection('chat_channels').where('members.'+uid,'==',true).onSnapshot(qs=>{
+    Object.keys(CHANNELS).forEach(k=>{if(CHANNELS[k].private)delete CHANNELS[k]});
+    qs.forEach(d=>CHANNELS[d.id]=Object.assign({name:d.id},d.data()));apply();
+  },e=>{});}catch(e){}
+}
+function chanCanManage(c){const ch=CHANNELS[c];if(!ch||!ch.private)return false;const u=CURRENT_USER;if(!u)return false;return ch.createdBy===u.uid||u.role==='admin'||u.role==='superadmin'}
 function renderChat(){renderChatChannels();subscribeChat();markChannelRead(chatChannel);chatAutosize();renderChatTray();chatWireDrop();chatWireViewport();chatKeyboardFit();}
 /* iOS/Android soft-keyboard fit: position:fixed doesn't know the keyboard is
    there, so the pinned composer would hide behind it. Use the VisualViewport
@@ -3628,13 +3703,60 @@ function chatWireViewport(){if(chatVVWired||!window.visualViewport)return;chatVV
 function chatFocus(){setTimeout(function(){chatKeyboardFit();const st=document.getElementById('chat-stream');if(st)st.scrollTop=st.scrollHeight},60)}
 function chatBlur(){setTimeout(chatKeyboardFit,60)}
 function renderChatChannels(){const el=document.getElementById('chat-channels');if(!el)return;
-  el.innerHTML=chatChannels.map(c=>{const un=channelUnread(c)&&c!==chatChannel;return '<button class="chip'+(c===chatChannel?' on':'')+'" onclick="switchChannel(decodeURIComponent(\''+encodeURIComponent(c)+'\'))">#'+esc(c)+(un?'<span class="udot"></span>':'')+'</button>'}).join('')+'<button class="chip" onclick="addChannel()" title="New channel">＋</button>';
-  const h=document.getElementById('chat-h1');if(h)h.textContent='#'+chatChannel;
-  const inp=document.getElementById('chat-input');if(inp)inp.placeholder='Message #'+chatChannel+'…';
-  const sub=document.getElementById('chat-sub');if(sub){const n=(TEAM||[]).length;sub.textContent='Real-time · '+(n?n+' teammate'+(n===1?'':'s'):'the whole team')+' · @mention to notify'}
+  let html=chatChannels.map(c=>{const un=channelUnread(c)&&c!==chatChannel;const priv=CHANNELS[c]&&CHANNELS[c].private;return '<button class="chip'+(c===chatChannel?' on':'')+'" onclick="switchChannel(decodeURIComponent(\''+encodeURIComponent(c)+'\'))">'+(priv?'🔒':'#')+esc(c)+(un?'<span class="udot"></span>':'')+'</button>'}).join('');
+  html+='<button class="chip" onclick="openNewChannel()" title="New channel">＋</button>';
+  const cur=CHANNELS[chatChannel];
+  if(cur&&cur.private)html+='<button class="chip" onclick="openChanMembers()" title="Members">👥 Members</button>';
+  el.innerHTML=html;
+  const h=document.getElementById('chat-h1');if(h)h.textContent=(cur&&cur.private?'🔒 ':'#')+chatChannel;
+  const inp=document.getElementById('chat-input');if(inp)inp.placeholder='Message '+(cur&&cur.private?'':'#')+chatChannel+'…';
+  const sub=document.getElementById('chat-sub');if(sub){if(cur&&cur.private){const n=Object.keys(cur.members||{}).length;sub.textContent='🔒 Private · '+n+' member'+(n===1?'':'s')+' · only they can see this channel'}else{const n=(TEAM||[]).length;sub.textContent='Public · '+(n?n+' teammate'+(n===1?'':'s'):'the whole team')+' · @mention to notify'}}
 }
 function switchChannel(c){chatChannel=c;renderChat()}
-function addChannel(){const n=(prompt('New channel name:')||'').trim().toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/^-+|-+$/g,'');if(!n)return;if(!chatChannels.includes(n))chatChannels.push(n);if(hasFirestore())firebase.firestore().collection('settings').doc('chat').set({channels:chatChannels},{merge:true}).catch(()=>{});chatChannel=n;subscribeChatMeta();renderChat()}
+/* --- create a channel (private by default) + manage its members --- */
+function openNewChannel(){chanNewMembers={};
+  const nm=document.getElementById('nc-name');if(nm)nm.value='';
+  document.querySelectorAll('#nc-priv button').forEach(b=>b.classList.toggle('on',b.dataset.v==='private'));
+  ncTogglePriv('private');renderNcMembers();closeSheets();openSheet('sh-newchannel');}
+function ncTogglePriv(v){const wrap=document.getElementById('nc-members-wrap');if(wrap)wrap.style.display=v==='private'?'':'none'}
+function renderNcMembers(){const el=document.getElementById('nc-members');if(!el)return;const me=CURRENT_USER&&CURRENT_USER.uid;
+  el.innerHTML=(TEAM||[]).filter(t=>t.uid&&t.uid!==me).map(t=>'<button type="button" data-v="'+esc(t.uid)+'" class="'+(chanNewMembers[t.uid]?'on':'')+'" onclick="chanNewMembers[this.dataset.v]=!chanNewMembers[this.dataset.v];this.classList.toggle(\'on\')">'+esc(t.name||t.email||'')+'</button>').join('')||'<span class="d" style="color:var(--faint)">No teammates yet — you can add people after they sign in.</span>';}
+async function createChannel(){
+  const raw=(document.getElementById('nc-name')||{}).value||'';
+  const name=raw.trim().toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/^-+|-+$/g,'');
+  if(!name){toast('Give the channel a name');return}
+  if(CHANNELS[name]){toast('#'+name+' already exists');switchChannel(name);closeSheets();return}
+  const pb=document.querySelector('#nc-priv button.on');const priv=(pb&&pb.dataset.v)==='private';
+  const uid=CURRENT_USER.uid,nm=CURRENT_USER.name||CURRENT_USER.email||'';
+  const members={},memberNames={};
+  if(priv){members[uid]=true;memberNames[uid]=nm;Object.keys(chanNewMembers).forEach(u=>{if(chanNewMembers[u]){members[u]=true;const t=(TEAM||[]).find(x=>x.uid===u);memberNames[u]=(t&&t.name)||''}})}
+  const doc={name:name,private:priv,members:members,memberNames:memberNames,createdBy:uid,createdByName:nm,createdAt:new Date().toISOString()};
+  if(hasFirestore()){try{await firebase.firestore().collection('chat_channels').doc(name).set(doc)}catch(e){toast('Create failed — '+((e&&e.code)||''));return}}
+  CHANNELS[name]=doc;if(chatChannels.indexOf(name)<0)chatChannels.push(name);chatChannel=name;closeSheets();renderChat();
+  toast((priv?'🔒 Private channel ':'#')+name+' created');
+}
+function openChanMembers(){const ch=CHANNELS[chatChannel];if(!ch)return;const t=document.getElementById('cm-title');if(t)t.textContent=(ch.private?'🔒 ':'#')+chatChannel;renderChanMembers();closeSheets();openSheet('sh-chanmembers');}
+function renderChanMembers(){const c=chatChannel,ch=CHANNELS[c];if(!ch)return;const manage=chanCanManage(c);const mem=Object.keys(ch.members||{});
+  const rows=mem.map(uid=>{const t=(TEAM||[]).find(x=>x.uid===uid);const nm=(t&&t.name)||(ch.memberNames&&ch.memberNames[uid])||uid;const owner=uid===ch.createdBy;
+    return '<div class="row" style="align-items:center;gap:8px;margin-top:8px"><span class="c-av">'+esc(initials(nm,''))+'</span><div class="grow"><div class="t" style="font-size:13px">'+esc(nm)+(owner?' <span class="pill dim" style="font-size:9px">owner</span>':'')+'</div></div>'+((manage&&!owner)?'<button class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px" onclick="removeChanMember(\''+uid+'\')">Remove</button>':'')+'</div>';}).join('');
+  let add='';
+  if(manage){const cands=(TEAM||[]).filter(t=>t.uid&&!ch.members[t.uid]);add=cands.length?'<p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Add teammate</p><div class="multipick">'+cands.map(t=>'<button type="button" onclick="addChanMember(\''+t.uid+'\')">＋ '+esc(t.name||t.email||'')+'</button>').join('')+'</div>':'<div class="d" style="color:var(--faint);margin-top:12px">Everyone is already in this channel.</div>';}
+  const head='<p class="d" style="color:var(--faint);margin:0 0 4px">'+(ch.private?(mem.length+' member'+(mem.length===1?'':'s')+' · only they can see this channel'):'Public — visible to the whole team')+'</p>';
+  document.getElementById('cm-body').innerHTML=head+rows+add+(ch.private&&!manage?'<div class="note" style="margin-top:12px">Only the channel owner or an admin can add or remove people.</div>':'');
+}
+function addChanMember(uid){const c=chatChannel,ch=CHANNELS[c];if(!ch||!chanCanManage(c)){toast('Owner or admin only');return}const t=(TEAM||[]).find(x=>x.uid===uid);
+  ch.members[uid]=true;ch.memberNames=ch.memberNames||{};ch.memberNames[uid]=(t&&t.name)||'';
+  if(hasFirestore()){const patch={};patch['members.'+uid]=true;patch['memberNames.'+uid]=(t&&t.name)||'';firebase.firestore().collection('chat_channels').doc(c).update(patch).catch(e=>toast('Add failed — '+((e&&e.code)||'')))}
+  renderChanMembers();renderChatChannels();
+  if(uid!==CURRENT_USER.uid)notify(uid,'Added to 🔒 '+c,(CURRENT_USER.name||'A teammate')+' added you to a private channel','s-chat');
+  toast('✓ Added '+((t&&t.name)||'teammate'));
+}
+function removeChanMember(uid){const c=chatChannel,ch=CHANNELS[c];if(!ch||!chanCanManage(c)){toast('Owner or admin only');return}if(uid===ch.createdBy){toast('The owner stays in the channel');return}
+  delete ch.members[uid];
+  if(hasFirestore()){const patch={};patch['members.'+uid]=firebase.firestore.FieldValue.delete();firebase.firestore().collection('chat_channels').doc(c).update(patch).catch(e=>toast('Remove failed — '+((e&&e.code)||'')))}
+  renderChanMembers();renderChatChannels();toast('Removed from channel');
+}
+function chatRoster(){const ch=CHANNELS[chatChannel];if(ch&&ch.private){const m=ch.members||{};return (TEAM||[]).filter(t=>t.uid&&m[t.uid])}return TEAM||[]}
 
 /* --- unread: one light listener per channel tracks its latest message --- */
 function subscribeChatMeta(){if(!hasFirestore())return;
@@ -3656,7 +3778,7 @@ function subscribeChat(){if(!hasFirestore()){document.getElementById('chat-strea
   try{chatUnsub=firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').orderBy('at','desc').limit(120).onSnapshot(qs=>{CHATMSGS=qs.docs.map(d=>Object.assign({id:d.id},d.data())).reverse();renderChatMessages();markChannelRead(chatChannel);},e=>{document.getElementById('chat-stream').innerHTML='<div class="d" style="color:var(--amber);margin:auto">Chat error — '+((e&&e.code)||'')+'</div>'})}catch(e){}}
 
 /* --- @mentions: match tokens against the team roster + @all/@here --- */
-function teamHandles(){const map={};(TEAM||[]).forEach(t=>{if(!t.uid)return;const first=((t.name||'').trim().split(/\s+/)[0]||'').toLowerCase();const full=(t.name||'').trim().toLowerCase().replace(/\s+/g,'');if(first)(map[first]=map[first]||[]).push(t);if(full&&full!==first)(map[full]=map[full]||[]).push(t)});return map}
+function teamHandles(){const map={};chatRoster().forEach(t=>{if(!t.uid)return;const first=((t.name||'').trim().split(/\s+/)[0]||'').toLowerCase();const full=(t.name||'').trim().toLowerCase().replace(/\s+/g,'');if(first)(map[first]=map[first]||[]).push(t);if(full&&full!==first)(map[full]=map[full]||[]).push(t)});return map}
 function parseMentions(text){const uids={},map=teamHandles();let all=false;(String(text||'').match(/@[\w.-]+/g)||[]).forEach(tok=>{const h=tok.slice(1).toLowerCase();if(h==='all'||h==='everyone'||h==='here'){all=true;return}(map[h]||[]).forEach(t=>{if(t.uid)uids[t.uid]=t.name})});return {uids:Object.keys(uids),names:uids,all:all}}
 function msgHitsMe(m){if(!CURRENT_USER)return false;const p=parseMentions(m.text||'');return p.all||p.uids.indexOf(CURRENT_USER.uid)>=0}
 function chatText(m){let s=esc(m.text||'');const map=teamHandles();
@@ -3696,8 +3818,12 @@ function sendChat(){const inp=document.getElementById('chat-input');const text=(
   firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').add(rec).then(()=>{
     const who=CURRENT_USER.name||'A teammate';
     const preview=text?text.slice(0,120):('📎 shared '+(atts[0]&&atts[0].kind==='image'?'a screenshot':(atts[0]?atts[0].name||'a file':'an attachment')));
-    if(men.all){notify('all','#'+chatChannel+' · '+who,preview,'s-chat')}
-    else{men.uids.forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,'#'+chatChannel+' · '+who+' mentioned you',preview,'s-chat')})}
+    const cch=CHANNELS[chatChannel];
+    if(men.all){
+      if(cch&&cch.private){Object.keys(cch.members||{}).forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,'🔒 '+chatChannel+' · '+who,preview,'s-chat')})}
+      else notify('all','#'+chatChannel+' · '+who,preview,'s-chat');
+    }
+    else{men.uids.forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,(cch&&cch.private?'🔒 ':'#')+chatChannel+' · '+who+' mentioned you',preview,'s-chat')})}
   }).catch(e=>{toast('Send failed — '+((e&&e.code)||''));inp.value=text})}
 
 /* --- attachments: screenshots (reusing the annotate tool), images & files;
@@ -3787,7 +3913,7 @@ function chatKey(e){
 function currentMentionToken(){const t=document.getElementById('chat-input');if(!t)return null;const pos=t.selectionStart;const before=t.value.slice(0,pos);const m=before.match(/(^|\s)@([\w.-]*)$/);return m?{q:m[2],start:pos-m[2].length-1}:null}
 function updateMentionPop(){const tok=currentMentionToken();if(!tok){hideMentions();return}
   const q=tok.q.toLowerCase();
-  let list=(TEAM||[]).filter(t=>t.uid&&(!q||(t.name||'').toLowerCase().includes(q)||(t.email||'').toLowerCase().includes(q)));
+  let list=chatRoster().filter(t=>t.uid&&(!q||(t.name||'').toLowerCase().includes(q)||(t.email||'').toLowerCase().includes(q)));
   const everyone={uid:'@all',name:'Everyone',email:'notify the whole channel',handle:'all'};
   const specials=(!q||'everyone here all'.indexOf(q)>=0)?[everyone]:[];
   chatMentionMatches=specials.concat(list).slice(0,6);

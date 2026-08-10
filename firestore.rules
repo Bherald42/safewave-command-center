@@ -103,9 +103,38 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
-    // Team chat — channels + messages, shared across signed-in teammates.
-    match /chat_channels/{ch}/messages/{m} {
-      allow read, write: if signedIn();
+    // Team chat — channels can be public (private:false, whole team) or private
+    // (members-only). Each channel is a doc with a members map; message access
+    // is gated by that doc. A private channel's members are managed only by its
+    // creator or an admin/super admin.
+    function chatChanExists(ch) {
+      return exists(/databases/$(database)/documents/chat_channels/$(ch));
+    }
+    function chatChan(ch) {
+      return get(/databases/$(database)/documents/chat_channels/$(ch)).data;
+    }
+    // Legacy channels (no doc yet) are treated as public so nothing breaks
+    // before the one-time migration seeds their docs.
+    function chatCanAccess(ch) {
+      return signedIn() && ( isSuper()
+        || !chatChanExists(ch)
+        || chatChan(ch).private == false
+        || chatChan(ch).members[request.auth.uid] == true );
+    }
+    match /chat_channels/{ch} {
+      // You can see a channel's metadata only if it's public or you're in it.
+      allow read: if signedIn() && ( isSuper()
+        || resource.data.private == false
+        || resource.data.members[request.auth.uid] == true );
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      // Only the owner or an admin/super admin can change it (add/remove members, rename, privacy).
+      allow update: if signedIn() && ( resource.data.createdBy == request.auth.uid
+        || myRole() == 'admin' || isSuper() );
+      allow delete: if signedIn() && ( resource.data.createdBy == request.auth.uid || isSuper() );
+
+      match /messages/{m} {
+        allow read, write: if chatCanAccess(ch);
+      }
     }
     match /settings/chat {
       allow read, write: if signedIn();
