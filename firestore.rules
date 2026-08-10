@@ -177,5 +177,20 @@ service cloud.firestore {
     match /compliance/{id} {
       allow read, write: if canComply();
     }
+
+    // Release QC — firmware & app release records (with release notes) and the
+    // soak-test / burn-in run logs that gate each release. Team-shared like the
+    // build board; the UI scopes the tab to tech + leadership. QC config
+    // (BLE / serial UUIDs, default thresholds) is leadership-writable.
+    match /releases/{id} {
+      allow read, write: if signedIn();
+    }
+    match /qc_runs/{id} {
+      allow read, write: if signedIn();
+    }
+    match /settings/qc {
+      allow read: if signedIn();
+      allow write: if canRaise();
+    }
   }
 }
