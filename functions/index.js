@@ -135,6 +135,128 @@ exports.askAgent = onCall({ region: REGION, timeoutSeconds: 120 }, async (reques
 });
 
 /* ------------------------------------------------------------------ *
+ * DRAFT FIRMWARE NOTES — auto-populate a firmware release's notes from
+ * the firmware repo's commits since the last release.
+ *
+ * Reads commits from the firmware GitHub repo (GITHUB_TOKEN, read-only),
+ * cleans the subjects, and — if ANTHROPIC_API_KEY is present — summarizes
+ * them into short release notes; otherwise returns the cleaned bullet list.
+ * Returns the repo HEAD sha so the client can store it on the release and
+ * diff from it next time (compare API). Never writes to GitHub.
+ * ------------------------------------------------------------------ */
+exports.draftFirmwareNotes = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to draft notes.");
+  const ghToken = process.env.GITHUB_TOKEN || "";
+  if (!ghToken) throw new HttpsError("failed-precondition",
+    "Connect GitHub first — add a GITHUB_TOKEN repo secret (a token with read access to the firmware repo) and redeploy.");
+
+  const { version, sinceSha } = request.data || {};
+  const repo = (process.env.FW_REPO || "bherald42/safewave-band-firmware").replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
+  const branch = process.env.FW_BRANCH || "main";
+  const ghHeaders = {
+    "authorization": "Bearer " + ghToken,
+    "accept": "application/vnd.github+json",
+    "user-agent": "safewave-command-center",
+    "x-github-api-version": "2022-11-28",
+  };
+
+  // 1) Gather commits. With a known baseline sha, use the compare API (only the
+  //    new commits); otherwise fall back to the most recent commits on branch.
+  let commits = [];
+  let headSha = null;
+  let range = "";
+  try {
+    if (sinceSha) {
+      const cmp = await fetch(
+        `https://api.github.com/repos/${repo}/compare/${encodeURIComponent(sinceSha)}...${encodeURIComponent(branch)}`,
+        { headers: ghHeaders });
+      if (cmp.ok) {
+        const d = await cmp.json();
+        commits = (d.commits || []).map((c) => (c.commit && c.commit.message) || "");
+        headSha = (d.commits && d.commits.length) ? d.commits[d.commits.length - 1].sha : sinceSha;
+        range = sinceSha.slice(0, 7) + ".." + branch;
+      } else if (cmp.status !== 404 && cmp.status !== 422) {
+        const t = await cmp.text();
+        logger.error("draftFirmwareNotes github compare", cmp.status, t.slice(0, 300));
+        throw new HttpsError("internal",
+          "GitHub returned " + cmp.status + " — check the token has read access to " + repo + ".");
+      }
+      // 404/422 = baseline sha not on this repo/branch anymore → fall through.
+    }
+    if (!headSha) {
+      const lst = await fetch(
+        `https://api.github.com/repos/${repo}/commits?sha=${encodeURIComponent(branch)}&per_page=30`,
+        { headers: ghHeaders });
+      if (!lst.ok) {
+        const t = await lst.text();
+        logger.error("draftFirmwareNotes github commits", lst.status, t.slice(0, 300));
+        throw new HttpsError("internal",
+          "GitHub returned " + lst.status + " — check the GITHUB_TOKEN and that it can read " + repo + ".");
+      }
+      const arr = await lst.json();
+      commits = (Array.isArray(arr) ? arr : []).map((c) => (c.commit && c.commit.message) || "");
+      headSha = (Array.isArray(arr) && arr.length) ? arr[0].sha : null;
+      range = "latest " + commits.length + " commits";
+    }
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    logger.error("draftFirmwareNotes github fetch failed", e && e.message);
+    throw new HttpsError("internal", "Couldn't reach GitHub. Try again in a moment.");
+  }
+
+  // 2) Clean commit subjects: first line only, drop merges + exact dupes.
+  const seen = new Set();
+  const clean = [];
+  commits.forEach((m) => {
+    const subj = ("" + m).split("\n")[0].trim();
+    if (!subj) return;
+    if (/^merge (branch|pull request|remote-tracking)/i.test(subj)) return;
+    const k = subj.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    clean.push(subj);
+  });
+
+  if (!clean.length) {
+    return { notes: "", headSha, commitCount: 0, range, ai: false, message: "No new commits since the last release." };
+  }
+
+  const listText = clean.slice(0, 80).map((s) => "- " + s).join("\n");
+
+  // 3) Summarize into release notes if the assistant is connected; else the list.
+  const aiKey = process.env.ANTHROPIC_API_KEY || "";
+  if (!aiKey) return { notes: listText, headSha, commitCount: clean.length, range, ai: false };
+
+  try {
+    const sys =
+      "You write concise, factual firmware release notes for the Safewave Band — a vibration-alert wristband " +
+      "for people who are Deaf or hard of hearing. You are given git commit subjects since the last release. " +
+      "Produce short user-facing notes as Markdown bullets, grouped under **Fixes**, **Improvements**, and **New** " +
+      "(include a group only if it has items). Merge related commits, drop internal noise (version bumps, formatting, " +
+      "CI, refactors with no user effect). No preamble, no marketing language. Red is reserved for life-safety — never " +
+      "imply severity with color.";
+    const usr = "Firmware version: " + (version || "(unspecified)") + "\nCommit subjects since last release:\n" + listText;
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": aiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 900, system: sys, messages: [{ role: "user", content: usr }] }),
+    });
+    if (!resp.ok) {
+      const t = await resp.text();
+      logger.error("draftFirmwareNotes anthropic", resp.status, t.slice(0, 300));
+      return { notes: listText, headSha, commitCount: clean.length, range, ai: false };
+    }
+    const data = await resp.json();
+    const notes = (data && Array.isArray(data.content) ? data.content : [])
+      .filter((b) => b && b.type === "text").map((b) => b.text).join("\n").trim();
+    return { notes: notes || listText, headSha, commitCount: clean.length, range, ai: !!notes };
+  } catch (e) {
+    logger.error("draftFirmwareNotes summarize failed", e && e.message);
+    return { notes: listText, headSha, commitCount: clean.length, range, ai: false };
+  }
+});
+
+/* ------------------------------------------------------------------ *
  * SOURCE PROSPECTS — Google Places business directory
  * ------------------------------------------------------------------ */
 exports.sourceProspects = onCall({ region: REGION }, async (request) => {
