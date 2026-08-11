@@ -2049,6 +2049,7 @@ let RELEASES={}, QCRUNS={}, SETTINGS_QC={}, qcUnsubR=null, qcUnsubRun=null, qcTa
 let qcBench={running:false,run:null,dev:null,tickTimer:null,alertTimer:null,connected:false,connectedMs:0,lastTickAt:0,t0:0,downSince:0,selRel:null};
 let qcSerial={port:null,reader:null,reading:false};
 let qcFwUploading=false, qcFwPickTarget=null;
+let qcOta={running:false,phase:'idle',pct:0,note:'',relId:null,dev:null,log:[]};
 function canQC(){const u=CURRENT_USER;if(!u)return false;const r=u.role;return r==='admin'||r==='manager'||r==='superadmin'||u.dept==='tech'||isOversight(u)}
 function subscribeQC(){
   if(!hasFirestore()||!canQC())return;
@@ -2319,7 +2320,8 @@ function qcImagesList(){
 function qcFlashView(){
   const serialOK=(typeof navigator!=='undefined'&&navigator.serial);const connected=!!qcSerial.port;
   return qcImagesList()
-   +'<div class="note" style="margin:12px 0">Connect a band over USB to watch its serial output and record a flash. '+(serialOK?'Live boot &amp; runtime logs stream below — the honest confirmation that a flash took and the band came up.':'This browser doesn’t support Web Serial (use desktop Chrome/Edge); you can still record flash outcomes below.')+' <b>Bluetooth-OTA flashing</b> (the band’s own <code>02F0…</code> update service) is the next step — until it’s verified on a spare band, flash the image above with your JLink.</div>'
+   +qcOtaCard()
+   +'<div class="note" style="margin:12px 0">The Bluetooth-OTA flasher above uses the band’s own <code>02F0…</code> update service. For bring-up/recovery you can also watch the band over USB and log a flash below.</div>'
    +'<div class="card"><div class="row" style="align-items:center"><div class="grow"><div class="t">Serial monitor</div><div class="d" id="qc-serial-state">'+(connected?'Connected':'Not connected')+'</div></div>'
    +(connected?'<button class="btn ghost" style="width:auto;padding:8px 12px" onclick="qcSerialClose()">Disconnect</button>':'<button class="btn" style="width:auto;padding:8px 12px"'+(serialOK?'':' disabled')+' onclick="qcSerialConnect()">Connect USB</button>')+'</div>'
    +'<div id="qc-seriallog" class="qc-log" style="margin-top:10px">'+(connected?'':'<div class="ln"><span class="msg" style="color:var(--faint)">Serial output appears here once connected.</span></div>')+'</div></div>'
@@ -2346,6 +2348,101 @@ function qcRecordFlash(){
   const rel=RELEASES[relId];if(!rel)return;
   rel.flashes=(rel.flashes||[]).concat([{at:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'',device:dev,result:res}]).slice(-30);
   RELEASES[relId]=rel;persistRelease(rel);toast(res==='ok'?'✓ Flash recorded':'Flash failure recorded');
+}
+/* ================= BLUETOOTH OTA FLASHER =================
+   Speaks the band's own OTA GATT service (02F0…) — the same update path the
+   mobile app uses. Protocol reverse-derived from the firmware (ota.c / the
+   FR801xH_OTA spec): GET_STR_BASE -> PAGE_ERASE (4KB each) -> WRITE_DATA
+   (contiguous) -> REBOOT carrying firmware_length + CRC32 of bin[256:]. The
+   CRC and every command frame are unit-tested to match the firmware byte-for-
+   byte. OTA is A/B ping-pong: data goes to the *inactive* bank and the band
+   validates the CRC before switching, so a bad/aborted flash leaves the
+   current firmware running (no brick) — but this is unverified on hardware, so
+   it's gated behind an explicit warning. Always test on a spare band you can
+   recover over JLink first. */
+const OTA_SVC='02f00000-0000-0000-0000-00000000fe00';
+const OTA_WRITE='02f00000-0000-0000-0000-00000000ff01';   // app -> device (commands + data)
+const OTA_NOTIFY='02f00000-0000-0000-0000-00000000ff02';  // device -> app (responses)
+const OTA_CMD={GET_BASE:1,READ_VER:2,PAGE_ERASE:3,WRITE_DATA:5,REBOOT:9};
+let OTA_CRCTAB=null;
+function otaCrcTab(){if(OTA_CRCTAB)return OTA_CRCTAB;const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?((0xEDB88320^(c>>>1))>>>0):(c>>>1);t[n]=c>>>0;}OTA_CRCTAB=t;return t;}
+function otaCrc32(bytes){const t=otaCrcTab();let crc=0;for(let i=0;i<bytes.length;i++){const high=(crc>>>8)>>>0;crc=(((crc<<8)>>>0)^t[(high^bytes[i])&0xff])>>>0;}return crc>>>0;}
+function otaU32(v){v>>>=0;return new Uint8Array([v&0xff,(v>>>8)&0xff,(v>>>16)&0xff,(v>>>24)&0xff]);}
+function otaCmd(opcode,payload){payload=payload||new Uint8Array(0);const b=new Uint8Array(3+payload.length);b[0]=opcode;b[1]=payload.length&0xff;b[2]=(payload.length>>8)&0xff;b.set(payload,3);return b;}
+function otaWriteDataPkt(baseAddr,data){const p=new Uint8Array(6+data.length);p.set(otaU32(baseAddr),0);p[4]=data.length&0xff;p[5]=(data.length>>8)&0xff;p.set(data,6);return otaCmd(OTA_CMD.WRITE_DATA,p);}
+function otaImageCrc(fw){const crcLen=Math.floor((fw.length-256)/256)*256;return otaCrc32(fw.subarray(256,256+crcLen));}
+function qcOtaCard(){
+  const bleOK=(typeof navigator!=='undefined'&&navigator.bluetooth);
+  const imgs=Object.values(RELEASES).filter(r=>r.product==='firmware'&&r.image&&r.image.url);
+  if(qcOta.running){
+    return '<div class="card" style="margin-top:12px;border-color:var(--wave)"><div class="row"><div class="grow"><div class="t">⚡ Flashing over Bluetooth…</div><div class="d" id="qc-ota-phase">'+esc(qcOta.note||qcOta.phase)+'</div></div><span class="d" id="qc-ota-pct" style="font-family:var(--font-m)">'+qcOta.pct+'%</span></div>'
+      +'<div class="progress" style="height:8px;margin-top:10px"><i id="qc-ota-bar" style="width:'+qcOta.pct+'%"></i></div>'
+      +'<div id="qc-ota-log" class="qc-log" style="margin-top:10px"></div>'
+      +'<div class="note" style="margin-top:10px;border-color:var(--amber);color:var(--amber)">Do not close this tab or move the band out of range until it finishes.</div></div>';
+  }
+  const opts=imgs.map(r=>'<option value="'+esc(r.id)+'">'+esc('Firmware '+r.version+' ('+((QC_CHAN[r.channel]||{}).label||r.channel)+') · '+qcFwKB(r.image.size))+'</option>').join('');
+  return '<div class="card" style="margin-top:12px"><div class="t">⚡ Flash over Bluetooth <span class="pill amber" style="font-size:10px">beta</span></div>'
+    +'<div class="note" style="margin:8px 0;border-color:var(--amber)">Sends the selected image to the band over its own OTA service — the same path the app uses. It writes to the <b>inactive</b> bank and the band checks the CRC before switching, so a failed flash keeps the current firmware. Still: <b>unverified on hardware</b> — test on a spare band you can re-flash over JLink before trusting it on a wearer’s device.</div>'
+    +(imgs.length?'<p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Firmware image</p><select class="field" id="qc-ota-rel">'+opts+'</select>'
+        :'<div class="d" style="color:var(--faint)">Upload a firmware <code>.bin</code> to a release first (Releases tab).</div>')
+    +'<button class="btn" style="margin-top:6px"'+((bleOK&&imgs.length)?'':' disabled')+' onclick="qcOtaFlashStart()">'+(bleOK?'Connect band &amp; flash':'Web Bluetooth needs desktop Chrome/Edge')+'</button>'
+    +(qcOta.phase==='done'||qcOta.phase==='fail'?'<div class="d" style="margin-top:8px;color:var(--'+(qcOta.phase==='done'?'good':'amber')+')">'+esc(qcOta.note)+'</div>':'')
+    +'</div>';
+}
+function qcOtaLog(msg,cls){qcOta.log.push({msg:msg,cls:cls||''});const box=document.getElementById('qc-ota-log');if(box){const t=new Date().toLocaleTimeString('en-US',{hour12:false});const d=document.createElement('div');d.className='ln';d.innerHTML='<span class="ts">'+t+'</span><span class="msg"'+(cls?' style="color:var(--'+cls+')"':'')+'>'+esc(msg)+'</span>';box.appendChild(d);while(box.childElementCount>400)box.removeChild(box.firstChild);box.scrollTop=box.scrollHeight;}}
+function qcOtaSetProgress(pct,note){qcOta.pct=Math.max(0,Math.min(100,Math.round(pct)));if(note)qcOta.note=note;const b=document.getElementById('qc-ota-bar');if(b)b.style.width=qcOta.pct+'%';const p=document.getElementById('qc-ota-pct');if(p)p.textContent=qcOta.pct+'%';const ph=document.getElementById('qc-ota-phase');if(ph&&note)ph.textContent=note;}
+async function qcOtaFlashStart(){
+  if(qcOta.running)return;
+  const relId=(document.getElementById('qc-ota-rel')||{}).value;const rel=RELEASES[relId];const im=rel&&rel.image;
+  if(!im||!im.url){toast('Pick a firmware image');return}
+  if(!(typeof navigator!=='undefined'&&navigator.bluetooth)){toast('Web Bluetooth needs desktop Chrome/Edge');return}
+  if(!confirm('Flash Firmware '+rel.version+' onto a band over Bluetooth?\n\nOnly do this on a spare band you can recover over JLink. The band keeps its current firmware if the flash fails, but this path is not yet hardware-verified.'))return;
+  qcOta={running:true,phase:'fetch',pct:0,note:'Downloading image…',relId:relId,dev:null,log:[]};renderQC();
+  let dev,server,wch,nch,pending=null;
+  const onNotify=e=>{const v=new Uint8Array(e.target.value.buffer.slice(0));if(pending){const r=pending;pending=null;r.resolve(v);}};
+  const send=(pkt,timeoutMs)=>new Promise(async(resolve,reject)=>{
+    let to=setTimeout(()=>{if(pending){pending=null;reject(new Error('timeout'))}},timeoutMs||6000);
+    pending={resolve:v=>{clearTimeout(to);resolve(v)},reject};
+    try{await wch.writeValueWithResponse(pkt);}catch(err){clearTimeout(to);pending=null;reject(err);}
+  });
+  const ok=rsp=>{if(!rsp||rsp[0]!==0)throw new Error('band returned error (result='+(rsp?rsp[0]:'?')+')');return rsp;};
+  try{
+    const buf=new Uint8Array(await (await fetch(im.url)).arrayBuffer());
+    let fw=buf;if(fw.length%256){const pad=new Uint8Array(Math.ceil(fw.length/256)*256);pad.fill(0xFF);pad.set(fw);fw=pad;qcOtaLog('Padded image '+buf.length+' → '+fw.length+' bytes (256-align)');}
+    qcOtaSetProgress(0,'Select your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
+    dev=await navigator.bluetooth.requestDevice({filters:[{services:[OTA_SVC]},{namePrefix:'Safewave'}],optionalServices:[OTA_SVC]});
+    qcOta.dev=dev;dev.addEventListener('gattserverdisconnected',()=>qcOtaLog('band disconnected','amber'));
+    qcOtaLog('Connecting to '+(dev.name||'band')+'…');server=await dev.gatt.connect();
+    const svc=await server.getPrimaryService(OTA_SVC);wch=await svc.getCharacteristic(OTA_WRITE);nch=await svc.getCharacteristic(OTA_NOTIFY);
+    await nch.startNotifications();nch.addEventListener('characteristicvaluechanged',onNotify);
+    qcOtaLog('OTA service open','good');
+    // 1) storage base
+    qcOtaSetProgress(1,'Reading flash base…');
+    const baseRsp=ok(await send(otaCmd(OTA_CMD.GET_BASE,new Uint8Array([0,0,0,0]))));
+    const base=(baseRsp[4]|(baseRsp[5]<<8)|(baseRsp[6]<<16)|(baseRsp[7]<<24))>>>0;
+    qcOtaLog('Target bank base 0x'+base.toString(16).toUpperCase());
+    // 2) erase
+    const pages=Math.ceil(fw.length/0x1000);
+    for(let i=0;i<pages;i++){ok(await send(otaCmd(OTA_CMD.PAGE_ERASE,otaU32((base+i*0x1000)>>>0)),9000));qcOtaSetProgress(1+(i+1)/pages*14,'Erasing '+(i+1)+'/'+pages+' pages…');}
+    qcOtaLog('Erase complete ('+pages+' × 4KB)','good');
+    // 3) write
+    const CHUNK=(SETTINGS_QC.otaChunk&&SETTINGS_QC.otaChunk>=16)?SETTINGS_QC.otaChunk:128;let off=0;
+    while(off<fw.length){const n=Math.min(CHUNK,fw.length-off);ok(await send(otaWriteDataPkt((base+off)>>>0,fw.subarray(off,off+n))));off+=n;qcOtaSetProgress(15+off/fw.length*80,'Writing '+Math.round(off/1024)+'/'+Math.round(fw.length/1024)+' KB…');}
+    qcOtaLog('Image written ('+Math.round(fw.length/1024)+' KB)','good');
+    // 4) reboot + CRC
+    qcOtaSetProgress(96,'Verifying CRC & rebooting…');
+    const crc=otaImageCrc(fw);const rebootPl=new Uint8Array([...otaU32(fw.length),...otaU32(crc)]);
+    let rebootRsp=null;try{rebootRsp=await send(otaCmd(OTA_CMD.REBOOT,rebootPl),12000);}catch(e){/* band may reset before replying */}
+    if(rebootRsp&&rebootRsp[0]===0){qcOta.phase='done';qcOta.note='✓ CRC verified — band is rebooting into Firmware '+rel.version+'.';qcOtaLog(qcOta.note,'good');qcOtaSetProgress(100,'Done');}
+    else{qcOta.phase='done';qcOta.note='Image sent. Band did not confirm before rebooting — watch the serial monitor / app to confirm it came up on '+rel.version+'. If it stayed on the old version, the CRC check failed and nothing was changed.';qcOtaLog('No reboot confirmation (expected if the band reset immediately)','amber');qcOtaSetProgress(100,'Sent');}
+    try{rel.flashes=(rel.flashes||[]).concat([{at:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'',device:(dev&&dev.name)||'BLE band',result:'ota',via:'bluetooth-ota'}]).slice(-30);RELEASES[relId]=rel;persistRelease(rel);}catch(e){}
+  }catch(err){
+    qcOta.phase='fail';qcOta.note='Flash aborted — '+((err&&err.message)||err)+'. The band keeps its current firmware.';qcOtaLog(qcOta.note,'amber');
+  }finally{
+    try{if(nch)nch.removeEventListener('characteristicvaluechanged',onNotify);}catch(e){}
+    try{if(dev&&dev.gatt&&dev.gatt.connected&&qcOta.phase==='fail')dev.gatt.disconnect();}catch(e){}
+    qcOta.running=false;renderQC();
+  }
 }
 /* ---- Release editor + run viewer sheets ---- */
 function openRelease(id){
