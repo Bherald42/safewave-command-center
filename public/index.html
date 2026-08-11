@@ -964,13 +964,17 @@ input[type=date]{color-scheme:dark}
     <input type="hidden" id="rel-id">
     <p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Product</p>
     <div class="rolepick" id="rel-product">
-      <button data-v="firmware" class="on">Band firmware</button><button data-v="app">Mobile app</button>
+      <button data-v="firmware" class="on" onclick="setTimeout(relDraftVis,0)">Band firmware</button><button data-v="app" onclick="setTimeout(relDraftVis,0)">Mobile app</button>
     </div>
     <div class="row" style="gap:8px;margin-top:12px">
       <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Version</p><input class="field" id="rel-version" placeholder="e.g. 1.4.0" style="margin:0"></div>
       <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Channel</p><select class="field" id="rel-channel" style="margin:0"><option value="dev">Dev</option><option value="beta">Beta</option><option value="prod">Production</option></select></div>
     </div>
-    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Release notes <span style="color:var(--faint);font-weight:400">(what changed)</span></p>
+    <div class="row" style="align-items:center;margin:12px 0 6px;gap:8px">
+      <p class="d" style="font-weight:600;color:var(--text);margin:0">Release notes <span style="color:var(--faint);font-weight:400">(what changed)</span></p>
+      <div class="grow"></div>
+      <button class="btn ghost" id="rel-draftbtn" style="width:auto;padding:5px 10px;font-size:12px;white-space:nowrap" onclick="draftReleaseNotesFromGitHub()">✨ Draft from GitHub</button>
+    </div>
     <textarea class="field" id="rel-notes" placeholder="• Fixed BLE reconnect after sleep&#10;• Stronger alert vibration profile&#10;• Battery reporting accuracy" style="min-height:96px;resize:vertical;font-family:var(--font-b)"></textarea>
     <button class="btn" style="margin-top:12px" onclick="saveRelease()">Save release</button>
     <button class="btn ghost" id="rel-del" onclick="deleteRelease()" style="margin-top:8px;display:none">Delete</button>
@@ -2460,8 +2464,14 @@ async function qcOtaFlashStart(){
   }
 }
 /* ---- Release editor + run viewer sheets ---- */
+/* Baseline firmware-repo HEAD sha captured when notes were last auto-drafted,
+   so the next release diffs from it. Set on draft, persisted on save. */
+let relDraftedSha=null;
+/* The "✨ Draft from GitHub" button only makes sense for firmware releases. */
+function relDraftVis(){const pb=document.querySelector('#rel-product button.on');const isFw=!pb||pb.dataset.v==='firmware';const b=document.getElementById('rel-draftbtn');if(b)b.style.display=isFw?'':'none';}
 function openRelease(id){
   const r=id?RELEASES[id]:null;
+  relDraftedSha=null;
   document.getElementById('rel-id').value=r?r.id:'';
   document.getElementById('rel-tag').textContent=r?'EDIT RELEASE':'NEW RELEASE';
   document.getElementById('rel-h').textContent=r?'Edit release':'New release';
@@ -2470,7 +2480,44 @@ function openRelease(id){
   document.getElementById('rel-channel').value=r?(r.channel||'dev'):'dev';
   document.getElementById('rel-notes').value=r?(r.notes||''):'';
   document.getElementById('rel-del').style.display=r?'block':'none';
+  relDraftVis();
   closeSheets();openSheet('sh-release');
+}
+/* Auto-populate firmware release notes from the firmware repo's commits since
+   the last release (backend: draftFirmwareNotes → GitHub + optional AI). */
+async function draftReleaseNotesFromGitHub(){
+  if(!canQC()){toast('Tech / leadership only');return}
+  const pb=document.querySelector('#rel-product button.on');const product=(pb&&pb.dataset&&pb.dataset.v)||'firmware';
+  if(product!=='firmware'){toast('GitHub notes are for firmware releases');return}
+  if(!hasFirestore()){toast('Runs on the live site (needs the backend)');return}
+  const version=(document.getElementById('rel-version').value||'').trim();
+  const editingId=document.getElementById('rel-id').value||'';
+  // Baseline = the newest OTHER firmware release that has a stored HEAD sha.
+  const prevRel=Object.values(RELEASES)
+    .filter(x=>x.product==='firmware'&&x.id!==editingId&&x.fwHeadSha)
+    .sort((a,b)=>(''+(b.createdAt||'')).localeCompare(''+(a.createdAt||'')))[0];
+  const sinceSha=prevRel?prevRel.fwHeadSha:null;
+  const btn=document.getElementById('rel-draftbtn');const old=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Drafting…';}
+  try{
+    const r=await firebase.functions().httpsCallable('draftFirmwareNotes')({version:version,sinceSha:sinceSha});
+    const d=(r&&r.data)||{};
+    if(d.notes&&d.notes.trim()){
+      const ta=document.getElementById('rel-notes');const has=(ta.value||'').trim();
+      if(!has||confirm('Replace the current notes with the GitHub draft ('+(d.commitCount||0)+' commit'+(d.commitCount===1?'':'s')+')?')){
+        ta.value=d.notes;
+        if(d.headSha)relDraftedSha=d.headSha;
+        toast('✓ Drafted from '+(d.commitCount||0)+' commit'+(d.commitCount===1?'':'s')+(d.ai?' · AI-summarized':'')+(d.range?(' · '+d.range):''));
+      }
+    }else{
+      if(d.headSha)relDraftedSha=d.headSha;
+      toast(d.message||'No new commits since the last release');
+    }
+  }catch(e){
+    const m=(e&&e.message)||'';
+    toast(/GITHUB_TOKEN|Connect GitHub/i.test(m)?'Add a GITHUB_TOKEN_FW secret to enable this':('Draft failed — '+m));
+  }
+  if(btn){btn.disabled=false;btn.textContent=old||'✨ Draft from GitHub';}
 }
 function saveRelease(){
   if(!canQC()){toast('Tech / leadership only');return}
@@ -2479,6 +2526,9 @@ function saveRelease(){
   const version=document.getElementById('rel-version').value.trim();if(!version){toast('Give it a version');return}
   const prev=RELEASES[id]||{};
   const r=Object.assign({},prev,{id:id,product:product,version:version,channel:document.getElementById('rel-channel').value,notes:document.getElementById('rel-notes').value.trim(),createdBy:prev.createdBy||((CURRENT_USER&&CURRENT_USER.name)||''),createdAt:prev.createdAt||new Date().toISOString(),status:prev.status||'draft'});
+  // Remember the firmware-repo HEAD the notes were drafted from, so the next
+  // firmware release can diff commits from here (GitHub compare API).
+  if(product==='firmware'){const sha=(relDraftedSha!=null?relDraftedSha:prev.fwHeadSha)||null;if(sha)r.fwHeadSha=sha;}
   RELEASES[id]=r;persistRelease(r);closeSheets();renderQC();toast('✓ '+(QC_PRODUCTS[product]||product)+' '+version+' saved');
 }
 function deleteRelease(){const id=document.getElementById('rel-id').value;const r=RELEASES[id];if(!r)return;
