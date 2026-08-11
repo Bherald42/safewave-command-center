@@ -2049,7 +2049,7 @@ let RELEASES={}, QCRUNS={}, SETTINGS_QC={}, qcUnsubR=null, qcUnsubRun=null, qcTa
 let qcBench={running:false,run:null,dev:null,tickTimer:null,alertTimer:null,connected:false,connectedMs:0,lastTickAt:0,t0:0,downSince:0,selRel:null};
 let qcSerial={port:null,reader:null,reading:false};
 let qcFwUploading=false, qcFwPickTarget=null;
-let qcOta={running:false,phase:'idle',pct:0,note:'',relId:null,dev:null,log:[]};
+let qcOta={running:false,phase:'idle',pct:0,note:'',relId:null,dev:null,log:[],curVer:null};
 function canQC(){const u=CURRENT_USER;if(!u)return false;const r=u.role;return r==='admin'||r==='manager'||r==='superadmin'||u.dept==='tech'||isOversight(u)}
 function subscribeQC(){
   if(!hasFirestore()||!canQC())return;
@@ -2371,11 +2371,16 @@ function otaU32(v){v>>>=0;return new Uint8Array([v&0xff,(v>>>8)&0xff,(v>>>16)&0x
 function otaCmd(opcode,payload){payload=payload||new Uint8Array(0);const b=new Uint8Array(3+payload.length);b[0]=opcode;b[1]=payload.length&0xff;b[2]=(payload.length>>8)&0xff;b.set(payload,3);return b;}
 function otaWriteDataPkt(baseAddr,data){const p=new Uint8Array(6+data.length);p.set(otaU32(baseAddr),0);p[4]=data.length&0xff;p[5]=(data.length>>8)&0xff;p.set(data,6);return otaCmd(OTA_CMD.WRITE_DATA,p);}
 function otaImageCrc(fw){const crcLen=Math.floor((fw.length-256)/256)*256;return otaCrc32(fw.subarray(256,256+crcLen));}
+/* The band reports its running firmware as APP_VERSION — a BCD-style hex literal
+   whose low nibbles read as M.m.pp (0x0001045 → 1.0.45), the same scheme the
+   app and the release manifest use. Show the dotted form plus the raw hex. */
+function otaFmtVer(raw){raw=raw>>>0;if(!raw)return null;const major=(raw>>>12)&0xF,minor=(raw>>>8)&0xF,patch=((raw>>>4)&0xF)*10+(raw&0xF);return major+'.'+minor+'.'+patch+' (0x'+raw.toString(16).toUpperCase().padStart(7,'0')+')';}
 function qcOtaCard(){
   const bleOK=(typeof navigator!=='undefined'&&navigator.bluetooth);
   const imgs=Object.values(RELEASES).filter(r=>r.product==='firmware'&&r.image&&r.image.url);
   if(qcOta.running){
     return '<div class="card" style="margin-top:12px;border-color:var(--wave)"><div class="row"><div class="grow"><div class="t">⚡ Flashing over Bluetooth…</div><div class="d" id="qc-ota-phase">'+esc(qcOta.note||qcOta.phase)+'</div></div><span class="d" id="qc-ota-pct" style="font-family:var(--font-m)">'+qcOta.pct+'%</span></div>'
+      +(qcOta.curVer?'<div class="d" style="margin-top:6px">Band currently on firmware <b>'+esc(qcOta.curVer)+'</b></div>':'')
       +'<div class="progress" style="height:8px;margin-top:10px"><i id="qc-ota-bar" style="width:'+qcOta.pct+'%"></i></div>'
       +'<div id="qc-ota-log" class="qc-log" style="margin-top:10px"></div>'
       +'<div class="note" style="margin-top:10px;border-color:var(--amber);color:var(--amber)">Do not close this tab or move the band out of range until it finishes.</div></div>';
@@ -2397,7 +2402,7 @@ async function qcOtaFlashStart(){
   if(!im||!im.url){toast('Pick a firmware image');return}
   if(!(typeof navigator!=='undefined'&&navigator.bluetooth)){toast('Web Bluetooth needs desktop Chrome/Edge');return}
   if(!confirm('Flash Firmware '+rel.version+' onto a band over Bluetooth?\n\nOnly do this on a spare band you can recover over JLink. The band keeps its current firmware if the flash fails, but this path is not yet hardware-verified.'))return;
-  qcOta={running:true,phase:'fetch',pct:0,note:'Downloading image…',relId:relId,dev:null,log:[]};renderQC();
+  qcOta={running:true,phase:'fetch',pct:0,note:'Downloading image…',relId:relId,dev:null,log:[],curVer:null};renderQC();
   let dev,server,wch,nch,pending=null;
   const onNotify=e=>{const v=new Uint8Array(e.target.value.buffer.slice(0));if(pending){const r=pending;pending=null;r.resolve(v);}};
   const send=(pkt,timeoutMs)=>new Promise(async(resolve,reject)=>{
@@ -2416,6 +2421,15 @@ async function qcOtaFlashStart(){
     const svc=await server.getPrimaryService(OTA_SVC);wch=await svc.getCharacteristic(OTA_WRITE);nch=await svc.getCharacteristic(OTA_NOTIFY);
     await nch.startNotifications();nch.addEventListener('characteristicvaluechanged',onNotify);
     qcOtaLog('OTA service open','good');
+    // 0) read the band's CURRENT firmware version so the operator can confirm
+    //    what they're flashing over (and see it change afterward). Non-fatal.
+    try{
+      const vr=ok(await send(otaCmd(OTA_CMD.READ_VER)));
+      const cur=(vr[4]|(vr[5]<<8)|(vr[6]<<16)|(vr[7]<<24))>>>0;
+      qcOta.curVer=otaFmtVer(cur);
+      if(qcOta.curVer){qcOtaLog('Band is currently running firmware '+qcOta.curVer,'good');qcOtaSetProgress(1,'Band on firmware '+qcOta.curVer+' — preparing…');}
+      else qcOtaLog('Band reported an unrecognized firmware version (0x'+cur.toString(16).toUpperCase()+')','amber');
+    }catch(e){qcOtaLog('Could not read current firmware version ('+((e&&e.message)||e)+') — continuing','amber');}
     // 1) storage base
     qcOtaSetProgress(1,'Reading flash base…');
     const baseRsp=ok(await send(otaCmd(OTA_CMD.GET_BASE,new Uint8Array([0,0,0,0]))));
@@ -2433,9 +2447,10 @@ async function qcOtaFlashStart(){
     qcOtaSetProgress(96,'Verifying CRC & rebooting…');
     const crc=otaImageCrc(fw);const rebootPl=new Uint8Array([...otaU32(fw.length),...otaU32(crc)]);
     let rebootRsp=null;try{rebootRsp=await send(otaCmd(OTA_CMD.REBOOT,rebootPl),12000);}catch(e){/* band may reset before replying */}
-    if(rebootRsp&&rebootRsp[0]===0){qcOta.phase='done';qcOta.note='✓ CRC verified — band is rebooting into Firmware '+rel.version+'.';qcOtaLog(qcOta.note,'good');qcOtaSetProgress(100,'Done');}
+    const fromTxt=qcOta.curVer?(' (was on '+qcOta.curVer+')'):'';
+    if(rebootRsp&&rebootRsp[0]===0){qcOta.phase='done';qcOta.note='✓ CRC verified — band is rebooting into Firmware '+rel.version+fromTxt+'.';qcOtaLog(qcOta.note,'good');qcOtaSetProgress(100,'Done');}
     else{qcOta.phase='done';qcOta.note='Image sent. Band did not confirm before rebooting — watch the serial monitor / app to confirm it came up on '+rel.version+'. If it stayed on the old version, the CRC check failed and nothing was changed.';qcOtaLog('No reboot confirmation (expected if the band reset immediately)','amber');qcOtaSetProgress(100,'Sent');}
-    try{rel.flashes=(rel.flashes||[]).concat([{at:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'',device:(dev&&dev.name)||'BLE band',result:'ota',via:'bluetooth-ota'}]).slice(-30);RELEASES[relId]=rel;persistRelease(rel);}catch(e){}
+    try{rel.flashes=(rel.flashes||[]).concat([{at:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'',device:(dev&&dev.name)||'BLE band',result:'ota',via:'bluetooth-ota',fromVersion:qcOta.curVer||null}]).slice(-30);RELEASES[relId]=rel;persistRelease(rel);}catch(e){}
   }catch(err){
     qcOta.phase='fail';qcOta.note='Flash aborted — '+((err&&err.message)||err)+'. The band keeps its current firmware.';qcOtaLog(qcOta.note,'amber');
   }finally{
