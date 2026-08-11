@@ -2515,7 +2515,7 @@ async function draftReleaseNotesFromGitHub(){
     }
   }catch(e){
     const m=(e&&e.message)||'';
-    toast(/GITHUB_TOKEN|Connect GitHub/i.test(m)?'Add a GITHUB_TOKEN_FW secret to enable this':('Draft failed — '+m));
+    toast(/FW_REPO_TOKEN|Connect GitHub/i.test(m)?'Add an FW_REPO_TOKEN secret to enable this':('Draft failed — '+m));
   }
   if(btn){btn.disabled=false;btn.textContent=old||'✨ Draft from GitHub';}
 }

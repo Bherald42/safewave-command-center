@@ -138,7 +138,7 @@ exports.askAgent = onCall({ region: REGION, timeoutSeconds: 120 }, async (reques
  * DRAFT FIRMWARE NOTES — auto-populate a firmware release's notes from
  * the firmware repo's commits since the last release.
  *
- * Reads commits from the firmware GitHub repo (GITHUB_TOKEN, read-only),
+ * Reads commits from the firmware GitHub repo (FW_REPO_TOKEN, read-only),
  * cleans the subjects, and — if ANTHROPIC_API_KEY is present — summarizes
  * them into short release notes; otherwise returns the cleaned bullet list.
  * Returns the repo HEAD sha so the client can store it on the release and
@@ -146,9 +146,9 @@ exports.askAgent = onCall({ region: REGION, timeoutSeconds: 120 }, async (reques
  * ------------------------------------------------------------------ */
 exports.draftFirmwareNotes = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to draft notes.");
-  const ghToken = process.env.GITHUB_TOKEN || "";
+  const ghToken = process.env.FW_REPO_TOKEN || "";
   if (!ghToken) throw new HttpsError("failed-precondition",
-    "Connect GitHub first — add a GITHUB_TOKEN repo secret (a token with read access to the firmware repo) and redeploy.");
+    "Connect GitHub first — add an FW_REPO_TOKEN repo secret (a token with read access to the firmware repo) and redeploy.");
 
   const { version, sinceSha } = request.data || {};
   const repo = (process.env.FW_REPO || "bherald42/safewave-band-firmware").replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
@@ -191,7 +191,7 @@ exports.draftFirmwareNotes = onCall({ region: REGION, timeoutSeconds: 120 }, asy
         const t = await lst.text();
         logger.error("draftFirmwareNotes github commits", lst.status, t.slice(0, 300));
         throw new HttpsError("internal",
-          "GitHub returned " + lst.status + " — check the GITHUB_TOKEN and that it can read " + repo + ".");
+          "GitHub returned " + lst.status + " — check the FW_REPO_TOKEN and that it can read " + repo + ".");
       }
       const arr = await lst.json();
       commits = (Array.isArray(arr) ? arr : []).map((c) => (c.commit && c.commit.message) || "");

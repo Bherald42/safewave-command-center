@@ -34,7 +34,7 @@ jobs:
           SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
           SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GITHUB_TOKEN_FW: ${{ secrets.GITHUB_TOKEN_FW }}
+          FW_REPO_TOKEN: ${{ secrets.FW_REPO_TOKEN }}
           FW_REPO: ${{ vars.FW_REPO }}
           FW_BRANCH: ${{ vars.FW_BRANCH }}
         run: |
@@ -49,10 +49,11 @@ jobs:
           if [ -n "$SHOPIFY_ADMIN_TOKEN" ]; then echo "SHOPIFY_ADMIN_TOKEN=$SHOPIFY_ADMIN_TOKEN" >> functions/.env; fi
           if [ -n "$ANTHROPIC_API_KEY" ]; then echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" >> functions/.env; fi
           # GitHub read token for auto-drafting firmware release notes. Named
-          # GITHUB_TOKEN_FW as a repo secret (Actions reserves GITHUB_TOKEN, and
-          # its auto-token can't read the separate firmware repo). FW_REPO /
-          # FW_BRANCH are optional repo *variables* to point at a different repo.
-          if [ -n "$GITHUB_TOKEN_FW" ]; then echo "GITHUB_TOKEN=$GITHUB_TOKEN_FW" >> functions/.env; fi
+          # FW_REPO_TOKEN as a repo secret — GitHub forbids secret names starting
+          # with GITHUB_, and the built-in GITHUB_TOKEN can't read the separate
+          # firmware repo anyway. FW_REPO / FW_BRANCH are optional repo
+          # *variables* to point at a different repo/branch.
+          if [ -n "$FW_REPO_TOKEN" ]; then echo "FW_REPO_TOKEN=$FW_REPO_TOKEN" >> functions/.env; fi
           if [ -n "$FW_REPO" ]; then echo "FW_REPO=$FW_REPO" >> functions/.env; fi
           if [ -n "$FW_BRANCH" ]; then echo "FW_BRANCH=$FW_BRANCH" >> functions/.env; fi
           firebase deploy --only functions --project safewave-command-center --non-interactive --force
