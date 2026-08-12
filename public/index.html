@@ -2448,8 +2448,14 @@ async function qcOtaFlashStart(){
   try{
     const buf=await qcLoadImageBytes(im.url);
     let fw=buf;if(fw.length%256){const pad=new Uint8Array(Math.ceil(fw.length/256)*256);pad.fill(0xFF);pad.set(fw);fw=pad;qcOtaLog('Padded image '+buf.length+' → '+fw.length+' bytes (256-align)');}
-    qcOtaSetProgress(0,'Select your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
-    dev=await navigator.bluetooth.requestDevice({filters:[{services:[OTA_SVC]},{namePrefix:'Safewave'}],optionalServices:[OTA_SVC]});
+    qcOtaSetProgress(0,'Pick “Safewave Band” in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
+    // Show ALL nearby Bluetooth devices and let the operator pick the band.
+    // The band does NOT advertise its 128-bit OTA service (02F0…) and its name
+    // ("Safewave Band") lives only in the scan response, which Windows/Edge often
+    // won't surface to a namePrefix filter — so a filtered chooser shows "No
+    // compatible devices found." acceptAllDevices lists it (as "Safewave Band")
+    // regardless; optionalServices lets us reach the OTA service after connecting.
+    dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:[OTA_SVC]});
     qcOta.dev=dev;dev.addEventListener('gattserverdisconnected',()=>qcOtaLog('band disconnected','amber'));
     qcOtaLog('Connecting to '+(dev.name||'band')+'…');server=await dev.gatt.connect();
     const svc=await server.getPrimaryService(OTA_SVC);wch=await svc.getCharacteristic(OTA_WRITE);nch=await svc.getCharacteristic(OTA_NOTIFY);
