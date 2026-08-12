@@ -2448,6 +2448,7 @@ async function qcOtaFlashStart(){
   try{
     const buf=await qcLoadImageBytes(im.url);
     let fw=buf;if(fw.length%256){const pad=new Uint8Array(Math.ceil(fw.length/256)*256);pad.fill(0xFF);pad.set(fw);fw=pad;qcOtaLog('Padded image '+buf.length+' → '+fw.length+' bytes (256-align)');}
+    qcOtaLog('Flasher build 2026-08-12c (graduated GATT recovery)');
     qcOtaSetProgress(0,'Pick your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
     // Find the band the SAME way the mobile app does — by an advertised SERVICE,
     // not by name. The band's name ("Safewave Band") lives only in the scan
@@ -2458,36 +2459,40 @@ async function qcOtaFlashStart(){
     const BAND_SVC='0000fffe-0000-1000-8000-00805f9b34fb';
     dev=await navigator.bluetooth.requestDevice({filters:[{services:[BAND_SVC]},{namePrefix:'Safewave'}],optionalServices:[OTA_SVC,BAND_SVC]});
     qcOta.dev=dev;dev.addEventListener('gattserverdisconnected',()=>qcOtaLog('band disconnected','amber'));
-    // A half-open link left by a previous attempt causes "GATT operation already
-    // in progress". Start clean: drop any existing connection, settle, reconnect.
     const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+    // A half-open link left by a previous attempt causes "GATT operation already
+    // in progress". Start clean: drop any existing connection and settle.
     if(dev.gatt.connected){try{dev.gatt.disconnect()}catch(e){}await sleep(800);}
-    qcOtaLog('Connecting to '+(dev.name||'band')+'…');server=await dev.gatt.connect();
-    await sleep(500); // let Windows/Chromium finish internal service discovery
-    // Discover the OTA service + characteristics and subscribe to notifications.
-    // On Windows/Chromium this often throws "GATT operation already in progress"
-    // right after connect — a stuck operation that will NOT clear by retrying on
-    // the same link. The only reliable recovery is to fully drop the connection
-    // (which resets the OS-level GATT operation queue) and reconnect. But a
-    // reconnect invalidates every service/characteristic handle, so the WHOLE
-    // discovery has to restart from getPrimaryService — hence one retry loop
-    // around the entire sequence rather than per-call.
+    // "GATT operation already in progress" on Windows has TWO opposite causes and
+    // needs opposite remedies:
+    //   (a) Chromium is still finishing its OWN service discovery right after
+    //       connect() — the fix is to WAIT and retry on the same link.
+    //       Disconnecting here would just restart that race (fails every time).
+    //   (b) A genuinely jammed op from a prior attempt — the fix is to fully
+    //       disconnect (resets the OS GATT queue) and reconnect.
+    // So: connect + discover inside one loop; wait-and-retry on early passes,
+    // escalate to a full link reset only if waiting doesn't clear it.
     const discover=async()=>{
+      if(!dev.gatt.connected){qcOtaLog('Connecting to '+(dev.name||'band')+'…');server=await dev.gatt.connect();await sleep(700);}
       const svc=await server.getPrimaryService(OTA_SVC);
       wch=await svc.getCharacteristic(OTA_WRITE);
       nch=await svc.getCharacteristic(OTA_NOTIFY);
       await nch.startNotifications();
     };
     let ready=false,lastErr=null;
-    for(let a=0;a<6&&!ready;a++){
+    for(let a=0;a<7&&!ready;a++){
       try{await discover();ready=true;}
       catch(e){
         lastErr=e;const m=(e&&e.message)||'';
         if(!/in progress|GATT|disconnect|not ready|No Services|network|already|no longer valid|invalid/i.test(m))throw e;
-        qcOtaLog('Bluetooth busy — resetting the link and retrying ('+(a+1)+'/6)…','amber');
-        try{if(dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
-        await sleep(900+a*400); // longer each pass, to let Windows fully release the link
-        try{server=await dev.gatt.connect();await sleep(700);}catch(_){await sleep(700);}
+        if(a<3){
+          qcOtaLog('Bluetooth still settling — retrying ('+(a+1)+'/7)…','amber');
+          await sleep(800+a*600); // let Chromium finish its own service discovery
+        }else{
+          qcOtaLog('Resetting the Bluetooth link ('+(a+1)+'/7)…','amber');
+          try{if(dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
+          await sleep(1400); // let Windows fully release the link before reconnecting
+        }
       }
     }
     if(!ready)throw (lastErr||new Error('could not open the OTA service'));
