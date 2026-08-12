@@ -2439,16 +2439,35 @@ async function qcOtaFlashStart(){
   qcOta={running:true,phase:'fetch',pct:0,note:'Downloading image…',relId:relId,dev:null,log:[],curVer:null};renderQC();
   let dev,server,wch,nch,pending=null;
   const onNotify=e=>{const v=new Uint8Array(e.target.value.buffer.slice(0));if(pending){const r=pending;pending=null;r.resolve(v);}};
-  const send=(pkt,timeoutMs)=>new Promise(async(resolve,reject)=>{
-    let to=setTimeout(()=>{if(pending){pending=null;reject(new Error('timeout'))}},timeoutMs||6000);
-    pending={resolve:v=>{clearTimeout(to);resolve(v)},reject};
-    try{await wch.writeValueWithResponse(pkt);}catch(err){clearTimeout(to);pending=null;reject(err);}
+  const napms=ms=>new Promise(r=>setTimeout(r,ms));
+  // Windows/Chromium serializes GATT strictly: a write issued before the previous
+  // operation has fully settled is rejected with "GATT operation already in
+  // progress" — even though the earlier write succeeded (the band buzzes on the
+  // very first OTA write, confirming the link is fine). That rejection means the
+  // NEW write never executed, so retrying after a short pause is safe — no double
+  // send. Retry only these transient serialization errors; rethrow anything else.
+  const gattWrite=async(pkt)=>{
+    let last;
+    for(let a=0;a<6;a++){
+      try{return await wch.writeValueWithResponse(pkt);}
+      catch(e){last=e;const m=(e&&e.message)||'';
+        if(!/in progress|GATT operation|congest|not ready|network|busy/i.test(m))throw e;
+        await napms(120+a*180);
+      }
+    }
+    throw last;
+  };
+  const send=(pkt,timeoutMs)=>new Promise((resolve,reject)=>{
+    let done=false;
+    let to=setTimeout(()=>{if(!done){done=true;pending=null;reject(new Error('timeout'))}},timeoutMs||6000);
+    pending={resolve:v=>{if(done)return;done=true;clearTimeout(to);resolve(v)},reject:e=>{if(done)return;done=true;clearTimeout(to);reject(e)}};
+    gattWrite(pkt).catch(err=>{if(!done){done=true;clearTimeout(to);pending=null;reject(err);}});
   });
   const ok=rsp=>{if(!rsp||rsp[0]!==0)throw new Error('band returned error (result='+(rsp?rsp[0]:'?')+')');return rsp;};
   try{
     const buf=await qcLoadImageBytes(im.url);
     let fw=buf;if(fw.length%256){const pad=new Uint8Array(Math.ceil(fw.length/256)*256);pad.fill(0xFF);pad.set(fw);fw=pad;qcOtaLog('Padded image '+buf.length+' → '+fw.length+' bytes (256-align)');}
-    qcOtaLog('Flasher build 2026-08-12c (graduated GATT recovery)');
+    qcOtaLog('Flasher build 2026-08-12d (GATT write retry)');
     qcOtaSetProgress(0,'Pick your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
     // Find the band the SAME way the mobile app does — by an advertised SERVICE,
     // not by name. The band's name ("Safewave Band") lives only in the scan
@@ -2497,6 +2516,7 @@ async function qcOtaFlashStart(){
     }
     if(!ready)throw (lastErr||new Error('could not open the OTA service'));
     nch.addEventListener('characteristicvaluechanged',onNotify);
+    await napms(400); // let the notification subscription (CCCD write) fully settle before the first command
     qcOtaLog('OTA service open','good');
     // 0) read the band's CURRENT firmware version so the operator can confirm
     //    what they're flashing over (and see it change afterward). Non-fatal.
