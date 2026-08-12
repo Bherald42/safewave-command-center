@@ -2484,7 +2484,7 @@ async function qcOtaFlashStart(){
   try{
     const buf=await qcLoadImageBytes(im.url);
     let fw=buf;if(fw.length%256){const pad=new Uint8Array(Math.ceil(fw.length/256)*256);pad.fill(0xFF);pad.set(fw);fw=pad;qcOtaLog('Padded image '+buf.length+' → '+fw.length+' bytes (256-align)');}
-    qcOtaLog('Flasher build 2026-08-12e (auto-resume on link drop)');
+    qcOtaLog('Flasher build 2026-08-12f (fast write-without-response, like the app)');
     qcOtaSetProgress(0,'Pick your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
     // Find the band the SAME way the mobile app does — by an advertised SERVICE,
     // not by name. The band's name ("Safewave Band") lives only in the scan
@@ -2550,32 +2550,53 @@ async function qcOtaFlashStart(){
     const pages=Math.ceil(fw.length/0x1000);
     for(let i=0;i<pages;i++){ok(await send(otaCmd(OTA_CMD.PAGE_ERASE,otaU32((base+i*0x1000)>>>0)),9000));qcOtaSetProgress(1+(i+1)/pages*14,'Erasing '+(i+1)+'/'+pages+' pages…');}
     qcOtaLog('Erase complete ('+pages+' × 4KB)','good');
-    // 3) write — with auto-resume. The band drops the link partway through a large
-    //    image (supervision/OTA timeout on the firmware side, and Windows BLE is
-    //    slow). Flash is non-volatile and each packet carries its absolute address,
-    //    so on a drop we reconnect and continue from the same offset — the pages
-    //    already written stay written, and the final CRC covers the whole image.
-    //    Rewriting one chunk is harmless (identical bytes to an already-erased page).
-    const CHUNK=(SETTINGS_QC.otaChunk&&SETTINGS_QC.otaChunk>=16)?SETTINGS_QC.otaChunk:128;let off=0,resumes=0;
-    while(off<fw.length){
-      const n=Math.min(CHUNK,fw.length-off);
-      try{
-        ok(await send(otaWriteDataPkt((base+off)>>>0,fw.subarray(off,off+n))));
-        off+=n;qcOtaSetProgress(15+off/fw.length*80,'Writing '+Math.round(off/1024)+'/'+Math.round(fw.length/1024)+' KB…');
-      }catch(e){
+    // 3) write — match the mobile app, which flashes this band reliably. Two things
+    //    make it work where a naive loop fails:
+    //    • WriteWithoutResponse, fired back-to-back with NO per-packet notify wait.
+    //      WriteWithResponse waits a full round-trip per 128 bytes (~0.7 KB/s on
+    //      Windows) — far too slow to finish 193 KB before the band's ~20 s OTA /
+    //      supervision window closes, so the band drops the link mid-write.
+    //    • The band's firmware requires a CONTINUOUS write from the base address
+    //      (it rejects any out-of-sequence write with no response), so we cannot
+    //      resume mid-stream — on a drop we reconnect, re-arm the base, and restart
+    //      the image from 0. Rewriting already-erased pages with identical bytes is
+    //      harmless, and the band verifies a full-image CRC at reboot, so a dropped
+    //      or reordered packet just fails the CRC safely (band keeps old firmware).
+    if(typeof wch.writeValueWithoutResponse!=='function')throw new Error('this browser lacks write-without-response — update Chrome/Edge, or flash from the mobile app');
+    const CHUNK=(SETTINGS_QC.otaChunk&&SETTINGS_QC.otaChunk>=16)?SETTINGS_QC.otaChunk:180;
+    const writeAll=async()=>{
+      let off=0,lastShown=-1;
+      while(off<fw.length){
+        const n=Math.min(CHUNK,fw.length-off);
+        await wch.writeValueWithoutResponse(otaWriteDataPkt((base+off)>>>0,fw.subarray(off,off+n)));
+        off+=n;
+        const kb=Math.round(off/1024);
+        if(kb!==lastShown){lastShown=kb;qcOtaSetProgress(15+off/fw.length*80,'Writing '+kb+'/'+Math.round(fw.length/1024)+' KB…');}
+      }
+    };
+    let attempt=0;
+    while(true){
+      const t0=Date.now();
+      try{await writeAll();break;}
+      catch(e){
         const m=(e&&e.message)||'';
-        if(!/disconnect|GATT Server|network|in progress|not ready|timeout/i.test(m))throw e;
-        if(++resumes>40)throw new Error('too many reconnects ('+resumes+') at '+Math.round(off/1024)+' KB — the band keeps dropping the link; move it right next to the laptop and retry');
-        qcOtaLog('Link dropped at '+Math.round(off/1024)+'/'+Math.round(fw.length/1024)+' KB — reconnecting to resume…','amber');
-        qcOtaSetProgress(15+off/fw.length*80,'Reconnecting to resume at '+Math.round(off/1024)+' KB…');
+        if(!/disconnect|GATT|network|in progress|not ready|timeout/i.test(m))throw e;
+        if(++attempt>4)throw new Error('the band dropped the link '+attempt+' times before the '+Math.round(fw.length/1024)+' KB image finished. Windows Web Bluetooth is too slow to beat this band’s ~20 s OTA window — flash from the mobile app instead (it negotiates a 512-byte MTU and completes in one pass)');
+        qcOtaLog('Link dropped after '+((Date.now()-t0)/1000).toFixed(0)+'s — reconnecting and restarting the image (attempt '+attempt+'/4)…','amber');
+        qcOtaSetProgress(15,'Reconnecting to restart the write…');
         try{if(dev.gatt&&dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
-        await sleep(1000);
+        await sleep(1200);
         await openOta('Reconnecting'); // throws if it truly can't get back
-        qcOtaLog('Resumed at '+Math.round(off/1024)+' KB (reconnect #'+resumes+')','good');
-        // loop retries the SAME offset on the fresh link
+        // Re-arm the band's sequential write pointer to the base (its OTA state
+        // resets on disconnect). Pages stay erased, so no need to erase again.
+        ok(await send(otaCmd(OTA_CMD.GET_BASE,new Uint8Array([0,0,0,0])),8000));
+        qcOtaLog('Reconnected — restarting the image from the beginning','good');
       }
     }
-    qcOtaLog('Image written ('+Math.round(fw.length/1024)+' KB'+(resumes?', '+resumes+' reconnect'+(resumes>1?'s':''):'')+')','good');
+    qcOtaLog('Image written ('+Math.round(fw.length/1024)+' KB'+(attempt?', '+attempt+' restart'+(attempt>1?'s':''):'')+')','good');
+    // Give the band a beat to finish flushing the last packets to flash before we
+    // ask it to CRC the whole image and reboot.
+    await sleep(600);
     // 4) reboot + CRC
     qcOtaSetProgress(96,'Verifying CRC & rebooting…');
     const crc=otaImageCrc(fw);const rebootPl=new Uint8Array([...otaU32(fw.length),...otaU32(crc)]);
