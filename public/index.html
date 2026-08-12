@@ -2151,17 +2151,29 @@ async function qcOnFirmwareFile(input){
   const f=input.files&&input.files[0];if(!f)return;const id=qcFwPickTarget;const r=RELEASES[id];if(!r){toast('Release not found');return}
   if(!hasFirestore()){toast('Firmware upload runs on the live site');return}
   if(f.size>16*1024*1024){toast('That file is over 16 MB');return}
-  if(!(typeof firebase!=='undefined'&&firebase.storage)){toast('Enable Firebase Storage first (Firebase console → Storage)');return}
   qcFwUploading=true;renderQC();toast('Uploading '+f.name+'…');
   try{
     const buf=await f.arrayBuffer();
     let sha='';try{const h=await crypto.subtle.digest('SHA-256',buf);sha=Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('')}catch(e){}
-    const clean=(f.name||'firmware.bin').replace(/[^\w.\-]/g,'_');
-    const ref=firebase.storage().ref('firmware/'+id+'/'+Date.now()+'_'+clean);
-    await ref.put(new Blob([buf]));const url=await ref.getDownloadURL();
-    r.image={name:f.name||'firmware.bin',url:url,size:f.size,sha256:sha,uploadedBy:(CURRENT_USER&&CURRENT_USER.name)||'',uploadedAt:new Date().toISOString()};
+    // A firmware .bin is small (~128 KB), so store it INLINE as a base64 data URL
+    // in the release doc — no Firebase Storage needed, nothing to enable, and the
+    // Bluetooth flasher / Download link read the data URL directly. Only a large
+    // app bundle (> INLINE_MAX) falls back to Storage, which must be enabled and
+    // now fails fast (~1 min) instead of retrying a missing bucket for 10 minutes.
+    const INLINE_MAX=600*1024; let url, storedIn;
+    if(f.size<=INLINE_MAX){
+      url=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=()=>rej(fr.error||new Error('file read failed'));fr.readAsDataURL(f);});
+      storedIn='inline';
+    }else{
+      if(!(typeof firebase!=='undefined'&&firebase.storage))throw new Error('needs-storage');
+      const st=firebase.storage();try{st.setMaxUploadRetryTime(60000)}catch(e){}
+      const clean=(f.name||'firmware.bin').replace(/[^\w.\-]/g,'_');
+      const ref=st.ref('firmware/'+id+'/'+Date.now()+'_'+clean);
+      await ref.put(new Blob([buf]));url=await ref.getDownloadURL();storedIn='storage';
+    }
+    r.image={name:f.name||'firmware.bin',url:url,size:f.size,sha256:sha,uploadedBy:(CURRENT_USER&&CURRENT_USER.name)||'',uploadedAt:new Date().toISOString(),storedIn:storedIn};
     RELEASES[id]=r;persistRelease(r);toast('✓ Firmware image uploaded');
-  }catch(e){const m=(e&&e.message)||'';toast(/storage|Storage|unauthorized|permission/i.test(m)?'Enable Firebase Storage first (Firebase console → Storage)':'Upload failed — '+m)}
+  }catch(e){const m=(e&&e.message)||'';toast(/needs-storage/.test(m)?'That file is over 600 KB — enable Firebase Storage in the console, or upload a firmware .bin (~128 KB, no setup needed).':(/storage|unauthorized|permission/i.test(m)?'Storage upload failed — enable Firebase Storage in the console, or use a .bin under 600 KB.':'Upload failed — '+((e&&e.message)||e)))}
   qcFwUploading=false;renderQC();
 }
 function qcRunRow(run){
