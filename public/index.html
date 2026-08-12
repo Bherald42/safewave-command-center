@@ -2464,13 +2464,34 @@ async function qcOtaFlashStart(){
     if(dev.gatt.connected){try{dev.gatt.disconnect()}catch(e){}await sleep(800);}
     qcOtaLog('Connecting to '+(dev.name||'band')+'…');server=await dev.gatt.connect();
     await sleep(500); // let Windows/Chromium finish internal service discovery
-    // Retry the discovery + subscribe on transient GATT errors ("already in
-    // progress", not-ready, brief disconnects) — common on Windows right after connect.
-    const gattTry=async(fn,label)=>{let last;for(let a=0;a<5;a++){try{return await fn();}catch(e){last=e;const m=(e&&e.message)||'';if(!/in progress|GATT operation|disconnected|not ready|No Services|network/i.test(m))throw e;qcOtaLog('retry '+label+'…','amber');await sleep(600);if(!dev.gatt.connected){try{server=await dev.gatt.connect();await sleep(300);}catch(_){}}}}throw last;};
-    const svc=await gattTry(()=>server.getPrimaryService(OTA_SVC),'OTA service');
-    wch=await gattTry(()=>svc.getCharacteristic(OTA_WRITE),'write characteristic');
-    nch=await gattTry(()=>svc.getCharacteristic(OTA_NOTIFY),'notify characteristic');
-    await gattTry(()=>nch.startNotifications(),'notifications');nch.addEventListener('characteristicvaluechanged',onNotify);
+    // Discover the OTA service + characteristics and subscribe to notifications.
+    // On Windows/Chromium this often throws "GATT operation already in progress"
+    // right after connect — a stuck operation that will NOT clear by retrying on
+    // the same link. The only reliable recovery is to fully drop the connection
+    // (which resets the OS-level GATT operation queue) and reconnect. But a
+    // reconnect invalidates every service/characteristic handle, so the WHOLE
+    // discovery has to restart from getPrimaryService — hence one retry loop
+    // around the entire sequence rather than per-call.
+    const discover=async()=>{
+      const svc=await server.getPrimaryService(OTA_SVC);
+      wch=await svc.getCharacteristic(OTA_WRITE);
+      nch=await svc.getCharacteristic(OTA_NOTIFY);
+      await nch.startNotifications();
+    };
+    let ready=false,lastErr=null;
+    for(let a=0;a<6&&!ready;a++){
+      try{await discover();ready=true;}
+      catch(e){
+        lastErr=e;const m=(e&&e.message)||'';
+        if(!/in progress|GATT|disconnect|not ready|No Services|network|already|no longer valid|invalid/i.test(m))throw e;
+        qcOtaLog('Bluetooth busy — resetting the link and retrying ('+(a+1)+'/6)…','amber');
+        try{if(dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
+        await sleep(900+a*400); // longer each pass, to let Windows fully release the link
+        try{server=await dev.gatt.connect();await sleep(700);}catch(_){await sleep(700);}
+      }
+    }
+    if(!ready)throw (lastErr||new Error('could not open the OTA service'));
+    nch.addEventListener('characteristicvaluechanged',onNotify);
     qcOtaLog('OTA service open','good');
     // 0) read the band's CURRENT firmware version so the operator can confirm
     //    what they're flashing over (and see it change afterward). Non-fatal.
