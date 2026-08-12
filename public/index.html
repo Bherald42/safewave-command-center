@@ -2458,9 +2458,19 @@ async function qcOtaFlashStart(){
     const BAND_SVC='0000fffe-0000-1000-8000-00805f9b34fb';
     dev=await navigator.bluetooth.requestDevice({filters:[{services:[BAND_SVC]},{namePrefix:'Safewave'}],optionalServices:[OTA_SVC,BAND_SVC]});
     qcOta.dev=dev;dev.addEventListener('gattserverdisconnected',()=>qcOtaLog('band disconnected','amber'));
+    // A half-open link left by a previous attempt causes "GATT operation already
+    // in progress". Start clean: drop any existing connection, settle, reconnect.
+    const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+    if(dev.gatt.connected){try{dev.gatt.disconnect()}catch(e){}await sleep(800);}
     qcOtaLog('Connecting to '+(dev.name||'band')+'…');server=await dev.gatt.connect();
-    const svc=await server.getPrimaryService(OTA_SVC);wch=await svc.getCharacteristic(OTA_WRITE);nch=await svc.getCharacteristic(OTA_NOTIFY);
-    await nch.startNotifications();nch.addEventListener('characteristicvaluechanged',onNotify);
+    await sleep(500); // let Windows/Chromium finish internal service discovery
+    // Retry the discovery + subscribe on transient GATT errors ("already in
+    // progress", not-ready, brief disconnects) — common on Windows right after connect.
+    const gattTry=async(fn,label)=>{let last;for(let a=0;a<5;a++){try{return await fn();}catch(e){last=e;const m=(e&&e.message)||'';if(!/in progress|GATT operation|disconnected|not ready|No Services|network/i.test(m))throw e;qcOtaLog('retry '+label+'…','amber');await sleep(600);if(!dev.gatt.connected){try{server=await dev.gatt.connect();await sleep(300);}catch(_){}}}}throw last;};
+    const svc=await gattTry(()=>server.getPrimaryService(OTA_SVC),'OTA service');
+    wch=await gattTry(()=>svc.getCharacteristic(OTA_WRITE),'write characteristic');
+    nch=await gattTry(()=>svc.getCharacteristic(OTA_NOTIFY),'notify characteristic');
+    await gattTry(()=>nch.startNotifications(),'notifications');nch.addEventListener('characteristicvaluechanged',onNotify);
     qcOtaLog('OTA service open','good');
     // 0) read the band's CURRENT firmware version so the operator can confirm
     //    what they're flashing over (and see it change afterward). Non-fatal.
