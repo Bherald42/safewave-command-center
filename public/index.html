@@ -2416,7 +2416,8 @@ function qcOtaCard(){
     return '<div class="card" style="margin-top:12px;border-color:var(--wave)"><div class="row"><div class="grow"><div class="t">⚡ Flashing over Bluetooth…</div><div class="d" id="qc-ota-phase">'+esc(qcOta.note||qcOta.phase)+'</div></div><span class="d" id="qc-ota-pct" style="font-family:var(--font-m)">'+qcOta.pct+'%</span></div>'
       +(qcOta.curVer?'<div class="d" style="margin-top:6px">Band currently on firmware <b>'+esc(qcOta.curVer)+'</b></div>':'')
       +'<div class="progress" style="height:8px;margin-top:10px"><i id="qc-ota-bar" style="width:'+qcOta.pct+'%"></i></div>'
-      +'<div id="qc-ota-log" class="qc-log" style="margin-top:10px"></div>'
+      +'<div class="row" style="margin-top:10px;align-items:center"><span class="grow"></span><button class="btn" style="padding:3px 10px;font-size:12px" onclick="qcOtaSaveLog()">Save log</button></div>'
+      +'<div id="qc-ota-log" class="qc-log" style="margin-top:6px">'+qcOtaLogHTML()+'</div>'
       +'<div class="note" style="margin-top:10px;border-color:var(--amber);color:var(--amber)">Do not close this tab or move the band out of range until it finishes.</div></div>';
   }
   const opts=imgs.map(r=>'<option value="'+esc(r.id)+'">'+esc('Firmware '+r.version+' ('+((QC_CHAN[r.channel]||{}).label||r.channel)+') · '+qcFwKB(r.image.size))+'</option>').join('');
@@ -2426,9 +2427,25 @@ function qcOtaCard(){
         :'<div class="d" style="color:var(--faint)">Upload a firmware <code>.bin</code> to a release first (Releases tab).</div>')
     +'<button class="btn" style="margin-top:6px"'+((bleOK&&imgs.length)?'':' disabled')+' onclick="qcOtaFlashStart()">'+(bleOK?'Connect band &amp; flash':'Web Bluetooth needs desktop Chrome/Edge')+'</button>'
     +(qcOta.phase==='done'||qcOta.phase==='fail'?'<div class="d" style="margin-top:8px;color:var(--'+(qcOta.phase==='done'?'good':'amber')+')">'+esc(qcOta.note)+'</div>':'')
+    +((qcOta.phase==='done'||qcOta.phase==='fail')&&qcOta.log&&qcOta.log.length?'<div class="row" style="margin-top:12px;align-items:center"><p class="d" style="font-weight:600;color:var(--text);margin:0">Flash log <span class="d" style="font-weight:400;color:var(--faint)">— from the last run, cleared when you flash again</span></p><span class="grow"></span><button class="btn" style="padding:3px 10px;font-size:12px" onclick="qcOtaSaveLog()">Save log</button></div><div id="qc-ota-log" class="qc-log" style="margin-top:6px">'+qcOtaLogHTML()+'</div>':'')
     +'</div>';
 }
-function qcOtaLog(msg,cls){qcOta.log.push({msg:msg,cls:cls||''});const box=document.getElementById('qc-ota-log');if(box){const t=new Date().toLocaleTimeString('en-US',{hour12:false});const d=document.createElement('div');d.className='ln';d.innerHTML='<span class="ts">'+t+'</span><span class="msg"'+(cls?' style="color:var(--'+cls+')"':'')+'>'+esc(msg)+'</span>';box.appendChild(d);while(box.childElementCount>400)box.removeChild(box.firstChild);box.scrollTop=box.scrollHeight;}}
+function qcOtaLog(msg,cls){const t=new Date().toLocaleTimeString('en-US',{hour12:false});qcOta.log.push({msg:msg,cls:cls||'',at:t});const box=document.getElementById('qc-ota-log');if(box){const d=document.createElement('div');d.className='ln';d.innerHTML='<span class="ts">'+t+'</span><span class="msg"'+(cls?' style="color:var(--'+cls+')"':'')+'>'+esc(msg)+'</span>';box.appendChild(d);while(box.childElementCount>400)box.removeChild(box.firstChild);box.scrollTop=box.scrollHeight;}}
+/* Rebuild the log box contents from qcOta.log, so the log survives a re-render
+   (e.g. after the flash ends) instead of vanishing when running goes false. */
+function qcOtaLogHTML(){return (qcOta.log||[]).map(function(e){return '<div class="ln"><span class="ts">'+esc(e.at||'')+'</span><span class="msg"'+(e.cls?' style="color:var(--'+e.cls+')"':'')+'>'+esc(e.msg)+'</span></div>';}).join('');}
+/* Download the current flash log as a .txt so it can be reviewed/shared before
+   the next flash resets it. */
+function qcOtaSaveLog(){
+  try{
+    if(!qcOta.log||!qcOta.log.length){toast('No log to save yet');return;}
+    const head='Safewave OTA flash log — '+new Date().toLocaleString();
+    const body=head+'\n'+'='.repeat(head.length)+'\n'+qcOta.log.map(function(e){return (e.at?e.at+'  ':'')+e.msg;}).join('\n')+'\n';
+    const blob=new Blob([body],{type:'text/plain'});const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='safewave-flash-log-'+new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)+'.txt';
+    document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1000);
+  }catch(e){toast('Could not save log: '+((e&&e.message)||e));}
+}
 function qcOtaSetProgress(pct,note){qcOta.pct=Math.max(0,Math.min(100,Math.round(pct)));if(note)qcOta.note=note;const b=document.getElementById('qc-ota-bar');if(b)b.style.width=qcOta.pct+'%';const p=document.getElementById('qc-ota-pct');if(p)p.textContent=qcOta.pct+'%';const ph=document.getElementById('qc-ota-phase');if(ph&&note)ph.textContent=note;}
 async function qcOtaFlashStart(){
   if(qcOta.running)return;
@@ -2467,7 +2484,7 @@ async function qcOtaFlashStart(){
   try{
     const buf=await qcLoadImageBytes(im.url);
     let fw=buf;if(fw.length%256){const pad=new Uint8Array(Math.ceil(fw.length/256)*256);pad.fill(0xFF);pad.set(fw);fw=pad;qcOtaLog('Padded image '+buf.length+' → '+fw.length+' bytes (256-align)');}
-    qcOtaLog('Flasher build 2026-08-12d (GATT write retry)');
+    qcOtaLog('Flasher build 2026-08-12e (auto-resume on link drop)');
     qcOtaSetProgress(0,'Pick your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
     // Find the band the SAME way the mobile app does — by an advertised SERVICE,
     // not by name. The band's name ("Safewave Band") lives only in the scan
@@ -2479,44 +2496,41 @@ async function qcOtaFlashStart(){
     dev=await navigator.bluetooth.requestDevice({filters:[{services:[BAND_SVC]},{namePrefix:'Safewave'}],optionalServices:[OTA_SVC,BAND_SVC]});
     qcOta.dev=dev;dev.addEventListener('gattserverdisconnected',()=>qcOtaLog('band disconnected','amber'));
     const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-    // A half-open link left by a previous attempt causes "GATT operation already
-    // in progress". Start clean: drop any existing connection and settle.
-    if(dev.gatt.connected){try{dev.gatt.disconnect()}catch(e){}await sleep(800);}
-    // "GATT operation already in progress" on Windows has TWO opposite causes and
-    // needs opposite remedies:
-    //   (a) Chromium is still finishing its OWN service discovery right after
-    //       connect() — the fix is to WAIT and retry on the same link.
-    //       Disconnecting here would just restart that race (fails every time).
-    //   (b) A genuinely jammed op from a prior attempt — the fix is to fully
-    //       disconnect (resets the OS GATT queue) and reconnect.
-    // So: connect + discover inside one loop; wait-and-retry on early passes,
-    // escalate to a full link reset only if waiting doesn't clear it.
-    const discover=async()=>{
-      if(!dev.gatt.connected){qcOtaLog('Connecting to '+(dev.name||'band')+'…');server=await dev.gatt.connect();await sleep(700);}
-      const svc=await server.getPrimaryService(OTA_SVC);
-      wch=await svc.getCharacteristic(OTA_WRITE);
-      nch=await svc.getCharacteristic(OTA_NOTIFY);
-      await nch.startNotifications();
-    };
-    let ready=false,lastErr=null;
-    for(let a=0;a<7&&!ready;a++){
-      try{await discover();ready=true;}
-      catch(e){
-        lastErr=e;const m=(e&&e.message)||'';
-        if(!/in progress|GATT|disconnect|not ready|No Services|network|already|no longer valid|invalid/i.test(m))throw e;
-        if(a<3){
-          qcOtaLog('Bluetooth still settling — retrying ('+(a+1)+'/7)…','amber');
-          await sleep(800+a*600); // let Chromium finish its own service discovery
-        }else{
-          qcOtaLog('Resetting the Bluetooth link ('+(a+1)+'/7)…','amber');
-          try{if(dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
-          await sleep(1400); // let Windows fully release the link before reconnecting
+    // (Re)connect, discover the OTA service + characteristics, and subscribe to
+    // notifications — tolerant of Windows GATT timing. Used for the initial open
+    // AND to RESUME after the band drops the link mid-transfer (its firmware has a
+    // 6s supervision timeout and a 15s OTA timeout, and Windows BLE is slow enough
+    // that a 193KB image can't always finish in one session). "GATT operation
+    // already in progress" has two opposite causes: (a) Chromium still finishing
+    // its own post-connect discovery — WAIT and retry on the same link; (b) a
+    // jammed op — fully disconnect and reconnect. Wait on early passes, escalate
+    // to a link reset on later ones.
+    const openOta=async(label)=>{
+      let ready=false,lastErr=null;
+      for(let a=0;a<8&&!ready;a++){
+        try{
+          if(!dev.gatt.connected){qcOtaLog((label||'Connecting')+' to '+(dev.name||'band')+'…');server=await dev.gatt.connect();await sleep(700);}
+          const svc=await server.getPrimaryService(OTA_SVC);
+          wch=await svc.getCharacteristic(OTA_WRITE);
+          nch=await svc.getCharacteristic(OTA_NOTIFY);
+          await nch.startNotifications();
+          try{nch.removeEventListener('characteristicvaluechanged',onNotify);}catch(_){}
+          nch.addEventListener('characteristicvaluechanged',onNotify);
+          await sleep(400); // let the CCCD subscribe settle before the first command
+          ready=true;
+        }catch(e){
+          lastErr=e;const m=(e&&e.message)||'';
+          if(!/in progress|GATT|disconnect|not ready|No Services|network|already|no longer valid|invalid/i.test(m))throw e;
+          if(a<3){qcOtaLog('Bluetooth still settling — retrying ('+(a+1)+'/8)…','amber');await sleep(800+a*600);}
+          else{qcOtaLog('Resetting the Bluetooth link ('+(a+1)+'/8)…','amber');try{if(dev.gatt.connected)dev.gatt.disconnect();}catch(_){}await sleep(1400);}
         }
       }
-    }
-    if(!ready)throw (lastErr||new Error('could not open the OTA service'));
-    nch.addEventListener('characteristicvaluechanged',onNotify);
-    await napms(400); // let the notification subscription (CCCD write) fully settle before the first command
+      if(!ready)throw (lastErr||new Error('could not open the OTA service'));
+    };
+    // A half-open link left by a previous attempt causes "already in progress" —
+    // start clean.
+    if(dev.gatt.connected){try{dev.gatt.disconnect()}catch(e){}await sleep(800);}
+    await openOta('Connecting');
     qcOtaLog('OTA service open','good');
     // 0) read the band's CURRENT firmware version so the operator can confirm
     //    what they're flashing over (and see it change afterward). Non-fatal.
@@ -2536,10 +2550,32 @@ async function qcOtaFlashStart(){
     const pages=Math.ceil(fw.length/0x1000);
     for(let i=0;i<pages;i++){ok(await send(otaCmd(OTA_CMD.PAGE_ERASE,otaU32((base+i*0x1000)>>>0)),9000));qcOtaSetProgress(1+(i+1)/pages*14,'Erasing '+(i+1)+'/'+pages+' pages…');}
     qcOtaLog('Erase complete ('+pages+' × 4KB)','good');
-    // 3) write
-    const CHUNK=(SETTINGS_QC.otaChunk&&SETTINGS_QC.otaChunk>=16)?SETTINGS_QC.otaChunk:128;let off=0;
-    while(off<fw.length){const n=Math.min(CHUNK,fw.length-off);ok(await send(otaWriteDataPkt((base+off)>>>0,fw.subarray(off,off+n))));off+=n;qcOtaSetProgress(15+off/fw.length*80,'Writing '+Math.round(off/1024)+'/'+Math.round(fw.length/1024)+' KB…');}
-    qcOtaLog('Image written ('+Math.round(fw.length/1024)+' KB)','good');
+    // 3) write — with auto-resume. The band drops the link partway through a large
+    //    image (supervision/OTA timeout on the firmware side, and Windows BLE is
+    //    slow). Flash is non-volatile and each packet carries its absolute address,
+    //    so on a drop we reconnect and continue from the same offset — the pages
+    //    already written stay written, and the final CRC covers the whole image.
+    //    Rewriting one chunk is harmless (identical bytes to an already-erased page).
+    const CHUNK=(SETTINGS_QC.otaChunk&&SETTINGS_QC.otaChunk>=16)?SETTINGS_QC.otaChunk:128;let off=0,resumes=0;
+    while(off<fw.length){
+      const n=Math.min(CHUNK,fw.length-off);
+      try{
+        ok(await send(otaWriteDataPkt((base+off)>>>0,fw.subarray(off,off+n))));
+        off+=n;qcOtaSetProgress(15+off/fw.length*80,'Writing '+Math.round(off/1024)+'/'+Math.round(fw.length/1024)+' KB…');
+      }catch(e){
+        const m=(e&&e.message)||'';
+        if(!/disconnect|GATT Server|network|in progress|not ready|timeout/i.test(m))throw e;
+        if(++resumes>40)throw new Error('too many reconnects ('+resumes+') at '+Math.round(off/1024)+' KB — the band keeps dropping the link; move it right next to the laptop and retry');
+        qcOtaLog('Link dropped at '+Math.round(off/1024)+'/'+Math.round(fw.length/1024)+' KB — reconnecting to resume…','amber');
+        qcOtaSetProgress(15+off/fw.length*80,'Reconnecting to resume at '+Math.round(off/1024)+' KB…');
+        try{if(dev.gatt&&dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
+        await sleep(1000);
+        await openOta('Reconnecting'); // throws if it truly can't get back
+        qcOtaLog('Resumed at '+Math.round(off/1024)+' KB (reconnect #'+resumes+')','good');
+        // loop retries the SAME offset on the fresh link
+      }
+    }
+    qcOtaLog('Image written ('+Math.round(fw.length/1024)+' KB'+(resumes?', '+resumes+' reconnect'+(resumes>1?'s':''):'')+')','good');
     // 4) reboot + CRC
     qcOtaSetProgress(96,'Verifying CRC & rebooting…');
     const crc=otaImageCrc(fw);const rebootPl=new Uint8Array([...otaU32(fw.length),...otaU32(crc)]);
