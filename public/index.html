@@ -2391,6 +2391,21 @@ function otaImageCrc(fw){const crcLen=Math.floor((fw.length-256)/256)*256;return
    whose low nibbles read as M.m.pp (0x0001045 → 1.0.45), the same scheme the
    app and the release manifest use. Show the dotted form plus the raw hex. */
 function otaFmtVer(raw){raw=raw>>>0;if(!raw)return null;const major=(raw>>>12)&0xF,minor=(raw>>>8)&0xF,patch=((raw>>>4)&0xF)*10+(raw&0xF);return major+'.'+minor+'.'+patch+' (0x'+raw.toString(16).toUpperCase().padStart(7,'0')+')';}
+/* Load the firmware image bytes for flashing. Firmware images are stored INLINE
+   as a base64 data URL (no Firebase Storage), so decode them directly — fetch()
+   of a data: URL was throwing "Failed to fetch" here. Real http(s) URLs (large
+   app bundles in Storage) still go through fetch. */
+async function qcLoadImageBytes(url){
+  if(!url)throw new Error('no image on this release — upload the .bin again');
+  if(/^data:/i.test(url)){
+    const c=url.indexOf(',');if(c<0)throw new Error('image data is malformed — re-upload the .bin');
+    const meta=url.slice(5,c),body=url.slice(c+1);
+    const bin=/;base64/i.test(meta)?atob(body):decodeURIComponent(body);
+    const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i)&0xff;return out;
+  }
+  const r=await fetch(url);if(!r||!r.ok)throw new Error('image download failed'+(r?' ('+r.status+')':''));
+  return new Uint8Array(await r.arrayBuffer());
+}
 function qcOtaCard(){
   const bleOK=(typeof navigator!=='undefined'&&navigator.bluetooth);
   const imgs=Object.values(RELEASES).filter(r=>r.product==='firmware'&&r.image&&r.image.url);
@@ -2428,7 +2443,7 @@ async function qcOtaFlashStart(){
   });
   const ok=rsp=>{if(!rsp||rsp[0]!==0)throw new Error('band returned error (result='+(rsp?rsp[0]:'?')+')');return rsp;};
   try{
-    const buf=new Uint8Array(await (await fetch(im.url)).arrayBuffer());
+    const buf=await qcLoadImageBytes(im.url);
     let fw=buf;if(fw.length%256){const pad=new Uint8Array(Math.ceil(fw.length/256)*256);pad.fill(0xFF);pad.set(fw);fw=pad;qcOtaLog('Padded image '+buf.length+' → '+fw.length+' bytes (256-align)');}
     qcOtaSetProgress(0,'Select your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
     dev=await navigator.bluetooth.requestDevice({filters:[{services:[OTA_SVC]},{namePrefix:'Safewave'}],optionalServices:[OTA_SVC]});
