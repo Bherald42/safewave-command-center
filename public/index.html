@@ -1796,7 +1796,7 @@ function renderVault(){
   const sub=document.getElementById('vault-sub');if(sub)sub.textContent=n?(n+' tool'+(n===1?'':'s')+' · leadership only'):'No tools yet — add the first shared login.';
   const cats=vaultCats();const catbar=document.getElementById('vault-cats');
   if(catbar){const keys=Object.keys(cats).sort();
-    catbar.innerHTML=(keys.length>1?[['all','All']]:[]).concat(keys.map(k=>[k,k+' ('+cats[k]+')'])).map(a=>'<button class="chip'+(vaultCat===a[0]?' on':'')+'" onclick="setVaultCat('+JSON.stringify(a[0])+')">'+esc(a[1])+'</button>').join('');}
+    catbar.innerHTML=(keys.length>1?[['all','All']]:[]).concat(keys.map(k=>[k,k+' ('+cats[k]+')'])).map(a=>'<button class="chip'+(vaultCat===a[0]?' on':'')+'" onclick="setVaultCat('+ocjson(a[0])+')">'+esc(a[1])+'</button>').join('');}
   renderVaultList();
 }
 function renderVaultList(){
@@ -1814,10 +1814,10 @@ function vaultCard(o){
   return '<div class="card">'
     +'<div class="row"><div class="grow"><div class="t">'+esc(o.name||'Untitled')+(o.category?' <span class="pill dim" style="font-size:10px">'+esc(o.category)+'</span>':'')+'</div>'
     +(url?'<div class="d"><a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(host)+' ↗</a></div>':'')+'</div></div>'
-    +(o.username?'<div class="row" style="gap:8px;margin-top:8px;align-items:center"><span class="d" style="width:78px;color:var(--faint)">Username</span><code style="flex:1;overflow:auto">'+esc(o.username)+'</code><button class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px" onclick="vaultCopy('+JSON.stringify(o.id)+',\'username\')">Copy</button></div>':'')
-    +(o.password?'<div class="row" style="gap:8px;margin-top:6px;align-items:center"><span class="d" style="width:78px;color:var(--faint)">Password</span><code id="vp-'+esc(o.id)+'" data-shown="0" style="flex:1;overflow:auto;letter-spacing:1px">••••••••</code><button class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px" onclick="vaultReveal('+JSON.stringify(o.id)+',this)">Show</button><button class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px" onclick="vaultCopy('+JSON.stringify(o.id)+',\'password\')">Copy</button></div>':'')
+    +(o.username?'<div class="row" style="gap:8px;margin-top:8px;align-items:center"><span class="d" style="width:78px;color:var(--faint)">Username</span><code style="flex:1;overflow:auto">'+esc(o.username)+'</code><button class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px" onclick="vaultCopy('+ocjson(o.id)+',\'username\')">Copy</button></div>':'')
+    +(o.password?'<div class="row" style="gap:8px;margin-top:6px;align-items:center"><span class="d" style="width:78px;color:var(--faint)">Password</span><code id="vp-'+esc(o.id)+'" data-shown="0" style="flex:1;overflow:auto;letter-spacing:1px">••••••••</code><button class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px" onclick="vaultReveal('+ocjson(o.id)+',this)">Show</button><button class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px" onclick="vaultCopy('+ocjson(o.id)+',\'password\')">Copy</button></div>':'')
     +(o.notes?'<div class="d" style="margin-top:8px;white-space:pre-wrap">'+esc(o.notes)+'</div>':'')
-    +'<div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost" style="flex:1" onclick="openVault('+JSON.stringify(o.id)+')">Edit</button><button class="btn ghost" style="flex:1" onclick="deleteVault('+JSON.stringify(o.id)+')">Delete</button></div>'
+    +'<div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost" style="flex:1" onclick="openVault('+ocjson(o.id)+')">Edit</button><button class="btn ghost" style="flex:1" onclick="deleteVault('+ocjson(o.id)+')">Delete</button></div>'
     +(meta?'<div class="d" style="margin-top:6px;color:var(--faint);font-size:11px">'+meta+'</div>':'')
     +'</div>';
 }
@@ -1931,7 +1931,7 @@ function complyWhen(iso){try{return new Date(iso).toLocaleString('en-US',{month:
 function renderComply(){
   const tabs=[['ready','Readiness'],['soc2','SOC 2'],['hipaa','HIPAA'],['phi','PHI map'],['watch','Standard watch']];
   const tb=document.getElementById('comply-tabs');
-  if(tb)tb.innerHTML=tabs.map(t=>'<button class="chip'+(complyTab===t[0]?' on':'')+'" onclick="setComplyTab('+JSON.stringify(t[0])+')">'+t[1]+'</button>').join('');
+  if(tb)tb.innerHTML=tabs.map(t=>'<button class="chip'+(complyTab===t[0]?' on':'')+'" onclick="setComplyTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
   const r=complyReadiness();
   const sub=document.getElementById('comply-sub');
   if(sub)sub.textContent='SOC 2 Type II + HIPAA · '+r.pct+'% ready · '+r.gaps+' gap'+(r.gaps===1?'':'s')+' open';
@@ -1950,7 +1950,7 @@ function complyReadyView(){
   const card=(name,st)=>'<div class="card"><div class="row"><div class="grow"><div class="t">'+name+'</div><div class="d">'+st.met+' met · '+st.prog+' in progress · '+st.gap+' gap'+(st.gap===1?'':'s')+' · '+st.total+' controls</div></div><div class="n" style="font-size:22px">'+st.pct+'%</div></div><div style="margin-top:10px">'+complyBar(st)+'</div></div>';
   const gaps=allControls().filter(c=>ctrlStatus(c)==='gap');
   const gapList=gaps.length
-    ? '<div class="card"><div class="t">Open gaps <span class="pill amber" style="font-size:10px">'+gaps.length+'</span></div>'+gaps.slice(0,8).map(c=>'<div class="row tap" onclick="openControl('+JSON.stringify(c.id)+')" style="gap:8px;margin-top:8px;align-items:flex-start;cursor:pointer"><span class="pill dim" style="font-size:10px;white-space:nowrap">'+esc(c.id)+'</span><div class="d" style="flex:1;color:var(--text)">'+esc(c.title)+'</div><span class="d" style="color:var(--faint);white-space:nowrap">'+(c.fw==='soc2'?'SOC 2':'HIPAA')+'</span></div>').join('')+(gaps.length>8?'<div class="d" style="margin-top:8px;color:var(--faint)">+'+(gaps.length-8)+' more</div>':'')+'</div>'
+    ? '<div class="card"><div class="t">Open gaps <span class="pill amber" style="font-size:10px">'+gaps.length+'</span></div>'+gaps.slice(0,8).map(c=>'<div class="row tap" onclick="openControl('+ocjson(c.id)+')" style="gap:8px;margin-top:8px;align-items:flex-start;cursor:pointer"><span class="pill dim" style="font-size:10px;white-space:nowrap">'+esc(c.id)+'</span><div class="d" style="flex:1;color:var(--text)">'+esc(c.title)+'</div><span class="d" style="color:var(--faint);white-space:nowrap">'+(c.fw==='soc2'?'SOC 2':'HIPAA')+'</span></div>').join('')+(gaps.length>8?'<div class="d" style="margin-top:8px;color:var(--faint)">+'+(gaps.length-8)+' more</div>':'')+'</div>'
     : '<div class="card"><div class="d">No open gaps — every control is met, in progress, or marked N/A. 🎉</div></div>';
   const lc=COMPLY.updates.lastCheckAt;
   const watch='<div class="card"><div class="row"><div class="grow"><div class="t">Standard watch</div><div class="d">'+(lc?'Last checked '+complyWhen(lc)+' · '+esc(COMPLY.updates.lastCheckBy||''):'Not run yet — checks the SOC 2 & HIPAA standards for changes, monthly.')+'</div></div></div><button class="btn ghost" style="margin-top:10px;width:auto;padding:8px 12px"'+(complyChecking?' disabled':'')+' onclick="runComplyCheck()">'+(complyChecking?'Checking…':'🔎 Check for standard updates')+'</button></div>';
@@ -1963,12 +1963,12 @@ function complyControlsView(fw){
 }
 function complyControlCard(c,fw){
   const cur=ctrlStatus(c);const st=ctrlState(c.id);
-  const btns=COMPLY_STATUS.map(s=>'<button data-v="'+s[0]+'"'+(cur===s[0]?' class="on"':'')+' onclick="setControlStatus('+JSON.stringify(c.id)+','+JSON.stringify(s[0])+')">'+s[1]+'</button>').join('');
+  const btns=COMPLY_STATUS.map(s=>'<button data-v="'+s[0]+'"'+(cur===s[0]?' class="on"':'')+' onclick="setControlStatus('+ocjson(c.id)+','+ocjson(s[0])+')">'+s[1]+'</button>').join('');
   const meta=[];if(st.owner)meta.push('Owner: '+esc(st.owner));if(st.evidence)meta.push('Evidence: '+esc(st.evidence));
   return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(c.title)+' <span class="pill dim" style="font-size:10px">'+esc(c.id)+'</span></div><div class="d">'+esc(c.desc)+'</div></div></div>'
     +'<div class="rolepick comply-pick" style="margin-top:10px">'+btns+'</div>'
     +(meta.length?'<div class="d" style="margin-top:8px;color:var(--faint)">'+meta.join(' · ')+(st.note?' — '+esc(st.note):'')+'</div>':'')
-    +'<div class="row" style="margin-top:8px"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="openControl('+JSON.stringify(c.id)+')">Owner &amp; evidence</button></div>'
+    +'<div class="row" style="margin-top:8px"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="openControl('+ocjson(c.id)+')">Owner &amp; evidence</button></div>'
     +'</div>';
 }
 function complyPhiView(){
@@ -1976,7 +1976,7 @@ function complyPhiView(){
    +PHI_SYSTEMS.map(sys=>{const p=COMPLY.phi[sys.id]||{};const cls=p.classification||'PHI';
      return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(sys.system)+' <span class="pill '+(cls==='None'?'dim':'amber')+'" style="font-size:10px">'+esc(cls)+'</span></div><div class="d">'+esc(sys.data)+' · '+esc(sys.where)+'</div></div></div>'
       +((p.owner||p.notes)?'<div class="d" style="margin-top:8px;color:var(--faint)">'+[p.owner?'Owner: '+esc(p.owner):'',p.notes?esc(p.notes):''].filter(Boolean).join(' — ')+'</div>':'')
-      +'<div class="row" style="margin-top:8px"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="openPhi('+JSON.stringify(sys.id)+')">Edit</button></div></div>';}).join('');
+      +'<div class="row" style="margin-top:8px"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="openPhi('+ocjson(sys.id)+')">Edit</button></div></div>';}).join('');
 }
 function complyWatchView(){
   const u=COMPLY.updates;const lc=u.lastCheckAt;
@@ -2083,7 +2083,7 @@ function qcSetProd(p){qcProdFilter=p;renderQC()}
 function renderQC(){
   const tabs=[['releases','Releases'],['bench','Test bench'],['flash','Flash & monitor']];
   const tb=document.getElementById('qc-tabs');
-  if(tb)tb.innerHTML=tabs.map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+JSON.stringify(t[0])+')">'+t[1]+'</button>').join('');
+  if(tb)tb.innerHTML=tabs.map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
   const n=Object.keys(RELEASES).length;
   const testing=Object.values(RELEASES).filter(r=>r.status==='testing').length,ready=Object.values(RELEASES).filter(r=>r.status==='passed').length;
   const sub=document.getElementById('qc-sub');
@@ -2096,7 +2096,7 @@ function renderQC(){
 }
 function qcReleasesView(){
   const prods=[['all','All'],['firmware','Firmware'],['app','App']];
-  const filt='<div class="row" style="gap:8px;margin-bottom:12px;align-items:center"><div class="chips" style="margin:0">'+prods.map(p=>'<button class="chip'+(qcProdFilter===p[0]?' on':'')+'" onclick="qcSetProd('+JSON.stringify(p[0])+')">'+p[1]+'</button>').join('')+'</div><div class="grow"></div><button class="btn" style="width:auto;white-space:nowrap" onclick="openRelease()">＋ New release</button></div>';
+  const filt='<div class="row" style="gap:8px;margin-bottom:12px;align-items:center"><div class="chips" style="margin:0">'+prods.map(p=>'<button class="chip'+(qcProdFilter===p[0]?' on':'')+'" onclick="qcSetProd('+ocjson(p[0])+')">'+p[1]+'</button>').join('')+'</div><div class="grow"></div><button class="btn" style="width:auto;white-space:nowrap" onclick="openRelease()">＋ New release</button></div>';
   let list=Object.values(RELEASES);
   if(qcProdFilter!=='all')list=list.filter(r=>r.product===qcProdFilter);
   list.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
@@ -2106,7 +2106,7 @@ function qcReleasesView(){
 function qcReleaseCard(r){
   const st=QC_RELSTATUS[r.status]||QC_RELSTATUS.draft;const passed=releasePassed(r);const last=releaseRuns(r.id)[0];
   const notesPrev=(r.notes||'').split('\n').map(l=>l.trim()).filter(Boolean).slice(0,2).map(esc).join('<br>');
-  return '<div class="card tap" tabindex="0" onclick="openQcRelease('+JSON.stringify(r.id)+')">'
+  return '<div class="card tap" tabindex="0" onclick="openQcRelease('+ocjson(r.id)+')">'
     +'<div class="row"><div class="grow"><div class="t">'+esc((QC_PRODUCTS[r.product]||r.product)+' '+(r.version||''))+' <span class="pill '+((QC_CHAN[r.channel]||{}).pill||'dim')+'" style="font-size:10px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+'</span></div>'
     +(notesPrev?'<div class="d" style="margin-top:4px">'+notesPrev+'</div>':'<div class="d" style="color:var(--faint)">No notes yet</div>')+'</div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
     +'<div class="d" style="margin-top:8px;color:var(--faint)">'+(last?('Last soak: '+qcVerdictChip(last.verdict)+' · '+fmtDur(last.durationSec||0)+' · '+(last.disconnects||0)+' disconnect'+(last.disconnects===1?'':'s')):'Not soak-tested yet')+(passed||r.status==='released'?'':' · <span style="color:var(--amber)">release blocked</span>')+'</div>'
@@ -2119,15 +2119,15 @@ function renderQcReleaseDetail(body){
   const st=QC_RELSTATUS[r.status]||QC_RELSTATUS.draft;const passed=releasePassed(r);const runs=releaseRuns(r.id);
   const passRun=runs.find(x=>x.verdict==='pass');
   const gate=passed
-    ? '<div class="card" style="border-color:var(--good)"><div class="t" style="color:var(--good)">✓ Ready to release</div><div class="d" style="margin-top:2px">Passed a soak test on '+esc((passRun&&passRun.device)||'a band')+' — held the connection and delivered alerts for the full window.</div>'+(r.status!=='released'?'<button class="btn" style="margin-top:10px" onclick="markReleased('+JSON.stringify(r.id)+')">🚀 Mark released</button>':'<div class="d" style="margin-top:8px;color:var(--good)">Released '+qcTime(r.releasedAt)+' by '+esc(r.releasedBy||'')+'</div>')+'</div>'
+    ? '<div class="card" style="border-color:var(--good)"><div class="t" style="color:var(--good)">✓ Ready to release</div><div class="d" style="margin-top:2px">Passed a soak test on '+esc((passRun&&passRun.device)||'a band')+' — held the connection and delivered alerts for the full window.</div>'+(r.status!=='released'?'<button class="btn" style="margin-top:10px" onclick="markReleased('+ocjson(r.id)+')">🚀 Mark released</button>':'<div class="d" style="margin-top:8px;color:var(--good)">Released '+qcTime(r.releasedAt)+' by '+esc(r.releasedBy||'')+'</div>')+'</div>'
     : (r.status==='released'
       ? '<div class="card" style="border-color:var(--amber)"><div class="t" style="color:var(--amber)">Released without passing QC</div><div class="d" style="margin-top:2px">'+esc(r.overrideReason?('Override: '+r.overrideReason+' — '+(r.overrideBy||'')):'No passing soak on record.')+'</div></div>'
-      : '<div class="card" style="border-color:var(--amber)"><div class="t" style="color:var(--amber)">Release blocked</div><div class="d" style="margin-top:2px">No passing soak test for '+esc(r.version||'this version')+' yet. Run one on a band — a release ships only after it holds the connection and delivers alerts for the full window.</div><button class="btn" style="margin-top:10px" onclick="qcStartFromRelease('+JSON.stringify(r.id)+')">▶ Start soak test</button>'+(isSuperAdmin()?'<button class="btn ghost" style="margin-top:8px" onclick="overrideRelease('+JSON.stringify(r.id)+')">Override &amp; release anyway (logged)</button>':'')+'</div>');
+      : '<div class="card" style="border-color:var(--amber)"><div class="t" style="color:var(--amber)">Release blocked</div><div class="d" style="margin-top:2px">No passing soak test for '+esc(r.version||'this version')+' yet. Run one on a band — a release ships only after it holds the connection and delivers alerts for the full window.</div><button class="btn" style="margin-top:10px" onclick="qcStartFromRelease('+ocjson(r.id)+')">▶ Start soak test</button>'+(isSuperAdmin()?'<button class="btn ghost" style="margin-top:8px" onclick="overrideRelease('+ocjson(r.id)+')">Override &amp; release anyway (logged)</button>':'')+'</div>');
   const notes=(r.notes||'').trim();
   body.innerHTML=''
     +'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;margin-bottom:12px" onclick="qcBackReleases()">← All releases</button>'
     +'<div class="row" style="align-items:flex-start"><div class="grow"><h2 style="margin:0;font-size:20px">'+esc((QC_PRODUCTS[r.product]||r.product)+' '+(r.version||''))+'</h2><div class="d" style="margin-top:2px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+' channel · created '+qcTime(r.createdAt)+' · '+esc(r.createdBy||'')+'</div></div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
-    +'<div class="row" style="gap:8px;margin:12px 0"><button class="btn ghost" style="flex:1" onclick="openRelease('+JSON.stringify(r.id)+')">Edit / notes</button><button class="btn ghost" style="flex:1" onclick="qcStartFromRelease('+JSON.stringify(r.id)+')">Soak test</button></div>'
+    +'<div class="row" style="gap:8px;margin:12px 0"><button class="btn ghost" style="flex:1" onclick="openRelease('+ocjson(r.id)+')">Edit / notes</button><button class="btn ghost" style="flex:1" onclick="qcStartFromRelease('+ocjson(r.id)+')">Soak test</button></div>'
     +gate
     +(r.product==='firmware'?qcImageCard(r):'')
     +'<p class="eyebrow" style="margin:16px 0 8px">Release notes</p><div class="card"><div class="d" style="white-space:pre-wrap;color:var(--text)">'+(notes?esc(notes):'<span style="color:var(--faint)">No notes yet — add what changed.</span>')+'</div></div>'
@@ -2139,10 +2139,10 @@ function renderQcReleaseDetail(body){
 function qcFwKB(bytes){bytes=bytes||0;return bytes<1024*100?(bytes/1024).toFixed(1)+' KB':(bytes/1024).toFixed(0)+' KB'}
 function qcImageCard(r){
   const im=r.image;const head='<p class="eyebrow" style="margin:16px 0 8px">Firmware image</p>';
-  if(!im)return head+'<div class="card"><div class="d">No <code>.bin</code> uploaded for '+esc(r.version||'this version')+' yet. Build it on the pinned toolchain, then upload the image here — it gets a SHA-256 checksum and can be soak-tested and flashed to a band.</div><button class="btn" style="margin-top:10px"'+(qcFwUploading?' disabled':'')+' onclick="qcPickFirmware('+JSON.stringify(r.id)+')">'+(qcFwUploading?'Uploading…':'⤒ Upload .bin')+'</button></div>';
+  if(!im)return head+'<div class="card"><div class="d">No <code>.bin</code> uploaded for '+esc(r.version||'this version')+' yet. Build it on the pinned toolchain, then upload the image here — it gets a SHA-256 checksum and can be soak-tested and flashed to a band.</div><button class="btn" style="margin-top:10px"'+(qcFwUploading?' disabled':'')+' onclick="qcPickFirmware('+ocjson(r.id)+')">'+(qcFwUploading?'Uploading…':'⤒ Upload .bin')+'</button></div>';
   return head+'<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(im.name)+' <span class="pill good" style="font-size:10px">uploaded</span></div><div class="d" style="margin-top:2px">'+qcFwKB(im.size)+' · '+qcTime(im.uploadedAt)+' · '+esc(im.uploadedBy||'')+'</div></div></div>'
     +'<div class="d" style="margin-top:8px;color:var(--faint);font-family:var(--font-m);font-size:10.5px;word-break:break-all">SHA-256 '+esc(im.sha256||'')+'</div>'
-    +'<div class="row" style="gap:8px;margin-top:10px"><a class="btn ghost" style="flex:1;text-align:center;text-decoration:none" href="'+esc(im.url||'')+'" target="_blank" rel="noopener">⤓ Download</a><button class="btn ghost" style="flex:1"'+(qcFwUploading?' disabled':'')+' onclick="qcPickFirmware('+JSON.stringify(r.id)+')">Replace</button></div>'
+    +'<div class="row" style="gap:8px;margin-top:10px"><a class="btn ghost" style="flex:1;text-align:center;text-decoration:none" href="'+esc(im.url||'')+'" target="_blank" rel="noopener">⤓ Download</a><button class="btn ghost" style="flex:1"'+(qcFwUploading?' disabled':'')+' onclick="qcPickFirmware('+ocjson(r.id)+')">Replace</button></div>'
     +'<div class="note" style="margin-top:10px">This image feeds the soak test and (next) the Bluetooth-OTA flasher — the band’s own update path. Until OTA is verified on a spare band, flash with your JLink using this exact image + checksum.</div>'
     +'</div>';
 }
@@ -2165,7 +2165,7 @@ async function qcOnFirmwareFile(input){
   qcFwUploading=false;renderQC();
 }
 function qcRunRow(run){
-  return '<div class="card tap" tabindex="0" onclick="openQcRun('+JSON.stringify(run.id)+')"><div class="row"><div class="grow"><div class="t">'+qcVerdictChip(run.verdict)+' '+fmtDur(run.durationSec||0)+' soak</div><div class="d" style="margin-top:4px">'+esc(run.device||'device')+' · '+(run.alertsAcked||0)+'/'+(run.alertsSent||0)+' alerts · '+(run.disconnects||0)+' disconnect'+(run.disconnects===1?'':'s')+(run.uptimePct!=null?' · '+run.uptimePct+'% uptime':'')+'</div></div><div class="d" style="color:var(--faint);white-space:nowrap">'+qcTime(run.startedAt)+'</div></div></div>';
+  return '<div class="card tap" tabindex="0" onclick="openQcRun('+ocjson(run.id)+')"><div class="row"><div class="grow"><div class="t">'+qcVerdictChip(run.verdict)+' '+fmtDur(run.durationSec||0)+' soak</div><div class="d" style="margin-top:4px">'+esc(run.device||'device')+' · '+(run.alertsAcked||0)+'/'+(run.alertsSent||0)+' alerts · '+(run.disconnects||0)+' disconnect'+(run.disconnects===1?'':'s')+(run.uptimePct!=null?' · '+run.uptimePct+'% uptime':'')+'</div></div><div class="d" style="color:var(--faint);white-space:nowrap">'+qcTime(run.startedAt)+'</div></div></div>';
 }
 function markReleased(id){const r=RELEASES[id];if(!r)return;if(!releasePassed(r)){toast('Blocked — needs a passing soak test first');return}
   r.status='released';r.releasedAt=new Date().toISOString();r.releasedBy=(CURRENT_USER&&CURRENT_USER.name)||'';RELEASES[id]=r;persistRelease(r);renderQC();
@@ -2318,7 +2318,7 @@ function qcAppendLiveLog(type,detail){
 function qcFirmwareOptions(){const fw=Object.values(RELEASES).filter(r=>r.product==='firmware').sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));return fw.length?fw.map(r=>'<option value="'+esc(r.id)+'">'+esc('Firmware '+r.version+' ('+((QC_CHAN[r.channel]||{}).label||r.channel)+')')+'</option>').join(''):'<option value="">No firmware releases yet</option>'}
 function qcImagesList(){
   const imgs=Object.values(RELEASES).filter(r=>r.product==='firmware'&&r.image).sort((a,b)=>(b.image.uploadedAt||'').localeCompare(a.image.uploadedAt||''));
-  const body=imgs.length?imgs.map(r=>'<div class="row" style="gap:8px;align-items:center;margin-top:8px"><div class="grow"><div class="t" style="font-size:13px">Firmware '+esc(r.version)+' <span class="pill dim" style="font-size:9px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+'</span></div><div class="d" style="color:var(--faint);font-size:10.5px;word-break:break-all">'+qcFwKB(r.image.size)+' · '+esc((r.image.sha256||'').slice(0,16))+'…</div></div><a class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px;text-decoration:none" href="'+esc(r.image.url||'')+'" target="_blank" rel="noopener">⤓ .bin</a><button class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px" onclick="openQcRelease('+JSON.stringify(r.id)+')">Open</button></div>').join(''):'<div class="d" style="color:var(--faint)">No firmware images uploaded yet — open a firmware release and upload its <code>.bin</code>.</div>';
+  const body=imgs.length?imgs.map(r=>'<div class="row" style="gap:8px;align-items:center;margin-top:8px"><div class="grow"><div class="t" style="font-size:13px">Firmware '+esc(r.version)+' <span class="pill dim" style="font-size:9px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+'</span></div><div class="d" style="color:var(--faint);font-size:10.5px;word-break:break-all">'+qcFwKB(r.image.size)+' · '+esc((r.image.sha256||'').slice(0,16))+'…</div></div><a class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px;text-decoration:none" href="'+esc(r.image.url||'')+'" target="_blank" rel="noopener">⤓ .bin</a><button class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px" onclick="openQcRelease('+ocjson(r.id)+')">Open</button></div>').join(''):'<div class="d" style="color:var(--faint)">No firmware images uploaded yet — open a firmware release and upload its <code>.bin</code>.</div>';
   return '<div class="card"><div class="t">Firmware images</div><div class="d" style="margin:2px 0 6px">The built <code>.bin</code> for each firmware release — checksummed and ready to flash.</div>'+body+'</div>';
 }
 function qcFlashView(){
@@ -3269,6 +3269,13 @@ window.addEventListener('load',()=>{
 const TK_KEY='sw_tickets_v1';
 const SEV={safety:{label:'SAFETY',pill:'safety',rank:0,sla:2},high:{label:'HIGH',pill:'amber',rank:1,sla:8},medium:{label:'MEDIUM',pill:'wave',rank:2,sla:24},low:{label:'LOW',pill:'dim',rank:3,sla:72}};
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+/* Safe string argument for an inline onclick="..." handler. JSON.stringify wraps
+   the value in DOUBLE quotes, which — inside a double-quoted HTML attribute —
+   closes the attribute early and breaks the handler (renders onclick="fn(" ).
+   HTML-encoding the quotes to &quot; keeps the attribute intact; the browser
+   decodes them back to " before running the handler. Use this for every inline
+   onclick that passes a string. */
+function ocjson(v){return esc(JSON.stringify(v))}
 let TKTS=[], tktSource='local';
 function lsTickets(){try{return JSON.parse(localStorage.getItem(TK_KEY)||'[]')}catch(e){return[]}}
 function loadTickets(){return TKTS}
@@ -3425,12 +3432,12 @@ function userAdminCard(u){
   h+='<div class="d" style="font-weight:600;color:var(--text);margin:10px 0 6px">Role</div>';
   if(ro){h+='<div class="d">'+roleLabel(role)+(deptLabel(u.dept)?' · '+deptLabel(u.dept):'')+'</div>';}
   else if(me){h+='<div class="d">'+roleLabel(role)+' — you can’t change your own role</div>';}
-  else{h+='<div class="rolepick">'+ROLES.map(r=>'<button data-v="'+r+'" class="'+(role===r?'on':'')+'" onclick="adminSetRole('+JSON.stringify(u.uid)+',\''+r+'\')">'+roleLabel(r)+'</button>').join('')+'</div>';}
+  else{h+='<div class="rolepick">'+ROLES.map(r=>'<button data-v="'+r+'" class="'+(role===r?'on':'')+'" onclick="adminSetRole('+ocjson(u.uid)+',\''+r+'\')">'+roleLabel(r)+'</button>').join('')+'</div>';}
   if(!ro){
     h+='<div class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Department <span style="font-weight:400;color:var(--faint)">· scopes work tabs for members</span></div>';
     const depts=[['','None'],['ops','Ops'],['sales','Sales'],['tech','Tech']];
-    h+='<div class="rolepick">'+depts.map(d=>'<button data-v="'+d[0]+'" class="'+((u.dept||'')===d[0]?'on':'')+'" onclick="adminSetDept('+JSON.stringify(u.uid)+',\''+d[0]+'\')">'+d[1]+'</button>').join('')+'</div>';
-    h+='<div class="row" style="justify-content:space-between;align-items:center;margin-top:12px"><div class="d" style="font-weight:600;color:var(--text)">Financials access</div>'+(role==='superadmin'?'<span class="pill dim">always on</span>':'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="adminToggleFinance('+JSON.stringify(u.email||'')+')">'+(fineOK?'Remove':'Grant')+'</button>')+'</div>';
+    h+='<div class="rolepick">'+depts.map(d=>'<button data-v="'+d[0]+'" class="'+((u.dept||'')===d[0]?'on':'')+'" onclick="adminSetDept('+ocjson(u.uid)+',\''+d[0]+'\')">'+d[1]+'</button>').join('')+'</div>';
+    h+='<div class="row" style="justify-content:space-between;align-items:center;margin-top:12px"><div class="d" style="font-weight:600;color:var(--text)">Financials access</div>'+(role==='superadmin'?'<span class="pill dim">always on</span>':'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="adminToggleFinance('+ocjson(u.email||'')+')">'+(fineOK?'Remove':'Grant')+'</button>')+'</div>';
   } else {
     h+='<div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><div class="d" style="font-weight:600;color:var(--text)">Financials access</div><span class="pill '+(fineOK?'good':'dim')+'">'+(fineOK?'On':'Off')+'</span></div>';
   }
@@ -4080,7 +4087,7 @@ function chatAttHtml(m){const a=m.att||[];if(!a.length)return '';
 }
 /* reactions + per-message actions */
 const REACTS=['👍','✅','🎉','❤️','👀'];
-function jattr(fn,a,bb){return 'onclick="'+(fn+'('+JSON.stringify(a)+(bb!==undefined?','+JSON.stringify(bb):'')+')').replace(/"/g,'&quot;')+'"'}
+function jattr(fn,a,bb){return 'onclick="'+(fn+'('+ocjson(a)+(bb!==undefined?','+ocjson(bb):'')+')').replace(/"/g,'&quot;')+'"'}
 function chatReactHtml(m){const r=m.reactions||{};const keys=Object.keys(r).filter(k=>(r[k]||[]).length);if(!keys.length)return '';
   return '<div class="c-react">'+keys.map(k=>{const mine=CURRENT_USER&&r[k].indexOf(CURRENT_USER.uid)>=0;return '<span class="re-chip'+(mine?' mine':'')+'" '+jattr('chatReact',m.id,k)+'>'+k+' '+r[k].length+'</span>'}).join('')+'</div>';}
 function chatActHtml(m,mine){if(!m.id)return '';
