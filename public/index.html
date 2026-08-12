@@ -2398,12 +2398,15 @@ function otaFmtVer(raw){raw=raw>>>0;if(!raw)return null;const major=(raw>>>12)&0
 async function qcLoadImageBytes(url){
   if(!url)throw new Error('no image on this release — upload the .bin again');
   if(/^data:/i.test(url)){
-    const c=url.indexOf(',');if(c<0)throw new Error('image data is malformed — re-upload the .bin');
+    const c=url.indexOf(',');if(c<0)throw new Error('inline image is malformed — re-upload the .bin');
     const meta=url.slice(5,c),body=url.slice(c+1);
-    const bin=/;base64/i.test(meta)?atob(body):decodeURIComponent(body);
+    let bin;try{bin=/;base64/i.test(meta)?atob(body):decodeURIComponent(body);}catch(e){throw new Error('inline image decode failed — re-upload the .bin');}
     const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i)&0xff;return out;
   }
-  const r=await fetch(url);if(!r||!r.ok)throw new Error('image download failed'+(r?' ('+r.status+')':''));
+  // Real http(s) URL (a large app bundle in Firebase Storage). Wrap fetch so a
+  // network/CORS throw never surfaces as the bare "Failed to fetch".
+  let r;try{r=await fetch(url);}catch(e){throw new Error('could not download the stored image — enable Firebase Storage, or re-upload the .bin so it stores inline');}
+  if(!r.ok)throw new Error('image download failed ('+r.status+')');
   return new Uint8Array(await r.arrayBuffer());
 }
 function qcOtaCard(){
