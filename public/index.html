@@ -2391,6 +2391,16 @@ function otaImageCrc(fw){const crcLen=Math.floor((fw.length-256)/256)*256;return
    whose low nibbles read as M.m.pp (0x0001045 → 1.0.45), the same scheme the
    app and the release manifest use. Show the dotted form plus the raw hex. */
 function otaFmtVer(raw){raw=raw>>>0;if(!raw)return null;const major=(raw>>>12)&0xF,minor=(raw>>>8)&0xF,patch=((raw>>>4)&0xF)*10+(raw&0xF);return major+'.'+minor+'.'+patch+' (0x'+raw.toString(16).toUpperCase().padStart(7,'0')+')';}
+/* Read the firmware version baked into a band .bin. The FR8010H image starts with
+   a jump_table_t: reserved(0) image_size(4) image_type(8) entry(12) memory_init(16)
+   stack_top(20) firmware_version(24) — all little-endian uint32. image_type is
+   0x33333333 for an app image; we use it to sanity-check this really is a band .bin.
+   Returns {ver, type, isApp} or null if the buffer is too small. */
+function otaBinInfo(bytes){
+  if(!bytes||bytes.length<28)return null;
+  const dv=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  return {type:dv.getUint32(8,true)>>>0,ver:dv.getUint32(24,true)>>>0,isApp:(dv.getUint32(8,true)>>>0)===0x33333333};
+}
 /* Load the firmware image bytes for flashing. Firmware images are stored INLINE
    as a base64 data URL (no Firebase Storage), so decode them directly — fetch()
    of a data: URL was throwing "Failed to fetch" here. Real http(s) URLs (large
@@ -2484,8 +2494,16 @@ async function qcOtaFlashStart(){
   try{
     const buf=await qcLoadImageBytes(im.url);
     let fw=buf;if(fw.length%256){const pad=new Uint8Array(Math.ceil(fw.length/256)*256);pad.fill(0xFF);pad.set(fw);fw=pad;qcOtaLog('Padded image '+buf.length+' → '+fw.length+' bytes (256-align)');}
-    qcOtaLog('Flasher build 2026-08-12f (fast write-without-response, like the app)');
+    qcOtaLog('Flasher build 2026-08-12g (version guardrail)');
     qcOtaSetProgress(0,'Pick your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
+    // Read the version baked into this .bin so we can (a) show it and (b) refuse to
+    // waste a flash the band would never boot (dual-bank bootloader runs the higher
+    // firmware_version — see below).
+    const binInfo=otaBinInfo(buf);
+    if(binInfo){
+      if(binInfo.ver)qcOtaLog('This image is firmware '+(otaFmtVer(binInfo.ver)||('0x'+binInfo.ver.toString(16))));
+      if(!binInfo.isApp)qcOtaLog('Warning: this .bin’s image_type is 0x'+binInfo.type.toString(16)+', not an app image (0x33333333) — it may not be a band firmware file','amber');
+    }
     // Find the band the SAME way the mobile app does — by an advertised SERVICE,
     // not by name. The band's name ("Safewave Band") lives only in the scan
     // response, which Windows/Edge won't surface to a namePrefix filter (it shows
@@ -2534,13 +2552,31 @@ async function qcOtaFlashStart(){
     qcOtaLog('OTA service open','good');
     // 0) read the band's CURRENT firmware version so the operator can confirm
     //    what they're flashing over (and see it change afterward). Non-fatal.
+    let curRaw=0;
     try{
       const vr=ok(await send(otaCmd(OTA_CMD.READ_VER)));
-      const cur=(vr[4]|(vr[5]<<8)|(vr[6]<<16)|(vr[7]<<24))>>>0;
-      qcOta.curVer=otaFmtVer(cur);
+      curRaw=(vr[4]|(vr[5]<<8)|(vr[6]<<16)|(vr[7]<<24))>>>0;
+      qcOta.curVer=otaFmtVer(curRaw);
       if(qcOta.curVer){qcOtaLog('Band is currently running firmware '+qcOta.curVer,'good');qcOtaSetProgress(1,'Band on firmware '+qcOta.curVer+' — preparing…');}
-      else qcOtaLog('Band reported an unrecognized firmware version (0x'+cur.toString(16).toUpperCase()+')','amber');
+      else qcOtaLog('Band reported an unrecognized firmware version (0x'+curRaw.toString(16).toUpperCase()+')','amber');
     }catch(e){qcOtaLog('Could not read current firmware version ('+((e&&e.message)||e)+') — continuing','amber');}
+    // 0b) GUARDRAIL — the FR8010H bootloader boots whichever bank has the higher
+    //     firmware_version (a raw uint32), so flashing an image whose version is not
+    //     greater than what's installed writes fine and CRC-verifies but the band
+    //     keeps booting the OLD firmware. Catch that BEFORE erasing so we don't waste
+    //     a flash. Compare the raw integers (not the display strings, which can rank
+    //     differently), and let the operator override for a deliberate re-flash.
+    if(binInfo&&binInfo.ver&&curRaw&&binInfo.ver<=curRaw){
+      const same=binInfo.ver===curRaw;
+      const msg=same
+        ? 'This image is the SAME version the band already runs ('+(otaFmtVer(curRaw)||curRaw)+').'
+        : 'This image (firmware '+(otaFmtVer(binInfo.ver)||binInfo.ver)+') is NOT newer than the band’s current firmware ('+(otaFmtVer(curRaw)||curRaw)+').';
+      qcOtaLog(msg+' The band boots the higher internal version, so it will keep its current firmware after this flash.','amber');
+      if(!confirm(msg+'\n\nThe band’s bootloader runs whichever image has the higher internal version number, so after this flash it will most likely reboot back into its CURRENT firmware — the update won’t "take". This usually means the build’s APP_VERSION wasn’t bumped above the installed one.\n\nFlash anyway?')){
+        throw new Error('cancelled — image version ('+(otaFmtVer(binInfo.ver)||binInfo.ver)+') is not higher than the band’s ('+(otaFmtVer(curRaw)||curRaw)+'); bump APP_VERSION and rebuild');
+      }
+      qcOtaLog('Operator chose to flash anyway','amber');
+    }
     // 1) storage base
     qcOtaSetProgress(1,'Reading flash base…');
     const baseRsp=ok(await send(otaCmd(OTA_CMD.GET_BASE,new Uint8Array([0,0,0,0]))));
