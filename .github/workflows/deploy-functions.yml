@@ -37,6 +37,7 @@ jobs:
           FW_REPO_TOKEN: ${{ secrets.FW_REPO_TOKEN }}
           FW_REPO: ${{ vars.FW_REPO }}
           FW_BRANCH: ${{ vars.FW_BRANCH }}
+          APP_FIREBASE_SA_B64: ${{ secrets.APP_FIREBASE_SA_B64 }}
         run: |
           npm install -g firebase-tools
           # Inject secrets (stored as encrypted repo secrets) into the function's
@@ -56,6 +57,10 @@ jobs:
           if [ -n "$FW_REPO_TOKEN" ]; then echo "FW_REPO_TOKEN=$FW_REPO_TOKEN" >> functions/.env; fi
           if [ -n "$FW_REPO" ]; then echo "FW_REPO=$FW_REPO" >> functions/.env; fi
           if [ -n "$FW_BRANCH" ]; then echo "FW_BRANCH=$FW_BRANCH" >> functions/.env; fi
+          # Field Monitor: base64 of the mobile-app project's service-account JSON
+          # key, so the mirrorFieldTelemetry function can read that project. base64
+          # keeps the multi-line key intact through the .env round-trip.
+          if [ -n "$APP_FIREBASE_SA_B64" ]; then echo "APP_FIREBASE_SA_B64=$APP_FIREBASE_SA_B64" >> functions/.env; fi
           firebase deploy --only functions --project safewave-command-center --non-interactive --force
       - name: Deploy Firestore + Storage rules
         env:

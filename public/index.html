@@ -720,6 +720,14 @@ input[type=date]{color-scheme:dark}
       <input type="file" id="qc-fw-file" accept=".bin,application/octet-stream" style="display:none" onchange="qcOnFirmwareFile(this)">
     </main>
 
+    <!-- FIELD MONITOR -->
+    <main class="screen" id="s-field">
+      <p class="eyebrow">Field monitor · band health from real phones</p>
+      <h1>Field</h1>
+      <p class="sub">Every wearer's band — live connection, alerts delivered, disconnect reasons, and battery — mirrored from the app so you can see exactly what each person is experiencing.</p>
+      <div id="field-body"></div>
+    </main>
+
     <!-- CHAT -->
     <main class="screen" id="s-chat">
       <p class="eyebrow">Chat · team</p>
@@ -3149,7 +3157,7 @@ function agentSnapshot(){try{
 
 /* ================= FEEDBACK (every screen → Brad, the super admin) ================= */
 let FEEDBACK=[], fbUnsub=null;
-const SCREEN_LABELS={'s-pulse':'Pulse','s-finance':'Financials','s-stock':'Stock','s-support':'Tickets','s-build':'Build','s-qc':'Release QC','s-chat':'Chat','s-crm':'CRM','s-comply':'Compliance','s-know':'Knowledge'};
+const SCREEN_LABELS={'s-pulse':'Pulse','s-finance':'Financials','s-stock':'Stock','s-support':'Tickets','s-build':'Build','s-qc':'Release QC','s-chat':'Chat','s-crm':'CRM','s-comply':'Compliance','s-know':'Knowledge','s-field':'Field'};
 let fbxFilter='open';
 function currentScreenId(){const el=document.querySelector('.screen.on');return el?el.id:'s-pulse'}
 function currentScreenLabel(){return SCREEN_LABELS[currentScreenId()]||'App'}
@@ -3185,6 +3193,121 @@ function subscribeFeedback(){if(!hasFirestore()||!isSuperAdmin())return;
     const scr=document.getElementById('s-feedback');if(scr&&scr.classList.contains('on'))renderFeedbackInbox();
   },e=>{})}catch(e){}}
 function fbOpenCount(){return FEEDBACK.filter(f=>f.status!=='resolved').length}
+
+/* ================= FIELD MONITOR ================= */
+/* Super-admin view of real-world band telemetry mirrored from the mobile app's
+   Firebase project by the mirrorFieldTelemetry function. Read-only. */
+let FIELD_USERS={},FIELD_BANDS={},FIELD_EVENTS=[],FIELD_SYNC=null,fieldSel=null;
+let fieldUnsubU=null,fieldUnsubB=null,fieldUnsubE=null,fieldUnsubS=null;
+function subscribeFieldMonitor(){
+  if(!hasFirestore()||!isSuperAdmin())return;
+  const paint=()=>{const scr=document.getElementById('s-field');if(scr&&scr.classList.contains('on'))renderField();};
+  if(!fieldUnsubU)try{fieldUnsubU=firebase.firestore().collection('field_users').limit(1000).onSnapshot(qs=>{FIELD_USERS={};qs.forEach(d=>FIELD_USERS[d.id]=Object.assign({id:d.id},d.data()));paint();},e=>{})}catch(e){}
+  if(!fieldUnsubB)try{fieldUnsubB=firebase.firestore().collection('field_bands').limit(1000).onSnapshot(qs=>{FIELD_BANDS={};qs.forEach(d=>FIELD_BANDS[d.id]=Object.assign({id:d.id},d.data()));paint();},e=>{})}catch(e){}
+  if(!fieldUnsubE)try{fieldUnsubE=firebase.firestore().collection('field_events').orderBy('ts','desc').limit(1500).onSnapshot(qs=>{FIELD_EVENTS=qs.docs.map(d=>Object.assign({id:d.id},d.data()));paint();},e=>{})}catch(e){}
+  if(!fieldUnsubS)try{fieldUnsubS=firebase.firestore().collection('field_sync').doc('cursor').onSnapshot(d=>{FIELD_SYNC=d.exists?d.data():null;paint();},e=>{})}catch(e){}
+}
+// Decode a BLE (HCI) disconnect reason code into plain language. Amber, never red
+// — a dropped link is not a life-safety state.
+function fieldReason(code){
+  const m={0x08:'range / supervision timeout',0x13:'phone ended the link',0x16:'app/phone closed it',0x22:'link-layer timeout',0x3d:'connection integrity (MIC) failure',0x28:'timing (instant passed)',0x3e:'failed to establish',0x1f:'unspecified',0x05:'auth/pairing failure',0x06:'PIN/key missing'};
+  if(code===null||code===undefined)return null;
+  const n=typeof code==='number'?code:parseInt(code,16);
+  const hex='0x'+(n>>>0).toString(16).toUpperCase().padStart(2,'0');
+  return (m[n]||'code '+hex)+' ('+hex+')';
+}
+function fieldAgo(ms){if(!ms)return '—';const s=Math.max(0,Math.round((Date.now()-ms)/1000));if(s<60)return s+'s ago';const mi=Math.round(s/60);if(mi<60)return mi+'m ago';const h=Math.round(mi/60);if(h<24)return h+'h ago';return Math.round(h/24)+'d ago';}
+function fieldAncsChip(v){if(v===1)return '<span class="pill good">ANCS ok</span>';if(v===2)return '<span class="pill dim">non-iOS</span>';if(v===0)return '<span class="pill amber">ANCS not flowing</span>';return '<span class="pill dim">ANCS ?</span>';}
+function fieldBattChip(b){if(b===null||b===undefined)return '';const cls=b<=20?'amber':(b<=40?'dim':'good');return '<span class="pill '+cls+'">'+b+'%</span>';}
+// A wearer's live band record: prefer their assigned band, else by name.
+function fieldBandFor(u){const list=Object.values(FIELD_BANDS);return list.find(b=>b.assignedUserId===u.id)||list.find(b=>u.bandName&&b.name===u.bandName)||null;}
+function fieldSelectUser(id){fieldSel=id;renderField();window.scrollTo(0,0);}
+function fieldBack(){fieldSel=null;renderField();}
+function renderField(){
+  const body=document.getElementById('field-body');if(!body)return;
+  if(!isSuperAdmin()){body.innerHTML='<div class="card"><div class="d">Super admin only.</div></div>';return;}
+  const users=Object.values(FIELD_USERS);
+  const asOf=FIELD_SYNC&&FIELD_SYNC.lastRunAt?('Data as of '+fieldAgo(FIELD_SYNC.lastRunAt)):'Waiting for the first sync';
+  const notConfigured=!users.length&&!FIELD_EVENTS.length&&!FIELD_SYNC;
+  if(notConfigured){
+    body.innerHTML='<div class="card" style="border-color:var(--amber)"><div class="t">No field data yet</div>'
+      +'<div class="d" style="margin-top:6px">The Field Monitor mirrors telemetry from the mobile app’s Firebase project. Once the <code>APP_FIREBASE_SA_B64</code> secret is set and the functions deploy, the <code>mirrorFieldTelemetry</code> job fills this in within ~5 minutes.</div></div>';
+    return;
+  }
+  const dayAgo=Date.now()-864e5;
+  const ev24=FIELD_EVENTS.filter(e=>e.ts>=dayAgo);
+  const disc24=ev24.filter(e=>e.kind==='band_disconnected').length;
+  const alerts24=ev24.filter(e=>e.kind==='alert');
+  const acked=alerts24.filter(e=>e.acknowledged).length;
+  const online=Object.values(FIELD_BANDS).filter(b=>b.isConnected===true).length;
+  const ancsBad=Object.values(FIELD_BANDS).filter(b=>b.ancsStatus===0).length;
+  if(fieldSel){body.innerHTML=fieldDetail(fieldSel,asOf);return;}
+  // metrics strip
+  let h='<div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+    +fieldMetric(users.length,'wearers')
+    +fieldMetric(online,'online now',online?'good':'')
+    +fieldMetric(disc24,'disconnects · 24h',disc24?'amber':'')
+    +fieldMetric(alerts24.length,'alerts · 24h')
+    +fieldMetric(alerts24.length?Math.round(acked/alerts24.length*100)+'%':'—','buzz acknowledged')
+    +fieldMetric(ancsBad,'ANCS not flowing',ancsBad?'amber':'')
+    +'</div>';
+  h+='<div class="d" style="color:var(--faint);margin-bottom:10px">'+esc(asOf)+' · click a wearer to see everything their band is doing</div>';
+  // roster
+  const rows=users.map(u=>{
+    const b=fieldBandFor(u)||{};
+    const uev=FIELD_EVENTS.filter(e=>e.userId===u.id);
+    const last=uev[0];
+    const online=b.isConnected===true;
+    return '<div class="card tap" tabindex="0" style="margin-bottom:8px" onclick="fieldSelectUser('+ocjson(u.id)+')"><div class="row" style="align-items:center;gap:10px">'
+      +'<div class="grow"><div class="t">'+esc(u.name||u.email||u.id)+'</div>'
+      +'<div class="d" style="margin-top:2px">'+esc(b.name||u.bandName||'no band')+(b.firmwareVersion?' · fw '+esc(b.firmwareVersion):'')+' · '+(last?esc(fieldEventLabel(last))+' '+fieldAgo(last.ts):'no events yet')+'</div></div>'
+      +(online?'<span class="pill good">online</span>':'<span class="pill dim">offline</span>')
+      +fieldAncsChip(b.ancsStatus)+fieldBattChip(b.batteryLevel)
+      +'</div></div>';
+  }).join('');
+  h+=rows||'<div class="card"><div class="d">No wearers mirrored yet.</div></div>';
+  body.innerHTML=h;
+}
+function fieldMetric(v,label,cls){return '<div class="card" style="flex:1;min-width:120px;margin:0"><div style="font-family:var(--font-m);font-size:22px;font-weight:700;color:var(--'+(cls||'text')+')">'+esc(String(v))+'</div><div class="d" style="color:var(--faint);font-size:11px">'+esc(label)+'</div></div>';}
+function fieldEventLabel(e){
+  if(e.kind==='band_connected')return 'connected';
+  if(e.kind==='band_disconnected')return 'dropped'+(e.bleErrorCode!=null?' ('+fieldReason(e.bleErrorCode)+')':(e.reason?' ('+e.reason+')':''));
+  if(e.kind==='alert')return 'alert'+(e.appName?' · '+e.appName:'')+(e.acknowledged?' ✓ acked':'');
+  if(e.kind==='ancs_not_granted')return 'ANCS not granted';
+  if(e.kind==='permission_regressed')return 'permission lost'+(e.missingPermissions?' ('+e.missingPermissions+')':'');
+  if(e.kind==='low_battery')return 'low battery'+(e.batteryLevel!=null?' ('+e.batteryLevel+'%)':'');
+  if(e.kind==='app_closed')return 'app closed';
+  return e.kind||'event';
+}
+function fieldDetail(uid,asOf){
+  const u=FIELD_USERS[uid]||{id:uid};
+  const b=fieldBandFor(u)||{};
+  const uev=FIELD_EVENTS.filter(e=>e.userId===uid);
+  const online=b.isConnected===true;
+  let h='<button class="btn ghost" style="margin-bottom:12px" onclick="fieldBack()">← All wearers</button>';
+  h+='<div class="card" style="margin-bottom:12px"><div class="row" style="align-items:center;gap:10px"><div class="grow">'
+    +'<div class="t" style="font-size:18px">'+esc(u.name||u.email||uid)+'</div>'
+    +'<div class="d" style="margin-top:2px">'+esc(u.email||'')+' · '+esc(b.name||u.bandName||'no band')+'</div></div>'
+    +(online?'<span class="pill good">online</span>':'<span class="pill dim">offline</span>')+'</div>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">'
+    +fieldAncsChip(b.ancsStatus)+fieldBattChip(b.batteryLevel)
+    +(b.firmwareVersion?'<span class="pill dim">fw '+esc(b.firmwareVersion)+'</span>':'')
+    +(b.lastConnected?'<span class="pill dim">last up '+fieldAgo(b.lastConnected)+'</span>':'')
+    +(b.lastDisconnected?'<span class="pill dim">last drop '+fieldAgo(b.lastDisconnected)+'</span>':'')
+    +'</div></div>';
+  // ANCS explainer if not flowing
+  if(b.ancsStatus===0){h+='<div class="note" style="margin-bottom:12px;border-color:var(--amber);color:var(--amber)">ANCS is not delivering to this band — the wearer won’t get message/clock alerts even while connected. Usually a missing notification-permission grant or a stale bond (have them Forget the band in iOS Settings → Bluetooth and re-pair).</div>';}
+  // event timeline
+  h+='<div class="t" style="margin:4px 0 8px">Timeline <span class="d" style="font-weight:400;color:var(--faint)">· '+esc(asOf)+'</span></div>';
+  if(!uev.length){h+='<div class="card"><div class="d">No events for this wearer yet.</div></div>';return h;}
+  h+='<div class="qc-log" style="max-height:none">'+uev.slice(0,400).map(e=>{
+    const drop=e.kind==='band_disconnected',alert=e.kind==='alert',bad=e.kind==='ancs_not_granted'||e.kind==='permission_regressed'||e.kind==='low_battery';
+    const cls=drop||bad?'amber':(e.kind==='band_connected'||(alert&&e.acknowledged)?'good':'');
+    const t=new Date(e.ts||0).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+    return '<div class="ln"><span class="ts" style="min-width:112px">'+esc(t)+'</span><span class="msg"'+(cls?' style="color:var(--'+cls+')"':'')+'>'+esc(fieldEventLabel(e))+(e.platform?'  ['+esc(e.platform)+']':'')+'</span></div>';
+  }).join('')+'</div>';
+  return h;
+}
 function renderFeedbackBadge(){const b=document.getElementById('fb-badge');if(b){const c=fbOpenCount();b.textContent=c>9?'9+':String(c);b.style.display=(isSuperAdmin()&&c)?'flex':'none'}
   const ac=document.getElementById('acc-fb-count');if(ac){const c=fbOpenCount();ac.textContent=c?'· '+c+' open':''}}
 function openFeedbackInbox(){fbxFilter='open';closeSheets();goto('s-feedback')}
@@ -3285,6 +3408,7 @@ let CURRENT_USER=null;
 const FINANCE_NAV={id:'s-finance',label:'Financials',roles:[],svg:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>'};
 const FEEDBACK_NAV={id:'s-feedback',label:'Feedback',roles:[],svg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'};
 const USERS_NAV={id:'s-users',label:'Users',roles:[],svg:'<circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 12 0"/><circle cx="17.5" cy="8.5" r="2.4"/><path d="M15.5 20a5 5 0 0 1 6.5-3.8"/>'};
+const FIELD_NAV={id:'s-field',label:'Field',roles:[],svg:'<path d="M4 20V10M10 20V4M16 20v-7M20 20H2"/><circle cx="10" cy="4" r="0"/>'};
 let FINANCE_EMAILS=[];
 function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;if(u.role==='superadmin')return true;if(isOversight(u))return true;return FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase())}
 /* Department layer: a sign-up role (Ops/Sales/Tech) that scopes which work
@@ -3312,6 +3436,7 @@ function buildNav(role){
   else items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(role)));
   if(financeAllowed())items.splice(1,0,FINANCE_NAV);
   if(isSuperAdmin())items.push(FEEDBACK_NAV);
+  if(isSuperAdmin())items.push(FIELD_NAV);
   if(isSuperAdmin()||isOversight())items.push(USERS_NAV);
   const current=document.querySelector('.screen.on');const curId=current?current.id:'s-pulse';
   items.forEach((n)=>{
@@ -3336,6 +3461,7 @@ function goto(id,btn){
   if(id==='s-vault')renderVault();
   if(id==='s-comply')renderComply();
   if(id==='s-qc')renderQC();
+  if(id==='s-field'){subscribeFieldMonitor();renderField();}
   if(id==='s-users')renderUsers();
   if(id==='s-know')renderAgent();
 }
