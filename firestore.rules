@@ -166,6 +166,16 @@ service cloud.firestore {
       allow write: if false; // server (Admin SDK) only
     }
 
+    // FIELD MONITOR mirror — the mirrorFieldTelemetry function copies band/app
+    // telemetry here from the separate mobile-app Firebase project. It carries
+    // end-user PII (which apps a wearer gets notifications from, connection
+    // timing, per-user state), so read is SUPER-ADMIN ONLY. Written by the
+    // Admin SDK (which bypasses rules), so client writes are denied.
+    match /field_events/{id} { allow read: if isSuper(); allow write: if false; }
+    match /field_users/{id}  { allow read: if isSuper(); allow write: if false; }
+    match /field_bands/{id}  { allow read: if isSuper(); allow write: if false; }
+    match /field_sync/{id}   { allow read: if isSuper(); allow write: if false; }
+
     // Per-user email credentials — readable/writable ONLY by their owner.
     // No other teammate can read them; the backend uses the Admin SDK to send.
     match /mail_credentials/{uid} {

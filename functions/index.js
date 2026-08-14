@@ -928,3 +928,175 @@ function lastActivity(a) {
   if (dd) ds.push(dd);
   return ds.length ? Math.max.apply(null, ds) : null;
 }
+
+/* ============================================================================
+ * FIELD MONITOR — cross-project telemetry mirror
+ * ----------------------------------------------------------------------------
+ * The mobile app lives in a SEPARATE Firebase project (default: safewave-371716).
+ * This scheduled function reads that project's telemetry with a read-only-in-
+ * practice service account (APP_FIREBASE_SA — the JSON key, injected at deploy)
+ * and mirrors it into THIS project so the super-admin Field Monitor can review
+ * every wearer's band + app activity in one place.
+ *   - Incremental: a cursor (field_sync/cursor) tracks the last-seen timestamp
+ *     for activity_logs and history so each run only pulls new rows.
+ *   - Idempotent: mirror doc id = "<srcCollection>_<srcId>", so re-runs upsert.
+ *   - Bounded: caps rows/users/bands per run to stay within function limits.
+ * If APP_FIREBASE_SA isn't set the function no-ops (safe before the secret is
+ * provisioned). Never writes to the app project.
+ * ==========================================================================*/
+let _appDb = null;
+function appProjectDb() {
+  if (_appDb) return _appDb;
+  // The app-project service-account key, provided as base64 of the JSON key file
+  // (APP_FIREBASE_SA_B64) so a multi-line key survives the .env round-trip. A raw
+  // single-line JSON in APP_FIREBASE_SA is also accepted as a fallback.
+  let raw = "";
+  if (process.env.APP_FIREBASE_SA_B64) {
+    try { raw = Buffer.from(process.env.APP_FIREBASE_SA_B64, "base64").toString("utf8"); } catch (e) { raw = ""; }
+  } else {
+    raw = process.env.APP_FIREBASE_SA || "";
+  }
+  if (!raw) return null;
+  let sa;
+  try { sa = JSON.parse(raw); } catch (e) { logger.error("APP_FIREBASE_SA(_B64) is not valid JSON"); return null; }
+  try {
+    const app = admin.initializeApp(
+      { credential: admin.credential.cert(sa), projectId: sa.project_id },
+      "appProject"
+    );
+    _appDb = app.firestore();
+    return _appDb;
+  } catch (e) {
+    // Re-init guard: if the named app already exists (warm instance), reuse it.
+    try { _appDb = admin.app("appProject").firestore(); return _appDb; } catch (_) {}
+    logger.error("appProjectDb init failed", e);
+    return null;
+  }
+}
+
+// Normalize an app-project activity_logs doc into a Field Monitor event.
+function normActivity(id, d) {
+  const m = d.metadata || {};
+  const ms = d.timestamp && d.timestamp.toMillis ? d.timestamp.toMillis() : 0;
+  return {
+    src: "activity_logs", srcId: id,
+    kind: d.type || "event",
+    userId: d.userId || null,
+    userEmail: d.userEmail || null,
+    bandName: m.bandName || null,
+    platform: d.devicePlatform || null,
+    reason: m.reason || null,
+    bleErrorCode: (m.bleErrorCode !== undefined ? m.bleErrorCode : null),
+    bleReason: (m.bleReason !== undefined ? m.bleReason : null),
+    firmwareVersion: m.firmwareVersion || null,
+    batteryLevel: (m.batteryLevel !== undefined ? m.batteryLevel : null),
+    missingPermissions: m.missingPermissions || null,
+    ts: ms, mirroredAt: Date.now(),
+  };
+}
+// Normalize an app-project history doc (a delivered notification) into an event.
+function normHistory(id, d) {
+  const ms = d.date && d.date.toMillis ? d.date.toMillis() : 0;
+  const ackMs = d.acknowledgedAt && d.acknowledgedAt.toMillis ? d.acknowledgedAt.toMillis() : null;
+  return {
+    src: "history", srcId: id,
+    kind: "alert",
+    userId: d.userId || null,
+    appName: d.appName || null,
+    bundleIdentifier: d.bundleIdentifier || null,
+    message: d.message || null,
+    acknowledged: !!d.acknowledged,
+    acknowledgedAt: ackMs,
+    ts: ms, mirroredAt: Date.now(),
+  };
+}
+
+exports.mirrorFieldTelemetry = onSchedule(
+  { schedule: "every 5 minutes", region: REGION, timeoutSeconds: 300 },
+  async () => {
+    const src = appProjectDb();
+    if (!src) { logger.info("mirrorFieldTelemetry skipped — APP_FIREBASE_SA not set"); return; }
+
+    const curRef = db.collection("field_sync").doc("cursor");
+    const curSnap = await curRef.get();
+    const cur = curSnap.exists ? (curSnap.data() || {}) : {};
+    let actMs = Number(cur.activityMs || 0);
+    let histMs = Number(cur.historyMs || 0);
+    const LIMIT = 500;
+    let events = 0;
+
+    // ---- activity_logs (connect/disconnect/permission/battery events) ----
+    try {
+      const snap = await src.collection("activity_logs")
+        .where("timestamp", ">", admin.firestore.Timestamp.fromMillis(actMs))
+        .orderBy("timestamp", "asc").limit(LIMIT).get();
+      let batch = db.batch(), n = 0;
+      for (const doc of snap.docs) {
+        const ev = normActivity(doc.id, doc.data());
+        batch.set(db.collection("field_events").doc("activity_logs_" + doc.id), ev, { merge: true });
+        if (ev.ts > actMs) actMs = ev.ts;
+        events++; if (++n >= 450) { await batch.commit(); batch = db.batch(); n = 0; }
+      }
+      if (n) await batch.commit();
+    } catch (e) { logger.error("mirror activity_logs failed", e); }
+
+    // ---- history (delivered notifications + button-ack) ----
+    try {
+      const snap = await src.collection("history")
+        .where("date", ">", admin.firestore.Timestamp.fromMillis(histMs))
+        .orderBy("date", "asc").limit(LIMIT).get();
+      let batch = db.batch(), n = 0;
+      for (const doc of snap.docs) {
+        const ev = normHistory(doc.id, doc.data());
+        batch.set(db.collection("field_events").doc("history_" + doc.id), ev, { merge: true });
+        if (ev.ts > histMs) histMs = ev.ts;
+        events++; if (++n >= 450) { await batch.commit(); batch = db.batch(); n = 0; }
+      }
+      if (n) await batch.commit();
+    } catch (e) { logger.error("mirror history failed", e); }
+
+    // ---- roster: mirror users + live band status (full bounded snapshot) ----
+    let users = 0, bands = 0;
+    try {
+      const snap = await src.collection("users").limit(2000).get();
+      let batch = db.batch(), n = 0;
+      for (const doc of snap.docs) {
+        const u = doc.data() || {};
+        batch.set(db.collection("field_users").doc(doc.id), {
+          userId: doc.id,
+          name: u.name || u.displayName || null,
+          email: u.email || null,
+          bandName: u.bandName || (Array.isArray(u.bands) ? (u.bands[0] || null) : null),
+          organizationId: u.organizationId || null,
+          mirroredAt: Date.now(),
+        }, { merge: true });
+        users++; if (++n >= 450) { await batch.commit(); batch = db.batch(); n = 0; }
+      }
+      if (n) await batch.commit();
+    } catch (e) { logger.error("mirror users failed", e); }
+    try {
+      const snap = await src.collection("bands").limit(2000).get();
+      let batch = db.batch(), n = 0;
+      for (const doc of snap.docs) {
+        const b = doc.data() || {};
+        batch.set(db.collection("field_bands").doc(doc.id), {
+          bandId: doc.id,
+          name: b.name || doc.id,
+          assignedUserId: b.assignedUserId || null,
+          isConnected: (b.isConnected !== undefined ? b.isConnected : null),
+          batteryLevel: (b.batteryLevel !== undefined ? b.batteryLevel : null),
+          ancsStatus: (b.ancsStatus !== undefined ? b.ancsStatus : null),
+          firmwareVersion: b.firmwareVersion || null,
+          lastConnected: b.lastConnected && b.lastConnected.toMillis ? b.lastConnected.toMillis() : null,
+          lastDisconnected: b.lastDisconnected && b.lastDisconnected.toMillis ? b.lastDisconnected.toMillis() : null,
+          mirroredAt: Date.now(),
+        }, { merge: true });
+        bands++; if (++n >= 450) { await batch.commit(); batch = db.batch(); n = 0; }
+      }
+      if (n) await batch.commit();
+    } catch (e) { logger.error("mirror bands failed", e); }
+
+    await curRef.set({ activityMs: actMs, historyMs: histMs, lastRunAt: Date.now(), lastCounts: { events, users, bands } }, { merge: true });
+    logger.info("mirrorFieldTelemetry done", { events, users, bands });
+  }
+);
