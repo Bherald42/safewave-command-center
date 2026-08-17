@@ -1341,6 +1341,7 @@ input[type=date]{color-scheme:dark}
 </div>
 
 <!-- Lightbox for viewing an attached screenshot -->
+<input type="file" id="fb-reply-file" accept="image/*" multiple style="display:none" onchange="replyPhotosPicked(this)">
 <div id="shot-view" onclick="this.style.display='none'"><img id="shot-view-img" alt="screenshot"><div id="shot-view-nav" style="display:none;position:absolute;left:0;right:0;bottom:22px;align-items:center;justify-content:center;gap:18px"><button onclick="shotViewStep(-1,event)" style="width:44px;height:44px;border-radius:22px;border:none;background:rgba(255,255,255,.14);color:#fff;font-size:20px;cursor:pointer">‹</button><span id="shot-view-count" style="color:#fff;font-size:13px;font-family:var(--font-m)"></span><button onclick="shotViewStep(1,event)" style="width:44px;height:44px;border-radius:22px;border:none;background:rgba(255,255,255,.14);color:#fff;font-size:20px;cursor:pointer">›</button></div></div>
 
 <!-- CRM guided "Start working" queue -->
@@ -4304,7 +4305,7 @@ function renderFeedbackInbox(){const open=fbOpenCount();
   document.getElementById('fbx-filter').innerHTML=fbxTab('open','Open',open)+fbxTab('all','All',FEEDBACK.length)+fbxTab('resolved','Resolved',FEEDBACK.length-open);
   const list=FEEDBACK.filter(f=>fbxFilter==='all'?true:(fbxFilter==='resolved'?f.status==='resolved':f.status!=='resolved'));
   document.getElementById('fbx-list').innerHTML=list.length?list.map(fbxCard).join(''):'<div class="empty"><div class="ico">💬</div><div class="t">Nothing here</div><div class="d">When the team taps the 💬 button on any screen, it shows up here.</div></div>'}
-let fbReplyOpen={};
+let fbReplyOpen={},fbReplyShots={},fbReplyText={},fbReplyTargetId=null;
 function fbShort(ms){if(!ms)return '';const d=new Date(ms);return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}
 function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMillis():0;const time=t?new Date(t).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';const resolved=f.status==='resolved';
   const tp=({Idea:'💡',Issue:'🐞',Question:'❓'})[f.type]||'💬';
@@ -4313,8 +4314,11 @@ function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMi
   let h='<div class="card"><div class="row"><div class="grow"><div class="t">'+tp+' '+esc(f.type||'Feedback')+' · '+esc(f.screenLabel||'')+'</div><div class="d">'+esc(f.fromName||f.fromEmail||'Teammate')+(time?' · '+time:'')+'</div></div><span class="pill '+(resolved?'good':(thread.length?'accent':'wave'))+'">'+(resolved?'RESOLVED':(thread.length?'REPLIED':'OPEN'))+'</span></div>'
     +'<div class="note" style="margin-top:9px;white-space:pre-wrap">'+esc(f.text||'')+'</div>';
   if(shots.length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+shots.map(function(src,i){return '<img src="'+src+'" alt="attachment" style="width:78px;height:78px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="viewShotFb(\''+f.id+'\','+i+')">'}).join('')+'</div>';
-  if(thread.length)h+='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px">'+thread.map(function(m){const mine=m.uid===f.fromUid;return '<div style="align-self:'+(mine?'flex-start':'flex-end')+';max-width:85%"><div style="font-size:11px;color:var(--faint);margin-bottom:2px">'+esc(m.by||(mine?'Submitter':'You'))+(m.at?' · '+fbShort(m.at):'')+'</div><div style="background:'+(mine?'var(--surface-2)':'rgba(29,170,225,.14)')+';color:var(--text);border-radius:12px;padding:8px 11px;font-size:13px;line-height:18px;white-space:pre-wrap">'+esc(m.text||'')+'</div></div>'}).join('')+'</div>';
-  if(replyOpen)h+='<div style="margin-top:10px"><textarea class="field" id="fb-reply-'+f.id+'" placeholder="Write a reply — the submitter gets an alert with your message…" style="min-height:70px;resize:vertical;font-family:var(--font-b);width:100%"></textarea><div class="row" style="gap:8px;margin-top:6px"><button class="btn" style="flex:1" onclick="sendFeedbackReply(\''+f.id+'\')">Send reply &amp; alert submitter</button><button class="btn ghost" style="flex:0 0 auto" onclick="toggleFbReply(\''+f.id+'\')">Close</button></div></div>';
+  if(thread.length)h+='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px">'+thread.map(function(m,mi){const mine=m.uid===f.fromUid;const ms=m.shots||[];return '<div style="align-self:'+(mine?'flex-start':'flex-end')+';max-width:85%"><div style="font-size:11px;color:var(--faint);margin-bottom:2px">'+esc(m.by||(mine?'Submitter':'You'))+(m.at?' · '+fbShort(m.at):'')+'</div>'+(m.text?'<div style="background:'+(mine?'var(--surface-2)':'rgba(29,170,225,.14)')+';color:var(--text);border-radius:12px;padding:8px 11px;font-size:13px;line-height:18px;white-space:pre-wrap">'+esc(m.text)+'</div>':'')+(ms.length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;justify-content:'+(mine?'flex-start':'flex-end')+'">'+ms.map(function(src,pi){return '<img src="'+src+'" alt="attachment" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="viewReplyShot(\''+f.id+'\','+mi+','+pi+')">'}).join('')+'</div>':'')+'</div>'}).join('')+'</div>';
+  if(replyOpen){var rShots=fbReplyShots[f.id]||[];
+    h+='<div style="margin-top:10px"><textarea class="field" id="fb-reply-'+f.id+'" placeholder="Write a reply — the submitter gets an alert with your message…" oninput="fbReplyText[\''+f.id+'\']=this.value" style="min-height:70px;resize:vertical;font-family:var(--font-b);width:100%">'+esc(fbReplyText[f.id]||'')+'</textarea>'
+      +(rShots.length?'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px">'+rShots.map(function(src,i){return '<div style="position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1px solid var(--line)"><img src="'+src+'" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in" onclick="viewReplyDraft(\''+f.id+'\','+i+')"><button onclick="removeReplyShot(\''+f.id+'\','+i+')" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:9px;border:none;background:rgba(6,12,20,.8);color:#fff;font-size:11px;line-height:1;cursor:pointer;padding:0">✕</button></div>'}).join('')+'</div>':'')
+      +'<div class="row" style="gap:8px;margin-top:6px"><button class="btn" style="flex:1" onclick="sendFeedbackReply(\''+f.id+'\')">Send reply &amp; alert submitter</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="addReplyPhotos(\''+f.id+'\')">🖼 Photos</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="toggleFbReply(\''+f.id+'\')">Close</button></div></div>';}
   h+='<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
       +(resolved?'<button class="btn ghost" style="flex:1 1 120px" onclick="setFeedbackStatus(\''+f.id+'\',\'open\')">Reopen</button>':'<button class="btn ghost" style="flex:1 1 120px" onclick="setFeedbackStatus(\''+f.id+'\',\'resolved\')">Mark resolved</button>')
       +(f.screen?'<button class="btn ghost" style="flex:1 1 120px" onclick="goto(\''+esc(f.screen)+'\')">Go to '+esc(f.screenLabel||'screen')+'</button>':'')
@@ -4323,15 +4327,25 @@ function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMi
   return h;}
 function toggleFbReply(id){fbReplyOpen[id]=!fbReplyOpen[id];renderFeedbackInbox();if(fbReplyOpen[id]){const el=document.getElementById('fb-reply-'+id);if(el)el.focus();}}
 function viewShotFb(id,i){const f=FEEDBACK.find(x=>x.id===id);if(!f)return;const shots=(f.shots&&f.shots.length)?f.shots:(f.shot?[f.shot]:[]);viewShotList(shots,i)}
+function viewReplyShot(fid,mi,pi){const f=FEEDBACK.find(x=>x.id===fid);if(!f||!f.thread||!f.thread[mi])return;viewShotList(f.thread[mi].shots||[],pi)}
+function viewReplyDraft(id,i){viewShotList(fbReplyShots[id]||[],i)}
+/* Attach photos to a reply draft. */
+function addReplyPhotos(id){fbReplyTargetId=id;const inp=document.getElementById('fb-reply-file');if(inp)inp.click();}
+function replyPhotosPicked(input){const files=Array.prototype.slice.call(input.files||[]);input.value='';const id=fbReplyTargetId;if(!id||!files.length)return;
+  fbReplyShots[id]=fbReplyShots[id]||[];let done=0;
+  files.forEach(function(f){photoToData(f).then(function(d){fbReplyShots[id].push(d);}).catch(function(){}).then(function(){if(++done===files.length)renderFeedbackInbox();});});}
+function removeReplyShot(id,i){(fbReplyShots[id]||[]).splice(i,1);renderFeedbackInbox();}
 /* Post a reply into the feedback thread and alert the submitter with it. */
-function sendFeedbackReply(id){const el=document.getElementById('fb-reply-'+id);const text=(el&&el.value||'').trim();if(!text){toast('Write a reply first');return}
+function sendFeedbackReply(id){const el=document.getElementById('fb-reply-'+id);const text=(el&&el.value||fbReplyText[id]||'').trim();const rShots=(fbReplyShots[id]||[]).slice();
+  if(!text&&!rShots.length){toast('Write a reply or add a photo first');return}
   const f=FEEDBACK.find(x=>x.id===id);if(!f){toast('Feedback not found');return}
   const msg={by:(CURRENT_USER&&CURRENT_USER.name)||'Safewave team',uid:(CURRENT_USER&&CURRENT_USER.uid)||'admin',text:text,at:Date.now()};
+  if(rShots.length)msg.shots=rShots;
   // Optimistic local update; the snapshot reconciles once the write lands.
-  f.thread=(f.thread||[]).concat([msg]);if(el)el.value='';renderFeedbackInbox();
+  f.thread=(f.thread||[]).concat([msg]);fbReplyText[id]='';fbReplyShots[id]=[];renderFeedbackInbox();
   if(hasFirestore()){
     firebase.firestore().collection('feedback').doc(id).update({thread:firebase.firestore.FieldValue.arrayUnion(msg),lastReplyAt:firebase.firestore.FieldValue.serverTimestamp()})
-      .then(()=>{if(f.fromUid&&f.fromUid!==(CURRENT_USER&&CURRENT_USER.uid))notify(f.fromUid,'Reply to your feedback',text.slice(0,140),'');toast('✓ Reply sent — submitter alerted')})
+      .then(()=>{if(f.fromUid&&f.fromUid!==(CURRENT_USER&&CURRENT_USER.uid))notify(f.fromUid,'Reply to your feedback',(text||'📷 Photo').slice(0,140),'');toast('✓ Reply sent — submitter alerted')})
       .catch(e=>toast('Reply failed — '+((e&&e.code)||'check rules')));
   }else{toast('Reply saved — connect the cloud to alert the submitter')}}
 function setFeedbackStatus(id,st){if(hasFirestore())firebase.firestore().collection('feedback').doc(id).set({status:st},{merge:true}).catch(e=>toast('Update failed — '+((e&&e.code)||'')));const f=FEEDBACK.find(x=>x.id===id);if(f)f.status=st;renderFeedbackInbox();renderFeedbackBadge()}
