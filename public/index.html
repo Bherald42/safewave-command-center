@@ -555,6 +555,20 @@ input[type=date]{color-scheme:dark}
 .sim-sb{display:flex;justify-content:space-between;align-items:center;padding:9px 20px 5px;color:#fff;font-family:var(--font-m);font-size:12px;font-weight:600;flex:0 0 auto}
 .sim-app{position:relative}
 .sim-fab{position:absolute;right:16px;bottom:70px;width:60px;height:60px;border-radius:30px;background:#1DAAE1;display:grid;place-items:center;z-index:6;box-shadow:0 4px 8px rgba(0,0,0,.3)}
+.sim-overlay{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;justify-content:flex-end;color:#fff;font-family:var(--font-b)}
+.sim-overlay .ov-scrim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.sim-sheet{position:relative;background:#121212;border-radius:24px 24px 0 0;max-height:88%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -8px 30px rgba(0,0,0,.5)}
+.sim-sheet.full{max-height:100%;height:100%;border-radius:0}
+.sim-sheet .sh-body{overflow-y:auto;padding:0 20px 20px}
+.sim-sheet .sh-body::-webkit-scrollbar{width:0}
+.sim-grab{width:40px;height:5px;border-radius:3px;background:#3a3a3a;margin:10px auto 4px}
+.sim-dialog-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:28px;z-index:9}
+.sim-dialog{position:relative;background:#1E1E1E;border-radius:16px;padding:20px;width:100%;max-width:270px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+.sim-mrow{display:flex;align-items:center;width:100%;padding:15px 0;border:none;background:none;text-align:left;cursor:pointer;color:#fff;font-family:var(--font-b);font-size:16px}
+.sim-appbar{display:flex;align-items:center;gap:12px;padding:14px 16px 10px}
+.sim-step{width:44px;height:44px;border-radius:22px;border:1px solid #3a3a3a;background:#2A2A2A;color:#fff;font-size:22px;cursor:pointer;flex:0 0 auto}
+.sim-spin{width:16px;height:16px;border-radius:50%;border:2px solid #2A2A2A;border-top-color:#1DAAE1;display:inline-block;animation:simspin .7s linear infinite}
+@keyframes simspin{to{transform:rotate(360deg)}}
 .sim-island{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:78px;height:23px;background:#000;border-radius:14px;z-index:6}
 .sim-notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:130px;height:22px;background:#000;border-radius:0 0 13px 13px;z-index:6}
 .sim-punch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:9px;height:9px;background:#000;border-radius:50%;z-index:6}
@@ -2448,6 +2462,7 @@ function qcSimView(){
         +'<div id="sim-chrome"></div>'
         +'<div class="sim-sb" id="sim-sb"><span id="sim-clock">9:41</span><span><span id="sim-net">5G</span> <span id="sim-batl">87</span></span></div>'
         +'<div class="sim-app"><div class="sim-scroll" id="sim-scroll"></div><div class="sim-fab" id="sim-fab" style="display:none"></div><div class="sim-tb" id="sim-tb"></div></div>'
+        +'<div class="sim-overlay" id="sim-overlay" style="display:none"></div>'
         +'<div class="sim-halo" id="sim-halo"></div>'
         +'<div class="sim-banner" id="sim-banner"><div class="t"></div><div class="b"></div></div>'
       +'</div></div>'
@@ -2470,7 +2485,7 @@ function simAfterRender(){
   document.getElementById('sim-dnd').value=qcSim.dnd;
   document.getElementById('sim-bat').value=qcSim.band.battery;
   simRenderFrame();simRenderApp();simRenderReadout();simRenderSummary();simRenderSoak();
-  simRenderRealBand();qcRenderCT();simRenderRunLog();
+  simRenderRealBand();qcRenderCT();simRenderRunLog();simRenderOverlay();
 }
 function simSetOSOptions(){const sel=document.getElementById('sim-os');if(!sel)return;sel.innerHTML=SIM_OSV[qcSim.os].map(function(v){return '<option'+(v===qcSim.osVersion?' selected':'')+'>'+v+'</option>'}).join('')}
 function simSetDevice(id){qcSim.device=id;simRefreshOS();simSetOSOptions();simRenderFrame();simRenderApp();simRenderSummary()}
@@ -2489,7 +2504,7 @@ function simDeleteApp(i){qcSim.apps.splice(i,1);simRenderApp();simRenderSummary(
 /* Alarm actions. */
 function simToggleAlarm(i){var a=qcSim.alarms[i];if(a){a.enabled=!a.enabled;simRenderApp();}}
 /* Floating add button. */
-function simFab(){if(qcSim.tab==='alerts')simToast('Add an app to monitor — done on device');else if(qcSim.tab==='alarm')simToast('Set a new wake alarm — done on device');}
+function simFab(){if(qcSim.tab==='alerts')simOpenAddApp();else if(qcSim.tab==='alarm')simOpenNewAlarm();}
 
 /* ================= REAL BAND (Web Bluetooth) ================= */
 let qcRealBand=null;
@@ -2619,6 +2634,203 @@ function simRenderRunLog(){
 function qcRunLogText(){var L=qcRunLog;if(!L)return '';var s='Safewave QC — '+L.title+'\n'+L.band+' · '+L.device+' · '+L.os+' · firmware '+L.firmware+'\nStarted '+L.startedAt+'\n'+L.passed+' passed · '+L.failed+' failed\n\n';L.entries.forEach(function(e){s+=(e.ts||'').slice(11,19)+'  '+(e.type==='run'?'· ':(e.ok?'PASS ':'FAIL '))+e.msg+'\n';});return s;}
 function qcDownloadRunLog(fmt){if(!qcRunLog)return;var data=fmt==='json'?JSON.stringify(qcRunLog,null,2):qcRunLogText();var blob=new Blob([data],{type:fmt==='json'?'application/json':'text/plain'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=(qcRunLog.title||'qc-run').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.'+fmt;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},1000);}
 function qcAttachRunLog(){if(!qcRunLog)return;var rels=Object.values(RELEASES);if(!rels.length){toast('No releases to attach to');return;}toast('Pick a release from the Releases tab to log against — coming from run '+qcRunLog.passed+'✓/'+qcRunLog.failed+'✕');}
+
+/* ================= IN-PHONE MODALS / DIALOGS =================
+   Faithful web replicas of the app's sheets, modals and alert dialogs so every
+   in-app button behaves like the real app (map built from the RN source). */
+let simUI={sheet:null,dlg:null};let simDlgFns=[];
+function simAdmin(){return true;} // the CC tester acts as an admin/staff user
+function simOpenSheet(kind,data){simUI.sheet=Object.assign({kind:kind},data||{});simRenderOverlay();}
+function simCloseSheet(){simUI.sheet=null;simRenderOverlay();}
+/* App-style alert/confirm. buttons:[{label,style:'cancel'|'destructive'|'',fn}] */
+function simDialog(title,msg,buttons){simUI.dlg={title:title,msg:msg,buttons:(buttons||[{label:'OK'}]).map(function(b){return {label:b.label,style:b.style||''}})};simDlgFns=(buttons||[]).map(function(b){return b.fn||null});simRenderOverlay();}
+function simDlgBtn(i){var f=simDlgFns[i];simUI.dlg=null;simRenderOverlay();if(typeof f==='function')f();}
+function simSheetField(k,v){if(simUI.sheet)simUI.sheet[k]=v;} // text setter, no re-render (keeps focus)
+function simCfgField(k,v){if(simUI.sheet&&simUI.sheet.cfg)simUI.sheet.cfg[k]=v;}
+function simBandName(){return qcSim.band.name||'Safewave Band';}
+function simBandId(){return qcSim.band.deviceId||'C8:3A:1F:74:2B:90';}
+
+function simRenderOverlay(){
+  var el=document.getElementById('sim-overlay');if(!el)return;
+  if(!simUI.sheet&&!simUI.dlg){el.style.display='none';el.innerHTML='';return;}
+  var h='';
+  if(simUI.sheet){h+='<div class="ov-scrim" onclick="simCloseSheet()"></div>'+simSheetHTML(simUI.sheet);}
+  if(simUI.dlg){var d=simUI.dlg;h+='<div class="sim-dialog-wrap"><div class="ov-scrim"></div><div class="sim-dialog">'
+    +'<div style="font-size:17px;font-weight:700;margin-bottom:6px">'+esc(d.title)+'</div>'
+    +(d.msg?'<div style="font-size:13px;color:#B0B0B0;line-height:19px;margin-bottom:16px">'+esc(d.msg)+'</div>':'<div style="height:8px"></div>')
+    +'<div style="display:flex;flex-direction:column;gap:8px">'+d.buttons.map(function(b,i){var col=b.style==='destructive'?'#F44336':'#1DAAE1';var wt=b.style==='cancel'?'500':'700';return '<button onclick="simDlgBtn('+i+')" style="padding:11px;border-radius:10px;border:none;background:'+(b.style==='cancel'?'#2A2A2A':'rgba(29,170,225,.12)')+';color:'+col+';font-size:15px;font-weight:'+wt+';cursor:pointer;font-family:var(--font-b)">'+esc(b.label)+'</button>'}).join('')+'</div>'
+    +'</div></div>';}
+  el.innerHTML=h;el.style.display='flex';
+}
+function simSheetHead(title,right){return '<div style="display:flex;align-items:center;padding:6px 20px 14px"><div style="flex:1;font-size:20px;font-weight:700">'+esc(title)+'</div>'+(right||'')+'<button onclick="simCloseSheet()" style="width:30px;height:30px;border-radius:15px;border:none;background:#2A2A2A;color:#fff;font-size:16px;cursor:pointer;margin-left:8px">✕</button></div>';}
+function simSheetHTML(s){
+  var grab='<div class="sim-grab"></div>';
+  if(s.kind==='bandinfo'){
+    return '<div class="sim-sheet">'+grab
+      +'<div style="display:flex;align-items:center;padding:6px 20px 14px"><div style="flex:1;font-size:20px;font-weight:700">Band Info</div><span class="pill" style="background:rgba(76,175,80,.15);color:#4CAF50;font-size:11px;padding:4px 10px;border-radius:99px;margin-right:8px">● Connected</span><button onclick="simCloseSheet()" style="width:30px;height:30px;border-radius:15px;border:none;background:#2A2A2A;color:#fff;cursor:pointer">✕</button></div>'
+      +'<div class="sh-body">'
+      +'<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Band Name</div>'
+      +(s.editName?('<div style="display:flex;gap:8px;margin-bottom:16px"><input class="sim-in" id="sim-bn-in" value="'+esc(simBandName())+'" maxlength="20" style="flex:1"><button class="sim-ib" onclick="simCloseRename()">Cancel</button><button class="sim-ib pri" onclick="simSaveBandName()">Save</button></div>')
+        :('<div style="display:flex;align-items:center;margin-bottom:16px"><div style="flex:1;font-size:18px;font-weight:600">'+esc(simBandName())+'</div>'+(simAdmin()?'<button class="sim-ib" onclick="simUI.sheet.editName=true;simRenderOverlay()">'+ic('pencil',16,'#1DAAE1')+' Edit</button>':'')+'</div>'))
+      +'<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Device ID</div><div style="font-family:var(--font-m);font-size:14px;color:#B0B0B0;margin-bottom:18px">'+esc(simBandId())+'</div>'
+      +'<div style="display:flex;gap:12px;margin-bottom:16px"><div style="flex:1;background:#1E1E1E;border-radius:14px;padding:16px;text-align:center"><div style="font-size:12px;color:#6B6B6B;margin-bottom:6px">Firmware</div><div style="font-size:18px;font-weight:700">'+esc(qcSim.band.firmware||'—')+'</div></div>'
+        +'<div style="flex:1;background:#1E1E1E;border-radius:14px;padding:16px;text-align:center"><div style="font-size:12px;color:#6B6B6B;margin-bottom:6px">Battery</div><div style="font-size:18px;font-weight:700;color:'+(qcSim.band.battery<=20?'#F44336':'#fff')+'">'+(qcSim.band.battery!=null?qcSim.band.battery+'%':'--')+'</div></div></div>'
+      +(simAdmin()?'<div style="font-size:12px;color:#6B6B6B;line-height:17px">You have admin privileges to rename this band.</div>':'')
+      +'</div></div>';
+  }
+  if(s.kind==='connect'){
+    var scanning=s.scanning!==false;
+    return '<div class="sim-sheet">'+grab+simSheetHead('Select Device')
+      +'<div class="sh-body">'
+      +(scanning?'<div style="display:flex;align-items:center;gap:10px;color:#B0B0B0;font-size:14px;margin-bottom:14px"><span class="sim-spin"></span>Scanning for devices…</div>':'')
+      +'<div onclick="simPickDevice()" style="display:flex;align-items:center;background:#1E1E1E;border-radius:14px;padding:16px;margin-bottom:10px;cursor:pointer">'+ic('bluetooth',22,'#1DAAE1')+'<div style="flex:1;margin-left:12px"><div style="font-size:16px;font-weight:600">Safewave Band</div><div style="font-size:12px;color:#6B6B6B;font-family:var(--font-m)">C8:3A:1F:74:2B:90</div></div><span style="color:#1DAAE1;font-weight:600;font-size:14px">Connect</span></div>'
+      +'<div style="font-size:12px;color:#6B6B6B;text-align:center;margin:14px 0">Make sure your Safewave Band is turned on and nearby.</div>'
+      +'<button class="sim-ib block pri" onclick="simUI.sheet.scanning='+(!scanning)+';simRenderOverlay()">'+(scanning?'Stop Scan':'Scan for Devices')+'</button>'
+      +'</div></div>';
+  }
+  if(s.kind==='register'){
+    var st=s.step||'scan';
+    var body;
+    if(st==='scan'){body='<div style="display:flex;align-items:center;gap:10px;color:#B0B0B0;font-size:14px;margin-bottom:14px"><span class="sim-spin"></span>Scanning for bands…</div>'
+      +'<div onclick="simUI.sheet.step=\'name\';simRenderOverlay()" style="display:flex;align-items:center;background:#1E1E1E;border-radius:14px;padding:16px;margin-bottom:10px;cursor:pointer">'+ic('bluetooth',22,'#1DAAE1')+'<div style="flex:1;margin-left:12px"><div style="font-size:16px;font-weight:600">Safewave Band</div><div style="font-size:12px;color:#6B6B6B;font-family:var(--font-m)">C8:3A:1F:74:2B:90</div></div>'+ic('chevron-forward',18,'#6B6B6B')+'</div>'
+      +'<button class="sim-ib block pri" onclick="simUI.sheet.step=\'name\';simRenderOverlay()">Start Scanning</button>';}
+    else{body='<div style="display:flex;align-items:center;background:#1E1E1E;border-radius:14px;padding:14px;margin-bottom:16px">'+ic('bluetooth',20,'#4CAF50')+'<span style="margin-left:10px;font-size:15px;font-weight:600">Safewave Band · connected</span></div>'
+      +'<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Band Name</div>'
+      +'<input class="sim-in" id="sim-reg-name" placeholder="e.g. Front-desk band" maxlength="20" oninput="simSheetField(\'regName\',this.value)" style="margin-bottom:6px">'
+      +'<div style="font-size:12px;color:#6B6B6B;margin-bottom:16px">3–20 characters. Can’t be the factory name.</div>'
+      +'<button class="sim-ib block pri" onclick="simDoRegister()">Register Band</button>';}
+    return '<div class="sim-sheet">'+grab+simSheetHead('Register Band')+'<div class="sh-body">'+body+'</div></div>';
+  }
+  if(s.kind==='appadd'){
+    var recs=[['Messages','#34C759'],['Phone','#30D158'],['WhatsApp','#25D366'],['Slack','#4A154B'],['Calendar','#FF3B30'],['Ring','#1DAAE1'],['ADT','#004B87'],['SimpliSafe','#0A2540']];
+    return '<div class="sim-sheet full">'+grab+simSheetHead('Add App')
+      +'<div style="padding:0 20px 10px"><input class="sim-in" placeholder="'+(qcSim.os==='ios'?'Search App Store…':'Filter apps…')+'" oninput="simSheetField(\'q\',this.value.toLowerCase());simRenderOverlay()" value="'+esc(s.q||'')+'"></div>'
+      +'<div class="sh-body"><div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin:4px 0 8px">'+(qcSim.os==='ios'?'Recommended apps':'Installed apps')+'</div>'
+      +recs.filter(function(r){return !s.q||r[0].toLowerCase().indexOf(s.q)>=0}).map(function(r){return '<div onclick="simAddApp('+ocjson(r[0])+','+ocjson(r[1])+')" style="display:flex;align-items:center;background:#1E1E1E;border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer"><div style="width:40px;height:40px;border-radius:8px;background:'+r[1]+';display:grid;place-items:center;color:#fff;font-weight:600;margin-right:12px">'+esc(r[0][0])+'</div><span style="flex:1;font-size:15px;font-weight:600">'+esc(r[0])+'</span>'+ic('add-circle',22,'#1DAAE1')+'</div>'}).join('')
+      +'</div></div>';
+  }
+  if(s.kind==='appconfig'){
+    var c=s.cfg,cont=c.numberOfVibrations===0,strengthWord=c.strength<=30?'Light':c.strength<=60?'Medium':c.strength<=90?'Strong':'Maximum';
+    return '<div class="sim-sheet">'+grab
+      +'<div style="display:flex;align-items:center;padding:6px 20px 10px"><button class="sim-ib" onclick="simCloseSheet()">Cancel</button><div style="flex:1;text-align:center;font-size:17px;font-weight:700">Configure</div><button class="sim-ib pri" onclick="simSaveAppCfg()">Save</button></div>'
+      +'<div class="sh-body"><div style="font-size:20px;font-weight:700;text-align:center;margin-bottom:18px">'+esc(c.name)+'</div>'
+      +'<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Number of vibrations</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:15px">Repeat until dismissed</span>'+'<span onclick="simCfgCont()" style="cursor:pointer">'+swSwitch(cont)+'</span></div>'
+      +'<div style="display:flex;align-items:center;justify-content:center;gap:20px;opacity:'+(cont?.4:1)+';margin-bottom:18px"><button class="sim-step" onclick="simCfgStep(\'numberOfVibrations\',-1,1,10)">−</button><div style="font-size:30px;font-weight:700;min-width:80px;text-align:center">'+(cont?'∞':c.numberOfVibrations)+'</div><button class="sim-step" onclick="simCfgStep(\'numberOfVibrations\',1,1,10)">+</button></div>'
+      +'<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Vibration strength</div>'
+      +'<div style="display:flex;align-items:center;justify-content:center;gap:20px;margin-bottom:6px"><button class="sim-step" onclick="simCfgStep(\'strength\',-10,10,100)">−</button><div style="font-size:30px;font-weight:700;min-width:120px;text-align:center">'+c.strength+'%</div><button class="sim-step" onclick="simCfgStep(\'strength\',10,10,100)">+</button></div>'
+      +'<div style="text-align:center;font-size:13px;color:#B0B0B0;margin-bottom:18px">'+strengthWord+'</div>'
+      +(qcSim.os==='android'?('<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Notification filter</div><div style="display:flex;gap:8px;margin-bottom:10px"><input class="sim-in" id="sim-phrase-in" placeholder="Add a word or phrase" style="flex:1"><button class="sim-ib pri" onclick="simCfgAddPhrase()">+</button></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">'+(c.phrases||[]).map(function(p,pi){return '<span onclick="simCfgDelPhrase('+pi+')" class="chip" style="cursor:pointer;padding:5px 10px">'+esc(p)+' ✕</span>'}).join('')+'</div>')
+        :'<div style="font-size:12px;color:#6B6B6B;line-height:17px;margin-bottom:16px">Phrase filters apply on Android only. On iPhone the band vibrates for every notification from this app.</div>')
+      +'<button class="sim-ib block" onclick="simTestAppCfg()">'+ic('phone-portrait',18,'#1DAAE1')+' Test on Band</button>'
+      +'</div></div>';
+  }
+  if(s.kind==='alarmedit'){
+    var a=s.al,x=to12(a.hour);
+    var days=[['S',0],['M',1],['T',2],['W',3],['T',4],['F',5],['S',6]];
+    return '<div class="sim-sheet">'+grab
+      +'<div style="display:flex;align-items:center;padding:6px 20px 10px"><button class="sim-ib" onclick="simCloseSheet()">Cancel</button><div style="flex:1;text-align:center;font-size:17px;font-weight:700">'+(s.isNew?'New Alarm':'Edit Alarm')+'</div><button class="sim-ib pri" onclick="simSaveAlarm()">Save</button></div>'
+      +'<div class="sh-body">'
+      +'<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin:6px 0 18px"><button class="sim-step" onclick="simAlTime(-1)">−</button><div style="font-size:44px;font-weight:300;min-width:150px;text-align:center">'+x.hh+':'+String(a.minute).padStart(2,'0')+' <span style="font-size:20px;color:#B0B0B0">'+x.m+'</span></div><button class="sim-step" onclick="simAlTime(1)">+</button></div>'
+      +'<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Repeat</div>'
+      +'<div style="display:flex;justify-content:space-between;margin-bottom:6px">'+days.map(function(d){var on=a.days.indexOf(d[1])>=0;return '<span onclick="simAlDay('+d[1]+')" style="width:34px;height:34px;border-radius:17px;display:grid;place-items:center;cursor:pointer;font-size:14px;font-weight:600;background:'+(on?'#1DAAE1':'#2A2A2A')+';color:'+(on?'#fff':'#B0B0B0')+'">'+d[0]+'</span>'}).join('')+'</div>'
+      +'<div style="font-size:12px;color:#6B6B6B;margin-bottom:16px">'+(a.days.length?'Repeats on the selected days':'Rings once, then turns off')+'</div>'
+      +'<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Label</div><input class="sim-in" value="'+esc(a.label||'')+'" maxlength="40" placeholder="Alarm" oninput="simUI.sheet.al.label=this.value" style="margin-bottom:16px">'
+      +'<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Wake pattern</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'+['gentle','standard','strong','escalate'].map(function(k){var sel=a.pattern===k;var w=SIM_WAKE[k];var sub={gentle:'Soft, short taps',standard:'Steady medium buzz',strong:'Full strength, long',escalate:'Ramps soft → max'}[k];return '<div onclick="simUI.sheet.al.pattern=\''+k+'\';simRenderOverlay()" style="border:2px solid '+(sel?'#1DAAE1':'#2A2A2A')+';border-radius:12px;padding:12px;cursor:pointer;background:'+(sel?'rgba(29,170,225,.08)':'transparent')+'"><div style="font-size:15px;font-weight:700;margin-bottom:2px">'+w.name+'</div><div style="font-size:11px;color:#B0B0B0">'+sub+'</div></div>'}).join('')+'</div>'
+      +[['buzzUntil','Buzz until dismissed','Band keeps buzzing until you press its button'],['snooze','Snooze','Offer a 9-minute snooze when it fires'],['phoneBackup','Phone backup','Also alert on the phone if the band is disconnected']].map(function(t){return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid rgba(255,255,255,.08)"><div style="flex:1;margin-right:12px"><div style="font-size:15px">'+t[1]+'</div><div style="font-size:12px;color:#6B6B6B">'+t[2]+'</div></div><span onclick="simUI.sheet.al.'+t[0]+'=!simUI.sheet.al.'+t[0]+';simRenderOverlay()" style="cursor:pointer">'+swSwitch(a[t[0]]!==false)+'</span></div>'}).join('')
+      +(s.isNew?'':'<button class="sim-ib block" style="margin-top:16px;color:#F44336;border-color:#F44336" onclick="simDeleteAlarm()">'+ic('trash',18,'#F44336')+' Delete Alarm</button>')
+      +'</div></div>';
+  }
+  if(s.kind==='histdetail'){
+    var e=s.entry,pill=e.filtered?['Filtered — band did not vibrate','#6B6B6B']:(e.buzz?['Acknowledged on band','#1DAAE1']:['Band vibrated','#1DAAE1']);
+    return '<div class="sim-sheet">'+grab+simSheetHead(e.label.split(':')[0]||'Alert')
+      +'<div class="sh-body"><div style="font-size:12px;color:#6B6B6B;margin-bottom:12px">'+esc(e.at)+'</div>'
+      +'<span class="pill" style="display:inline-block;background:rgba(29,170,225,.12);color:'+pill[1]+';font-size:12px;padding:5px 12px;border-radius:99px;margin-bottom:16px">'+pill[0]+'</span>'
+      +'<div style="font-size:16px;font-weight:600;margin-bottom:8px">'+esc(e.label)+'</div>'
+      +'<div style="font-size:14px;color:#B0B0B0;line-height:20px;font-style:'+(e.body?'normal':'italic')+'">'+esc(e.body||'No additional details were captured for this notification.')+'</div>'
+      +(e.buzz&&!e.filtered?'<div style="margin-top:16px;font-size:13px;color:#B0B0B0">You acknowledged this alert by pressing the button on your band.</div>':'')
+      +'</div></div>';
+  }
+  if(s.kind==='sub'){return simSubScreen(s.which);}
+  if(s.kind==='editprofile'){
+    return '<div class="sim-sheet">'+grab+simSheetHead('Edit Profile')
+      +'<div class="sh-body"><div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Display Name</div><input class="sim-in" value="Preview User" style="margin-bottom:14px" oninput="simSheetField(\'name\',this.value)">'
+      +'<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Email</div><div style="display:flex;align-items:center;background:#1E1E1E;border-radius:10px;padding:12px;margin-bottom:16px;color:#B0B0B0">'+ic('shield-checkmark',16,'#6B6B6B')+'<span style="margin-left:8px;font-size:14px">preview@safewavetech.com</span></div>'
+      +'<button class="sim-ib block pri" onclick="simCloseSheet();simToast(\'Profile updated\')">Save Changes</button>'
+      +'<div style="border-top:1px solid rgba(255,255,255,.08);margin:18px 0 12px"></div><div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Password</div><div style="font-size:13px;color:#B0B0B0;line-height:18px;margin-bottom:12px">Need to change your password? We’ll send you an email with a reset link.</div><button class="sim-ib block" style="color:#F44336" onclick="simToast(\'Password reset email sent\')">Send Password Reset Email</button>'
+      +'</div></div>';
+  }
+  if(s.kind==='deleteacct'){
+    return '<div class="sim-dialog-wrap"><div class="ov-scrim" onclick="simCloseSheet()"></div><div class="sim-dialog" style="max-width:300px;text-align:left">'
+      +'<div style="display:flex;align-items:center;margin-bottom:12px"><div style="flex:1;font-size:17px;font-weight:700">Delete Account</div><button onclick="simCloseSheet()" style="width:26px;height:26px;border-radius:13px;border:none;background:#2A2A2A;color:#fff;cursor:pointer">✕</button></div>'
+      +'<div style="text-align:center;margin-bottom:10px">'+ic('warning',40,'#F44336')+'</div>'
+      +'<div style="font-size:13px;color:#B0B0B0;line-height:19px;margin-bottom:12px">Deleting your account is permanent. Your Safewave login and associated account data will be removed.</div>'
+      +'<div style="font-size:13px;color:#B0B0B0;margin-bottom:8px">Enter your current password to confirm this action.</div>'
+      +'<input class="sim-in" type="password" placeholder="Current password" style="margin-bottom:16px">'
+      +'<div style="display:flex;gap:8px"><button class="sim-ib" style="flex:1" onclick="simCloseSheet()">Cancel</button><button class="sim-ib" style="flex:1;background:#F44336;color:#fff" onclick="simCloseSheet();simToast(\'Account deletion runs on a real device\')">Delete Account</button></div>'
+      +'</div></div>';
+  }
+  return '';
+}
+/* ----- Account sub-screens (full-height push screens) ----- */
+function simSubScreen(which){
+  var back='<div class="sim-appbar"><button onclick="simCloseSheet()" style="border:none;background:none;color:#fff;font-size:22px;cursor:pointer;padding:0">‹</button><div style="font-size:20px;font-weight:700">'+({bandhealth:'Band Health',firmware:'Firmware Update',help:'Contact Us',background:'Background Access'}[which])+'</div></div>';
+  var body='';
+  if(which==='bandhealth'){
+    var conn=qcSim.band.connected;
+    var checks=[['Band connection',conn,conn?'Connected to '+simBandName():'Not connected'],['Bluetooth',true,'On'],['Battery',qcSim.band.battery>20,(qcSim.band.battery!=null?qcSim.band.battery+'%':'—')+(qcSim.band.battery<=20?' — charge soon':'')],['Notifications reaching band',qcSim.band.ancs!==0,qcSim.band.ancs===0?'Not reaching band — re-pair':'OK'],['Firmware',true,qcSim.band.firmware||'—']];
+    body=checks.map(function(c){return '<div style="display:flex;align-items:center;background:#1E1E1E;border-radius:12px;padding:14px;margin-bottom:8px">'+(c[1]?icCheck(22,'#4CAF50'):ic('warning',22,'#FF9800'))+'<div style="flex:1;margin-left:12px"><div style="font-size:15px;font-weight:600">'+c[0]+'</div><div style="font-size:12px;color:#B0B0B0">'+esc(c[2])+'</div></div></div>'}).join('')
+      +'<button class="sim-ib block" style="margin-top:8px" onclick="simToast(\'Health report shared\')">Share health report</button>';
+  }else if(which==='firmware'){
+    var latest='1.0.46',cur=qcSim.band.firmware||'—',upToDate=(cur===latest);
+    body='<div style="background:#1E1E1E;border-radius:16px;padding:20px;text-align:center;margin-bottom:16px"><div style="font-size:12px;color:#6B6B6B;margin-bottom:6px">Current firmware</div><div style="font-size:30px;font-weight:700;margin-bottom:10px">'+esc(cur)+'</div><div style="font-size:13px;color:'+(upToDate?'#4CAF50':'#FF9800')+'">'+(upToDate?'Up to date':'Update available → '+latest)+'</div></div>'
+      +(upToDate?'<button class="sim-ib block" onclick="simToast(\'Checking for update…\')">Check for update</button>':'<button class="sim-ib block pri" onclick="simFwUpdate()">Update now</button>');
+  }else if(which==='help'){
+    body='<div style="font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Send us a message</div>'
+      +'<input class="sim-in" placeholder="Name" style="margin-bottom:8px"><input class="sim-in" placeholder="Email" style="margin-bottom:8px"><textarea class="sim-in" placeholder="Message" style="margin-bottom:10px;min-height:90px;resize:none"></textarea>'
+      +'<button class="sim-ib block pri" onclick="simToast(\'Message sent\')">Submit</button>'
+      +'<div style="border-top:1px solid rgba(255,255,255,.08);margin:18px 0 12px"></div>'
+      +'<div onclick="simToast(\'Opens mail app\')" class="sim-mrow" style="border:none">'+ic('document-text',20,'#1DAAE1')+'<span style="flex:1;margin-left:12px">Email Us</span>'+ic('open',18,'#6B6B6B')+'</div>'
+      +'<div onclick="simToast(\'Opens safewavetech.com\')" class="sim-mrow" style="border:none">'+ic('open',20,'#1DAAE1')+'<span style="flex:1;margin-left:12px">Website</span>'+ic('open',18,'#6B6B6B')+'</div>';
+  }else if(which==='background'){
+    body=['Battery optimization','Notification access','Autostart','Background activity'].map(function(t){return '<div style="display:flex;align-items:center;background:#1E1E1E;border-radius:12px;padding:14px;margin-bottom:8px">'+icCheck(22,'#4CAF50')+'<span style="flex:1;margin-left:12px;font-size:15px;font-weight:600">'+t+'</span></div>'}).join('');
+  }
+  return '<div class="sim-sheet full">'+back+'<div class="sh-body">'+body+'</div></div>';
+}
+
+/* ----- Handlers wired from the in-phone UI ----- */
+function simTapBandInfo(){if(qcSim.band.connected)simOpenSheet('bandinfo');}
+function simCloseRename(){if(simUI.sheet){simUI.sheet.editName=false;simRenderOverlay();}}
+function simSaveBandName(){var v=(document.getElementById('sim-bn-in')||{}).value||'';v=v.trim();if(!v){simDialog('Error','Band name cannot be empty',[{label:'OK'}]);return;}if(v===simBandName()){simUI.sheet.editName=false;simRenderOverlay();return;}simDialog('Confirm Rename','Please allow 1-2 minutes for the band name to be updated.',[{label:'Cancel',style:'cancel'},{label:'Continue',fn:function(){qcSim.band.name=v;if(simUI.sheet)simUI.sheet.editName=false;simRenderOverlay();simToast('Band renamed');}}]);}
+function simConnectSheet(){simOpenSheet('connect',{scanning:true});}
+function simPickDevice(){qcSim.band.connected=true;if(qcSim.band.battery==null)qcSim.band.battery=87;simCloseSheet();simRenderApp();simRenderSummary();simToast('Band connected');}
+function simOpenRegister(){simOpenSheet('register',{step:'scan'});}
+function simDoRegister(){var v=(simUI.sheet&&simUI.sheet.regName||'').trim();if(v.length<3){simDialog('Name too short','Band name must be 3–20 characters.',[{label:'OK'}]);return;}if(v.toLowerCase()==='safewave band'){simDialog('Choose a name','That’s the factory name — pick a unique one.',[{label:'OK'}]);return;}simCloseSheet();simDialog('Success','“'+v+'” has been registered. The band is restarting — please allow 1-2 minutes.',[{label:'Done'}]);}
+function simGoAlerts(){simSetTab('alerts');}
+function simOpenAddApp(){simOpenSheet('appadd',{q:''});}
+function simAddApp(name,color){if(qcSim.apps.some(function(a){return a.name===name})){simDialog('Already Added',name+' is already in your alerts list.',[{label:'OK'}]);return;}var app={id:'app'+Date.now(),name:name,color:color,enabled:true,numberOfVibrations:3,strength:65,phrases:[],phraseMode:'allow'};qcSim.apps.push(app);simOpenSheet('appconfig',{idx:qcSim.apps.length-1,cfg:JSON.parse(JSON.stringify(app)),isNew:true});}
+function simOpenAppConfig(i){var a=qcSim.apps[i];simOpenSheet('appconfig',{idx:i,cfg:JSON.parse(JSON.stringify(a))});}
+function simCfgCont(){var c=simUI.sheet.cfg;c.numberOfVibrations=(c.numberOfVibrations===0?3:0);simRenderOverlay();}
+function simCfgStep(k,d,mn,mx){var c=simUI.sheet.cfg;c[k]=Math.max(mn,Math.min(mx,(c[k]||0)+d));simRenderOverlay();}
+function simCfgAddPhrase(){var el=document.getElementById('sim-phrase-in');var v=(el&&el.value||'').trim();if(!v)return;simUI.sheet.cfg.phrases=(simUI.sheet.cfg.phrases||[]).concat([v]);simRenderOverlay();}
+function simCfgDelPhrase(i){simUI.sheet.cfg.phrases.splice(i,1);simRenderOverlay();}
+function simTestAppCfg(){if(!qcSim.band.connected){simDialog('Not Connected','Please connect to your Safewave Band first to test vibrations.',[{label:'OK'}]);return;}var c=simUI.sheet.cfg;simEmitBuzz({strength:c.strength,numBuzzes:c.numberOfVibrations===0?12:c.numberOfVibrations,dutyOfBuzz:50,durationOfDelay:50});simToast('Test sent to band');}
+function simSaveAppCfg(){var s=simUI.sheet,c=s.cfg;qcSim.apps[s.idx]=Object.assign(qcSim.apps[s.idx]||{},c);simCloseSheet();simRenderApp();simRenderSummary();simToast(qcSim.os==='ios'&&qcSim.band.connected?'Saved to band':'Settings saved');}
+function simOpenAlarmEdit(i){var a=qcSim.alarms[i];simOpenSheet('alarmedit',{idx:i,al:JSON.parse(JSON.stringify(a))});}
+function simOpenNewAlarm(){simOpenSheet('alarmedit',{idx:-1,isNew:true,al:{hour:7,minute:0,label:'',days:[],pattern:'standard',enabled:true,buzzUntil:true,snooze:true,phoneBackup:true}});}
+function simAlTime(d){var a=simUI.sheet.al;var t=(a.hour*60+a.minute+d*15+1440)%1440;a.hour=Math.floor(t/60);a.minute=t%60;simRenderOverlay();}
+function simAlDay(d){var a=simUI.sheet.al,i=a.days.indexOf(d);if(i>=0)a.days.splice(i,1);else a.days.push(d);simRenderOverlay();}
+function simSaveAlarm(){var s=simUI.sheet,a=s.al;if(s.isNew)qcSim.alarms.push(a);else qcSim.alarms[s.idx]=a;simCloseSheet();simRenderApp();simToast('Alarm saved');}
+function simDeleteAlarm(){simDialog('Delete alarm?','This alarm will be removed.',[{label:'Cancel',style:'cancel'},{label:'Delete',style:'destructive',fn:function(){var s=simUI.sheet;if(s&&s.idx>=0)qcSim.alarms.splice(s.idx,1);simCloseSheet();simRenderApp();simToast('Alarm deleted');}}]);}
+function simOpenHist(i){simOpenSheet('histdetail',{entry:qcSim.history[i]});}
+function simOpenSub(which){simOpenSheet('sub',{which:which});}
+function simFwUpdate(){simCloseSheet();simDialog('Update sent','Waiting for the band to reboot…',[{label:'OK',fn:function(){qcSim.band.firmware='1.0.46';simToast('Update confirmed — now on 1.0.46');}}]);}
+function simSignOut(){simDialog('Sign Out','Are you sure you want to sign out?',[{label:'Cancel',style:'cancel'},{label:'Sign Out',style:'destructive',fn:function(){simToast('Signed out (preview)');}}]);}
+function simDeleteAcct(){simOpenSheet('deleteacct');}
+function simSync(){if(qcSim.os!=='ios')return;if(!qcSim.band.connected){simDialog('Not Connected','Please connect to your Safewave Band first.',[{label:'OK'}]);return;}if(qcSim.apps.filter(function(a){return a.enabled}).length===0){simDialog('No Apps Enabled','Please enable at least one app to save to the band.',[{label:'OK'}]);return;}if(qcRealActive()){qcSim.apps.filter(function(a){return a.enabled}).forEach(function(a){qcRealBand.buzz({strength:a.strength,numBuzzes:1,dutyOfBuzz:50,durationOfDelay:50});});}simDialog('Success','App settings saved to band successfully!',[{label:'OK'}]);}
+function simTapDisconnect(){simDialog('Disconnect','Disconnect from Safewave Band?',[{label:'Cancel',style:'cancel'},{label:'Disconnect',style:'destructive',fn:function(){simBand('disconnect');}}]);}
+function simTapDeleteApp(i){var a=qcSim.apps[i];simDialog('Remove App','Are you sure you want to remove '+(a?a.name:'this app')+' from your alerts?',[{label:'Cancel',style:'cancel'},{label:'Remove',style:'destructive',fn:function(){simDeleteApp(i);}}]);}
 function simBattery(v){qcSim.band.battery=+v;var e=document.getElementById('sim-batv');if(e)e.textContent=v+'%';var l=document.getElementById('sim-batl');if(l)l.textContent=v;simRenderApp()}
 function simReset(){qcSim.metrics={total:0,delivered:0,buzz:0,drop:0,filt:0};qcSim.history=[];qcSim.verdicts=[];qcSim.logs=[];qcSim.lastBuzz=null;simClock=0;simRenderReadout();simRenderApp();simRenderSummary()}
 function simRenderFrame(){
@@ -2686,7 +2898,7 @@ function swSwitch(on){return '<div style="width:44px;height:26px;border-radius:9
 function swHash(s,pal){var h=0;for(var i=0;i<(s||'').length;i++)h=s.charCodeAt(i)+((h<<5)-h);return pal[Math.abs(h)%pal.length]}
 function swRepeat(days){if(!days.length)return 'Once';if(days.length===7)return 'Every day';var s=days.slice().sort();if(s.join()==='1,2,3,4,5')return 'Weekdays';if(s.join()==='0,6')return 'Weekends';var N=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];return s.map(function(d){return N[d]}).join(', ')}
 const SIM_TABS=[['home','Home','home'],['alerts','Alerts','notifications'],['alarm','Alarm','alarm'],['history','History','time'],['account','Account','person-circle']];
-function simSetTab(t){qcSim.tab=t;simRenderApp()}
+function simSetTab(t){qcSim.tab=t;simUI.sheet=null;simUI.dlg=null;simRenderApp();simRenderOverlay();}
 function simRenderApp(){
   const sc=document.getElementById('sim-scroll');if(!sc)return;const b=qcSim.band,t=qcSim.tab;let h='';
   const enabledApps=qcSim.apps.filter(function(a){return a.enabled}).length;
@@ -2694,7 +2906,7 @@ function simRenderApp(){
     const conn=b.connected,statusCol=conn?'#4CAF50':'#FF9800',statusTxt=conn?'Connected':'Reconnecting...';
     h='<div style="text-align:center;padding:8px 0"><img src="'+SIM_ASSET_WORDMARK+'" alt="Safewave" style="height:40px;width:auto;object-fit:contain"></div>'
     +'<div style="font-size:24px;font-weight:500;color:#fff;text-align:center;margin:8px 0 24px">Preview User</div>'
-    +'<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px"><div style="position:relative;width:150px;height:150px;display:grid;place-items:center'+(conn?';filter:drop-shadow(0 0 18px rgba(29,170,225,.45))':'')+'">'
+    +'<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px"'+(conn?' onclick="simTapBandInfo()"':'')+'><div style="position:relative;width:150px;height:150px;display:grid;place-items:center'+(conn?';cursor:pointer;filter:drop-shadow(0 0 18px rgba(29,170,225,.45))':'')+'">'
       +(conn?swRing(b.battery,150):'<div style="position:absolute;inset:0;border-radius:50%;border:6px solid #2A2A2A"></div>')
       +'<div style="width:116px;height:116px;border-radius:58px;background:#1DAAE1;display:grid;place-items:center;overflow:hidden">'+'<img src="'+SIM_ASSET_LOGO+'" alt="" style="width:70px;height:70px;object-fit:contain">'+'</div></div>'
       +(conn?'<div style="font-size:12px;color:#6B6B6B;margin-top:8px">Tap for band info</div>':'')+'</div>'
@@ -2703,31 +2915,31 @@ function simRenderApp(){
       +(conn?'':'<div style="display:inline-flex;align-items:center;background:rgba(255,152,0,.1);border:1px solid #FF9800;border-radius:999px;padding:5px 16px;margin-top:8px">'+ic('search',14,'#FF9800')+'<span style="font-size:13px;font-weight:600;color:#FF9800;margin-left:6px">Looking for Safewave Band</span></div>')+'</div>'
     +(qcSim.os==='ios'&&conn&&b.ancs===0?'<div style="display:flex;align-items:flex-start;background:rgba(108,99,255,.1);border:2px solid #1DAAE1;border-radius:16px;padding:16px;margin-bottom:24px"><span style="margin-right:16px;margin-top:2px">'+ic('notifications-off',24,'#1DAAE1')+'</span><div style="flex:1"><div style="font-size:16px;font-weight:700;color:#1DAAE1;margin-bottom:4px">Notifications not reaching band</div><div style="font-size:13px;color:#B0B0B0;line-height:18px">Your band is connected but iPhone notifications aren’t reaching it. Forget the band, reset it, and pair again — tap Allow when iPhone asks.</div></div></div>':'')
     +'<div style="display:flex;background:#1E1E1E;border-radius:24px;padding:24px 16px;margin-bottom:24px">'
-      +'<div style="flex:1;display:flex;flex-direction:column;align-items:center;position:relative">'+ic('apps',20,'#1DAAE1')+'<div style="font-size:12px;color:#B0B0B0;margin:4px 0">Apps Monitoring</div><div style="font-size:24px;font-weight:700;color:#fff">'+enabledApps+'</div><span style="position:absolute;right:0;top:50%;margin-top:-8px">'+ic('chevron-forward',16,'#6B6B6B')+'</span></div>'
+      +'<div onclick="simGoAlerts()" style="flex:1;display:flex;flex-direction:column;align-items:center;position:relative;cursor:pointer">'+ic('apps',20,'#1DAAE1')+'<div style="font-size:12px;color:#B0B0B0;margin:4px 0">Apps Monitoring</div><div style="font-size:24px;font-weight:700;color:#fff">'+enabledApps+'</div><span style="position:absolute;right:0;top:50%;margin-top:-8px">'+ic('chevron-forward',16,'#6B6B6B')+'</span></div>'
       +'<div style="width:1px;background:rgba(255,255,255,.1);margin:8px 0"></div>'
       +'<div style="flex:1;display:flex;flex-direction:column;align-items:center">'+ic(b.charging?'battery-charging':'battery-half',20,b.battery<=20?'#F44336':'#4CAF50')+'<div style="font-size:12px;color:#B0B0B0;margin:4px 0">Battery</div><div style="display:flex;align-items:center"><span style="font-size:24px;font-weight:700;color:'+(conn&&b.battery<=20?'#F44336':'#fff')+'">'+(conn?b.battery+'%':'--')+'</span>'+(conn&&b.charging?'<span style="margin-left:4px">'+ic('flash',14,'#4CAF50',true)+'</span>':'')+'</div></div></div>'
     +'<div style="display:flex;flex-direction:column;gap:16px">'
-    +(conn?'<div onclick="simTapTest()" style="display:flex;align-items:center;justify-content:center;background:#fff;border-radius:24px;padding:18px 0;cursor:pointer">'+ic('phone-portrait',22,'#1DAAE1')+'<span style="font-size:16px;font-weight:600;color:#1DAAE1;margin-left:8px">Test Vibration</span></div><div onclick="simBand(\'disconnect\')" style="display:flex;align-items:center;justify-content:center;border:2px solid #F44336;border-radius:24px;padding:16px 0;cursor:pointer">'+ic('close-circle',22,'#F44336')+'<span style="font-size:16px;font-weight:600;color:#F44336;margin-left:8px">Disconnect</span></div>'
-      :'<div onclick="simTapConnect()" style="display:flex;align-items:center;justify-content:center;background:#fff;border-radius:24px;padding:18px 0;cursor:pointer">'+ic('bluetooth',22,'#00151E')+'<span style="font-size:16px;font-weight:600;color:#00151E;margin-left:8px">Connect Band</span></div>')
-    +'<div onclick="simTapRegister()" style="display:flex;align-items:center;justify-content:center;border:2px solid #1DAAE1;border-radius:24px;padding:16px 0;cursor:pointer">'+ic('add-circle',22,'#1DAAE1')+'<span style="font-size:16px;font-weight:600;color:#1DAAE1;margin-left:8px">Register New Band</span></div>'
+    +(conn?'<div onclick="simTapTest()" style="display:flex;align-items:center;justify-content:center;background:#fff;border-radius:24px;padding:18px 0;cursor:pointer">'+ic('phone-portrait',22,'#1DAAE1')+'<span style="font-size:16px;font-weight:600;color:#1DAAE1;margin-left:8px">Test Vibration</span></div><div onclick="simTapDisconnect()" style="display:flex;align-items:center;justify-content:center;border:2px solid #F44336;border-radius:24px;padding:16px 0;cursor:pointer">'+ic('close-circle',22,'#F44336')+'<span style="font-size:16px;font-weight:600;color:#F44336;margin-left:8px">Disconnect</span></div>'
+      :'<div onclick="simConnectSheet()" style="display:flex;align-items:center;justify-content:center;background:#fff;border-radius:24px;padding:18px 0;cursor:pointer">'+ic('bluetooth',22,'#00151E')+'<span style="font-size:16px;font-weight:600;color:#00151E;margin-left:8px">Connect Band</span></div>')
+    +'<div onclick="simOpenRegister()" style="display:flex;align-items:center;justify-content:center;border:2px solid #1DAAE1;border-radius:24px;padding:16px 0;cursor:pointer">'+ic('add-circle',22,'#1DAAE1')+'<span style="font-size:16px;font-weight:600;color:#1DAAE1;margin-left:8px">Register New Band</span></div>'
     +'</div>';
   }else if(t==='alerts'){
     h='<div style="padding:24px 0 0"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="flex:1"><div style="font-size:28px;font-weight:700;color:#fff;margin-bottom:4px">Alerts</div><div style="font-size:14px;color:#B0B0B0">Configure which apps trigger your band</div></div>'
-      +(qcSim.os==='ios'?'<div style="display:flex;align-items:center;background:'+(b.connected?'#1DAAE1':'#2A2A2A')+';padding:8px 16px;border-radius:99px;gap:4px;min-width:70px;justify-content:center"><img src="'+SIM_ASSET_LOGO+'" alt="" style="width:18px;height:18px;object-fit:contain;opacity:'+(b.connected?1:.4)+'"><span style="font-size:14px;font-weight:600;color:'+(b.connected?'#fff':'#6B6B6B')+'">Sync</span></div>':'')+'</div>'
-      +(qcSim.os==='android'?'<div style="background:#1E1E1E;border-radius:16px;padding:16px;margin-top:16px;border:1px solid rgba(255,255,255,.1)"><div style="display:flex;align-items:center;margin-bottom:16px"><div style="width:40px;height:40px;border-radius:20px;background:rgba(29,170,225,.125);display:grid;place-items:center;margin-right:16px">'+ic('notifications-off',24,'#1DAAE1')+'</div><div style="flex:1"><div style="font-size:15px;font-weight:600;color:#fff;margin-bottom:2px">Notification Access Required</div><div style="font-size:12px;color:#B0B0B0;line-height:16px">Enable notification access to receive alerts</div></div><div style="width:36px;height:36px;border-radius:18px;background:rgba(29,170,225,.082);display:grid;place-items:center;margin-left:4px">'+ic('refresh',20,'#1DAAE1')+'</div></div><div style="display:flex;align-items:center;justify-content:center;background:#1DAAE1;padding:8px 0;border-radius:8px;gap:4px"><span style="font-size:14px;font-weight:600;color:#fff">Open Settings</span>'+ic('arrow-forward',16,'#fff')+'</div></div>':'')
+      +(qcSim.os==='ios'?'<div onclick="simSync()" style="display:flex;align-items:center;background:'+(b.connected?'#1DAAE1':'#2A2A2A')+';padding:8px 16px;border-radius:99px;gap:4px;min-width:70px;justify-content:center;cursor:pointer"><img src="'+SIM_ASSET_LOGO+'" alt="" style="width:18px;height:18px;object-fit:contain;opacity:'+(b.connected?1:.4)+'"><span style="font-size:14px;font-weight:600;color:'+(b.connected?'#fff':'#6B6B6B')+'">Sync</span></div>':'')+'</div>'
+      +(qcSim.os==='android'?'<div style="background:#1E1E1E;border-radius:16px;padding:16px;margin-top:16px;border:1px solid rgba(255,255,255,.1)"><div style="display:flex;align-items:center;margin-bottom:16px"><div style="width:40px;height:40px;border-radius:20px;background:rgba(29,170,225,.125);display:grid;place-items:center;margin-right:16px">'+ic('notifications-off',24,'#1DAAE1')+'</div><div style="flex:1"><div style="font-size:15px;font-weight:600;color:#fff;margin-bottom:2px">Notification Access Required</div><div style="font-size:12px;color:#B0B0B0;line-height:16px">Enable notification access to receive alerts</div></div><div style="width:36px;height:36px;border-radius:18px;background:rgba(29,170,225,.082);display:grid;place-items:center;margin-left:4px">'+ic('refresh',20,'#1DAAE1')+'</div></div><div onclick="simToast(\'Opens notification-access settings\')" style="display:flex;align-items:center;justify-content:center;background:#1DAAE1;padding:8px 0;border-radius:8px;gap:4px;cursor:pointer"><span style="font-size:14px;font-weight:600;color:#fff">Open Settings</span>'+ic('arrow-forward',16,'#fff')+'</div></div>':'')
       +'</div><div style="padding-top:16px">';
     qcSim.apps.forEach(function(a,i){var en=a.enabled,mc=en?'#B0B0B0':'#6B6B6B',ac=en?'#1DAAE1':'#6B6B6B';
       var badges='<span style="display:inline-flex;align-items:center;margin-right:16px">'+ic(a.numberOfVibrations===0?'infinite':'pulse',12,ac)+'<span style="font-size:12px;color:'+mc+';margin-left:4px">'+(a.numberOfVibrations===0?'Continuous':a.numberOfVibrations+'x')+'</span></span>'
         +'<span style="display:inline-flex;align-items:center;margin-right:16px">'+ic('flash',12,ac,en)+'<span style="font-size:12px;color:'+mc+';margin-left:4px">'+a.strength+'%</span></span>'
         +(a.phrases.length?'<span style="display:inline-flex;align-items:center;margin-right:16px">'+ic('funnel',12,ac)+'<span style="font-size:12px;color:'+mc+';margin-left:4px">'+a.phrases.length+'</span></span>':'');
-      h+='<div style="display:flex;align-items:center;justify-content:space-between;background:#1E1E1E;border-radius:16px;padding:16px;margin-bottom:8px;opacity:'+(en?1:.6)+'"><div style="display:flex;align-items:center;flex:1;min-width:0"><div style="width:48px;height:48px;border-radius:8px;background:'+a.color+';display:grid;place-items:center;color:#fff;font-size:20px;font-weight:600;margin-right:16px;flex:0 0 auto">'+esc(a.name[0].toUpperCase())+'</div><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:600;color:'+(en?'#fff':'#6B6B6B')+';margin-bottom:4px">'+esc(a.name)+'</div><div style="display:flex;align-items:center;flex-wrap:wrap">'+badges+'</div></div></div><div style="display:flex;align-items:center"><span onclick="simDeleteApp('+i+')" style="padding:8px;margin-right:8px;cursor:pointer">'+ic('trash',20,'#F44336')+'</span><span onclick="simToggleApp('+i+')" style="cursor:pointer">'+swSwitch(en)+'</span></div></div>';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;background:#1E1E1E;border-radius:16px;padding:16px;margin-bottom:8px;opacity:'+(en?1:.6)+'"><div onclick="simOpenAppConfig('+i+')" style="display:flex;align-items:center;flex:1;min-width:0;cursor:pointer"><div style="width:48px;height:48px;border-radius:8px;background:'+a.color+';display:grid;place-items:center;color:#fff;font-size:20px;font-weight:600;margin-right:16px;flex:0 0 auto">'+esc(a.name[0].toUpperCase())+'</div><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:600;color:'+(en?'#fff':'#6B6B6B')+';margin-bottom:4px">'+esc(a.name)+'</div><div style="display:flex;align-items:center;flex-wrap:wrap">'+badges+'</div></div></div><div style="display:flex;align-items:center"><span onclick="simTapDeleteApp('+i+')" style="padding:8px;margin-right:8px;cursor:pointer">'+ic('trash',20,'#F44336')+'</span><span onclick="simToggleApp('+i+')" style="cursor:pointer">'+swSwitch(en)+'</span></div></div>';
     });
     h+='</div>';
   }else if(t==='alarm'){
     h='<div style="padding:24px 0 8px"><div style="font-size:28px;font-weight:700;color:#fff;margin-bottom:4px">Alarms</div><div style="font-size:14px;color:#B0B0B0">Wake alerts delivered straight to your band</div></div>';
     if(!qcSim.alarms.length)h+='<div style="text-align:center;padding:48px 32px">'+ic('alarm',64,'#6B6B6B')+'<div style="font-size:20px;font-weight:600;color:#fff;margin:24px 0 8px">No alarms yet</div><div style="font-size:14px;color:#B0B0B0;line-height:20px">Set a wake alarm and your Safewave Band will buzz you awake — no sound needed.</div></div>';
     qcSim.alarms.forEach(function(a,i){var x=to12(a.hour),dis=!a.enabled,rep=swRepeat(a.days);
-      h+='<div style="display:flex;align-items:center;justify-content:space-between;background:#1E1E1E;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px;margin-bottom:16px;opacity:'+(dis?.55:1)+'"><div style="flex:1;margin-right:16px"><div style="display:flex;align-items:flex-end"><span style="font-size:34px;font-weight:300;color:'+(dis?'#6B6B6B':'#fff')+';line-height:38px">'+x.hh+':'+String(a.minute).padStart(2,'0')+'</span><span style="font-size:16px;font-weight:500;color:'+(dis?'#6B6B6B':'#B0B0B0')+';margin-left:4px;margin-bottom:4px">'+x.m+'</span></div>'
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;background:#1E1E1E;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px;margin-bottom:16px;opacity:'+(dis?.55:1)+'"><div onclick="simOpenAlarmEdit('+i+')" style="flex:1;margin-right:16px;cursor:pointer"><div style="display:flex;align-items:flex-end"><span style="font-size:34px;font-weight:300;color:'+(dis?'#6B6B6B':'#fff')+';line-height:38px">'+x.hh+':'+String(a.minute).padStart(2,'0')+'</span><span style="font-size:16px;font-weight:500;color:'+(dis?'#6B6B6B':'#B0B0B0')+';margin-left:4px;margin-bottom:4px">'+x.m+'</span></div>'
       +(a.label?'<div style="font-size:14px;color:'+(dis?'#6B6B6B':'#fff')+';margin-top:2px">'+esc(a.label)+'</div>':'')
       +'<div style="display:flex;align-items:center;margin-top:4px"><span style="font-size:13px;color:#6B6B6B">'+rep+'</span><span style="width:3px;height:3px;border-radius:2px;background:#6B6B6B;margin:0 6px"></span>'+ic('pulse',13,dis?'#333333':'#6B6B6B')+'<span style="font-size:13px;color:#6B6B6B;margin-left:4px">'+SIM_WAKE[a.pattern].name+'</span></div></div><span onclick="simToggleAlarm('+i+')" style="cursor:pointer">'+swSwitch(a.enabled)+'</span></div>';
     });
@@ -2735,18 +2947,18 @@ function simRenderApp(){
     h='<div style="padding:24px 0 8px"><div style="font-size:28px;font-weight:700;color:#fff;margin-bottom:4px">History</div><div style="font-size:14px;color:#B0B0B0">Recent notification alerts</div></div>';
     if(!qcSim.history.length)h+='<div style="text-align:center;padding:48px 32px">'+ic('time',64,'#6B6B6B')+'<div style="font-size:20px;font-weight:600;color:#fff;margin:24px 0 8px">No History Yet</div><div style="font-size:14px;color:#B0B0B0;line-height:20px">Notification alerts will appear here when your band responds to them</div></div>';
     else{h+='<div style="padding:8px 0;margin-top:8px;font-size:14px;font-weight:600;color:#B0B0B0;text-transform:uppercase;letter-spacing:.5px">Today</div>';
-      qcSim.history.forEach(function(e){var av=swHash(e.label,['#4A154B','#25D366','#464EB8','#FF6B6B','#4ECDC4','#45B7D1']);var nm=(e.label.split(':')[0]||'').slice(0,20);
+      qcSim.history.forEach(function(e,i){var av=swHash(e.label,['#4A154B','#25D366','#464EB8','#FF6B6B','#4ECDC4','#45B7D1']);var nm=(e.label.split(':')[0]||'').slice(0,20);
         var badge=e.filtered?'<div style="display:flex;align-items:center;margin-top:4px">'+ic('notifications-off',12,'#6B6B6B')+'<span style="font-size:11px;color:#6B6B6B;margin-left:4px;font-style:italic">Filtered (no buzz)</span></div>':(e.buzz?'<div style="display:flex;align-items:center;margin-top:4px">'+icCheck(12,'#1DAAE1')+'<span style="font-size:11px;color:#1DAAE1;margin-left:4px;font-style:italic">Acknowledged</span></div>':'');
-        h+='<div style="display:flex;background:#1E1E1E;border-radius:16px;padding:16px;margin-bottom:8px"><div style="width:44px;height:44px;border-radius:22px;background:'+av+';display:grid;place-items:center;color:#fff;font-size:18px;font-weight:600;margin-right:16px;flex:0 0 auto">'+esc((e.label[0]||'?').toUpperCase())+'</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:16px;font-weight:600;color:#fff">'+esc(nm)+'</span><span style="font-size:12px;color:#6B6B6B">'+e.at+'</span></div><div style="font-size:14px;font-weight:500;color:#fff;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.label)+'</div>'+badge+'</div><span style="align-self:center;margin-left:4px">'+ic('chevron-forward',18,'#6B6B6B')+'</span></div>';
+        h+='<div onclick="simOpenHist('+i+')" style="display:flex;background:#1E1E1E;border-radius:16px;padding:16px;margin-bottom:8px;cursor:pointer"><div style="width:44px;height:44px;border-radius:22px;background:'+av+';display:grid;place-items:center;color:#fff;font-size:18px;font-weight:600;margin-right:16px;flex:0 0 auto">'+esc((e.label[0]||'?').toUpperCase())+'</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:16px;font-weight:600;color:#fff">'+esc(nm)+'</span><span style="font-size:12px;color:#6B6B6B">'+e.at+'</span></div><div style="font-size:14px;font-weight:500;color:#fff;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.label)+'</div>'+badge+'</div><span style="align-self:center;margin-left:4px">'+ic('chevron-forward',18,'#6B6B6B')+'</span></div>';
       });}
   }else if(t==='account'){
-    function mrow(icon,label,extra,last,trail){return '<div style="display:flex;align-items:center;padding:16px 0'+(last?'':';border-bottom:1px solid rgba(255,255,255,.1)')+'">'+ic(icon,22,'#fff')+'<span style="flex:1;font-size:16px;color:#fff;margin-left:16px">'+label+'</span>'+(extra||'')+ic(trail||'chevron-forward',trail==='open'?18:20,'#6B6B6B')+'</div>'}
+    function mrow(icon,label,click,last,trail,extra){return '<div onclick="'+click+'" style="display:flex;align-items:center;padding:16px 0;cursor:pointer'+(last?'':';border-bottom:1px solid rgba(255,255,255,.1)')+'">'+ic(icon,22,'#fff')+'<span style="flex:1;font-size:16px;color:#fff;margin-left:16px">'+label+'</span>'+(extra||'')+ic(trail||'chevron-forward',trail==='open'?18:20,'#6B6B6B')+'</div>'}
     h='<div style="padding:24px 0 0"><div style="font-size:28px;font-weight:700;color:#fff">Account</div></div>'
-    +'<div style="background:#1E1E1E;border-radius:24px;padding:24px;display:flex;flex-direction:column;align-items:center;margin:16px 0 24px"><div style="width:80px;height:80px;border-radius:40px;background:#1DAAE1;display:grid;place-items:center;font-size:28px;font-weight:700;color:#fff;margin-bottom:16px">PU</div><div style="font-size:22px;font-weight:700;color:#fff">Preview User</div><div style="font-size:14px;color:#B0B0B0;margin-top:4px">preview@safewavetech.com</div></div>'
-    +'<div style="background:#1E1E1E;border-radius:24px;padding:0 16px;margin-bottom:24px">'+mrow('pulse','Band Health')+(qcSim.os==='android'?mrow('shield-checkmark','Background Access'):'')+mrow('cloud-download','Firmware Update')+mrow('help-circle','Help & Support')+mrow('information-circle','About',null,true,'open')+'</div>'
-    +'<div style="background:#1E1E1E;border-radius:24px;padding:0 16px;margin-bottom:24px">'+mrow('document-text','Privacy Policy',null,false,'open')+mrow('document','Terms of Service',null,true,'open')+'</div>'
-    +'<div style="display:flex;align-items:center;justify-content:center;padding:16px 0;border-radius:16px;background:rgba(244,67,54,.1);margin-bottom:16px">'+ic('log-out',22,'#F44336')+'<span style="font-size:16px;font-weight:600;color:#F44336;margin-left:8px">Sign Out</span></div>'
-    +'<div style="display:flex;align-items:center;justify-content:center;padding:16px 0;border-radius:16px;border:1px solid #F44336;background:rgba(244,67,54,.08)">'+ic('trash',22,'#F44336')+'<span style="font-size:16px;font-weight:600;color:#F44336;margin-left:8px">Delete Account</span></div>';
+    +'<div style="background:#1E1E1E;border-radius:24px;padding:24px;display:flex;flex-direction:column;align-items:center;margin:16px 0 24px;position:relative"><div onclick="simOpenSheet(\'editprofile\')" style="position:absolute;top:16px;right:16px;cursor:pointer">'+ic('pencil',18,'#1DAAE1')+'</div><div style="width:80px;height:80px;border-radius:40px;background:#1DAAE1;display:grid;place-items:center;font-size:28px;font-weight:700;color:#fff;margin-bottom:16px">PU</div><div style="display:flex;align-items:center;gap:6px"><span style="font-size:22px;font-weight:700;color:#fff">Preview User</span>'+ic('shield-checkmark',16,'#1DAAE1')+'</div><div style="font-size:14px;color:#B0B0B0;margin-top:4px">preview@safewavetech.com</div></div>'
+    +'<div style="background:#1E1E1E;border-radius:24px;padding:0 16px;margin-bottom:24px">'+mrow('pulse','Band Health',"simOpenSub('bandhealth')")+(qcSim.os==='android'?mrow('shield-checkmark','Background Access',"simOpenSub('background')"):'')+mrow('cloud-download','Firmware Update',"simOpenSub('firmware')",false,'chevron-forward',(qcSim.band.firmware&&qcSim.band.firmware!=='1.0.46')?'<span class="pill" style="background:rgba(255,152,0,.15);color:#FF9800;font-size:11px;padding:3px 8px;border-radius:99px;margin-right:8px">Update</span>':'')+mrow('help-circle','Help & Support',"simOpenSub('help')")+mrow('information-circle','About',"simToast('Opens safewavetech.com/about')",true,'open')+'</div>'
+    +'<div style="background:#1E1E1E;border-radius:24px;padding:0 16px;margin-bottom:24px">'+mrow('document-text','Privacy Policy',"simToast('Opens privacy policy')",false,'open')+mrow('document','Terms of Service',"simToast('Opens terms of service')",true,'open')+'</div>'
+    +'<div onclick="simSignOut()" style="display:flex;align-items:center;justify-content:center;padding:16px 0;border-radius:16px;background:rgba(244,67,54,.1);margin-bottom:16px;cursor:pointer">'+ic('log-out',22,'#F44336')+'<span style="font-size:16px;font-weight:600;color:#F44336;margin-left:8px">Sign Out</span></div>'
+    +'<div onclick="simDeleteAcct()" style="display:flex;align-items:center;justify-content:center;padding:16px 0;border-radius:16px;border:1px solid #F44336;background:rgba(244,67,54,.08);cursor:pointer">'+ic('trash',22,'#F44336')+'<span style="font-size:16px;font-weight:600;color:#F44336;margin-left:8px">Delete Account</span></div>';
   }
   sc.innerHTML=h;
   const fab=document.getElementById('sim-fab');if(fab){if(t==='alerts'||t==='alarm'){fab.style.display='grid';fab.style.cursor='pointer';fab.innerHTML=ic('add',32,'#fff');fab.onclick=simFab;}else{fab.style.display='none';fab.onclick=null;}}
