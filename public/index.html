@@ -533,6 +533,71 @@ input[type=date]{color-scheme:dark}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 @media(min-width:860px){#toast{bottom:28px}}
 [hidden]{display:none!important}
+/* ===== Release QC · Device Simulator (Band Lab) ===== */
+.sim-grid{display:grid;grid-template-columns:250px minmax(240px,1fr) 300px;gap:14px;align-items:start}
+@media(max-width:960px){.sim-grid{grid-template-columns:1fr}}
+.sim-col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.sim-stage{align-items:center}
+.sim-lab{font-family:var(--font-m);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);display:block;margin-bottom:9px}
+.sim-field{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.sim-field:last-child{margin-bottom:0}
+.sim-field label{font-size:11.5px;font-weight:600;color:var(--muted)}
+.sim-field select,.sim-in{width:100%;padding:8px 10px;border-radius:9px;background:var(--surface-2);color:var(--text);border:1px solid var(--line);font-family:var(--font-b);font-size:13px}
+.sim-btnrow{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.sim-ib{appearance:none;border:1px solid var(--line);background:var(--surface-2);color:var(--text);padding:8px 10px;border-radius:9px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--font-b);text-align:left;transition:background .12s}
+.sim-ib:hover{background:var(--wave-dim)}
+.sim-ib.pri{background:var(--wave);border-color:var(--wave);color:var(--wave-ink)}
+.sim-ib.block{width:100%}
+.sim-phone{position:relative;background:#05161c;border-radius:38px;padding:9px;width:270px;height:560px;box-shadow:0 20px 50px -22px rgba(0,0,0,.55),0 0 0 2px #1b2a30;transition:width .2s,height .2s}
+.sim-phone.android{border-radius:26px}
+.sim-screen{position:relative;overflow:hidden;border-radius:30px;background:#00141d;width:100%;height:100%;display:flex;flex-direction:column}
+.sim-phone.android .sim-screen{border-radius:18px}
+.sim-sb{display:flex;justify-content:space-between;align-items:center;padding:9px 20px 5px;color:#fff;font-family:var(--font-m);font-size:12px;font-weight:600;flex:0 0 auto}
+.sim-island{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:78px;height:23px;background:#000;border-radius:14px;z-index:6}
+.sim-notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:130px;height:22px;background:#000;border-radius:0 0 13px 13px;z-index:6}
+.sim-punch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:9px;height:9px;background:#000;border-radius:50%;z-index:6}
+.sim-app{flex:1;min-height:0;display:flex;flex-direction:column}
+.sim-scroll{flex:1;overflow-y:auto;padding:12px 14px 6px;color:#e8f4fa}
+.sim-scroll::-webkit-scrollbar{width:0}
+.sim-ah{font-size:19px;font-weight:700;color:#fff}
+.sim-asub{font-size:11px;color:#8fa9b4;margin-bottom:11px}
+.sim-tile{background:#0e2731;border:1px solid rgba(150,200,220,.1);border-radius:12px;padding:11px;margin-bottom:8px;font-size:12px}
+.sim-tile .r{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.sim-tile .r b{color:#fff;text-align:right}
+.sim-ring{width:112px;height:112px;margin:4px auto 10px;border-radius:50%;display:grid;place-items:center}
+.sim-ring .in{width:90px;height:90px;border-radius:50%;background:#00141d;display:grid;place-items:center;text-align:center}
+.sim-ring b{font-size:14px;color:#fff;display:block}.sim-ring span{font-size:10px;color:#8fa9b4}
+.sim-approw{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid rgba(150,200,220,.08)}
+.sim-approw:last-child{border-bottom:0}
+.sim-appic{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex:0 0 auto}
+.sim-appm{flex:1;min-width:0}.sim-appm b{font-size:13px;color:#fff;display:block}.sim-appm span{font-size:10.5px;color:#8fa9b4}
+.sim-mt{width:32px;height:19px;border-radius:99px;background:#24424f;position:relative;flex:0 0 auto}
+.sim-mt.on{background:#1daae1}.sim-mt::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .15s}.sim-mt.on::after{left:15px}
+.sim-tb{display:flex;border-top:1px solid rgba(150,200,220,.1);background:#0c222c;padding-bottom:5px;flex:0 0 auto}
+.sim-tab{flex:1;text-align:center;padding:7px 0 4px;color:#6f8894;cursor:pointer;font-size:9.5px;font-weight:600}
+.sim-tab.on{color:#1daae1}.sim-tab svg{width:20px;height:20px;display:block;margin:0 auto 2px}
+.sim-halo{position:absolute;inset:0;border-radius:30px;pointer-events:none;z-index:7;opacity:0}
+.sim-halo.fire{animation:simbuzz .9s ease-out}
+@keyframes simbuzz{0%{opacity:1;box-shadow:inset 0 0 0 4px rgba(29,170,225,.9),inset 0 0 34px rgba(29,170,225,.5)}100%{opacity:0}}
+.sim-banner{position:absolute;top:36px;left:9px;right:9px;z-index:8;background:rgba(20,40,50,.94);border:1px solid rgba(150,200,220,.2);border-radius:14px;padding:9px 11px;transform:translateY(-170%);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.sim-banner.show{transform:translateY(0)}
+.sim-banner .t{font-size:12px;font-weight:700;color:#fff}.sim-banner .b{font-size:11.5px;color:#cfe0e8;margin-top:1px}
+.sim-metrics{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.sim-metric{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.sim-metric .k{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-family:var(--font-m)}
+.sim-metric .v{font-size:19px;font-weight:700;font-family:var(--font-m);margin-top:1px}.sim-metric .v small{font-size:11px;color:var(--faint);font-weight:500}
+.sim-hap{height:46px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:5px;display:flex;align-items:flex-end;gap:3px;overflow:hidden}
+.sim-hb{width:6px;background:linear-gradient(180deg,#19b7ef,#0a8fa6);border-radius:2px 2px 0 0;flex:0 0 auto}
+.sim-verdict{border:1px solid var(--line);border-left-width:3px;border-radius:9px;padding:8px 10px;background:var(--surface);margin-bottom:7px}
+.sim-verdict.pass{border-left-color:var(--good)}.sim-verdict.info{border-left-color:var(--wave)}.sim-verdict.warn{border-left-color:var(--amber)}.sim-verdict.crit{border-left-color:var(--safety)}
+.sim-verdict .vh{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700}
+.sim-verdict .vh .tg{margin-left:auto;font-family:var(--font-m);font-size:9.5px;padding:2px 6px;border-radius:5px;background:var(--surface-2);color:var(--muted)}
+.sim-verdict .vr{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.45}
+.sim-verdict .vm{font-family:var(--font-m);font-size:9.5px;color:var(--faint);margin-top:3px}
+.sim-log{font-family:var(--font-m);font-size:10.5px;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;max-height:130px;overflow-y:auto}
+.sim-log div{white-space:nowrap;padding:1px 0}.sim-log .ok{color:var(--good)}.sim-log .no{color:var(--amber)}.sim-log .ts{color:var(--faint)}
+.sim-note{font-size:11px;color:var(--muted);background:var(--wave-dim);border:1px solid var(--line);border-radius:9px;padding:8px 10px;line-height:1.5}
+@media(prefers-reduced-motion:reduce){.sim-halo.fire{animation:none}.sim-banner{transition:none}}
 </style>
 </head>
 <body>
@@ -2089,7 +2154,7 @@ function qcNotifyLeads(title,body){if(typeof notifyAll==='function')notifyAll(ti
 function setQcTab(t){qcTab=t;qcRelView=null;renderQC()}
 function qcSetProd(p){qcProdFilter=p;renderQC()}
 function renderQC(){
-  const tabs=[['releases','Releases'],['bench','Test bench'],['flash','Flash & monitor']];
+  const tabs=[['releases','Releases'],['bench','Test bench'],['sim','Device simulator'],['flash','Flash & monitor']];
   const tb=document.getElementById('qc-tabs');
   if(tb)tb.innerHTML=tabs.map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
   const n=Object.keys(RELEASES).length;
@@ -2099,6 +2164,7 @@ function renderQC(){
   const body=document.getElementById('qc-body');if(!body)return;
   if(qcRelView){renderQcReleaseDetail(body);return}
   if(qcTab==='bench')body.innerHTML=qcBenchView();
+  else if(qcTab==='sim'){body.innerHTML=qcSimView();simAfterRender();}
   else if(qcTab==='flash')body.innerHTML=qcFlashView();
   else body.innerHTML=qcReleasesView();
 }
@@ -2201,6 +2267,416 @@ function overrideRelease(id){const r=RELEASES[id];if(!r)return;if(!isSuperAdmin(
 /* ---- Test bench ---- */
 function qcStartFromRelease(id){qcBench.selRel=id;qcTab='bench';qcRelView=null;renderQC();window.scrollTo(0,0)}
 function qcModePick(v){const so=document.getElementById('qc-simopt');if(so)so.style.display=(v==='sim')?'':'none'}
+
+/* ===== Release QC · Device Simulator (Band Lab) =====
+   Simulate the Safewave app on any phone + OS version (no hardware) and inject
+   alerts to see exactly how the app + band react — and WHY. Decision logic is
+   ported from the app (wake patterns, phrase filter, vibration encoding); the
+   OS-behavior rules encode the real per-version quirks from the compatibility
+   audit. Complements the real-band Web-Bluetooth soak in the Test bench tab. */
+const SIM_WAKE={gentle:{name:'Gentle',strength:40,numberOfVibrations:3,dutyOfBuzz:50,durationOfDelay:60},standard:{name:'Standard',strength:65,numberOfVibrations:5,dutyOfBuzz:60,durationOfDelay:50},strong:{name:'Strong',strength:100,numberOfVibrations:8,dutyOfBuzz:80,durationOfDelay:40},escalate:{name:'Escalating',strength:100,numberOfVibrations:10,dutyOfBuzz:80,durationOfDelay:40,escalating:true}};
+const SIM_DEVICES=[
+  {id:'iphone15pro',name:'iPhone 15 Pro',os:'ios',w:262,h:544,chrome:'island',radius:40},
+  {id:'iphonese',name:'iPhone SE',os:'ios',w:248,h:500,chrome:'bezel',radius:28},
+  {id:'iphone16pro',name:'iPhone 16 Pro',os:'ios',w:268,h:556,chrome:'island',radius:42},
+  {id:'pixel8',name:'Pixel 8',os:'android',w:262,h:548,chrome:'punch',radius:28},
+  {id:'galaxys24',name:'Galaxy S24',os:'android',w:258,h:550,chrome:'punch',radius:26},
+  {id:'androidlow',name:'Budget Android',os:'android',w:250,h:496,chrome:'notch',radius:22}
+];
+const SIM_OSV={ios:['iOS 18','iOS 17','iOS 16'],android:['Android 15','Android 14','Android 13','Android 12','Android 11']};
+const SIM_APPS=[
+  {id:'com.apple.MobileSMS',name:'Messages',color:'#25D366',enabled:true,strength:65,numberOfVibrations:3,phrases:[],phraseMode:'allow'},
+  {id:'com.apple.mobilephone',name:'Phone',color:'#34C759',enabled:true,strength:100,numberOfVibrations:0,phrases:[],phraseMode:'allow'},
+  {id:'com.apple.reminders',name:'Reminders',color:'#FF9500',enabled:true,strength:50,numberOfVibrations:2,phrases:[],phraseMode:'allow'},
+  {id:'com.whatsapp',name:'WhatsApp',color:'#25D366',enabled:true,strength:60,numberOfVibrations:3,phrases:['urgent','mom'],phraseMode:'allow'},
+  {id:'com.apple.mobilecal',name:'Calendar',color:'#FF3B30',enabled:false,strength:50,numberOfVibrations:2,phrases:[],phraseMode:'allow'}
+];
+const SIM_IOS=new Set(['com.apple.MobileSMS','com.apple.mobilephone','com.apple.reminders','com.apple.mobilecal','com.whatsapp']);
+let qcSim=null,simClock=0;
+function simApiFor(v){return {'Android 15':35,'Android 14':34,'Android 13':33,'Android 12':31,'Android 11':30}[v]||34}
+function simInit(){
+  qcSim={device:'iphone15pro',os:'ios',osVersion:'iOS 18',api:34,appState:'foreground',dnd:'off',tab:'home',exactDenied:false,
+    band:{connected:true,battery:87,ancs:1,firmware:'1.0.46'},apps:JSON.parse(JSON.stringify(SIM_APPS)),
+    alarms:[{hour:8,minute:0,label:'Wake up',days:[1,2,3,4,5],pattern:'escalate',enabled:true},{hour:7,minute:30,label:'Meds',days:[],pattern:'standard',enabled:false}],
+    history:[],verdicts:[],logs:[],metrics:{total:0,delivered:0,buzz:0,drop:0,filt:0},lastBuzz:null};
+  simRefreshOS();
+}
+function simDev(){return SIM_DEVICES.find(d=>d.id===qcSim.device)}
+function simMatchesPhrases(app,text){const p=app.phrases||[];if(!p.length)return true;const h=(text||'').toLowerCase();const m=p.some(x=>x.trim()&&h.includes(x.trim().toLowerCase()));return (app.phraseMode||'allow')==='block'?!m:m}
+function simEncode(c){return [Math.min(100,Math.max(0,c.strength)),Math.min(255,Math.max(0,c.numBuzzes)),Math.min(100,Math.max(10,c.dutyOfBuzz)),Math.min(100,Math.max(10,c.durationOfDelay))]}
+function simClockStr(){const t=9*60+41+simClock,h=Math.floor(t/60)%24,m=t%60;return (((h%12)||12))+':'+String(m).padStart(2,'0')}
+function to12(h){return {hh:(h%12===0?12:h%12),m:(h>=12?'PM':'AM')}}
+function simRefreshOS(){const os=simDev().os;qcSim.os=os;qcSim.osVersion=SIM_OSV[os][0];qcSim.api=simApiFor(qcSim.osVersion);qcSim.exactDenied=(os==='android'&&qcSim.api>=33)}
+
+/* ---- The OS-behavior decision engine ---- */
+function simDecide(kind,ctx){
+  const os=qcSim.os,st=qcSim.appState,dnd=qcSim.dnd==='on',api=qcSim.api,conn=qcSim.band.connected,ancs=qcSim.band.ancs;
+  const o={delivered:false,buzz:false,filtered:false,phone:null,reason:'',level:'info',pattern:null,via:''};
+  if(kind==='admin'){
+    if(os==='ios'){
+      if(st==='killed'){o.delivered=true;o.phone='banner';
+        if(conn&&ancs===1){o.buzz=true;o.via='ANCS-forwarded';o.reason='iOS is force-quit so no app code runs — but the push is sent as a VISIBLE alert, so iOS displays it and forwards it over ANCS to the band. (A data-only push would be dropped here.)';o.level='pass';}
+        else if(conn&&ancs===0){o.reason='Alert shown on phone, but notifications aren’t reaching the band (ANCS not granted) — band stays silent. Guide the user through the re-pair fix.';o.level='warn';}
+        else{o.reason='Alert shown on phone, but the band is disconnected — nothing to forward it to.';o.level='warn';}
+        return o;}
+      o.delivered=true;o.phone='banner';
+      if(dnd){o.reason='Delivered, but Focus/DND is on and an admin alert isn’t marked time-sensitive, so iOS may hold it quietly. ';o.level='warn';}
+      if(conn){o.buzz=true;o.via=(st==='foreground'?'direct BLE':'ANCS + data handler');if(o.level==='info'){o.reason='App is '+st+'; the data handler + ANCS both reach the band → buzz.';o.level='pass';}}
+      else{o.reason=(o.reason||'')+'Band disconnected — no buzz.';o.level='warn';}
+      return o;}
+    o.delivered=true;o.phone='banner';
+    if(st==='killed'){o.reason='Data-only high-priority push wakes the app’s background handler to buzz — but only if the process/foreground-service is alive. If an OEM killed it, the alert shows but the band won’t buzz.';if(conn){o.buzz=true;o.via='data handler (headless)';o.level='pass';}else{o.level='warn';o.reason+=' Band disconnected — no buzz.';}return o;}
+    if(conn){o.buzz=true;o.via='data handler';o.reason='App '+st+'; background handler buzzes the band.';o.level='pass';}else{o.reason='Band disconnected — no buzz.';o.level='warn';}
+    return o;
+  }
+  if(kind==='appnotif'){
+    const app=ctx.app;
+    if(!app.enabled){o.reason=app.name+' is turned off in Alerts — no buzz.';o.delivered=(os==='ios');o.phone=os==='ios'?'banner':null;return o;}
+    if(os==='ios'&&!SIM_IOS.has(app.id)){o.reason=app.name+' isn’t an iOS app on this phone.';return o;}
+    if(os==='ios'){
+      if(dnd&&st!=='killed'){o.reason='Focus/DND on — iOS suppresses this notification, so nothing reaches the band either.';o.level='warn';return o;}
+      o.delivered=true;o.phone='banner';
+      if(conn&&ancs!==0){o.buzz=true;o.via='ANCS';o.reason='iOS forwards it over ANCS → band buzzes. Phrase filters don’t apply on iOS (iOS never gives the band the text) — that’s why the app hides them there.';o.level='pass';}
+      else{o.reason=conn?'ANCS not granted — band silent.':'Shown on phone; band disconnected.';o.level='warn';}
+      return o;}
+    const passes=simMatchesPhrases(app,ctx.text);o.delivered=true;o.phone='banner';
+    if(!passes){o.filtered=true;o.reason='Suppressed by '+app.name+'’s phrase filter (mode: '+(app.phraseMode||'allow')+') — logged to History, no buzz. Exactly how the phone behaves.';o.level='info';return o;}
+    if(st==='killed'){o.reason='Notification-listener → buzz needs the app process alive. With the foreground service up it buzzes; if an OEM killed it, it won’t.';if(conn){o.buzz=true;o.via='listener (headless)';o.level='pass';}else{o.level='warn';o.reason+=' Band disconnected.';}return o;}
+    if(conn){o.buzz=true;o.via='notification listener';o.reason='Passed the filter → band buzzes ('+(app.numberOfVibrations===0?'continuous':app.numberOfVibrations+'×')+' @ '+app.strength+'%).';o.level='pass';}
+    else{o.reason='Band disconnected — buzz queued and replayed on reconnect.';o.level='warn';}
+    return o;
+  }
+  if(kind==='missedcall'){
+    if(os!=='ios'){o.reason='Missed-call category is an iOS/ANCS concept; on Android it’s just a Phone-app notification.';return o;}
+    o.delivered=true;o.phone='banner';
+    if(conn&&ancs===1){o.buzz=true;o.via='ANCS · MissedCall';o.reason='Missed calls are among the most safety-relevant alerts for a Deaf user. Requires firmware with the MissedCall category (firmware F5) — buzzes when present.';o.level='pass';}
+    else{o.reason='Band not receiving ANCS — missed call not felt.';o.level='warn';}
+    return o;
+  }
+  if(kind==='alarm'){
+    const pat=SIM_WAKE[ctx.pattern];o.pattern=ctx.pattern;
+    if(os==='android'&&api>=31&&qcSim.exactDenied){o.delivered=true;o.phone='banner';o.reason='Exact-alarm permission is off (Android 12+). The alarm may fire late or not at all in Doze. The app now prompts to fix this.';o.level='warn';if(conn){o.buzz=true;o.via='delayed';}return o;}
+    if(os==='ios'&&st==='killed'){o.delivered=true;o.phone='banner';
+      if(conn&&ancs===1){o.buzz=true;o.via='ANCS (generic)';o.pattern=null;o.reason='iOS won’t run app JS when force-quit, so the escalating wake PATTERN can’t play — the band gets a single generic ANCS buzz from the visible notification. Known iOS limit: keep the app running for the full pattern.';o.level='warn';}
+      else{o.reason='Force-quit iOS + band not ANCS-reachable — alarm shows on phone only.';o.level='warn';}
+      return o;}
+    if(os==='ios'&&dnd){o.delivered=true;o.phone='banner';o.reason='Alarm is marked time-sensitive, so it breaks through Focus/DND (needs the Time-Sensitive entitlement). Delivered + buzzes.';o.level='pass';if(conn)o.buzz=true;return o;}
+    o.delivered=true;o.phone='banner';
+    if(conn){o.buzz=true;o.via=st==='foreground'?'direct BLE':'scheduled + BLE';o.reason='Alarm fires the '+pat.name+' pattern on the band ('+pat.numberOfVibrations+'× @ '+pat.strength+'%'+(pat.escalating?', ramping':'')+').';o.level='pass';}
+    else{o.reason='Band disconnected at fire time — phone backup notification only.';o.level='warn';}
+    return o;
+  }
+  if(kind==='button'){
+    if(!conn){o.reason='Band disconnected — button press not received.';o.level='warn';return o;}
+    o.delivered=true;o.reason='Band button acknowledges the active alert (stops a continuous buzz) — attributed to the most recent alert within the ack window.';o.level='info';return o;
+  }
+  return o;
+}
+
+/* ---- Inject ---- */
+function simInject(kind){
+  if(!qcSim)return;let ctx={},label='';
+  if(kind==='appnotif'){const app=qcSim.apps.find(a=>a.id===(document.getElementById('sim-app')||{}).value)||qcSim.apps[0];ctx.app=app;ctx.text=((document.getElementById('sim-nt')||{}).value)||(app.name+' notification');label=app.name+': “'+ctx.text+'”';}
+  else if(kind==='alarm'){ctx.pattern=(document.getElementById('sim-pat')||{}).value||'escalate';label='Alarm · '+SIM_WAKE[ctx.pattern].name;}
+  else if(kind==='admin'){label='Admin alert';ctx.text='Please check in — this is a Safewave alert.';}
+  else if(kind==='missedcall')label='Missed call';
+  else if(kind==='button')label='Band button press';
+  const r=simDecide(kind,ctx);
+  qcSim.metrics.total++;if(r.delivered)qcSim.metrics.delivered++;if(r.filtered)qcSim.metrics.filt++;
+  if(r.buzz){qcSim.metrics.buzz++;simFireBuzz(kind,ctx,r);}
+  if(!r.delivered&&kind!=='button')qcSim.metrics.drop++;
+  if(r.phone==='banner')simBanner(kind,ctx,r);
+  if(kind!=='button'){qcSim.history.unshift({label:label,buzz:r.buzz,filtered:r.filtered,delivered:r.delivered,at:simClockStr(),via:r.via});qcSim.history=qcSim.history.slice(0,30);}
+  qcSim.verdicts.unshift({kind:kind,label:label,r:r,ctx:{dev:simDev().name,osv:qcSim.osVersion,st:qcSim.appState}});qcSim.verdicts=qcSim.verdicts.slice(0,12);
+  const res=r.buzz?'buzz':r.filtered?'filtered':r.delivered?'shown':'dropped';
+  qcSim.logs.unshift({ts:simClockStr(),res:res,label:label});qcSim.logs=qcSim.logs.slice(0,60);
+  simClock++;
+  simRenderReadout();if(qcSim.tab==='history')simRenderApp();simRenderSummary();
+}
+function simFireBuzz(kind,ctx,r){
+  let c;
+  if(kind==='alarm'&&r.pattern){const p=SIM_WAKE[r.pattern];c={strength:p.strength,numBuzzes:p.numberOfVibrations,dutyOfBuzz:p.dutyOfBuzz,durationOfDelay:p.durationOfDelay};}
+  else if(kind==='appnotif'){const a=ctx.app;c={strength:a.strength,numBuzzes:a.numberOfVibrations===0?12:a.numberOfVibrations,dutyOfBuzz:50,durationOfDelay:50};}
+  else if(kind==='missedcall')c={strength:90,numBuzzes:6,dutyOfBuzz:60,durationOfDelay:45};
+  else c={strength:70,numBuzzes:(r.via&&r.via.indexOf('generic')>=0)?1:4,dutyOfBuzz:50,durationOfDelay:50};
+  qcSim.lastBuzz={cmd:c,encoded:simEncode(c)};simRenderHaptic();
+  const h=document.getElementById('sim-halo');if(h){h.classList.remove('fire');void h.offsetWidth;h.classList.add('fire');}
+}
+function simBanner(kind,ctx,r){
+  const b=document.getElementById('sim-banner');if(!b)return;
+  const T={admin:'Safewave',appnotif:ctx.app?ctx.app.name:'Notification',alarm:'Alarm',missedcall:'Phone'};
+  const B={admin:'Please check in — this is a Safewave alert.',appnotif:ctx.text,alarm:(qcSim.alarms.find(a=>a.enabled)||{}).label||'Wake up',missedcall:'Missed call'};
+  b.querySelector('.t').textContent=T[kind]||'Notification';b.querySelector('.b').textContent=B[kind]||'';
+  b.classList.add('show');clearTimeout(b._t);b._t=setTimeout(function(){b.classList.remove('show')},2600);
+}
+
+/* ---- Render ---- */
+function qcSimView(){
+  if(!qcSim)simInit();
+  const d=simDev();
+  return '<div class="sim-grid">'
+    +'<div class="sim-col">'
+      +'<div class="card"><span class="sim-lab">Soak test</span><div id="sim-soak"></div></div>'
+      +'<div class="card"><span class="sim-lab">Test rig</span>'
+        +'<div class="sim-field"><label>Phone</label><select id="sim-dev" onchange="simSetDevice(this.value)">'+SIM_DEVICES.map(function(x){return '<option value="'+x.id+'"'+(x.id===qcSim.device?' selected':'')+'>'+esc(x.name)+' · '+(x.os==='ios'?'iOS':'Android')+'</option>'}).join('')+'</select></div>'
+        +'<div class="sim-field"><label>OS version</label><select id="sim-os" onchange="simSetOS(this.value)"></select></div>'
+        +'<div class="sim-field"><label>App state</label><select id="sim-st" onchange="simSet(\'appState\',this.value)"><option value="foreground">Foreground (open)</option><option value="background">Background</option><option value="killed">Killed / force-quit</option></select></div>'
+        +'<div class="sim-field"><label>Focus / Do Not Disturb</label><select id="sim-dnd" onchange="simSet(\'dnd\',this.value)"><option value="off">Off</option><option value="on">On</option></select></div>'
+      +'</div>'
+      +'<div class="card"><span class="sim-lab">Band · virtual</span>'
+        +'<div class="sim-btnrow" style="margin-bottom:9px"><button class="sim-ib" onclick="simBand(\'connect\')">Connect</button><button class="sim-ib" onclick="simBand(\'disconnect\')">Disconnect</button></div>'
+        +'<div class="sim-field"><label>Battery — <span id="sim-batv" style="font-family:var(--font-m)">87%</span></label><input class="sim-in" type="range" id="sim-bat" min="0" max="100" value="87" oninput="simBattery(this.value)"></div>'
+        +'<div class="sim-btnrow"><button class="sim-ib" onclick="simBand(\'ancs0\')">ANCS blocked</button><button class="sim-ib" onclick="simBand(\'ancs1\')">ANCS OK</button></div>'
+        +'<div class="sim-note" style="margin-top:9px">Virtual band. The <b>Test bench</b> tab connects a <b>real band over Web Bluetooth</b> for hardware soak.</div>'
+      +'</div>'
+      +'<div class="card"><span class="sim-lab">Inject event</span>'
+        +'<button class="sim-ib block pri" style="margin-bottom:8px" onclick="simInject(\'admin\')">⚡ Admin alert (from Command Center)</button>'
+        +'<div class="sim-field"><label>App notification</label><select id="sim-app">'+qcSim.apps.map(function(a){return '<option value="'+a.id+'">'+esc(a.name)+(a.enabled?'':' (off)')+'</option>'}).join('')+'</select></div>'
+        +'<input class="sim-in" id="sim-nt" placeholder="Notification text (e.g. “Mom: dinner’s ready”)" style="margin-bottom:8px">'
+        +'<button class="sim-ib block" style="margin-bottom:10px" onclick="simInject(\'appnotif\')">📱 Deliver app notification</button>'
+        +'<div class="sim-field"><label>Alarm wake pattern</label><select id="sim-pat">'+Object.keys(SIM_WAKE).map(function(k){var v=SIM_WAKE[k];return '<option value="'+k+'"'+(k==='escalate'?' selected':'')+'>'+v.name+' · '+v.numberOfVibrations+'× @ '+v.strength+'%</option>'}).join('')+'</select></div>'
+        +'<button class="sim-ib block" style="margin-bottom:8px" onclick="simInject(\'alarm\')">⏰ Fire alarm now</button>'
+        +'<div class="sim-btnrow"><button class="sim-ib" onclick="simInject(\'button\')">Band button</button><button class="sim-ib" onclick="simInject(\'missedcall\')">Missed call</button></div>'
+      +'</div>'
+    +'</div>'
+    +'<div class="sim-col sim-stage">'
+      +'<div class="sim-phone" id="sim-phone"><div class="sim-screen" id="sim-screen">'
+        +'<div id="sim-chrome"></div>'
+        +'<div class="sim-sb" id="sim-sb"><span id="sim-clock">9:41</span><span><span id="sim-net">5G</span> <span id="sim-batl">87</span></span></div>'
+        +'<div class="sim-app"><div class="sim-scroll" id="sim-scroll"></div><div class="sim-tb" id="sim-tb"></div></div>'
+        +'<div class="sim-halo" id="sim-halo"></div>'
+        +'<div class="sim-banner" id="sim-banner"><div class="t"></div><div class="b"></div></div>'
+      +'</div></div>'
+      +'<div id="sim-stagechip"></div>'
+    +'</div>'
+    +'<div class="sim-col">'
+      +'<div class="row" style="align-items:center;margin-bottom:2px"><span class="sim-lab" style="margin:0">Readout</span><div class="grow"></div><button class="chip" style="padding:4px 10px" onclick="simReset()">Reset</button></div>'
+      +'<div class="sim-metrics" id="sim-metrics"></div>'
+      +'<div><span class="sim-lab">Last buzz · haptic</span><div class="sim-hap" id="sim-hap"></div></div>'
+      +'<div><span class="sim-lab">Verdicts</span><div id="sim-verdicts"></div></div>'
+      +'<div><span class="sim-lab">Event log</span><div class="sim-log" id="sim-log"></div></div>'
+    +'</div>'
+  +'</div>';
+}
+function simAfterRender(){
+  if(!qcSim)return;
+  simSetOSOptions();
+  document.getElementById('sim-st').value=qcSim.appState;
+  document.getElementById('sim-dnd').value=qcSim.dnd;
+  document.getElementById('sim-bat').value=qcSim.band.battery;
+  simRenderFrame();simRenderApp();simRenderReadout();simRenderSummary();simRenderSoak();
+}
+function simSetOSOptions(){const sel=document.getElementById('sim-os');if(!sel)return;sel.innerHTML=SIM_OSV[qcSim.os].map(function(v){return '<option'+(v===qcSim.osVersion?' selected':'')+'>'+v+'</option>'}).join('')}
+function simSetDevice(id){qcSim.device=id;simRefreshOS();simSetOSOptions();simRenderFrame();simRenderApp();simRenderSummary()}
+function simSetOS(v){qcSim.osVersion=v;qcSim.api=simApiFor(v);qcSim.exactDenied=(qcSim.os==='android'&&qcSim.api>=33);simRenderSummary()}
+function simSet(k,v){qcSim[k]=v;simRenderSummary()}
+function simBand(a){if(a==='connect')qcSim.band.connected=true;else if(a==='disconnect')qcSim.band.connected=false;else if(a==='ancs0')qcSim.band.ancs=0;else if(a==='ancs1')qcSim.band.ancs=1;simRenderApp();simRenderSummary()}
+function simBattery(v){qcSim.band.battery=+v;var e=document.getElementById('sim-batv');if(e)e.textContent=v+'%';var l=document.getElementById('sim-batl');if(l)l.textContent=v;simRenderApp()}
+function simReset(){qcSim.metrics={total:0,delivered:0,buzz:0,drop:0,filt:0};qcSim.history=[];qcSim.verdicts=[];qcSim.logs=[];qcSim.lastBuzz=null;simClock=0;simRenderReadout();simRenderApp();simRenderSummary()}
+function simRenderFrame(){
+  const d=simDev(),ph=document.getElementById('sim-phone');if(!ph)return;
+  ph.classList.toggle('android',d.os==='android');ph.style.width=d.w+'px';ph.style.height=d.h+'px';
+  document.getElementById('sim-chrome').innerHTML=d.chrome==='island'?'<div class="sim-island"></div>':d.chrome==='notch'?'<div class="sim-notch"></div>':d.chrome==='punch'?'<div class="sim-punch"></div>':'';
+  document.getElementById('sim-sb').style.paddingTop=(d.chrome==='island'?15:d.chrome==='bezel'?10:12)+'px';
+  document.getElementById('sim-net').textContent=d.os==='ios'?'5G':'LTE';
+  document.getElementById('sim-clock').textContent=simClockStr();
+}
+const SIM_TABS=[['home','Home','M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z'],['alerts','Alerts','M12 3a6 6 0 00-6 6v4l-2 3h16l-2-3V9a6 6 0 00-6-6zM9 20a3 3 0 006 0'],['alarm','Alarm','M12 8v5l3 2M4 4L7 6M20 4l-3 2M12 21a8 8 0 100-16 8 8 0 000 16z'],['history','History','M12 8v5l3 2M3 12a9 9 0 109-9 9 9 0 00-8 5m0 0V6m0 4h4'],['account','Account','M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0']];
+function simSetTab(t){qcSim.tab=t;simRenderApp()}
+function simRenderApp(){
+  const sc=document.getElementById('sim-scroll');if(!sc)return;const b=qcSim.band,t=qcSim.tab;let h='';
+  if(t==='home'){const col=b.connected?'#4CAF50':'#FF9800';
+    h='<div class="sim-ah">Home</div><div class="sim-asub">'+(b.connected?'Connected':'Reconnecting…')+'</div>'
+    +'<div class="sim-ring" style="background:conic-gradient('+col+' '+(b.connected?100:40)+'%, rgba(150,200,220,.12) 0)"><div class="in"><div><b>'+(b.connected?'Band ✓':'…')+'</b><span>'+b.battery+'% battery</span></div></div></div>'
+    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Firmware</span><b>'+esc(b.firmware)+'</b></div></div>'
+    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Notifications reaching band</span><b style="color:'+(b.ancs===0?'#FF9800':'#4CAF50')+'">'+(b.ancs===0?'Blocked':'OK')+'</b></div></div>'
+    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Last event</span><b>'+esc((qcSim.history[0]||{}).label?(qcSim.history[0].label).slice(0,20):'—')+'</b></div></div>';
+  }else if(t==='alerts'){h='<div class="sim-ah">Alerts</div><div class="sim-asub">Apps that buzz your band</div>';
+    qcSim.apps.forEach(function(a){h+='<div class="sim-approw"><div class="sim-appic" style="background:'+a.color+'">'+esc(a.name[0])+'</div><div class="sim-appm"><b>'+esc(a.name)+'</b><span>'+(a.numberOfVibrations===0?'Continuous':a.numberOfVibrations+'×')+' · '+a.strength+'%'+(a.phrases.length?' · '+a.phrases.length+' filter':'')+'</span></div><div class="sim-mt '+(a.enabled?'on':'')+'"></div></div>'});
+  }else if(t==='alarm'){h='<div class="sim-ah">Alarms</div><div class="sim-asub">Wake alerts to your band</div>';
+    qcSim.alarms.forEach(function(a){var x=to12(a.hour);var rep=a.days.length===0?'Once':a.days.length===7?'Every day':a.days.join()==='1,2,3,4,5'?'Weekdays':a.days.map(function(d){return 'SMTWTFS'[d]}).join(' ');h+='<div class="sim-tile" style="opacity:'+(a.enabled?1:.5)+'"><div class="r"><div><div style="font-size:24px;font-weight:300;color:#fff">'+x.hh+':'+String(a.minute).padStart(2,'0')+' <span style="font-size:12px;color:#8fa9b4">'+x.m+'</span></div><div style="font-size:11px;color:#8fa9b4">'+esc(a.label)+' · '+rep+' · '+SIM_WAKE[a.pattern].name+'</div></div><div class="sim-mt '+(a.enabled?'on':'')+'"></div></div></div>'});
+  }else if(t==='history'){h='<div class="sim-ah">History</div><div class="sim-asub">'+qcSim.history.length+' events</div>';
+    if(!qcSim.history.length)h+='<div class="sim-tile" style="text-align:center;color:#8fa9b4">No events yet — inject one.</div>';
+    qcSim.history.forEach(function(e){var tag=e.buzz?'<span style="color:#4CAF50">● buzzed</span>':e.filtered?'<span style="color:#8fa9b4">○ filtered</span>':e.delivered?'<span style="color:#FF9800">● phone only</span>':'<span style="color:#FF9800">○ dropped</span>';h+='<div class="sim-approw"><div class="sim-appm"><b style="font-size:12.5px">'+esc(e.label)+'</b><span>'+e.at+(e.via?' · '+e.via:'')+'</span></div><span style="font-size:10.5px">'+tag+'</span></div>'});
+  }else if(t==='account'){h='<div class="sim-ah">Account</div><div class="sim-asub">Band &amp; app health</div>'
+    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Band</span><b>'+(b.connected?'Connected':'Not connected')+'</b></div></div>'
+    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Firmware</span><b>'+esc(b.firmware)+'</b></div></div>'
+    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Battery</span><b>'+b.battery+'%</b></div></div>'
+    +'<div class="sim-tile" style="border-color:'+(b.ancs===0?'rgba(255,152,0,.4)':'rgba(150,200,220,.1)')+'"><div class="r"><span style="color:#8fa9b4">Band Health</span><b style="color:'+(b.ancs===0?'#FF9800':'#4CAF50')+'">'+(b.ancs===0?'1 issue':'All good')+'</b></div></div>';}
+  sc.innerHTML=h;
+  const tb=document.getElementById('sim-tb');if(tb)tb.innerHTML=SIM_TABS.map(function(x){return '<div class="sim-tab'+(qcSim.tab===x[0]?' on':'')+'" onclick="simSetTab(\''+x[0]+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="'+x[2]+'"/></svg>'+x[1]+'</div>'}).join('');
+}
+function simRenderReadout(){
+  const m=qcSim.metrics;
+  const mm=document.getElementById('sim-metrics');if(mm)mm.innerHTML=
+    '<div class="sim-metric"><div class="k">Delivered</div><div class="v">'+m.delivered+'<small>/'+m.total+'</small></div></div>'
+    +'<div class="sim-metric"><div class="k">Band buzzes</div><div class="v">'+m.buzz+'</div></div>'
+    +'<div class="sim-metric"><div class="k">Dropped</div><div class="v">'+m.drop+'</div></div>'
+    +'<div class="sim-metric"><div class="k">Filtered</div><div class="v">'+m.filt+'</div></div>';
+  const vd=document.getElementById('sim-verdicts');
+  if(vd){if(!qcSim.verdicts.length)vd.innerHTML='<div class="sim-note">Inject an event to see how it behaves on the selected phone + OS — delivered, filtered, or dropped, and <b>why</b>.</div>';
+    else vd.innerHTML=qcSim.verdicts.map(function(v){var r=v.r;var cls=r.level==='pass'?'pass':r.level==='warn'?'warn':r.level==='crit'?'crit':'info';var icon=r.buzz?'🟢':r.filtered?'⚪':r.delivered?'🟡':'🔴';var st=r.buzz?'BAND BUZZED':r.filtered?'FILTERED':r.delivered?'PHONE ONLY':'DROPPED';return '<div class="sim-verdict '+cls+'"><div class="vh">'+icon+' '+esc(v.label)+'<span class="tg">'+st+'</span></div><div class="vr">'+esc(r.reason||'—')+'</div><div class="vm">'+esc(v.ctx.osv)+' · '+esc(v.ctx.dev)+' · app '+esc(v.ctx.st)+(r.via?' · via '+esc(r.via):'')+'</div></div>'}).join('');}
+  const lg=document.getElementById('sim-log');
+  if(lg)lg.innerHTML=qcSim.logs.map(function(x){var cls=x.res==='buzz'?'ok':(x.res==='dropped'?'no':'');return '<div><span class="ts">'+x.ts+'</span> <span class="'+cls+'">'+(x.res+'        ').slice(0,8)+'</span> '+esc(x.label)+'</div>'}).join('');
+  simRenderHaptic();
+}
+function simRenderHaptic(){
+  const h=document.getElementById('sim-hap');if(!h)return;h.innerHTML='';if(!qcSim.lastBuzz)return;
+  const c=qcSim.lastBuzz.cmd,cont=(c.numBuzzes>=12),n=Math.min(c.numBuzzes||1,14);
+  for(var i=0;i<(cont?14:n);i++){var bar=document.createElement('div');bar.className='sim-hb';bar.style.height=Math.max(11,(c.strength/100)*36)+'px';if(cont)bar.style.opacity=(0.5+0.5*Math.abs(Math.sin(i)));h.appendChild(bar);if(i<n-1){var g=document.createElement('div');g.style.width=Math.max(2,(c.durationOfDelay/100)*9)+'px';g.style.flex='0 0 auto';h.appendChild(g);}}
+}
+function simRenderSummary(){
+  const b=qcSim.band,e=document.getElementById('sim-stagechip');
+  if(e)e.innerHTML='<span class="pill '+(b.connected?'good':'amber')+'">'+(b.connected?'band connected':'band offline')+'</span> <span class="pill dim">'+esc(simDev().name)+' · '+esc(qcSim.osVersion)+'</span>'+(b.ancs===0&&qcSim.os==='ios'?' <span class="pill amber">ANCS blocked</span>':'')+(qcSim.appState!=='foreground'?' <span class="pill dim">app '+esc(qcSim.appState)+'</span>':'')+(qcSim.dnd==='on'?' <span class="pill amber">Focus on</span>':'');
+  var bl=document.getElementById('sim-batl');if(bl)bl.textContent=b.battery;var bv=document.getElementById('sim-batv');if(bv)bv.textContent=b.battery+'%';
+}
+
+/* ===== Combined soak: device/OS-aware soak test driving a real OR virtual band =====
+   Reuses the bench's run/verdict/report plumbing (QCRUNS, thresholds, release
+   gating) but drives events through the simulator's OS-behavior engine and adds
+   chaos + time acceleration. A soak here counts toward a release's QC gate just
+   like the Test-bench soak. */
+let simSoak={running:false,run:null,dev:null,band:'virtual',speed:1,chaos:true,t0:0,lastTickAt:0,connectedMs:0,downSince:0,
+  ev:0,expected:0,delivered:0,disconnects:0,safetyMiss:0,evTimer:null,chaosTimer:null,tickTimer:null,durSec:0};
+function simRenderSoak(){
+  const host=document.getElementById('sim-soak');if(!host)return;
+  if(simSoak.running){
+    const s=simSoak,el=Math.min(s.durSec,(Date.now()-s.t0)/1000*s.speed);
+    const up=el>0?Math.round(s.connectedMs/1000/((Date.now()-s.t0)/1000)*100):100;
+    const del=s.expected?Math.round(s.delivered/s.expected*100):100;
+    host.innerHTML='<div class="row" style="align-items:center;margin-bottom:8px"><span class="pill wave">RUNNING</span><span class="grow"></span><button class="chip" style="padding:4px 10px" onclick="simStopSoak()">Stop</button></div>'
+      +'<div class="d" style="color:var(--faint);font-family:var(--font-m);font-size:11px" id="sim-soak-el">'+fmtDur(Math.floor(el))+' / '+fmtDur(s.durSec)+(s.speed>1?' · ×'+s.speed:'')+'</div>'
+      +'<div class="progress" style="height:7px;margin:8px 0"><i id="sim-soak-prog" style="width:'+Math.min(100,el/s.durSec*100)+'%"></i></div>'
+      +'<div class="row" style="gap:6px;flex-wrap:wrap"><div class="qc-stat"><div class="n" id="sim-soak-del" style="color:var(--good)">'+del+'%</div><div class="l">delivered</div></div>'
+      +'<div class="qc-stat"><div class="n" id="sim-soak-dc">'+s.disconnects+'</div><div class="l">disconnects</div></div>'
+      +'<div class="qc-stat"><div class="n" id="sim-soak-up">'+up+'%</div><div class="l">uptime</div></div>'
+      +'<div class="qc-stat"><div class="n" id="sim-soak-sf" style="color:'+(s.safetyMiss?'var(--safety)':'var(--good)')+'">'+s.safetyMiss+'</div><div class="l">safety miss</div></div></div>';
+    return;
+  }
+  const rels=Object.values(RELEASES).filter(function(r){return r.status!=='released'}).sort(function(a,b){return (b.createdAt||'').localeCompare(a.createdAt||'')});
+  host.innerHTML='<div class="sim-field"><label>Attach to release (gates QC)</label><select id="sim-soak-rel"><option value="">— practice run (not attached) —</option>'
+      +rels.map(function(r){return '<option value="'+esc(r.id)+'">'+esc((QC_PRODUCTS[r.product]||r.product)+' '+(r.version||''))+'</option>'}).join('')+'</select></div>'
+    +'<div class="sim-btnrow"><div class="sim-field" style="margin:0"><label>Duration (min)</label><input class="sim-in" id="sim-soak-dur" type="number" min="1" value="480"></div>'
+      +'<div class="sim-field" style="margin:0"><label>Speed</label><select id="sim-soak-speed"><option value="60">Accelerated ×60</option><option value="1">Realtime</option></select></div></div>'
+    +'<div class="sim-btnrow" style="margin-top:9px"><div class="sim-field" style="margin:0"><label>Band</label><select id="sim-soak-band"><option value="virtual">Virtual</option><option value="ble">Real (Bluetooth)</option></select></div>'
+      +'<div class="sim-field" style="margin:0"><label>Chaos</label><select id="sim-soak-chaos"><option value="1">On — drops, Doze, ANCS</option><option value="0">Off</option></select></div></div>'
+    +'<button class="sim-ib block pri" style="margin-top:10px" onclick="simStartSoak()">▶ Run soak on '+esc(simDev().name)+' · '+esc(qcSim.osVersion)+'</button>'
+    +'<div class="sim-note" style="margin-top:8px">Auto-injects a realistic alert mix on the selected phone/OS while injecting chaos, then scores delivery, uptime, disconnects, and <b>life-safety misses</b> into a pass/fail QC run. Real-band mode drives an actual buzz over Web Bluetooth (realtime only).</div>';
+}
+async function simStartSoak(){
+  if(simSoak.running)return;
+  if(typeof qcBench!=='undefined'&&qcBench&&qcBench.running){toast('A Test-bench soak is already running');return}
+  const relId=(document.getElementById('sim-soak-rel')||{}).value||'';
+  const durMin=Math.max(1,parseInt((document.getElementById('sim-soak-dur')||{}).value||'480',10)||480);
+  let speed=Math.max(1,parseInt((document.getElementById('sim-soak-speed')||{}).value||'60',10)||60);
+  const band=(document.getElementById('sim-soak-band')||{}).value||'virtual';
+  const chaos=((document.getElementById('sim-soak-chaos')||{}).value||'1')==='1';
+  if(band==='ble')speed=1; // can't time-accelerate real hardware
+  let dev=null;
+  if(band==='ble'){try{dev=await qcConnectBLE();qcSim.band.connected=true;}catch(e){toast('Could not connect band — '+((e&&e.message)||''));return;}}
+  const rel=relId?RELEASES[relId]:null;
+  const now=new Date();
+  const run={id:'QR'+Date.now().toString(36).toUpperCase().slice(-8),releaseId:relId,product:rel?rel.product:'app',version:rel?(rel.version||''):'',
+    device:simDev().name+' · '+qcSim.osVersion+(band==='ble'?' · real band':' · sim'),mode:band==='ble'?'ble':'sim',startedAt:now.toISOString(),
+    durationTargetSec:durMin*60,thresholds:{minDurationSec:durMin*60,maxDisconnects:qcThresholds().maxDisconnects,minDeliveryPct:qcThresholds().minDeliveryPct},
+    profile:{device:simDev().name,os:qcSim.osVersion},alertsSent:0,alertsAcked:0,disconnects:0,maxGapMs:0,by:(CURRENT_USER&&CURRENT_USER.name)||'',verdict:'running',events:[]};
+  simSoak={running:true,run:run,dev:dev,band:band,speed:speed,chaos:chaos,t0:Date.now(),lastTickAt:Date.now(),connectedMs:0,downSince:0,
+    ev:0,expected:0,delivered:0,disconnects:0,safetyMiss:0,evTimer:null,chaosTimer:null,tickTimer:null,durSec:durMin*60};
+  if(dev){dev.onDisconnect=function(){if(!simSoak.running)return;qcSim.band.connected=false;simSoak.disconnects++;simRenderSummary();};dev.onReconnect=function(){if(!simSoak.running)return;qcSim.band.connected=true;simRenderSummary();};}
+  if(rel&&rel.status!=='released'){rel.status='testing';rel.testingSince=rel.testingSince||now.toISOString();RELEASES[rel.id]=rel;persistRelease(rel);}
+  simSoak.tickTimer=setInterval(simSoakTick,500);
+  simSoak.evTimer=setInterval(simSoakEvent,band==='ble'?4000:2500);
+  if(chaos)simSoak.chaosTimer=setInterval(simSoakChaos,band==='ble'?9000:4000);
+  simRenderSoak();toast('Soak started · '+run.device);
+}
+function simSoakTick(){
+  const s=simSoak;if(!s.running)return;const now=Date.now(),dt=now-s.lastTickAt;s.lastTickAt=now;
+  if(qcSim.band.connected)s.connectedMs+=dt;
+  const el=(now-s.t0)/1000*s.speed;
+  const p=document.getElementById('sim-soak-prog');if(p)p.style.width=Math.min(100,el/s.durSec*100)+'%';
+  const elx=document.getElementById('sim-soak-el');if(elx)elx.textContent=fmtDur(Math.floor(Math.min(s.durSec,el)))+' / '+fmtDur(s.durSec)+(s.speed>1?' · ×'+s.speed:'');
+  const up=document.getElementById('sim-soak-up');if(up)up.textContent=(el>0?Math.round(s.connectedMs/1000/((now-s.t0)/1000)*100):100)+'%';
+  if(el>=s.durSec)simFinishSoak('done');
+}
+const SIM_SOAK_MIX=['appnotif','appnotif','admin','alarm','missedcall','appnotif','admin'];
+function simSoakEvent(){
+  const s=simSoak;if(!s.running)return;
+  const kind=SIM_SOAK_MIX[Math.floor(Math.random()*SIM_SOAK_MIX.length)];
+  let ctx={};
+  if(kind==='appnotif'){const en=qcSim.apps.filter(function(a){return a.enabled});const app=en[Math.floor(Math.random()*en.length)]||qcSim.apps[0];ctx.app=app;ctx.text=['Mom: call me','urgent: check in','Reminder: meds','Are you free?','Package delivered'][Math.floor(Math.random()*5)];}
+  else if(kind==='alarm')ctx.pattern='escalate';
+  else if(kind==='admin')ctx.text='Safewave check-in';
+  const r=simDecide(kind,ctx);
+  const isSafety=(kind==='admin'||kind==='alarm'||kind==='missedcall');
+  s.ev++;
+  if(r.buzz)s.expected++; // events that should buzz on this phone/OS/state
+  // Drive the visible simulator (metrics/verdicts/phone/haptic) + real band.
+  simInjectDuring(kind,ctx,r);
+  if(r.buzz){
+    if(s.band==='ble'&&s.dev){s.run.alertsSent++;s.dev.sendAlert().then(function(ok){if(!s.running)return;if(ok){s.delivered++;s.run.alertsAcked++;}else{qcLogSoak('miss','real band did not deliver'+(isSafety?' (SAFETY)':''));if(isSafety)s.safetyMiss++;}simRenderSoakStats();}).catch(function(){});}
+    else{ // virtual: delivered iff currently connected (chaos may have dropped it)
+      if(qcSim.band.connected){s.delivered++;}else{qcLogSoak('miss','band down at fire'+(isSafety?' (SAFETY)':''));if(isSafety)s.safetyMiss++;}
+      simRenderSoakStats();
+    }
+  }
+}
+function simInjectDuring(kind,ctx,r){
+  // Mirror simInject's state updates without re-reading form inputs.
+  const label=kind==='appnotif'?(ctx.app.name+': “'+ctx.text+'”'):kind==='alarm'?'Alarm · Escalating':kind==='admin'?'Admin alert':kind==='missedcall'?'Missed call':kind;
+  qcSim.metrics.total++;if(r.delivered)qcSim.metrics.delivered++;if(r.filtered)qcSim.metrics.filt++;
+  if(r.buzz){qcSim.metrics.buzz++;simFireBuzz(kind,ctx,r);}
+  if(!r.delivered)qcSim.metrics.drop++;
+  if(r.phone==='banner')simBanner(kind,ctx,r);
+  qcSim.history.unshift({label:label,buzz:r.buzz,filtered:r.filtered,delivered:r.delivered,at:simClockStr(),via:r.via});qcSim.history=qcSim.history.slice(0,30);
+  qcSim.verdicts.unshift({kind:kind,label:label,r:r,ctx:{dev:simDev().name,osv:qcSim.osVersion,st:qcSim.appState}});qcSim.verdicts=qcSim.verdicts.slice(0,12);
+  const res=r.buzz?'buzz':r.filtered?'filtered':r.delivered?'shown':'dropped';qcSim.logs.unshift({ts:simClockStr(),res:res,label:label});qcSim.logs=qcSim.logs.slice(0,60);
+  simClock++;simRenderReadout();if(qcSim.tab==='history')simRenderApp();
+}
+function simSoakChaos(){
+  const s=simSoak;if(!s.running)return;const roll=Math.random();
+  if(roll<0.35){ // drop the link for a scaled moment
+    if(qcSim.band.connected){qcSim.band.connected=false;s.disconnects++;s.downSince=Date.now();qcLogSoak('chaos','link dropped');
+      if(s.band==='ble'&&s.dev&&s.dev.disconnect)s.dev.disconnect();
+      setTimeout(function(){if(!s.running)return;qcSim.band.connected=true;qcLogSoak('chaos','reconnected');simRenderSummary();},700+Math.random()*1800);}
+  }else if(roll<0.55){qcSim.appState=(qcSim.appState==='foreground')?'background':'foreground';const st=document.getElementById('sim-st');if(st)st.value=qcSim.appState;qcLogSoak('chaos','app '+qcSim.appState);}
+  else if(roll<0.70&&qcSim.os==='ios'){qcSim.band.ancs=qcSim.band.ancs===1?0:1;qcLogSoak('chaos','ANCS '+(qcSim.band.ancs?'restored':'lost'));}
+  else if(roll<0.82){qcSim.dnd=qcSim.dnd==='on'?'off':'on';const d=document.getElementById('sim-dnd');if(d)d.value=qcSim.dnd;qcLogSoak('chaos','Focus '+qcSim.dnd);}
+  simRenderSummary();simRenderApp();simRenderSoakStats();
+}
+function qcLogSoak(type,detail){const s=simSoak;if(!s.run)return;s.run.events.push({t:new Date().toISOString(),type:type,detail:detail});if(s.run.events.length>240)s.run.events=s.run.events.slice(-240);}
+function simRenderSoakStats(){
+  const s=simSoak;if(!s.running)return;
+  const del=s.expected?Math.round(s.delivered/s.expected*100):100;
+  const set=function(id,v,c){var e=document.getElementById(id);if(e){e.textContent=v;if(c)e.style.color=c;}};
+  set('sim-soak-del',del+'%');set('sim-soak-dc',s.disconnects);set('sim-soak-sf',s.safetyMiss,s.safetyMiss?'var(--safety)':'var(--good)');
+}
+function simStopSoak(){if(simSoak.running)simFinishSoak('abort')}
+function simFinishSoak(reason){
+  const s=simSoak;if(!s.running)return;s.running=false;
+  if(s.tickTimer)clearInterval(s.tickTimer);if(s.evTimer)clearInterval(s.evTimer);if(s.chaosTimer)clearInterval(s.chaosTimer);
+  const now=Date.now(),realEl=(now-s.t0)/1000;
+  const run=s.run;run.endedAt=new Date().toISOString();run.durationSec=Math.round(realEl*s.speed);
+  run.uptimePct=realEl>0?Math.round(s.connectedMs/1000/realEl*100):100;
+  const del=s.expected?Math.round(s.delivered/s.expected*100):100;run.deliveryPct=del;run.eventsInjected=s.ev;run.safetyMisses=s.safetyMiss;
+  const th=run.thresholds,reasons=[];
+  if(reason==='abort'){run.verdict='aborted';reasons.push('Stopped early by tester');}
+  else{
+    if(run.durationSec<th.minDurationSec-2)reasons.push('Ran '+fmtDur(run.durationSec)+' of '+fmtDur(th.minDurationSec));
+    if(s.disconnects>th.maxDisconnects)reasons.push(s.disconnects+' disconnects (max '+th.maxDisconnects+')');
+    if(del<th.minDeliveryPct)reasons.push('Delivery '+del+'% (min '+th.minDeliveryPct+'%)');
+    if(s.safetyMiss>0)reasons.push(s.safetyMiss+' life-safety alert'+(s.safetyMiss===1?'':'s')+' missed');
+    run.verdict=reasons.length?'fail':'pass';
+  }
+  run.reasons=reasons;run.disconnects=s.disconnects;
+  try{if(s.dev&&s.dev.disconnect)s.dev.disconnect();}catch(e){}
+  if(run.releaseId&&typeof QCRUNS!=='undefined'){QCRUNS[run.id]=run;if(typeof persistRun==='function')persistRun(run);
+    const rel=RELEASES[run.releaseId];if(rel&&rel.status!=='released'){rel.status=(run.verdict==='pass')?'passed':(run.verdict==='fail'?'failed':'testing');rel.latestVerdict=run.verdict;RELEASES[rel.id]=rel;if(typeof persistRelease==='function')persistRelease(rel);}
+    if(run.verdict==='pass'&&typeof qcNotifyLeads==='function')qcNotifyLeads('QC passed (sim soak) · '+run.version,'Simulated soak passed on '+run.device+' — '+del+'% delivery, '+s.disconnects+' disconnects');
+    else if(run.verdict==='fail'&&typeof qcNotifyLeads==='function')qcNotifyLeads('QC failed (sim soak) · '+run.version,reasons.join('; '));
+  }
+  simRenderSoak();
+  toast(run.verdict==='pass'?'✓ Soak PASSED — '+del+'% delivery':(run.verdict==='aborted'?'Soak stopped':'⚠︎ Soak FAILED — '+(reasons[0]||'')));
+}
 function qcBenchView(){
   if(qcBench.running)return qcRunningPanel();
   const rels=Object.values(RELEASES).filter(r=>r.status!=='released').sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
@@ -2254,6 +2730,7 @@ function qcTryReconnect(dev){if(!qcBench.running)return;try{dev._bt.gatt.connect
 function qcLog(run,type,detail){run.events.push({t:new Date().toISOString(),type:type,detail:detail});if(run.events.length>240)run.events=run.events.slice(-240);qcAppendLiveLog(type,detail);}
 async function qcStartRun(cfg){
   if(qcBench.running)return;
+  if(typeof simSoak!=='undefined'&&simSoak&&simSoak.running){toast('A Device-simulator soak is running — stop it first');return}
   const rel=RELEASES[cfg.releaseId];if(!rel){toast('Release not found');return}
   let dev;
   try{dev=cfg.mode==='ble'?await qcConnectBLE():qcSimDevice({flaky:cfg.flaky});}
