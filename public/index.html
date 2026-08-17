@@ -91,6 +91,7 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .pill.amber{background:var(--amber-dim);color:var(--amber)}
 .pill.good{background:var(--good-dim);color:var(--good)}
 .pill.dim{background:var(--surface-2);color:var(--muted)}
+.pill.accent{background:var(--wave-dim);color:var(--wave)}
 .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
 
 .wstr{display:flex;align-items:flex-end;gap:2.5px;height:22px;flex-shrink:0}
@@ -1312,9 +1313,10 @@ input[type=date]{color-scheme:dark}
     <p class="d" style="font-weight:600;color:var(--text);margin:10px 0 6px">About <span class="pill dim" id="fb-screen">this screen</span></p>
     <div class="rolepick" id="fb-type"><button data-v="Idea" class="on">💡 Idea</button><button data-v="Issue">🐞 Issue</button><button data-v="Question">❓ Question</button></div>
     <textarea class="field" id="fb-text" placeholder="What's working, what's not, what would help…" style="min-height:130px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
-    <div id="fb-shot-wrap" style="display:none;margin:2px 0 4px"><img id="fb-shot-img" alt="screenshot" style="max-width:100%;border-radius:10px;border:1px solid var(--line);display:block"><button class="btn ghost" style="margin-top:6px" onclick="removeShot()">Remove screenshot</button></div>
-    <button class="btn ghost" id="fb-shot-btn" style="margin-bottom:10px" onclick="captureScreenshot('feedback')">📷 Add annotated screenshot</button>
+    <div id="fb-shot-tiles" style="display:none;gap:8px;flex-wrap:wrap;margin:2px 0 8px"></div>
+    <div class="row" style="gap:8px;margin-bottom:10px"><button class="btn ghost" id="fb-shot-btn" style="flex:1" onclick="captureScreenshot('feedback')">📷 Screenshot</button><button class="btn ghost" style="flex:1" onclick="document.getElementById('fb-photo-file').click()">🖼 Add photos</button></div>
     <input type="file" id="fb-shot-file" accept="image/*" style="display:none" onchange="shotFilePicked(this)">
+    <input type="file" id="fb-photo-file" accept="image/*" multiple style="display:none" onchange="photosPicked(this)">
     <button class="btn" onclick="sendFeedback()">Send to Brad</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
   </div>
@@ -1339,7 +1341,7 @@ input[type=date]{color-scheme:dark}
 </div>
 
 <!-- Lightbox for viewing an attached screenshot -->
-<div id="shot-view" onclick="this.style.display='none'"><img id="shot-view-img" alt="screenshot"></div>
+<div id="shot-view" onclick="this.style.display='none'"><img id="shot-view-img" alt="screenshot"><div id="shot-view-nav" style="display:none;position:absolute;left:0;right:0;bottom:22px;align-items:center;justify-content:center;gap:18px"><button onclick="shotViewStep(-1,event)" style="width:44px;height:44px;border-radius:22px;border:none;background:rgba(255,255,255,.14);color:#fff;font-size:20px;cursor:pointer">‹</button><span id="shot-view-count" style="color:#fff;font-size:13px;font-family:var(--font-m)"></span><button onclick="shotViewStep(1,event)" style="width:44px;height:44px;border-radius:22px;border:none;background:rgba(255,255,255,.14);color:#fff;font-size:20px;cursor:pointer">›</button></div></div>
 
 <!-- CRM guided "Start working" queue -->
 <div id="crm-queue" onclick="if(event.target===this)queueClose(false)"><div class="q-card" id="q-card"></div></div>
@@ -4142,13 +4144,13 @@ function isOversight(u){u=u||CURRENT_USER;return !!(u&&u.email&&OVERSIGHT_EMAILS
 function buildReadOnly(){return isOversight()}
 function notifySuper(title,body,link){const t=(TEAM||[]).find(x=>(x.email||'').toLowerCase()===SUPER_EMAIL);if(t&&t.uid)notify(t.uid,title,body,link||'')}
 function openFeedback(){if(!CURRENT_USER)return;document.getElementById('fb-screen').textContent=currentScreenLabel();document.getElementById('fb-text').value='';
-  fbShot=null;showShotThumb();
+  fbShots=[];renderShotTiles();
   document.querySelectorAll('#fb-type button').forEach((b,i)=>{b.classList.toggle('on',i===0);b.onclick=function(){document.querySelectorAll('#fb-type button').forEach(x=>x.classList.remove('on'));this.classList.add('on')}});
   closeSheets();openSheet('sh-feedback')}
 function sendFeedback(){const text=document.getElementById('fb-text').value.trim();if(!text){toast('Write your feedback first');return}
   const type=((document.querySelector('#fb-type button.on')||{}).dataset||{}).v||'Idea';
   const rec={fromUid:CURRENT_USER.uid,fromName:CURRENT_USER.name||'',fromEmail:CURRENT_USER.email||'',screen:currentScreenId(),screenLabel:currentScreenLabel(),type:type,text:text,status:'open'};
-  if(fbShot)rec.shot=fbShot;
+  if(fbShots.length)rec.shots=fbShots.slice();
   if(!hasFirestore()){toast('Not connected — feedback needs the shared cloud');return}
   rec.createdAt=firebase.firestore.FieldValue.serverTimestamp();
   firebase.firestore().collection('feedback').add(rec)
@@ -4156,7 +4158,7 @@ function sendFeedback(){const text=document.getElementById('fb-text').value.trim
       firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({feedbackCount:firebase.firestore.FieldValue.increment(1)},{merge:true}).catch(()=>{});
       CURRENT_USER.feedbackCount=(CURRENT_USER.feedbackCount||0)+1;const me=(TEAM||[]).find(t=>t.uid===CURRENT_USER.uid);if(me)me.feedbackCount=(me.feedbackCount||0)+1;refreshPulse();})
     .catch(e=>toast('Send failed — '+((e&&e.code)||'check rules')));
-  fbShot=null;closeSheets();toast('✓ Sent to Brad — thank you')}
+  fbShots=[];closeSheets();toast('✓ Sent to Brad — thank you')}
 function subscribeFeedback(){if(!hasFirestore()||!isSuperAdmin())return;
   if(fbUnsub){try{fbUnsub()}catch(e){}}
   try{fbUnsub=firebase.firestore().collection('feedback').orderBy('createdAt','desc').limit(200).onSnapshot(qs=>{
@@ -4288,21 +4290,40 @@ function renderFeedbackInbox(){const open=fbOpenCount();
   document.getElementById('fbx-filter').innerHTML=fbxTab('open','Open',open)+fbxTab('all','All',FEEDBACK.length)+fbxTab('resolved','Resolved',FEEDBACK.length-open);
   const list=FEEDBACK.filter(f=>fbxFilter==='all'?true:(fbxFilter==='resolved'?f.status==='resolved':f.status!=='resolved'));
   document.getElementById('fbx-list').innerHTML=list.length?list.map(fbxCard).join(''):'<div class="empty"><div class="ico">💬</div><div class="t">Nothing here</div><div class="d">When the team taps the 💬 button on any screen, it shows up here.</div></div>'}
+let fbReplyOpen={};
+function fbShort(ms){if(!ms)return '';const d=new Date(ms);return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}
 function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMillis():0;const time=t?new Date(t).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';const resolved=f.status==='resolved';
   const tp=({Idea:'💡',Issue:'🐞',Question:'❓'})[f.type]||'💬';
-  return '<div class="card"><div class="row"><div class="grow"><div class="t">'+tp+' '+esc(f.type||'Feedback')+' · '+esc(f.screenLabel||'')+'</div><div class="d">'+esc(f.fromName||f.fromEmail||'Teammate')+(time?' · '+time:'')+'</div></div><span class="pill '+(resolved?'good':'wave')+'">'+(resolved?'RESOLVED':'OPEN')+'</span></div>'
-    +'<div class="note" style="margin-top:9px;white-space:pre-wrap">'+esc(f.text||'')+'</div>'
-    +(f.shot?'<img src="'+f.shot+'" alt="screenshot" style="max-width:100%;border-radius:8px;margin-top:9px;cursor:zoom-in;display:block" onclick="viewShot(this.src)">':'')
-    +'<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
+  const shots=(f.shots&&f.shots.length)?f.shots:(f.shot?[f.shot]:[]);
+  const thread=f.thread||[];const replyOpen=!!fbReplyOpen[f.id];
+  let h='<div class="card"><div class="row"><div class="grow"><div class="t">'+tp+' '+esc(f.type||'Feedback')+' · '+esc(f.screenLabel||'')+'</div><div class="d">'+esc(f.fromName||f.fromEmail||'Teammate')+(time?' · '+time:'')+'</div></div><span class="pill '+(resolved?'good':(thread.length?'accent':'wave'))+'">'+(resolved?'RESOLVED':(thread.length?'REPLIED':'OPEN'))+'</span></div>'
+    +'<div class="note" style="margin-top:9px;white-space:pre-wrap">'+esc(f.text||'')+'</div>';
+  if(shots.length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+shots.map(function(src,i){return '<img src="'+src+'" alt="attachment" style="width:78px;height:78px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="viewShotFb(\''+f.id+'\','+i+')">'}).join('')+'</div>';
+  if(thread.length)h+='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px">'+thread.map(function(m){const mine=m.uid===f.fromUid;return '<div style="align-self:'+(mine?'flex-start':'flex-end')+';max-width:85%"><div style="font-size:11px;color:var(--faint);margin-bottom:2px">'+esc(m.by||(mine?'Submitter':'You'))+(m.at?' · '+fbShort(m.at):'')+'</div><div style="background:'+(mine?'var(--surface-2)':'rgba(29,170,225,.14)')+';color:var(--text);border-radius:12px;padding:8px 11px;font-size:13px;line-height:18px;white-space:pre-wrap">'+esc(m.text||'')+'</div></div>'}).join('')+'</div>';
+  if(replyOpen)h+='<div style="margin-top:10px"><textarea class="field" id="fb-reply-'+f.id+'" placeholder="Write a reply — the submitter gets an alert with your message…" style="min-height:70px;resize:vertical;font-family:var(--font-b);width:100%"></textarea><div class="row" style="gap:8px;margin-top:6px"><button class="btn" style="flex:1" onclick="sendFeedbackReply(\''+f.id+'\')">Send reply &amp; alert submitter</button><button class="btn ghost" style="flex:0 0 auto" onclick="toggleFbReply(\''+f.id+'\')">Close</button></div></div>';
+  h+='<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
       +(resolved?'<button class="btn ghost" style="flex:1 1 120px" onclick="setFeedbackStatus(\''+f.id+'\',\'open\')">Reopen</button>':'<button class="btn ghost" style="flex:1 1 120px" onclick="setFeedbackStatus(\''+f.id+'\',\'resolved\')">Mark resolved</button>')
       +(f.screen?'<button class="btn ghost" style="flex:1 1 120px" onclick="goto(\''+esc(f.screen)+'\')">Go to '+esc(f.screenLabel||'screen')+'</button>':'')
-      +(f.fromEmail?'<button class="btn ghost" style="flex:1 1 90px" onclick="replyFeedback(decodeURIComponent(\''+encodeURIComponent(f.fromEmail)+'\'))">Reply</button>':'')
-    +'</div></div>'}
+      +(f.fromUid?'<button class="btn '+(replyOpen?'ghost':'')+'" style="flex:1 1 90px" onclick="toggleFbReply(\''+f.id+'\')">'+(thread.length?'Reply again':'Reply')+'</button>':'')
+    +'</div></div>';
+  return h;}
+function toggleFbReply(id){fbReplyOpen[id]=!fbReplyOpen[id];renderFeedbackInbox();if(fbReplyOpen[id]){const el=document.getElementById('fb-reply-'+id);if(el)el.focus();}}
+function viewShotFb(id,i){const f=FEEDBACK.find(x=>x.id===id);if(!f)return;const shots=(f.shots&&f.shots.length)?f.shots:(f.shot?[f.shot]:[]);viewShotList(shots,i)}
+/* Post a reply into the feedback thread and alert the submitter with it. */
+function sendFeedbackReply(id){const el=document.getElementById('fb-reply-'+id);const text=(el&&el.value||'').trim();if(!text){toast('Write a reply first');return}
+  const f=FEEDBACK.find(x=>x.id===id);if(!f){toast('Feedback not found');return}
+  const msg={by:(CURRENT_USER&&CURRENT_USER.name)||'Safewave team',uid:(CURRENT_USER&&CURRENT_USER.uid)||'admin',text:text,at:Date.now()};
+  // Optimistic local update; the snapshot reconciles once the write lands.
+  f.thread=(f.thread||[]).concat([msg]);if(el)el.value='';renderFeedbackInbox();
+  if(hasFirestore()){
+    firebase.firestore().collection('feedback').doc(id).update({thread:firebase.firestore.FieldValue.arrayUnion(msg),lastReplyAt:firebase.firestore.FieldValue.serverTimestamp()})
+      .then(()=>{if(f.fromUid&&f.fromUid!==(CURRENT_USER&&CURRENT_USER.uid))notify(f.fromUid,'Reply to your feedback',text.slice(0,140),'');toast('✓ Reply sent — submitter alerted')})
+      .catch(e=>toast('Reply failed — '+((e&&e.code)||'check rules')));
+  }else{toast('Reply saved — connect the cloud to alert the submitter')}}
 function setFeedbackStatus(id,st){if(hasFirestore())firebase.firestore().collection('feedback').doc(id).set({status:st},{merge:true}).catch(e=>toast('Update failed — '+((e&&e.code)||'')));const f=FEEDBACK.find(x=>x.id===id);if(f)f.status=st;renderFeedbackInbox();renderFeedbackBadge()}
-function replyFeedback(email){if(!email)return;window.location.href='mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent('Re: your Safewave feedback')}
 
 /* ---- Snip & annotate: capture the page, crop a region, draw arrows/circles/pen ---- */
-let fbShot=null,shotBase=null,shotOps=[],shotMode='pen',shotColor='#ff3b30',shotDrawing=false,shotStart=null,shotTemp=null,shotWired=false,shotTarget='feedback';
+let fbShots=[],shotBase=null,shotOps=[],shotMode='pen',shotColor='#ff3b30',shotDrawing=false,shotStart=null,shotTemp=null,shotWired=false,shotTarget='feedback';
 const SHOT_COLORS=['#ff3b30','#ffcc00','#34c759','#0a84ff','#ffffff','#111111'];
 async function captureScreenshot(target){shotTarget=target||'feedback';closeSheets();
   const gdm=navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia;
@@ -4364,15 +4385,28 @@ function shotDone(){if(!shotBase){closeShotEditor();return}
   const out=document.createElement('canvas');out.width=shotBase.width;out.height=shotBase.height;const ctx=out.getContext('2d');ctx.drawImage(shotBase,0,0);shotOps.forEach(o=>drawOp(ctx,o));
   const data=encodeShot(out);document.getElementById('shot-editor').classList.remove('on');
   if(shotTarget==='chat'){shotTarget='feedback';chatAddImageAttachment(data);return}
-  fbShot=data;showShotThumb();reopenFeedback()}
+  fbShots.push(data);renderShotTiles();reopenFeedback()}
 function encodeShot(cv){const LIMIT=680000;
   for(const s of [1,0.8,0.66,0.5]){let c=cv;if(s<1){c=document.createElement('canvas');c.width=Math.max(1,Math.round(cv.width*s));c.height=Math.max(1,Math.round(cv.height*s));c.getContext('2d').drawImage(cv,0,0,c.width,c.height)}
     for(const q of [0.72,0.6,0.45]){const d=c.toDataURL('image/jpeg',q);if(d.length<=LIMIT)return d}}
   return cv.toDataURL('image/jpeg',0.4)}
-function showShotThumb(){const w=document.getElementById('fb-shot-wrap'),img=document.getElementById('fb-shot-img'),btn=document.getElementById('fb-shot-btn');if(!w)return;
-  if(fbShot){img.src=fbShot;w.style.display='';if(btn)btn.textContent='📷 Replace screenshot'}else{w.style.display='none';if(btn)btn.textContent='📷 Add annotated screenshot'}}
-function removeShot(){fbShot=null;showShotThumb()}
-function viewShot(src){if(!src)return;const v=document.getElementById('shot-view');document.getElementById('shot-view-img').src=src;v.style.display='flex'}
+/* Photo attachments as expandable thumbnail tiles (feedback composer). */
+function renderShotTiles(){const w=document.getElementById('fb-shot-tiles');if(!w)return;
+  if(!fbShots.length){w.style.display='none';w.innerHTML='';return;}
+  w.style.display='flex';
+  w.innerHTML=fbShots.map(function(src,i){return '<div style="position:relative;width:72px;height:72px;border-radius:10px;overflow:hidden;border:1px solid var(--line);flex:0 0 auto"><img src="'+src+'" alt="attachment" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in" onclick="viewShotAt('+i+')"><button aria-label="Remove" onclick="removeShot('+i+')" style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:10px;border:none;background:rgba(6,12,20,.8);color:#fff;font-size:12px;line-height:1;cursor:pointer;padding:0">✕</button></div>'}).join('');}
+function removeShot(i){fbShots.splice(i,1);renderShotTiles()}
+/* Downscale a picked photo to a data URI within the Firestore-doc size budget. */
+function photoToData(file){return new Promise(function(res,rej){const url=URL.createObjectURL(file);const img=new Image();img.onload=function(){URL.revokeObjectURL(url);const max=1400;let w=img.width,h=img.height;if(Math.max(w,h)>max){const s=max/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s);}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(encodeShot(c));};img.onerror=function(){URL.revokeObjectURL(url);rej()};img.src=url;});}
+function photosPicked(input){const files=Array.prototype.slice.call(input.files||[]);input.value='';if(!files.length)return;
+  let done=0;files.forEach(function(f){photoToData(f).then(function(d){fbShots.push(d);renderShotTiles();}).catch(function(){}).then(function(){if(++done===files.length&&!document.getElementById('sh-feedback').classList.contains('on'))openSheet('sh-feedback');});});}
+/* Expandable lightbox with next/prev when several photos are attached. */
+let shotViewList=[],shotViewIdx=0;
+function viewShotAt(i){shotViewList=fbShots.slice();shotViewIdx=i;showShotView();}
+function viewShotList(list,i){shotViewList=list.slice();shotViewIdx=i||0;showShotView();}
+function viewShot(src){shotViewList=[src];shotViewIdx=0;showShotView();}
+function shotViewStep(d,ev){if(ev)ev.stopPropagation();if(!shotViewList.length)return;shotViewIdx=(shotViewIdx+d+shotViewList.length)%shotViewList.length;showShotView();}
+function showShotView(){const v=document.getElementById('shot-view');if(!v||!shotViewList.length)return;document.getElementById('shot-view-img').src=shotViewList[shotViewIdx];const nav=document.getElementById('shot-view-nav');if(nav)nav.style.display=shotViewList.length>1?'flex':'none';const ct=document.getElementById('shot-view-count');if(ct)ct.textContent=(shotViewIdx+1)+' / '+shotViewList.length;v.style.display='flex'}
 
 /* ================= NAV / ROUTER ================= */
 let CURRENT_USER=null;
