@@ -2156,7 +2156,7 @@ function qcNotifyLeads(title,body){if(typeof notifyAll==='function')notifyAll(ti
 function setQcTab(t){qcTab=t;qcRelView=null;renderQC()}
 function qcSetProd(p){qcProdFilter=p;renderQC()}
 function renderQC(){
-  const tabs=[['releases','Releases'],['bench','Test bench'],['sim','Device simulator'],['flash','Flash & monitor']];
+  const tabs=[['releases','Releases'],['sim','Device simulator'],['flash','Flash & monitor']];
   const tb=document.getElementById('qc-tabs');
   if(tb)tb.innerHTML=tabs.map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
   const n=Object.keys(RELEASES).length;
@@ -2165,8 +2165,7 @@ function renderQC(){
   if(sub)sub.textContent=n?(n+' release'+(n===1?'':'s')+' · '+testing+' in QC · '+ready+' ready to ship'):'Every build earns its release — soak-tested on a real band before it ships.';
   const body=document.getElementById('qc-body');if(!body)return;
   if(qcRelView){renderQcReleaseDetail(body);return}
-  if(qcTab==='bench')body.innerHTML=qcBenchView();
-  else if(qcTab==='sim'){body.innerHTML=qcSimView();simAfterRender();}
+  if(qcTab==='sim'){body.innerHTML=qcSimView();simAfterRender();}
   else if(qcTab==='flash')body.innerHTML=qcFlashView();
   else body.innerHTML=qcReleasesView();
 }
@@ -2267,7 +2266,7 @@ function overrideRelease(id){const r=RELEASES[id];if(!r)return;if(!isSuperAdmin(
   qcNotifyLeads('Release override',(QC_PRODUCTS[r.product]||r.product)+' '+r.version+' released WITHOUT passing QC by '+((CURRENT_USER&&CURRENT_USER.name)||'')+' — '+reason.trim());
 }
 /* ---- Test bench ---- */
-function qcStartFromRelease(id){qcBench.selRel=id;qcTab='bench';qcRelView=null;renderQC();window.scrollTo(0,0)}
+function qcStartFromRelease(id){qcTab='sim';qcRelView=null;renderQC();var s=document.getElementById('sim-soak-rel');if(s){s.value=id;}window.scrollTo(0,0)}
 function qcModePick(v){const so=document.getElementById('qc-simopt');if(so)so.style.display=(v==='sim')?'':'none'}
 
 /* ===== Release QC · Device Simulator (Band Lab) =====
@@ -2403,6 +2402,7 @@ function simFireBuzz(kind,ctx,r){
   else c={strength:70,numBuzzes:(r.via&&r.via.indexOf('generic')>=0)?1:4,dutyOfBuzz:50,durationOfDelay:50};
   qcSim.lastBuzz={cmd:c,encoded:simEncode(c)};simRenderHaptic();
   const h=document.getElementById('sim-halo');if(h){h.classList.remove('fire');void h.offsetWidth;h.classList.add('fire');}
+  if(qcRealBand&&qcRealBand.connected){try{qcRealBand.buzz(c);}catch(e){}}
 }
 function simBanner(kind,ctx,r){
   const b=document.getElementById('sim-banner');if(!b)return;
@@ -2425,12 +2425,14 @@ function qcSimView(){
         +'<div class="sim-field"><label>App state</label><select id="sim-st" onchange="simSet(\'appState\',this.value)"><option value="foreground">Foreground (open)</option><option value="background">Background</option><option value="killed">Killed / force-quit</option></select></div>'
         +'<div class="sim-field"><label>Focus / Do Not Disturb</label><select id="sim-dnd" onchange="simSet(\'dnd\',this.value)"><option value="off">Off</option><option value="on">On</option></select></div>'
       +'</div>'
-      +'<div class="card"><span class="sim-lab">Band · virtual</span>'
-        +'<div class="sim-btnrow" style="margin-bottom:9px"><button class="sim-ib" onclick="simBand(\'connect\')">Connect</button><button class="sim-ib" onclick="simBand(\'disconnect\')">Disconnect</button></div>'
+      +'<div class="card"><span class="sim-lab">Band</span>'
+        +'<div id="sim-realband"></div>'
+        +'<div class="sim-note" style="margin:8px 0">Connect a <b>real Safewave Band</b> to buzz actual hardware, or drive the virtual band below.</div>'
+        +'<div class="sim-btnrow" style="margin-bottom:9px"><button class="sim-ib" onclick="simBand(\'connect\')">Connect (virtual)</button><button class="sim-ib" onclick="simBand(\'disconnect\')">Disconnect</button></div>'
         +'<div class="sim-field"><label>Battery — <span id="sim-batv" style="font-family:var(--font-m)">87%</span></label><input class="sim-in" type="range" id="sim-bat" min="0" max="100" value="87" oninput="simBattery(this.value)"></div>'
         +'<div class="sim-btnrow"><button class="sim-ib" onclick="simBand(\'ancs0\')">ANCS blocked</button><button class="sim-ib" onclick="simBand(\'ancs1\')">ANCS OK</button></div>'
-        +'<div class="sim-note" style="margin-top:9px">Virtual band. The <b>Test bench</b> tab connects a <b>real band over Web Bluetooth</b> for hardware soak.</div>'
       +'</div>'
+      +'<div class="card"><span class="sim-lab">Custom test</span><div id="sim-ct"></div></div>'
       +'<div class="card"><span class="sim-lab">Inject event</span>'
         +'<button class="sim-ib block pri" style="margin-bottom:8px" onclick="simInject(\'admin\')">⚡ Admin alert (from Command Center)</button>'
         +'<div class="sim-field"><label>App notification</label><select id="sim-app">'+qcSim.apps.map(function(a){return '<option value="'+a.id+'">'+esc(a.name)+(a.enabled?'':' (off)')+'</option>'}).join('')+'</select></div>'
@@ -2457,6 +2459,7 @@ function qcSimView(){
       +'<div><span class="sim-lab">Last buzz · haptic</span><div class="sim-hap" id="sim-hap"></div></div>'
       +'<div><span class="sim-lab">Verdicts</span><div id="sim-verdicts"></div></div>'
       +'<div><span class="sim-lab">Event log</span><div class="sim-log" id="sim-log"></div></div>'
+      +'<div class="card" style="margin-top:2px"><span class="sim-lab">Test results log</span><div id="sim-runlog"></div></div>'
     +'</div>'
   +'</div>';
 }
@@ -2467,6 +2470,7 @@ function simAfterRender(){
   document.getElementById('sim-dnd').value=qcSim.dnd;
   document.getElementById('sim-bat').value=qcSim.band.battery;
   simRenderFrame();simRenderApp();simRenderReadout();simRenderSummary();simRenderSoak();
+  simRenderRealBand();qcRenderCT();simRenderRunLog();
 }
 function simSetOSOptions(){const sel=document.getElementById('sim-os');if(!sel)return;sel.innerHTML=SIM_OSV[qcSim.os].map(function(v){return '<option'+(v===qcSim.osVersion?' selected':'')+'>'+v+'</option>'}).join('')}
 function simSetDevice(id){qcSim.device=id;simRefreshOS();simSetOSOptions();simRenderFrame();simRenderApp();simRenderSummary()}
@@ -2476,7 +2480,7 @@ function simBand(a){if(a==='connect')qcSim.band.connected=true;else if(a==='disc
 /* In-phone toast, mirrors the app's transient feedback. */
 function simToast(msg){var s=document.getElementById('sim-screen');if(!s)return;var t=document.createElement('div');t.textContent=msg;t.style.cssText='position:absolute;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(18,28,34,.96);color:#fff;font-family:var(--font-b);font-size:12px;font-weight:600;padding:9px 16px;border-radius:999px;z-index:9;box-shadow:0 6px 18px rgba(0,0,0,.45);max-width:82%;text-align:center;pointer-events:none';s.appendChild(t);setTimeout(function(){t.parentNode&&t.remove()},1600);}
 /* Home actions — drive the same state the real buttons do. */
-function simTapTest(){if(!qcSim.band.connected){simToast('Connect a band first');return;}var c={strength:80,numBuzzes:3,dutyOfBuzz:50,durationOfDelay:50};qcSim.lastBuzz={cmd:c,encoded:simEncode(c)};qcSim.metrics.buzz++;simRenderHaptic();var h=document.getElementById('sim-halo');if(h){h.classList.remove('fire');void h.offsetWidth;h.classList.add('fire');}simRenderReadout();simToast('Test vibration sent to band');}
+function simTapTest(){if(!qcSim.band.connected){simToast('Connect a band first');return;}var c={strength:80,numBuzzes:3,dutyOfBuzz:50,durationOfDelay:50};qcSim.metrics.buzz++;simEmitBuzz(c);simRenderReadout();simToast(qcRealActive()?'Test vibration sent to real band':'Test vibration sent to band');}
 function simTapConnect(){qcSim.band.connected=true;if(qcSim.band.battery==null||qcSim.band.battery==='')qcSim.band.battery=87;simRenderApp();simRenderSummary();simToast('Band connected');}
 function simTapRegister(){simToast('Band registration runs on a real device');}
 /* Alerts actions. */
@@ -2486,6 +2490,135 @@ function simDeleteApp(i){qcSim.apps.splice(i,1);simRenderApp();simRenderSummary(
 function simToggleAlarm(i){var a=qcSim.alarms[i];if(a){a.enabled=!a.enabled;simRenderApp();}}
 /* Floating add button. */
 function simFab(){if(qcSim.tab==='alerts')simToast('Add an app to monitor — done on device');else if(qcSim.tab==='alarm')simToast('Set a new wake alarm — done on device');}
+
+/* ================= REAL BAND (Web Bluetooth) ================= */
+let qcRealBand=null;
+async function simConnectReal(){
+  if(!(typeof navigator!=='undefined'&&navigator.bluetooth)){toast('Web Bluetooth needs desktop Chrome or Edge');return;}
+  var btn=document.getElementById('sim-real-btn');if(btn){btn.textContent='Connecting…';btn.disabled=true;}
+  try{
+    qcRealBand=await qcConnectBLE();
+    qcRealBand.onDisconnect=function(){simRenderRealBand();simRenderApp();};
+    qcRealBand.onReconnect=function(){simRenderRealBand();simRenderApp();};
+    qcSim.band.connected=true;
+    var bat=await qcRealBand.readBattery();if(bat){qcSim.band.battery=bat.level;qcSim.band.ancs=(bat.ancsStatus==null?1:bat.ancsStatus);}
+    var fw=await qcRealBand.readFirmware();if(fw)qcSim.band.firmware=fw;
+    toast('✓ Connected to '+qcRealBand.label);
+  }catch(e){qcRealBand=null;toast('Could not connect — '+((e&&e.message)||'cancelled'));}
+  simRenderRealBand();simRenderApp();simRenderSummary();
+}
+function simDisconnectReal(){if(qcRealBand){try{qcRealBand.disconnect();}catch(e){}}qcRealBand=null;simRenderRealBand();}
+async function simRefreshReal(){if(!qcRealBand||!qcRealBand.connected)return;var bat=await qcRealBand.readBattery();if(bat){qcSim.band.battery=bat.level;qcSim.band.ancs=(bat.ancsStatus==null?1:bat.ancsStatus);}var fw=await qcRealBand.readFirmware();if(fw)qcSim.band.firmware=fw;simRenderRealBand();simRenderApp();}
+function simRenderRealBand(){
+  var el=document.getElementById('sim-realband');if(!el)return;
+  if(qcRealBand&&qcRealBand.connected){
+    el.innerHTML='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="width:8px;height:8px;border-radius:50%;background:var(--good);flex:0 0 auto"></span><b style="font-size:13px">'+esc(qcRealBand.label)+'</b><span class="sim-note" style="margin:0">· real hardware</span></div>'
+      +'<div class="sim-note" style="margin-bottom:8px">Firmware <b>'+esc(qcSim.band.firmware||'—')+'</b> · Battery <b>'+(qcSim.band.battery!=null?qcSim.band.battery+'%':'—')+'</b></div>'
+      +'<div class="sim-btnrow"><button class="sim-ib" onclick="simRefreshReal()">Refresh</button><button class="sim-ib" onclick="qcRealBand&&qcRealBand.buzz({strength:80,numBuzzes:3,dutyOfBuzz:50,durationOfDelay:50})">Test buzz</button><button class="sim-ib" onclick="simDisconnectReal()">Disconnect</button></div>';
+  }else{
+    el.innerHTML='<button class="sim-ib block pri" id="sim-real-btn" onclick="simConnectReal()">🔗 Connect real band (Bluetooth)</button>';
+  }
+}
+/* Emit a buzz to whichever band is active: real hardware if connected, plus the
+   on-screen haptic. Returns whether the (real) write was acknowledged. */
+async function simEmitBuzz(c){
+  qcSim.lastBuzz={cmd:c,encoded:simEncode(c)};simRenderHaptic();
+  var h=document.getElementById('sim-halo');if(h){h.classList.remove('fire');void h.offsetWidth;h.classList.add('fire');}
+  if(qcRealBand&&qcRealBand.connected){try{return await qcRealBand.buzz(c);}catch(e){return false;}}
+  return true;
+}
+
+/* ================= CUSTOM TESTS ================= */
+const QC_CT_KEY='sw_qc_customtests_v1';
+let qcCTLib=qcLoadCTs();
+let qcCT={name:'',steps:[]};
+let qcCustom={running:false};
+let qcRunLog=null;
+function qcLoadCTs(){try{return JSON.parse(localStorage.getItem(QC_CT_KEY)||'[]')}catch(e){return[]}}
+function qcSaveCTs(){try{localStorage.setItem(QC_CT_KEY,JSON.stringify(qcCTLib))}catch(e){}}
+const QC_STEP_DEFAULTS={
+  buzz:{type:'buzz',strength:80,numBuzzes:3,duty:50,delay:50},
+  wait:{type:'wait',sec:2},
+  alert:{type:'alert',source:'admin',text:'Please check in — Safewave alert.'},
+  battery:{type:'battery',min:20},
+  firmware:{type:'firmware',expect:''},
+  connect:{type:'connect'}
+};
+const QC_STEP_LABEL={buzz:'Buzz band',wait:'Wait',alert:'Deliver alert',battery:'Check battery',firmware:'Check firmware',connect:'Check connected'};
+function qcCTAddStep(t){qcCT.steps.push(JSON.parse(JSON.stringify(QC_STEP_DEFAULTS[t])));qcRenderCT();}
+function qcCTDelStep(i){qcCT.steps.splice(i,1);qcRenderCT();}
+function qcCTMove(i,d){var j=i+d;if(j<0||j>=qcCT.steps.length)return;var s=qcCT.steps[i];qcCT.steps[i]=qcCT.steps[j];qcCT.steps[j]=s;qcRenderCT();}
+function qcCTSet(i,k,v){qcCT.steps[i][k]=(k==='text'||k==='expect'||k==='source')?v:(+v);}
+function qcCTNew(){qcCT={name:'',steps:[]};qcRenderCT();}
+function qcCTSave(){var nm=(document.getElementById('qc-ct-name')||{}).value||qcCT.name;nm=(nm||'').trim();if(!nm){toast('Name the test first');return;}if(!qcCT.steps.length){toast('Add at least one step');return;}qcCT.name=nm;var ex=qcCTLib.findIndex(function(t){return t.name===nm});var rec={name:nm,steps:JSON.parse(JSON.stringify(qcCT.steps))};if(ex>=0)qcCTLib[ex]=rec;else qcCTLib.push(rec);qcSaveCTs();qcRenderCT();toast('✓ Saved “'+nm+'”');}
+function qcCTLoad(nm){var t=qcCTLib.find(function(x){return x.name===nm});if(!t)return;qcCT={name:t.name,steps:JSON.parse(JSON.stringify(t.steps))};qcRenderCT();}
+function qcCTDelete(nm){qcCTLib=qcCTLib.filter(function(x){return x.name!==nm});qcSaveCTs();if(qcCT.name===nm)qcCTNew();else qcRenderCT();}
+function qcCTStepEditor(s,i){
+  var row='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+  var h='<div class="card" style="padding:9px;margin-bottom:6px;background:var(--surface-2)"><div style="display:flex;align-items:center;margin-bottom:6px"><b style="font-size:12px;flex:1">'+(i+1)+'. '+QC_STEP_LABEL[s.type]+'</b>'
+    +'<button class="sim-ib" style="padding:2px 7px" onclick="qcCTMove('+i+',-1)">↑</button><button class="sim-ib" style="padding:2px 7px" onclick="qcCTMove('+i+',1)">↓</button><button class="sim-ib" style="padding:2px 7px" onclick="qcCTDelStep('+i+')">✕</button></div>';
+  function num(k,lab,mn,mx){return '<label style="font-size:11px;color:var(--faint)">'+lab+' <input class="sim-in" style="width:64px;display:inline-block;padding:3px 6px" type="number" min="'+mn+'" max="'+mx+'" value="'+s[k]+'" oninput="qcCTSet('+i+',\''+k+'\',this.value)"></label>';}
+  if(s.type==='buzz')h+=row+num('strength','Strength%',0,100)+num('numBuzzes','Count',0,255)+num('duty','Duty',10,100)+num('delay','Delay',10,100)+'</div>';
+  else if(s.type==='wait')h+=row+num('sec','Seconds',0,3600)+'</div>';
+  else if(s.type==='alert')h+=row+'<label style="font-size:11px;color:var(--faint)">Source <select class="sim-in" style="width:auto;display:inline-block;padding:3px 6px" onchange="qcCTSet('+i+',\'source\',this.value)"><option value="admin"'+(s.source==='admin'?' selected':'')+'>Admin alert</option><option value="app"'+(s.source==='app'?' selected':'')+'>App notification</option><option value="alarm"'+(s.source==='alarm'?' selected':'')+'>Alarm</option></select></label></div>';
+  else if(s.type==='battery')h+=row+num('min','Pass if ≥ %',0,100)+'</div>';
+  else if(s.type==='firmware')h+=row+'<label style="font-size:11px;color:var(--faint)">Expect <input class="sim-in" style="width:110px;display:inline-block;padding:3px 6px" placeholder="any" value="'+esc(s.expect||'')+'" oninput="qcCTSet('+i+',\'expect\',this.value)"></label></div>';
+  else h+='<div class="sim-note" style="margin:0">Passes when a band is connected.</div>';
+  return h+'</div>';
+}
+function qcRenderCT(){
+  var el=document.getElementById('sim-ct');if(!el)return;
+  var lib=qcCTLib.length?('<div class="sim-field"><label>Saved tests</label><div style="display:flex;flex-wrap:wrap;gap:6px">'+qcCTLib.map(function(t){return '<span class="chip" style="cursor:pointer;padding:4px 8px" onclick="qcCTLoad('+ocjson(t.name)+')">'+esc(t.name)+' <span style="opacity:.6" onclick="event.stopPropagation();qcCTDelete('+ocjson(t.name)+')">✕</span></span>'}).join('')+'</div></div>'):'';
+  var steps=qcCT.steps.length?qcCT.steps.map(qcCTStepEditor).join(''):'<div class="sim-note">No steps yet. Add one below — steps run top to bottom on the connected band (real or virtual).</div>';
+  var add='<div class="sim-field"><label>Add step</label><div style="display:flex;flex-wrap:wrap;gap:6px">'+Object.keys(QC_STEP_DEFAULTS).map(function(t){return '<button class="sim-ib" style="padding:5px 9px" onclick="qcCTAddStep(\''+t+'\')">+ '+QC_STEP_LABEL[t]+'</button>'}).join('')+'</div></div>';
+  el.innerHTML=lib
+    +'<input class="sim-in" id="qc-ct-name" placeholder="Test name (e.g. “Wake-alarm sanity”)" value="'+esc(qcCT.name||'')+'" style="margin-bottom:8px">'
+    +steps+add
+    +'<div class="sim-btnrow" style="margin-top:8px"><button class="sim-ib pri" onclick="qcRunCustom()"'+(qcCustom.running?' disabled':'')+'>▶ Run test</button><button class="sim-ib" onclick="qcCTSave()">Save</button><button class="sim-ib" onclick="qcCTNew()">New</button></div>';
+}
+function qcSleep(ms){return new Promise(function(r){setTimeout(r,ms)});}
+function qcRealActive(){return !!(qcRealBand&&qcRealBand.connected);}
+async function qcRunCustom(){
+  if(qcCustom.running)return;
+  if(!qcCT.steps.length){toast('Add at least one step');return;}
+  if(typeof simSoak!=='undefined'&&simSoak&&simSoak.running){toast('Stop the soak first');return;}
+  qcCustom.running=true;qcRenderCT();
+  var real=qcRealActive();
+  qcRunLog={title:qcCT.name||'Custom test',startedAt:new Date().toISOString(),band:real?('Real · '+qcRealBand.label):'Virtual',device:simDev().name,os:qcSim.osVersion,firmware:real?(qcSim.band.firmware||'—'):'virtual',entries:[],passed:0,failed:0};
+  qcLogRun('run','▶ Start · '+qcRunLog.band+' · '+qcRunLog.device+' · '+qcRunLog.os,true);
+  for(var i=0;i<qcCT.steps.length;i++){
+    if(!qcCustom.running)break;
+    var s=qcCT.steps[i],lab=(i+1)+'. '+QC_STEP_LABEL[s.type],ok=true,detail='';
+    try{
+      if(s.type==='buzz'){var c={strength:s.strength,numBuzzes:s.numBuzzes,dutyOfBuzz:s.duty,durationOfDelay:s.delay};var ack=await simEmitBuzz(c);ok=real?ack:true;detail=s.strength+'% ×'+s.numBuzzes+(real?(ack?' · acked':' · NOT acked'):' · virtual');}
+      else if(s.type==='wait'){var ms=Math.min(3600,Math.max(0,s.sec))*1000;detail=s.sec+'s';await qcSleep(ms);}
+      else if(s.type==='alert'){var actx=s.source==='app'?{app:qcSim.apps[0],text:'test'}:(s.source==='alarm'?{pattern:'escalate'}:{});var r=simDecide(s.source==='app'?'appnotif':s.source,actx);qcSim.metrics.total++;if(r.delivered)qcSim.metrics.delivered++;if(r.buzz){qcSim.metrics.buzz++;await simEmitBuzz({strength:80,numBuzzes:3,dutyOfBuzz:50,durationOfDelay:50});}ok=r.delivered;detail=r.buzz?'buzzed':r.filtered?'filtered':r.delivered?'shown':'dropped';}
+      else if(s.type==='battery'){var lvl=real?((await qcRealBand.readBattery())||{}).level:qcSim.band.battery;if(lvl==null){ok=false;detail='no reading';}else{ok=lvl>=s.min;detail=lvl+'% (need ≥'+s.min+'%)';}}
+      else if(s.type==='firmware'){var fw=real?(await qcRealBand.readFirmware()):(qcSim.band.firmware||'virtual');detail=String(fw||'—');if(s.expect&&s.expect.trim())ok=(String(fw)===s.expect.trim());}
+      else if(s.type==='connect'){ok=real?qcRealActive():qcSim.band.connected;detail=ok?'connected':'not connected';}
+    }catch(e){ok=false;detail='error: '+((e&&e.message)||e);}
+    qcLogRun(s.type,lab+' — '+detail,ok);
+    simRenderReadout();
+  }
+  var done=qcCustom.running;qcCustom.running=false;
+  qcRunLog.endedAt=new Date().toISOString();
+  qcLogRun('run',(done?'■ Finished':'■ Stopped')+' · '+qcRunLog.passed+' passed · '+qcRunLog.failed+' failed',qcRunLog.failed===0);
+  qcRenderCT();simRenderRunLog();
+}
+function qcLogRun(type,msg,ok){if(!qcRunLog)return;qcRunLog.entries.push({ts:new Date().toISOString(),type:type,msg:msg,ok:ok!==false});if(type!=='run'){if(ok!==false)qcRunLog.passed++;else qcRunLog.failed++;}simRenderRunLog();}
+function simRenderRunLog(){
+  var el=document.getElementById('sim-runlog');if(!el)return;
+  if(!qcRunLog){el.innerHTML='<div class="sim-note">Run a custom test or soak to produce a results log.</div>';return;}
+  var head='<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><b style="font-size:13px;flex:1">'+esc(qcRunLog.title)+'</b>'
+    +'<span class="pill '+(qcRunLog.failed===0?'good':'amber')+'" style="font-size:10px">'+qcRunLog.passed+'✓ '+(qcRunLog.failed?qcRunLog.failed+'✕':'')+'</span></div>'
+    +'<div class="sim-note" style="margin-bottom:6px">'+esc(qcRunLog.band)+' · '+esc(qcRunLog.device)+' · '+esc(qcRunLog.os)+' · fw '+esc(qcRunLog.firmware)+'</div>';
+  var rows=qcRunLog.entries.map(function(e){var col=e.type==='run'?'var(--faint)':(e.ok?'var(--good)':'var(--warn)');var mk=e.type==='run'?'·':(e.ok?'✓':'✕');return '<div style="display:flex;gap:6px;font-size:11px;font-family:var(--font-m);padding:2px 0"><span style="color:'+col+';flex:0 0 auto">'+mk+'</span><span style="opacity:.5;flex:0 0 auto">'+esc((e.ts||'').slice(11,19))+'</span><span style="color:'+col+'">'+esc(e.msg)+'</span></div>'}).join('');
+  var actions='<div class="sim-btnrow" style="margin-top:8px"><button class="sim-ib" onclick="qcDownloadRunLog(\'txt\')">⬇ Download .txt</button><button class="sim-ib" onclick="qcDownloadRunLog(\'json\')">⬇ .json</button>'+(Object.keys(RELEASES).length?'<button class="sim-ib" onclick="qcAttachRunLog()">Attach to release</button>':'')+'</div>';
+  el.innerHTML=head+'<div style="max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px;background:var(--surface-2)">'+rows+'</div>'+actions;
+}
+function qcRunLogText(){var L=qcRunLog;if(!L)return '';var s='Safewave QC — '+L.title+'\n'+L.band+' · '+L.device+' · '+L.os+' · firmware '+L.firmware+'\nStarted '+L.startedAt+'\n'+L.passed+' passed · '+L.failed+' failed\n\n';L.entries.forEach(function(e){s+=(e.ts||'').slice(11,19)+'  '+(e.type==='run'?'· ':(e.ok?'PASS ':'FAIL '))+e.msg+'\n';});return s;}
+function qcDownloadRunLog(fmt){if(!qcRunLog)return;var data=fmt==='json'?JSON.stringify(qcRunLog,null,2):qcRunLogText();var blob=new Blob([data],{type:fmt==='json'?'application/json':'text/plain'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=(qcRunLog.title||'qc-run').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.'+fmt;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},1000);}
+function qcAttachRunLog(){if(!qcRunLog)return;var rels=Object.values(RELEASES);if(!rels.length){toast('No releases to attach to');return;}toast('Pick a release from the Releases tab to log against — coming from run '+qcRunLog.passed+'✓/'+qcRunLog.failed+'✕');}
 function simBattery(v){qcSim.band.battery=+v;var e=document.getElementById('sim-batv');if(e)e.textContent=v+'%';var l=document.getElementById('sim-batl');if(l)l.textContent=v;simRenderApp()}
 function simReset(){qcSim.metrics={total:0,delivered:0,buzz:0,drop:0,filt:0};qcSim.history=[];qcSim.verdicts=[];qcSim.logs=[];qcSim.lastBuzz=null;simClock=0;simRenderReadout();simRenderApp();simRenderSummary()}
 function simRenderFrame(){
@@ -2787,6 +2920,18 @@ function simFinishSoak(reason){
     if(run.verdict==='pass'&&typeof qcNotifyLeads==='function')qcNotifyLeads('QC passed (sim soak) · '+run.version,'Simulated soak passed on '+run.device+' — '+del+'% delivery, '+s.disconnects+' disconnects');
     else if(run.verdict==='fail'&&typeof qcNotifyLeads==='function')qcNotifyLeads('QC failed (sim soak) · '+run.version,reasons.join('; '));
   }
+  // Produce a downloadable results log for the soak, same panel as custom tests.
+  qcRunLog={title:'Soak · '+(run.version||'practice'),startedAt:run.startedAt||run.endedAt,endedAt:run.endedAt,
+    band:s.band==='ble'?'Real · Bluetooth':'Virtual',device:run.device||simDev().name,os:qcSim.osVersion,firmware:s.band==='ble'?(qcSim.band.firmware||'—'):'virtual',
+    entries:[],passed:0,failed:0};
+  qcRunLog.entries.push({ts:run.endedAt,type:'run',msg:'Duration '+fmtDur(run.durationSec)+' · '+s.ev+' events injected',ok:true});
+  var mk=function(msg,ok){qcRunLog.entries.push({ts:run.endedAt,type:'metric',msg:msg,ok:ok});if(ok)qcRunLog.passed++;else qcRunLog.failed++;};
+  mk('Delivery '+del+'% (min '+th.minDeliveryPct+'%)',del>=th.minDeliveryPct);
+  mk('Disconnects '+s.disconnects+' (max '+th.maxDisconnects+')',s.disconnects<=th.maxDisconnects);
+  mk('Uptime '+run.uptimePct+'%',run.uptimePct>=90);
+  mk('Life-safety misses '+s.safetyMiss,s.safetyMiss===0);
+  qcRunLog.entries.push({ts:run.endedAt,type:'run',msg:'■ Verdict: '+(run.verdict||'').toUpperCase()+(reasons.length?' — '+reasons.join('; '):''),ok:run.verdict==='pass'});
+  simRenderRunLog();
   simRenderSoak();
   toast(run.verdict==='pass'?'✓ Soak PASSED — '+del+'% delivery':(run.verdict==='aborted'?'Soak stopped':'⚠︎ Soak FAILED — '+(reasons[0]||'')));
 }
@@ -2825,21 +2970,45 @@ function qcSimDevice(opts){opts=opts||{};const dev={label:'Simulated band',conne
   if(opts.flaky){const cycle=()=>{const upFor=4000+Math.random()*6000;const t1=setTimeout(()=>{dev.connected=false;if(dev.onDisconnect)dev.onDisconnect();const downFor=1500+Math.random()*4000;const t2=setTimeout(()=>{dev.connected=true;if(dev.onReconnect)dev.onReconnect();cycle();},downFor);dev._timers.push(t2);},upFor);dev._timers.push(t1);};cycle();}
   return dev;
 }
-function qcBleConfig(){const s=SETTINGS_QC||{};return {service:s.bleService||'',alertChar:s.bleAlertChar||'',ackChar:s.bleAckChar||''}}
+/* Real Safewave Band GATT — mirrors the mobile app's BLEConstants/BLEManager so
+   the bench drives the actual hardware, not a placeholder. */
+const BAND_MAIN_SVC='0000fffe-0000-1000-8000-00805f9b34fb';
+const BAND_VIBRATION_CH='12d9cf1a-751b-11ed-a1eb-0242ac120002';
+const BAND_BATTERY_CH='47cd799a-8233-11ed-a1eb-0242ac120002';
+const BAND_NAME_CH='543eff2a-751b-11ed-a1eb-0242ac120002';
+const BAND_BATTERY_SVC='0000180f-0000-1000-8000-00805f9b34fb';
+const BAND_DEVINFO_SVC='0000180a-0000-1000-8000-00805f9b34fb';
+const BAND_OTA_SVC='02f00000-0000-0000-0000-00000000fe00';
+/* Clamp + encode a buzz exactly as the app does:
+   [strength 0-100, numBuzzes 0-255, duty 10-100, delay 10-100]. */
+function bandBuzzBytes(c){c=c||{};return new Uint8Array([
+  Math.min(100,Math.max(0,c.strength==null?80:c.strength|0)),
+  Math.min(255,Math.max(0,c.numBuzzes==null?3:c.numBuzzes|0)),
+  Math.min(100,Math.max(10,c.dutyOfBuzz==null?50:c.dutyOfBuzz|0)),
+  Math.min(100,Math.max(10,c.durationOfDelay==null?50:c.durationOfDelay|0))]);}
 async function qcConnectBLE(){
-  if(!(typeof navigator!=='undefined'&&navigator.bluetooth))throw new Error('Web Bluetooth not available');
-  const cfg=qcBleConfig();
-  const options=cfg.service?{filters:[{services:[cfg.service]}],optionalServices:[cfg.service]}:{acceptAllDevices:true};
-  const btdev=await navigator.bluetooth.requestDevice(options);
-  const dev={label:btdev.name||'Band',connected:false,onDisconnect:null,onReconnect:null,_bt:btdev,_alertCh:null};
+  if(!(typeof navigator!=='undefined'&&navigator.bluetooth))throw new Error('Web Bluetooth not available — use desktop Chrome or Edge');
+  const btdev=await navigator.bluetooth.requestDevice({
+    filters:[{services:[BAND_MAIN_SVC]},{namePrefix:'Safewave'}],
+    optionalServices:[BAND_MAIN_SVC,BAND_BATTERY_SVC,BAND_DEVINFO_SVC,BAND_OTA_SVC]});
+  const dev={label:btdev.name||'Safewave Band',connected:false,real:true,onDisconnect:null,onReconnect:null,_bt:btdev,_vib:null,_bat:null};
   const server=await btdev.gatt.connect();dev.connected=true;
   btdev.addEventListener('gattserverdisconnected',()=>{dev.connected=false;if(dev.onDisconnect)dev.onDisconnect();qcTryReconnect(dev);});
-  if(cfg.service&&cfg.alertChar){try{const svc=await server.getPrimaryService(cfg.service);dev._alertCh=await svc.getCharacteristic(cfg.alertChar);}catch(e){}}
-  dev.sendAlert=async function(){if(!dev.connected)return false;if(dev._alertCh){try{await dev._alertCh.writeValue(new Uint8Array([1]));return true;}catch(e){return false;}}return !!dev.connected;};
+  try{const svc=await server.getPrimaryService(BAND_MAIN_SVC);
+    try{dev._vib=await svc.getCharacteristic(BAND_VIBRATION_CH);}catch(e){}
+    try{dev._bat=await svc.getCharacteristic(BAND_BATTERY_CH);}catch(e){}
+  }catch(e){}
+  // Fire a buzz on the real band. Resolves true when the write is acked.
+  dev.buzz=async function(c){if(!dev.connected||!dev._vib)return false;try{await dev._vib.writeValueWithResponse(bandBuzzBytes(c));return true;}catch(e){try{await dev._vib.writeValue(bandBuzzBytes(c));return true;}catch(e2){return false;}}};
+  // Default alert used by the soak runner = a standard buzz.
+  dev.sendAlert=async function(c){if(dev._vib)return dev.buzz(c||{strength:80,numBuzzes:3,dutyOfBuzz:50,durationOfDelay:50});return !!dev.connected;};
+  // Read {level,isCharging,ancsStatus} and firmware from the battery characteristic.
+  dev.readBattery=async function(){if(!dev.connected||!dev._bat)return null;try{const v=await dev._bat.readValue();const b=new Uint8Array(v.buffer);if(b.length<2)return null;return {level:b[0],isCharging:b[1]===1,ancsStatus:b.length>=7?b[6]:null};}catch(e){return null;}};
+  dev.readFirmware=async function(){if(!dev.connected||!dev._bat)return null;try{const v=await dev._bat.readValue();const b=new Uint8Array(v.buffer);if(b.length>=6)return String((((b[2]<<24)>>>0)+(b[3]<<16)+(b[4]<<8)+b[5]));return null;}catch(e){return null;}};
   dev.disconnect=function(){try{if(btdev.gatt&&btdev.gatt.connected)btdev.gatt.disconnect()}catch(e){}};
   return dev;
 }
-function qcTryReconnect(dev){if(!qcBench.running)return;try{dev._bt.gatt.connect().then(()=>{dev.connected=true;if(dev.onReconnect)dev.onReconnect();}).catch(()=>{});}catch(e){}}
+function qcTryReconnect(dev){var active=(typeof simSoak!=='undefined'&&simSoak&&simSoak.running)||(typeof qcCustom!=='undefined'&&qcCustom&&qcCustom.running)||(qcBench&&qcBench.running);if(!active)return;try{dev._bt.gatt.connect().then(()=>{dev.connected=true;if(dev.onReconnect)dev.onReconnect();}).catch(()=>{});}catch(e){}}
 function qcLog(run,type,detail){run.events.push({t:new Date().toISOString(),type:type,detail:detail});if(run.events.length>240)run.events=run.events.slice(-240);qcAppendLiveLog(type,detail);}
 async function qcStartRun(cfg){
   if(qcBench.running)return;
