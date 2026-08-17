@@ -550,14 +550,16 @@ input[type=date]{color-scheme:dark}
 .sim-ib.block{width:100%}
 .sim-phone{position:relative;background:#05161c;border-radius:38px;padding:9px;width:270px;height:560px;box-shadow:0 20px 50px -22px rgba(0,0,0,.55),0 0 0 2px #1b2a30;transition:width .2s,height .2s}
 .sim-phone.android{border-radius:26px}
-.sim-screen{position:relative;overflow:hidden;border-radius:30px;background:#00141d;width:100%;height:100%;display:flex;flex-direction:column}
+.sim-screen{position:relative;overflow:hidden;border-radius:30px;background:#00151E;width:100%;height:100%;display:flex;flex-direction:column}
 .sim-phone.android .sim-screen{border-radius:18px}
 .sim-sb{display:flex;justify-content:space-between;align-items:center;padding:9px 20px 5px;color:#fff;font-family:var(--font-m);font-size:12px;font-weight:600;flex:0 0 auto}
+.sim-app{position:relative}
+.sim-fab{position:absolute;right:16px;bottom:70px;width:60px;height:60px;border-radius:30px;background:#1DAAE1;display:grid;place-items:center;z-index:6;box-shadow:0 4px 8px rgba(0,0,0,.3)}
 .sim-island{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:78px;height:23px;background:#000;border-radius:14px;z-index:6}
 .sim-notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:130px;height:22px;background:#000;border-radius:0 0 13px 13px;z-index:6}
 .sim-punch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:9px;height:9px;background:#000;border-radius:50%;z-index:6}
 .sim-app{flex:1;min-height:0;display:flex;flex-direction:column}
-.sim-scroll{flex:1;overflow-y:auto;padding:12px 14px 6px;color:#e8f4fa}
+.sim-scroll{flex:1;overflow-y:auto;padding:0 16px 14px;color:#fff}
 .sim-scroll::-webkit-scrollbar{width:0}
 .sim-ah{font-size:19px;font-weight:700;color:#fff}
 .sim-asub{font-size:11px;color:#8fa9b4;margin-bottom:11px}
@@ -2276,12 +2278,12 @@ function qcModePick(v){const so=document.getElementById('qc-simopt');if(so)so.st
    audit. Complements the real-band Web-Bluetooth soak in the Test bench tab. */
 const SIM_WAKE={gentle:{name:'Gentle',strength:40,numberOfVibrations:3,dutyOfBuzz:50,durationOfDelay:60},standard:{name:'Standard',strength:65,numberOfVibrations:5,dutyOfBuzz:60,durationOfDelay:50},strong:{name:'Strong',strength:100,numberOfVibrations:8,dutyOfBuzz:80,durationOfDelay:40},escalate:{name:'Escalating',strength:100,numberOfVibrations:10,dutyOfBuzz:80,durationOfDelay:40,escalating:true}};
 const SIM_DEVICES=[
-  {id:'iphone15pro',name:'iPhone 15 Pro',os:'ios',w:262,h:544,chrome:'island',radius:40},
-  {id:'iphonese',name:'iPhone SE',os:'ios',w:248,h:500,chrome:'bezel',radius:28},
-  {id:'iphone16pro',name:'iPhone 16 Pro',os:'ios',w:268,h:556,chrome:'island',radius:42},
-  {id:'pixel8',name:'Pixel 8',os:'android',w:262,h:548,chrome:'punch',radius:28},
-  {id:'galaxys24',name:'Galaxy S24',os:'android',w:258,h:550,chrome:'punch',radius:26},
-  {id:'androidlow',name:'Budget Android',os:'android',w:250,h:496,chrome:'notch',radius:22}
+  {id:'iphone15pro',name:'iPhone 15 Pro',os:'ios',w:330,h:684,chrome:'island',radius:46},
+  {id:'iphonese',name:'iPhone SE',os:'ios',w:312,h:594,chrome:'bezel',radius:30},
+  {id:'iphone16pro',name:'iPhone 16 Pro',os:'ios',w:336,h:694,chrome:'island',radius:48},
+  {id:'pixel8',name:'Pixel 8',os:'android',w:330,h:686,chrome:'punch',radius:30},
+  {id:'galaxys24',name:'Galaxy S24',os:'android',w:326,h:688,chrome:'punch',radius:28},
+  {id:'androidlow',name:'Budget Android',os:'android',w:312,h:612,chrome:'notch',radius:24}
 ];
 const SIM_OSV={ios:['iOS 18','iOS 17','iOS 16'],android:['Android 15','Android 14','Android 13','Android 12','Android 11']};
 const SIM_APPS=[
@@ -2443,7 +2445,7 @@ function qcSimView(){
       +'<div class="sim-phone" id="sim-phone"><div class="sim-screen" id="sim-screen">'
         +'<div id="sim-chrome"></div>'
         +'<div class="sim-sb" id="sim-sb"><span id="sim-clock">9:41</span><span><span id="sim-net">5G</span> <span id="sim-batl">87</span></span></div>'
-        +'<div class="sim-app"><div class="sim-scroll" id="sim-scroll"></div><div class="sim-tb" id="sim-tb"></div></div>'
+        +'<div class="sim-app"><div class="sim-scroll" id="sim-scroll"></div><div class="sim-fab" id="sim-fab" style="display:none"></div><div class="sim-tb" id="sim-tb"></div></div>'
         +'<div class="sim-halo" id="sim-halo"></div>'
         +'<div class="sim-banner" id="sim-banner"><div class="t"></div><div class="b"></div></div>'
       +'</div></div>'
@@ -2481,30 +2483,113 @@ function simRenderFrame(){
   document.getElementById('sim-net').textContent=d.os==='ios'?'5G':'LTE';
   document.getElementById('sim-clock').textContent=simClockStr();
 }
-const SIM_TABS=[['home','Home','M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z'],['alerts','Alerts','M12 3a6 6 0 00-6 6v4l-2 3h16l-2-3V9a6 6 0 00-6-6zM9 20a3 3 0 006 0'],['alarm','Alarm','M12 8v5l3 2M4 4L7 6M20 4l-3 2M12 21a8 8 0 100-16 8 8 0 000 16z'],['history','History','M12 8v5l3 2M3 12a9 9 0 109-9 9 9 0 00-8 5m0 0V6m0 4h4'],['account','Account','M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0']];
+/* ---- Faithful app-screen rendering: an exact replica of the real app UI
+   (colors/copy/structure resolved from src/theme/colors.ts + each screen). ---- */
+const SIM_ICONS={
+  'home':'M3 11.4l9-7.4 9 7.4M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9',
+  'notifications':'M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6M9.5 20a2.5 2.5 0 005 0',
+  'alarm':'M12 22a8 8 0 100-16 8 8 0 000 16zM12 10.5v3.5l2.4 1.5M5 3.5L2.5 6M19 3.5L21.5 6',
+  'time':'M12 22a9 9 0 100-18 9 9 0 000 18zM12 8v4.4l3 2',
+  'person-circle':'M12 22a10 10 0 100-20 10 10 0 000 20zM12 11.5a3 3 0 100-6 3 3 0 000 6M6.7 18.6a5.6 5.6 0 0110.6 0',
+  'apps':'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
+  'battery-half':'M2 8.5h15a2 2 0 012 2v3a2 2 0 01-2 2H2a1 1 0 01-1-1V9.5a1 1 0 011-1zM22 11v2M4.5 10.5h6v3h-6z',
+  'battery-charging':'M2 8.5h15a2 2 0 012 2v3a2 2 0 01-2 2h-2M22 11v2M9 8.5l-3 5h3.5l-3 5',
+  'flash':'M13 2L4.5 13.5H10l-1 8.5 9-12.5H12z',
+  'pulse':'M2 12h4l2.5-6.5 4 13 3-9.5 1.8 3H21',
+  'infinite':'M7 9a3 3 0 100 6c2 0 3-2 5-3s3-3 5-3a3 3 0 110 6c-2 0-3-2-5-3S9 9 7 9z',
+  'funnel':'M3 5h18l-7 8v6l-4-2v-4z',
+  'notifications-off':'M6.3 8.5A6 6 0 0118 9c0 4 1.6 5.4 1.6 5.4M8 18h11M3 3l18 18M9.5 20a2.5 2.5 0 005 0',
+  'trash':'M4 6.5h16M9.5 6.5V4.5h5v2M6.5 6.5l1 13.5h9l1-13.5M10 10.5v6M14 10.5v6',
+  'chevron-forward':'M9 5l7 7-7 7',
+  'cloud-download':'M7 18.5a4 4 0 01-1-8 5.2 5.2 0 019.6-1.9A4 4 0 0117 18.5M12 12v6M9.2 15.2L12 18l2.8-2.8',
+  'help-circle':'M12 22a10 10 0 100-20 10 10 0 000 20zM9.6 9a2.5 2.5 0 013.6-2c1.4.7 1.6 2.4.5 3.3-.8.6-1.6.9-1.6 1.9v.4M12 16.6h.01',
+  'information-circle':'M12 22a10 10 0 100-20 10 10 0 000 20zM12 11v6M12 7.4h.01',
+  'shield-checkmark':'M12 3l7 2.8v5c0 5-3.5 8.2-7 10-3.5-1.8-7-5-7-10v-5zM9 12l2.2 2.2L15 10.5',
+  'pencil':'M4 20l4.2-1L19 8.2l-3.2-3.2L5 15.8z',
+  'business':'M4 21V6.2l7-2.7V21M11 21h9V9.5L11 6.3M14.4 9.5M14.4 12.5M14.4 15.5M7.3 9.5M7.3 12.5',
+  'log-out':'M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 8l-4 4 4 4M6 12h10',
+  'checkmark-circle':'M12 22a10 10 0 100-20 10 10 0 000 20zM8 12l3 3 5-6',
+  'warning':'M12 3.2l9.5 16.3H2.5zM12 9v5M12 17h.01',
+  'add':'M12 5v14M5 12h14',
+  'bluetooth':'M7 7l10 10-5 4V3l5 4L7 17',
+  'close-circle':'M12 22a10 10 0 100-20 10 10 0 000 20zM9 9l6 6M15 9l-6 6',
+  'phone-portrait':'M7.5 3h9a1 1 0 011 1v16a1 1 0 01-1 1h-9a1 1 0 01-1-1V4a1 1 0 011-1z',
+  'document-text':'M7 3h7l4 4v14H7zM14 3v4h4M9.5 12.5h5M9.5 16h5',
+  'document':'M7 3h7l4 4v14H7zM14 3v4h4',
+  'open':'M14 4h6v6M20 4l-8.5 8.5M18 13.5V18a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h4.5',
+  'search':'M11 18a7 7 0 100-14 7 7 0 000 14zM21 21l-4.8-4.8',
+  'arrow-forward':'M4 12h16M13 5l7 7-7 7',
+  'refresh':'M20.5 9A8 8 0 105 15.5M20.5 4v5h-5'
+};
+function ic(n,sz,col,fill){var f=fill?('fill="'+(col||'#fff')+'" stroke="none"'):('fill="none" stroke="'+(col||'#fff')+'"');return '<svg width="'+(sz||18)+'" height="'+(sz||18)+'" viewBox="0 0 24 24" '+f+' stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;vertical-align:middle">'+(SIM_ICONS[n]||'')+'</svg>'}
+function icCheck(sz,col){return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" style="flex:0 0 auto;vertical-align:middle"><circle cx="12" cy="12" r="10" fill="'+col+'"/><path d="M8 12l2.8 2.8L16 9.4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'}
+function swRing(pct,size){size=size||150;var sw=6,r=(size-sw)/2,c=2*Math.PI*r,p=Math.max(0,Math.min(100,pct)),off=c*(1-p/100),col=pct<=20?'#F44336':pct<=50?'#FF9800':'#4CAF50',cx=size/2;return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="position:absolute;inset:0"><circle cx="'+cx+'" cy="'+cx+'" r="'+r+'" fill="none" stroke="#2A2A2A" stroke-width="'+sw+'"/><circle cx="'+cx+'" cy="'+cx+'" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'" transform="rotate(-90 '+cx+' '+cx+')"/></svg>'}
+function swWave(s){return '<svg width="'+s+'" height="'+(s*0.52)+'" viewBox="0 0 48 25" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13c3-9 5.5-9 7 0S15 22 16.5 13s3-14 4.5 0 3 22 4.5 13 3-14 4.5-9"/></svg>'}
+function swSwitch(on){return '<div style="width:44px;height:26px;border-radius:99px;background:'+(on?'#1DAAE1':'#2A2A2A')+';position:relative;flex:0 0 auto"><div style="position:absolute;top:2px;left:'+(on?'20px':'2px')+';width:22px;height:22px;border-radius:50%;background:#fff;transition:left .15s"></div></div>'}
+function swHash(s,pal){var h=0;for(var i=0;i<(s||'').length;i++)h=s.charCodeAt(i)+((h<<5)-h);return pal[Math.abs(h)%pal.length]}
+function swRepeat(days){if(!days.length)return 'Once';if(days.length===7)return 'Every day';var s=days.slice().sort();if(s.join()==='1,2,3,4,5')return 'Weekdays';if(s.join()==='0,6')return 'Weekends';var N=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];return s.map(function(d){return N[d]}).join(', ')}
+const SIM_TABS=[['home','Home','home'],['alerts','Alerts','notifications'],['alarm','Alarm','alarm'],['history','History','time'],['account','Account','person-circle']];
 function simSetTab(t){qcSim.tab=t;simRenderApp()}
 function simRenderApp(){
   const sc=document.getElementById('sim-scroll');if(!sc)return;const b=qcSim.band,t=qcSim.tab;let h='';
-  if(t==='home'){const col=b.connected?'#4CAF50':'#FF9800';
-    h='<div class="sim-ah">Home</div><div class="sim-asub">'+(b.connected?'Connected':'Reconnecting…')+'</div>'
-    +'<div class="sim-ring" style="background:conic-gradient('+col+' '+(b.connected?100:40)+'%, rgba(150,200,220,.12) 0)"><div class="in"><div><b>'+(b.connected?'Band ✓':'…')+'</b><span>'+b.battery+'% battery</span></div></div></div>'
-    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Firmware</span><b>'+esc(b.firmware)+'</b></div></div>'
-    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Notifications reaching band</span><b style="color:'+(b.ancs===0?'#FF9800':'#4CAF50')+'">'+(b.ancs===0?'Blocked':'OK')+'</b></div></div>'
-    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Last event</span><b>'+esc((qcSim.history[0]||{}).label?(qcSim.history[0].label).slice(0,20):'—')+'</b></div></div>';
-  }else if(t==='alerts'){h='<div class="sim-ah">Alerts</div><div class="sim-asub">Apps that buzz your band</div>';
-    qcSim.apps.forEach(function(a){h+='<div class="sim-approw"><div class="sim-appic" style="background:'+a.color+'">'+esc(a.name[0])+'</div><div class="sim-appm"><b>'+esc(a.name)+'</b><span>'+(a.numberOfVibrations===0?'Continuous':a.numberOfVibrations+'×')+' · '+a.strength+'%'+(a.phrases.length?' · '+a.phrases.length+' filter':'')+'</span></div><div class="sim-mt '+(a.enabled?'on':'')+'"></div></div>'});
-  }else if(t==='alarm'){h='<div class="sim-ah">Alarms</div><div class="sim-asub">Wake alerts to your band</div>';
-    qcSim.alarms.forEach(function(a){var x=to12(a.hour);var rep=a.days.length===0?'Once':a.days.length===7?'Every day':a.days.join()==='1,2,3,4,5'?'Weekdays':a.days.map(function(d){return 'SMTWTFS'[d]}).join(' ');h+='<div class="sim-tile" style="opacity:'+(a.enabled?1:.5)+'"><div class="r"><div><div style="font-size:24px;font-weight:300;color:#fff">'+x.hh+':'+String(a.minute).padStart(2,'0')+' <span style="font-size:12px;color:#8fa9b4">'+x.m+'</span></div><div style="font-size:11px;color:#8fa9b4">'+esc(a.label)+' · '+rep+' · '+SIM_WAKE[a.pattern].name+'</div></div><div class="sim-mt '+(a.enabled?'on':'')+'"></div></div></div>'});
-  }else if(t==='history'){h='<div class="sim-ah">History</div><div class="sim-asub">'+qcSim.history.length+' events</div>';
-    if(!qcSim.history.length)h+='<div class="sim-tile" style="text-align:center;color:#8fa9b4">No events yet — inject one.</div>';
-    qcSim.history.forEach(function(e){var tag=e.buzz?'<span style="color:#4CAF50">● buzzed</span>':e.filtered?'<span style="color:#8fa9b4">○ filtered</span>':e.delivered?'<span style="color:#FF9800">● phone only</span>':'<span style="color:#FF9800">○ dropped</span>';h+='<div class="sim-approw"><div class="sim-appm"><b style="font-size:12.5px">'+esc(e.label)+'</b><span>'+e.at+(e.via?' · '+e.via:'')+'</span></div><span style="font-size:10.5px">'+tag+'</span></div>'});
-  }else if(t==='account'){h='<div class="sim-ah">Account</div><div class="sim-asub">Band &amp; app health</div>'
-    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Band</span><b>'+(b.connected?'Connected':'Not connected')+'</b></div></div>'
-    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Firmware</span><b>'+esc(b.firmware)+'</b></div></div>'
-    +'<div class="sim-tile"><div class="r"><span style="color:#8fa9b4">Battery</span><b>'+b.battery+'%</b></div></div>'
-    +'<div class="sim-tile" style="border-color:'+(b.ancs===0?'rgba(255,152,0,.4)':'rgba(150,200,220,.1)')+'"><div class="r"><span style="color:#8fa9b4">Band Health</span><b style="color:'+(b.ancs===0?'#FF9800':'#4CAF50')+'">'+(b.ancs===0?'1 issue':'All good')+'</b></div></div>';}
+  const enabledApps=qcSim.apps.filter(function(a){return a.enabled}).length;
+  if(t==='home'){
+    const conn=b.connected,statusCol=conn?'#4CAF50':'#FF9800',statusTxt=conn?'Connected':'Reconnecting...';
+    h='<div style="text-align:center;padding:8px 0"><div style="font-size:23px;font-weight:600;letter-spacing:-.4px;color:#fff">safe<span style="color:#1DAAE1">wave</span></div></div>'
+    +'<div style="font-size:24px;font-weight:500;color:#fff;text-align:center;margin:8px 0 24px">Preview User</div>'
+    +'<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px"><div style="position:relative;width:150px;height:150px;display:grid;place-items:center'+(conn?';filter:drop-shadow(0 0 18px rgba(29,170,225,.45))':'')+'">'
+      +(conn?swRing(b.battery,150):'<div style="position:absolute;inset:0;border-radius:50%;border:6px solid #2A2A2A"></div>')
+      +'<div style="width:116px;height:116px;border-radius:58px;background:#1DAAE1;display:grid;place-items:center">'+swWave(70)+'</div></div>'
+      +(conn?'<div style="font-size:12px;color:#6B6B6B;margin-top:8px">Tap for band info</div>':'')+'</div>'
+    +'<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:24px"><div style="font-size:28px;font-weight:700;color:#fff;text-align:center;margin-bottom:4px">Safewave Band</div>'
+      +'<div style="display:flex;align-items:center;justify-content:center"><span style="width:10px;height:10px;border-radius:5px;margin-right:8px;background:'+statusCol+'"></span><span style="font-size:18px;font-weight:600;color:'+statusCol+'">'+statusTxt+'</span></div></div>'
+    +(qcSim.os==='ios'&&conn&&b.ancs===0?'<div style="display:flex;align-items:flex-start;background:rgba(108,99,255,.1);border:2px solid #1DAAE1;border-radius:16px;padding:16px;margin-bottom:24px"><span style="margin-right:16px;margin-top:2px">'+ic('notifications-off',24,'#1DAAE1')+'</span><div style="flex:1"><div style="font-size:16px;font-weight:700;color:#1DAAE1;margin-bottom:4px">Notifications not reaching band</div><div style="font-size:13px;color:#B0B0B0;line-height:18px">Your band is connected but iPhone notifications aren’t reaching it. Forget the band, reset it, and pair again — tap Allow when iPhone asks.</div></div></div>':'')
+    +'<div style="display:flex;background:#1E1E1E;border-radius:24px;padding:24px 16px;margin-bottom:24px">'
+      +'<div style="flex:1;display:flex;flex-direction:column;align-items:center;position:relative">'+ic('apps',20,'#1DAAE1')+'<div style="font-size:12px;color:#B0B0B0;margin:4px 0">Apps Monitoring</div><div style="font-size:24px;font-weight:700;color:#fff">'+enabledApps+'</div><span style="position:absolute;right:0;top:50%;margin-top:-8px">'+ic('chevron-forward',16,'#6B6B6B')+'</span></div>'
+      +'<div style="width:1px;background:rgba(255,255,255,.1);margin:8px 0"></div>'
+      +'<div style="flex:1;display:flex;flex-direction:column;align-items:center">'+ic(b.charging?'battery-charging':'battery-half',20,b.battery<=20?'#F44336':'#4CAF50')+'<div style="font-size:12px;color:#B0B0B0;margin:4px 0">Battery</div><div style="display:flex;align-items:center"><span style="font-size:24px;font-weight:700;color:'+(b.battery<=20?'#F44336':'#fff')+'">'+b.battery+'%</span>'+(b.charging?'<span style="margin-left:4px">'+ic('flash',14,'#4CAF50',true)+'</span>':'')+'</div></div></div>'
+    +(conn?'<div style="display:flex;flex-direction:column;gap:16px"><div style="display:flex;align-items:center;justify-content:center;background:#fff;border-radius:24px;padding:18px 0">'+ic('phone-portrait',22,'#1DAAE1')+'<span style="font-size:16px;font-weight:600;color:#1DAAE1;margin-left:8px">Test Vibration</span></div><div style="display:flex;align-items:center;justify-content:center;border:2px solid #F44336;border-radius:24px;padding:16px 0">'+ic('close-circle',22,'#F44336')+'<span style="font-size:16px;font-weight:600;color:#F44336;margin-left:8px">Disconnect</span></div></div>'
+      :'<div style="display:flex;align-items:center;justify-content:center;background:#fff;border-radius:24px;padding:18px 0">'+ic('bluetooth',22,'#00151E')+'<span style="font-size:16px;font-weight:600;color:#00151E;margin-left:8px">Connect Band</span></div>');
+  }else if(t==='alerts'){
+    h='<div style="padding:24px 0 0"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="flex:1"><div style="font-size:28px;font-weight:700;color:#fff;margin-bottom:4px">Alerts</div><div style="font-size:14px;color:#B0B0B0">Configure which apps trigger your band</div></div>'
+      +(qcSim.os==='ios'?'<div style="display:flex;align-items:center;background:'+(b.connected?'#1DAAE1':'#2A2A2A')+';padding:8px 16px;border-radius:99px;gap:4px;min-width:70px;justify-content:center"><span style="opacity:'+(b.connected?1:.4)+'">'+swWave(18)+'</span><span style="font-size:14px;font-weight:600;color:'+(b.connected?'#fff':'#6B6B6B')+'">Sync</span></div>':'')+'</div>'
+      +(qcSim.os==='android'?'<div style="background:#1E1E1E;border-radius:16px;padding:16px;margin-top:16px;border:1px solid rgba(255,255,255,.1)"><div style="display:flex;align-items:center;margin-bottom:16px"><div style="width:40px;height:40px;border-radius:20px;background:rgba(29,170,225,.125);display:grid;place-items:center;margin-right:16px">'+ic('notifications-off',24,'#1DAAE1')+'</div><div style="flex:1"><div style="font-size:15px;font-weight:600;color:#fff;margin-bottom:2px">Notification Access Required</div><div style="font-size:12px;color:#B0B0B0;line-height:16px">Enable notification access to receive alerts</div></div><div style="width:36px;height:36px;border-radius:18px;background:rgba(29,170,225,.082);display:grid;place-items:center;margin-left:4px">'+ic('refresh',20,'#1DAAE1')+'</div></div><div style="display:flex;align-items:center;justify-content:center;background:#1DAAE1;padding:8px 0;border-radius:8px;gap:4px"><span style="font-size:14px;font-weight:600;color:#fff">Open Settings</span>'+ic('arrow-forward',16,'#fff')+'</div></div>':'')
+      +'</div><div style="padding-top:16px">';
+    qcSim.apps.forEach(function(a){var en=a.enabled,mc=en?'#B0B0B0':'#6B6B6B',ac=en?'#1DAAE1':'#6B6B6B';
+      var badges='<span style="display:inline-flex;align-items:center;margin-right:16px">'+ic(a.numberOfVibrations===0?'infinite':'pulse',12,ac)+'<span style="font-size:12px;color:'+mc+';margin-left:4px">'+(a.numberOfVibrations===0?'Continuous':a.numberOfVibrations+'x')+'</span></span>'
+        +'<span style="display:inline-flex;align-items:center;margin-right:16px">'+ic('flash',12,ac,en)+'<span style="font-size:12px;color:'+mc+';margin-left:4px">'+a.strength+'%</span></span>'
+        +(a.phrases.length?'<span style="display:inline-flex;align-items:center;margin-right:16px">'+ic('funnel',12,ac)+'<span style="font-size:12px;color:'+mc+';margin-left:4px">'+a.phrases.length+'</span></span>':'');
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;background:#1E1E1E;border-radius:16px;padding:16px;margin-bottom:8px;opacity:'+(en?1:.6)+'"><div style="display:flex;align-items:center;flex:1;min-width:0"><div style="width:48px;height:48px;border-radius:8px;background:'+a.color+';display:grid;place-items:center;color:#fff;font-size:20px;font-weight:600;margin-right:16px;flex:0 0 auto">'+esc(a.name[0].toUpperCase())+'</div><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:600;color:'+(en?'#fff':'#6B6B6B')+';margin-bottom:4px">'+esc(a.name)+'</div><div style="display:flex;align-items:center;flex-wrap:wrap">'+badges+'</div></div></div><div style="display:flex;align-items:center"><span style="padding:8px;margin-right:8px">'+ic('trash',20,'#F44336')+'</span>'+swSwitch(en)+'</div></div>';
+    });
+    h+='</div>';
+  }else if(t==='alarm'){
+    h='<div style="padding:24px 0 8px"><div style="font-size:28px;font-weight:700;color:#fff;margin-bottom:4px">Alarms</div><div style="font-size:14px;color:#B0B0B0">Wake alerts delivered straight to your band</div></div>';
+    if(!qcSim.alarms.length)h+='<div style="text-align:center;padding:48px 32px">'+ic('alarm',64,'#6B6B6B')+'<div style="font-size:20px;font-weight:600;color:#fff;margin:24px 0 8px">No alarms yet</div><div style="font-size:14px;color:#B0B0B0;line-height:20px">Set a wake alarm and your Safewave Band will buzz you awake — no sound needed.</div></div>';
+    qcSim.alarms.forEach(function(a){var x=to12(a.hour),dis=!a.enabled,rep=swRepeat(a.days);
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;background:#1E1E1E;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px;margin-bottom:16px;opacity:'+(dis?.55:1)+'"><div style="flex:1;margin-right:16px"><div style="display:flex;align-items:flex-end"><span style="font-size:34px;font-weight:300;color:'+(dis?'#6B6B6B':'#fff')+';line-height:38px">'+x.hh+':'+String(a.minute).padStart(2,'0')+'</span><span style="font-size:16px;font-weight:500;color:'+(dis?'#6B6B6B':'#B0B0B0')+';margin-left:4px;margin-bottom:4px">'+x.m+'</span></div>'
+      +(a.label?'<div style="font-size:14px;color:'+(dis?'#6B6B6B':'#fff')+';margin-top:2px">'+esc(a.label)+'</div>':'')
+      +'<div style="display:flex;align-items:center;margin-top:4px"><span style="font-size:13px;color:#6B6B6B">'+rep+'</span><span style="width:3px;height:3px;border-radius:2px;background:#6B6B6B;margin:0 6px"></span>'+ic('pulse',13,dis?'#333333':'#6B6B6B')+'<span style="font-size:13px;color:#6B6B6B;margin-left:4px">'+SIM_WAKE[a.pattern].name+'</span></div></div>'+swSwitch(a.enabled)+'</div>';
+    });
+  }else if(t==='history'){
+    h='<div style="padding:24px 0 8px"><div style="font-size:28px;font-weight:700;color:#fff;margin-bottom:4px">History</div><div style="font-size:14px;color:#B0B0B0">Recent notification alerts</div></div>';
+    if(!qcSim.history.length)h+='<div style="text-align:center;padding:48px 32px">'+ic('time',64,'#6B6B6B')+'<div style="font-size:20px;font-weight:600;color:#fff;margin:24px 0 8px">No History Yet</div><div style="font-size:14px;color:#B0B0B0;line-height:20px">Notification alerts will appear here when your band responds to them</div></div>';
+    else{h+='<div style="padding:8px 0;margin-top:8px;font-size:14px;font-weight:600;color:#B0B0B0;text-transform:uppercase;letter-spacing:.5px">Today</div>';
+      qcSim.history.forEach(function(e){var av=swHash(e.label,['#4A154B','#25D366','#464EB8','#FF6B6B','#4ECDC4','#45B7D1']);var nm=(e.label.split(':')[0]||'').slice(0,20);
+        var badge=e.filtered?'<div style="display:flex;align-items:center;margin-top:4px">'+ic('notifications-off',12,'#6B6B6B')+'<span style="font-size:11px;color:#6B6B6B;margin-left:4px;font-style:italic">Filtered (no buzz)</span></div>':(e.buzz?'<div style="display:flex;align-items:center;margin-top:4px">'+icCheck(12,'#1DAAE1')+'<span style="font-size:11px;color:#1DAAE1;margin-left:4px;font-style:italic">Acknowledged</span></div>':'');
+        h+='<div style="display:flex;background:#1E1E1E;border-radius:16px;padding:16px;margin-bottom:8px"><div style="width:44px;height:44px;border-radius:22px;background:'+av+';display:grid;place-items:center;color:#fff;font-size:18px;font-weight:600;margin-right:16px;flex:0 0 auto">'+esc((e.label[0]||'?').toUpperCase())+'</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:16px;font-weight:600;color:#fff">'+esc(nm)+'</span><span style="font-size:12px;color:#6B6B6B">'+e.at+'</span></div><div style="font-size:14px;font-weight:500;color:#fff;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.label)+'</div>'+badge+'</div><span style="align-self:center;margin-left:4px">'+ic('chevron-forward',18,'#6B6B6B')+'</span></div>';
+      });}
+  }else if(t==='account'){
+    function mrow(icon,label,extra,last,trail){return '<div style="display:flex;align-items:center;padding:16px 0'+(last?'':';border-bottom:1px solid rgba(255,255,255,.1)')+'">'+ic(icon,22,'#fff')+'<span style="flex:1;font-size:16px;color:#fff;margin-left:16px">'+label+'</span>'+(extra||'')+ic(trail||'chevron-forward',trail==='open'?18:20,'#6B6B6B')+'</div>'}
+    h='<div style="padding:24px 0 0"><div style="font-size:28px;font-weight:700;color:#fff">Account</div></div>'
+    +'<div style="background:#1E1E1E;border-radius:24px;padding:24px;display:flex;flex-direction:column;align-items:center;margin:16px 0 24px"><div style="width:80px;height:80px;border-radius:40px;background:#1DAAE1;display:grid;place-items:center;font-size:28px;font-weight:700;color:#fff;margin-bottom:16px">PU</div><div style="font-size:22px;font-weight:700;color:#fff">Preview User</div><div style="font-size:14px;color:#B0B0B0;margin-top:4px">preview@safewavetech.com</div></div>'
+    +'<div style="background:#1E1E1E;border-radius:24px;padding:0 16px;margin-bottom:24px">'+mrow('pulse','Band Health')+(qcSim.os==='android'?mrow('shield-checkmark','Background Access'):'')+mrow('cloud-download','Firmware Update')+mrow('help-circle','Help & Support')+mrow('information-circle','About',null,true,'open')+'</div>'
+    +'<div style="background:#1E1E1E;border-radius:24px;padding:0 16px;margin-bottom:24px">'+mrow('document-text','Privacy Policy',null,false,'open')+mrow('document','Terms of Service',null,true,'open')+'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:center;padding:16px 0;border-radius:16px;background:rgba(244,67,54,.1);margin-bottom:16px">'+ic('log-out',22,'#F44336')+'<span style="font-size:16px;font-weight:600;color:#F44336;margin-left:8px">Sign Out</span></div>'
+    +'<div style="display:flex;align-items:center;justify-content:center;padding:16px 0;border-radius:16px;border:1px solid #F44336;background:rgba(244,67,54,.08)">'+ic('trash',22,'#F44336')+'<span style="font-size:16px;font-weight:600;color:#F44336;margin-left:8px">Delete Account</span></div>';
+  }
   sc.innerHTML=h;
-  const tb=document.getElementById('sim-tb');if(tb)tb.innerHTML=SIM_TABS.map(function(x){return '<div class="sim-tab'+(qcSim.tab===x[0]?' on':'')+'" onclick="simSetTab(\''+x[0]+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="'+x[2]+'"/></svg>'+x[1]+'</div>'}).join('');
+  const fab=document.getElementById('sim-fab');if(fab){if(t==='alerts'||t==='alarm'){fab.style.display='grid';fab.innerHTML=ic('add',32,'#fff');}else fab.style.display='none';}
+  const tb=document.getElementById('sim-tb');if(tb)tb.innerHTML=SIM_TABS.map(function(x){var on=qcSim.tab===x[0];return '<div class="sim-tab'+(on?' on':'')+'" onclick="simSetTab(\''+x[0]+'\')">'+ic(x[2],22,on?'#1DAAE1':'#6B6B6B')+x[1]+'</div>'}).join('');
 }
 function simRenderReadout(){
   const m=qcSim.metrics;
