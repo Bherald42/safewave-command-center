@@ -3375,10 +3375,15 @@ function qcRecordFlash(){
 const OTA_SVC='02f00000-0000-0000-0000-00000000fe00';
 const OTA_WRITE='02f00000-0000-0000-0000-00000000ff01';   // app -> device (commands + data)
 const OTA_NOTIFY='02f00000-0000-0000-0000-00000000ff02';  // device -> app (responses)
-const OTA_CMD={GET_BASE:1,READ_VER:2,PAGE_ERASE:3,WRITE_DATA:5,REBOOT:9};
+const OTA_CMD={NVDS_TYPE:0,GET_BASE:1,READ_VER:2,PAGE_ERASE:3,WRITE_DATA:5,REBOOT:9};
+/* Dual-bank flash addresses — must match the app's OTAProtocol (FIRST/SECOND_ADDR). */
+const OTA_FIRST_ADDR=0x00000000, OTA_SECOND_ADDR=0x00014000;
 let OTA_CRCTAB=null;
 function otaCrcTab(){if(OTA_CRCTAB)return OTA_CRCTAB;const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?((0xEDB88320^(c>>>1))>>>0):(c>>>1);t[n]=c>>>0;}OTA_CRCTAB=t;return t;}
-function otaCrc32(bytes){const t=otaCrcTab();let crc=0;for(let i=0;i<bytes.length;i++){const high=(crc>>>8)>>>0;crc=(((crc<<8)>>>0)^t[(high^bytes[i])&0xff])>>>0;}return crc>>>0;}
+/* high byte via signed truncating division — the firmware's CRC was compiled
+   against Java's arithmetic, which differs from a logical >>>8 once the running
+   CRC goes "negative" (top bit set). Must match the app's javaHighByte exactly. */
+function otaCrc32(bytes){const t=otaCrcTab();let crc=0;for(let i=0;i<bytes.length;i++){const high=(((crc|0)/256)|0)&0xff;crc=(((crc<<8)>>>0)^t[(high^bytes[i])&0xff])>>>0;}return crc>>>0;}
 function otaU32(v){v>>>=0;return new Uint8Array([v&0xff,(v>>>8)&0xff,(v>>>16)&0xff,(v>>>24)&0xff]);}
 function otaCmd(opcode,payload){payload=payload||new Uint8Array(0);const b=new Uint8Array(3+payload.length);b[0]=opcode;b[1]=payload.length&0xff;b[2]=(payload.length>>8)&0xff;b.set(payload,3);return b;}
 function otaWriteDataPkt(baseAddr,data){const p=new Uint8Array(6+data.length);p.set(otaU32(baseAddr),0);p[4]=data.length&0xff;p[5]=(data.length>>8)&0xff;p.set(data,6);return otaCmd(OTA_CMD.WRITE_DATA,p);}
@@ -3573,11 +3578,19 @@ async function qcOtaFlashStart(){
       }
       qcOtaLog('Operator chose to flash anyway','amber');
     }
-    // 1) storage base
+    // 1) device type + storage base. CRITICAL: a dual-bank BK8010 runs from one
+    //    bank and the new image MUST be written to the OTHER bank, or the
+    //    bootloader just re-activates the bank still holding the old image and
+    //    the band reverts. NVDS_TYPE byte4 bit 0x10: clear=BK8010 (dual-bank,
+    //    swap), set=BK8010H (write-in-place). Mirrors the app's OTAProtocol.
+    qcOtaSetProgress(1,'Reading device type…');
+    const ntRsp=ok(await send(otaCmd(OTA_CMD.NVDS_TYPE,new Uint8Array([0,0,0,0]))));
+    const writeInPlace=(ntRsp[4]&0x10)!==0;
     qcOtaSetProgress(1,'Reading flash base…');
     const baseRsp=ok(await send(otaCmd(OTA_CMD.GET_BASE,new Uint8Array([0,0,0,0]))));
-    const base=(baseRsp[4]|(baseRsp[5]<<8)|(baseRsp[6]<<16)|(baseRsp[7]<<24))>>>0;
-    qcOtaLog('Target bank base 0x'+base.toString(16).toUpperCase());
+    const currentAddr=(baseRsp[4]|(baseRsp[5]<<8)|(baseRsp[6]<<16)|(baseRsp[7]<<24))>>>0;
+    const base=writeInPlace?currentAddr:(currentAddr===OTA_FIRST_ADDR?OTA_SECOND_ADDR:OTA_FIRST_ADDR);
+    qcOtaLog('Running bank 0x'+currentAddr.toString(16).toUpperCase()+' → writing to bank 0x'+base.toString(16).toUpperCase()+(writeInPlace?' (BK8010H · write-in-place)':' (BK8010 · dual-bank swap)'));
     // 2) erase
     const pages=Math.ceil(fw.length/0x1000);
     for(let i=0;i<pages;i++){ok(await send(otaCmd(OTA_CMD.PAGE_ERASE,otaU32((base+i*0x1000)>>>0)),9000));qcOtaSetProgress(1+(i+1)/pages*14,'Erasing '+(i+1)+'/'+pages+' pages…');}
@@ -3631,8 +3644,14 @@ async function qcOtaFlashStart(){
     await sleep(600);
     // 4) reboot + CRC
     qcOtaSetProgress(96,'Verifying CRC & rebooting…');
-    const crc=otaImageCrc(fw);const rebootPl=new Uint8Array([...otaU32(fw.length),...otaU32(crc)]);
-    let rebootRsp=null;try{rebootRsp=await send(otaCmd(OTA_CMD.REBOOT,rebootPl),12000);}catch(e){/* band may reset before replying */}
+    // 11-byte reboot packet — byte1 is the constant 0x0A the firmware expects
+    //    (NOT the payload length 0x08 that otaCmd would emit). Carries firmware
+    //    length + CRC32 so the bootloader validates and commits the new bank.
+    const crc=otaImageCrc(fw);
+    const rebootPl=new Uint8Array(11);
+    rebootPl[0]=OTA_CMD.REBOOT;rebootPl[1]=0x0a;rebootPl[2]=0x00;
+    rebootPl.set(otaU32(fw.length),3);rebootPl.set(otaU32(crc),7);
+    let rebootRsp=null;try{rebootRsp=await send(rebootPl,12000);}catch(e){/* band may reset before replying */}
     const fromTxt=qcOta.curVer?(' (was on '+qcOta.curVer+')'):'';
     if(rebootRsp&&rebootRsp[0]===0){qcOta.phase='done';qcOta.note='✓ CRC verified — band is rebooting into Firmware '+rel.version+fromTxt+'.';qcOtaLog(qcOta.note,'good');qcOtaSetProgress(100,'Done');}
     else{qcOta.phase='done';qcOta.note='Image sent. Band did not confirm before rebooting — watch the serial monitor / app to confirm it came up on '+rel.version+'. If it stayed on the old version, the CRC check failed and nothing was changed.';qcOtaLog('No reboot confirmation (expected if the band reset immediately)','amber');qcOtaSetProgress(100,'Sent');}
