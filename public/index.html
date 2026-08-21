@@ -3517,7 +3517,7 @@ async function qcOtaFlashStart(){
     // file[256:length]; a padded length/tail would diverge from the app's proven
     // reboot packet and can make the bootloader reject the image.
     const fw=buf;
-    qcOtaLog('Flasher build 2026-08-19a (app-parity: header layout, full-tail CRC, per-chunk write-ack)');
+    qcOtaLog('Flasher build 2026-08-21a (app-parity framing + full-tail CRC, fast back-to-back write)');
     qcOtaSetProgress(0,'Pick your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
     // Read the version baked into this .bin so we can (a) show it and (b) refuse to
     // waste a flash the band would never boot (dual-bank bootloader runs the higher
@@ -3617,34 +3617,25 @@ async function qcOtaFlashStart(){
     const pages=Math.ceil(fw.length/0x1000);
     for(let i=0;i<pages;i++){ok(await send(otaEraseCmd((base+i*0x1000)>>>0),9000));qcOtaSetProgress(1+(i+1)/pages*14,'Erasing '+(i+1)+'/'+pages+' pages…');}
     qcOtaLog('Erase complete ('+pages+' × 4KB)','good');
-    // 3) write — a faithful port of the app's notification-driven WRITE_DATA loop
-    //    (OTAManager), the path that flashes this band reliably:
-    //    • Each chunk is a WriteWithoutResponse carrying its own absolute address,
-    //      immediately followed by a WAIT for the band's per-chunk notify. That
-    //      application-level ack is the real flow control — it paces us to the
-    //      band's flash-write rate so no packet is silently dropped. (An earlier
-    //      build fired writes back-to-back with no wait; dropped packets left gaps
-    //      in flash, the reboot CRC failed, and the band kept its old image — the
-    //      "writes finish but the update won't take" symptom.)
-    //    • On a link drop we reconnect, re-arm the base, and restart the image from
-    //      0 — every WRITE_DATA carries its addr and the pages stay erased, so
-    //      re-writing identical bytes is harmless, and the whole-image CRC at reboot
-    //      still fails safely (band keeps old firmware) if anything is off.
+    // 3) write — fire WriteWithoutResponse back-to-back with NO per-chunk notify
+    //    wait. This band tolerates a fast burst but NOT a slow trickle: the very
+    //    first (correct-framing) build proved it takes the full ~194 KB image in
+    //    ~3 s back-to-back and stays connected. A per-chunk notify-wait — the right
+    //    call for the mobile app on native BLE with a 512-byte MTU — is far too slow
+    //    over Windows Web Bluetooth: it only pushes ~100 KB before the band's ~20 s
+    //    OTA window closes and it drops the link, so the image never finishes.
+    //    Correctness is still covered: `await writeValueWithoutResponse` resolves as
+    //    the controller drains its TX buffer, so Chrome paces the burst to real radio
+    //    throughput (no local packet loss), and the band's whole-image CRC at reboot
+    //    catches anything off — failing SAFE (keeps old firmware). On a drop we
+    //    reconnect, re-arm the base, and restart the image from 0.
     if(typeof wch.writeValueWithoutResponse!=='function')throw new Error('this browser lacks write-without-response — update Chrome/Edge, or flash from the mobile app');
-    const CHUNK=(SETTINGS_QC.otaChunk&&SETTINGS_QC.otaChunk>=16&&SETTINGS_QC.otaChunk<=240)?SETTINGS_QC.otaChunk:180;
-    // Send one WRITE_DATA, then resolve on the band's next notify (its per-chunk
-    // ack). Mirrors the app's `writePacket` + `queue.next()` pairing.
-    const sendData=(pkt,timeoutMs)=>new Promise((resolve,reject)=>{
-      let done=false;
-      const to=setTimeout(()=>{if(!done){done=true;pending=null;reject(new Error('timeout waiting for band write-ack'))}},timeoutMs||8000);
-      pending={resolve:v=>{if(done)return;done=true;clearTimeout(to);resolve(v)},reject:e=>{if(done)return;done=true;clearTimeout(to);reject(e)}};
-      wch.writeValueWithoutResponse(pkt).catch(err=>{if(!done){done=true;clearTimeout(to);pending=null;reject(err);}});
-    });
+    const CHUNK=(SETTINGS_QC.otaChunk&&SETTINGS_QC.otaChunk>=16&&SETTINGS_QC.otaChunk<=512)?SETTINGS_QC.otaChunk:180;
     const writeAll=async()=>{
       let off=0,lastShown=-1;
       while(off<fw.length){
         const n=Math.min(CHUNK,fw.length-off);
-        await sendData(otaWriteDataPkt((base+off)>>>0,fw.subarray(off,off+n)),8000);
+        await wch.writeValueWithoutResponse(otaWriteDataPkt((base+off)>>>0,fw.subarray(off,off+n)));
         off+=n;
         const kb=Math.round(off/1024);
         if(kb!==lastShown){lastShown=kb;qcOtaSetProgress(15+off/fw.length*80,'Writing '+kb+'/'+Math.round(fw.length/1024)+' KB…');}
