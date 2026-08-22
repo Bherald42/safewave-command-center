@@ -3,7 +3,7 @@
    Network-first for navigations so teammates always get the latest build;
    falls back to cache when offline. Live data (Firestore) is fetched by the
    page itself and is not cached here. */
-const CACHE = 'safewave-shell-v2';
+const CACHE = 'safewave-shell-v3';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -19,9 +19,14 @@ self.addEventListener('fetch', (e) => {
   // Only handle same-origin; let Firebase/CDN/Shopify requests pass straight through.
   if (url.origin !== self.location.origin) return;
   if (req.mode === 'navigate') {
+    // cache:'no-store' bypasses the HTTP cache entirely — during the OTA-flasher
+    // debugging, stale builds kept being served through cache layers even after
+    // deploys, and an outdated flasher on real hardware is actively dangerous.
+    // Every page load now hits the network for the live build; the cached copy
+    // is ONLY the offline fallback.
     // Clone SYNCHRONOUSLY before returning r — otherwise the page starts reading
     // r's body and the later r.clone() throws "Response body is already used".
-    e.respondWith(fetch(req).then((r) => { const copy = r.clone(); caches.open(CACHE).then((c) => c.put('/index.html', copy)); return r; }).catch(() => caches.match('/index.html')));
+    e.respondWith(fetch(req, { cache: 'no-store' }).then((r) => { const copy = r.clone(); caches.open(CACHE).then((c) => c.put('/index.html', copy)); return r; }).catch(() => caches.match('/index.html')));
     return;
   }
   e.respondWith(caches.match(req).then((cached) => cached || fetch(req)));
