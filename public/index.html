@@ -3375,6 +3375,10 @@ function qcRecordFlash(){
 const OTA_SVC='02f00000-0000-0000-0000-00000000fe00';
 const OTA_WRITE='02f00000-0000-0000-0000-00000000ff01';   // app -> device (commands + data)
 const OTA_NOTIFY='02f00000-0000-0000-0000-00000000ff02';  // device -> app (responses)
+/* Flasher build tag — bump on EVERY flasher change. Shown in the Flash card UI
+   and logged at the top of every run, so an operator can verify they're on the
+   deployed build BEFORE flashing (stale cached builds burned three test runs). */
+const QC_FLASHER_BUILD='2026-08-22a';
 const OTA_CMD={NVDS_TYPE:0,GET_BASE:1,READ_VER:2,PAGE_ERASE:3,WRITE_DATA:5,REBOOT:9};
 /* Dual-bank flash addresses — must match the app's OTAProtocol (FIRST/SECOND_ADDR). */
 const OTA_FIRST_ADDR=0x00000000, OTA_SECOND_ADDR=0x00014000;
@@ -3450,7 +3454,7 @@ function qcOtaCard(){
       +'<div class="note" style="margin-top:10px;border-color:var(--amber);color:var(--amber)">Do not close this tab or move the band out of range until it finishes.</div></div>';
   }
   const opts=imgs.map(r=>'<option value="'+esc(r.id)+'">'+esc('Firmware '+r.version+' ('+((QC_CHAN[r.channel]||{}).label||r.channel)+') · '+qcFwKB(r.image.size))+'</option>').join('');
-  return '<div class="card" style="margin-top:12px"><div class="t">⚡ Flash over Bluetooth <span class="pill amber" style="font-size:10px">beta</span></div>'
+  return '<div class="card" style="margin-top:12px"><div class="t">⚡ Flash over Bluetooth <span class="pill amber" style="font-size:10px">beta</span> <span class="d" style="font-size:10px;color:var(--faint);font-family:var(--font-m)">build '+esc(QC_FLASHER_BUILD)+'</span></div>'
     +'<div class="note" style="margin:8px 0;border-color:var(--amber)">Sends the selected image to the band over its own OTA service — the same path the app uses. It writes to the <b>inactive</b> bank and the band checks the CRC before switching, so a failed flash keeps the current firmware. Still: <b>unverified on hardware</b> — test on a spare band you can re-flash over JLink before trusting it on a wearer’s device.</div>'
     +(imgs.length?'<p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Firmware image</p><select class="field" id="qc-ota-rel">'+opts+'</select>'
         :'<div class="d" style="color:var(--faint)">Upload a firmware <code>.bin</code> to a release first (Releases tab).</div>')
@@ -3530,7 +3534,7 @@ async function qcOtaFlashStart(){
     // file[256:length]; a padded length/tail would diverge from the app's proven
     // reboot packet and can make the bootloader reject the image.
     const fw=buf;
-    qcOtaLog('Flasher build 2026-08-21b (windowed flow control · band-confirmed resume · post-reboot verify)');
+    qcOtaLog('Flasher build '+QC_FLASHER_BUILD+' (windowed flow control · band-confirmed resume · post-reboot verify)');
     qcOtaSetProgress(0,'Pick your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
     // Read the version baked into this .bin so we can (a) show it and (b) refuse to
     // waste a flash the band would never boot (dual-bank bootloader runs the higher
