@@ -3378,7 +3378,7 @@ const OTA_NOTIFY='02f00000-0000-0000-0000-00000000ff02';  // device -> app (resp
 /* Flasher build tag — bump on EVERY flasher change. Shown in the Flash card UI
    and logged at the top of every run, so an operator can verify they're on the
    deployed build BEFORE flashing (stale cached builds burned three test runs). */
-const QC_FLASHER_BUILD='2026-08-22c';
+const QC_FLASHER_BUILD='2026-08-22d';
 const OTA_CMD={NVDS_TYPE:0,GET_BASE:1,READ_VER:2,PAGE_ERASE:3,WRITE_DATA:5,REBOOT:9};
 /* Dual-bank flash addresses — must match the app's OTAProtocol (FIRST/SECOND_ADDR). */
 const OTA_FIRST_ADDR=0x00000000, OTA_SECOND_ADDR=0x00014000;
@@ -3534,7 +3534,7 @@ async function qcOtaFlashStart(){
     // file[256:length]; a padded length/tail would diverge from the app's proven
     // reboot packet and can make the bootloader reject the image.
     const fw=buf;
-    qcOtaLog('Flasher build '+QC_FLASHER_BUILD+' (link-paced blast write · boot-CRC arbiter · post-reboot verify)');
+    qcOtaLog('Flasher build '+QC_FLASHER_BUILD+' (timed pacing with auto rate discovery · boot-CRC arbiter · verify)');
     qcOtaSetProgress(0,'Pick your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
     // Read the version baked into this .bin so we can (a) show it and (b) refuse to
     // waste a flash the band would never boot (dual-bank bootloader runs the higher
@@ -3639,58 +3639,45 @@ async function qcOtaFlashStart(){
     const currentAddr=(baseRsp[4]|(baseRsp[5]<<8)|(baseRsp[6]<<16)|(baseRsp[7]<<24))>>>0;
     const base=writeInPlace?currentAddr:(currentAddr===OTA_FIRST_ADDR?OTA_SECOND_ADDR:OTA_FIRST_ADDR);
     qcOtaLog('Running bank 0x'+currentAddr.toString(16).toUpperCase()+' → writing to bank 0x'+base.toString(16).toUpperCase()+(writeInPlace?' (BK8010H · write-in-place)':' (BK8010 · dual-bank swap)'));
-    // 2) erase
-    const pages=Math.ceil(fw.length/0x1000);
-    for(let i=0;i<pages;i++){ok(await send(otaEraseCmd((base+i*0x1000)>>>0),9000));qcOtaSetProgress(1+(i+1)/pages*14,'Erasing '+(i+1)+'/'+pages+' pages…');}
-    qcOtaLog('Erase complete ('+pages+' × 4KB)','good');
-    // 3) write — WINDOWED flow control with band-confirmed RESUME. Both extremes
-    //    failed on real hardware over Windows Web Bluetooth:
-    //    Hardware-measured constraints (real logs, 2026-08-22):
-    //    • The Windows link survives ~25-30 s of sustained OTA traffic, then
-    //      drops ("GATT operation failed") — consistently at ~140-165 KB.
-    //    • Throughput is capped by the band's ack rate: ONE notify per
-    //      connection interval (~33 ms), so bytes/s = chunkSize × ~30. At
-    //      180-byte chunks that is ~5.5 KB/s → a 194 KB image needs ~35 s,
-    //      which can NEVER fit the link budget. Chunk size is the only lever.
-    //    • The band's firmware REFUSES a mid-stream resume after reconnect
-    //      (acks go silent) — the stream must restart from the base each time.
-    //    So: write the LARGEST chunks the ATT link accepts — this BK8010H stack
-    //    negotiates a 512-byte MTU (the mobile app requests exactly that for
-    //    this chip), and Windows auto-negotiates ~527, so 471-byte data chunks
-    //    (480-byte packets) give ~14 KB/s → full image in ~14 s, inside the
-    //    budget. The ladder falls back (471→235→171) if the first write is
-    //    rejected for size while the link is still up. Windowed acks still
-    //    bound the band's buffer; on a drop we reconnect, re-arm, and restart
-    //    from 0 (a fresh link = a fresh time budget, and at 14 s the restart
-    //    has real odds). The reboot-time whole-image CRC stays the final gate.
+    // 2-5) FLASH ATTEMPT LOOP with automatic rate discovery.
+    // Hardware truth table (all measured live on this band + adapter):
+    //   • Ack-paced writes: ≤ ~6 KB/s (the band acks one chunk per ~33 ms
+    //     connection interval — its REPORTING rate) → a 194 KB image needs
+    //     ~32 s, but the link dies at ~25-30 s of sustained traffic. Six
+    //     passes died at 95-173 KB. Can never finish.
+    //   • Full blast (~35 KB/s): all data out in ~6 s, but overruns the
+    //     band's RX drain — only ~35 KB committed; boot CRC failed; band
+    //     safely kept its old firmware.
+    //   • Mid-stream resume after a reconnect: refused by the firmware.
+    // So: TIMED pacing between those two walls, ignoring the laggy ack
+    // channel. The band's exact drain rate is the one unknown → DISCOVER it:
+    // try each rate in RATE_LADDER (KB/s); after each pass the band's own
+    // boot-time whole-image CRC plus a version read-back decide. A failed
+    // pass is safe (band keeps its current firmware) — re-erase and retry
+    // gentler. settings/qc otaKBps pins a single rate.
     if(typeof wch.writeValueWithoutResponse!=='function')throw new Error('this browser lacks write-without-response — update Chrome/Edge, or flash from the mobile app');
-    const CHUNK_LADDER=(SETTINGS_QC.otaChunk&&SETTINGS_QC.otaChunk>=16&&SETTINGS_QC.otaChunk<=471)?[SETTINGS_QC.otaChunk]:[471,235,171];
-    let chunkIdx=0;
-    // Ack-paced writing is mathematically dead on this link: the band acks at
-    // most ~26-30 chunks/s (one notify per connection interval), so even
-    // MTU-max 235-byte chunks give ~6 KB/s — a 194 KB image needs ~32 s
-    // against a hard ~25-30 s link budget (measured: passes died at 95-173 KB,
-    // never finishing). So DON'T pace on acks: blast the writes back-to-back —
-    // each awaited writeValueWithoutResponse is paced by Windows' link-layer
-    // credit flow (the first-ever hardware run pushed the full image in ~3 s
-    // this way, with the band staying connected and answering afterward). The
-    // band's ack notifies are consumed opportunistically for the progress bar
-    // only. Integrity does NOT depend on pacing: flash keeps whatever was
-    // committed, the BOOTLOADER validates the whole-image CRC at reboot, and
-    // the post-reboot version read reports the truth — a bad pass fails SAFE
-    // (band keeps its current firmware) and we simply retry.
-    let confirmedOff=0;      // bytes the BAND has acked (progress display only)
-    let lastShownKB=-1;
-    const writeAll=async()=>{
-      let off=0;confirmedOff=0;
+    const RATE_LADDER=(SETTINGS_QC.otaKBps&&SETTINGS_QC.otaKBps>=3&&SETTINGS_QC.otaKBps<=40)?[SETTINGS_QC.otaKBps]:[12,8,5.5];
+    const pages=Math.ceil(fw.length/0x1000);
+    const eraseAll=async()=>{
+      for(let i=0;i<pages;i++){ok(await send(otaEraseCmd((base+i*0x1000)>>>0),9000));qcOtaSetProgress(1+(i+1)/pages*13,'Erasing '+(i+1)+'/'+pages+' pages…');}
+      qcOtaLog('Erase complete ('+pages+' × 4KB)','good');
+    };
+    let confirmedOff=0,lastShownKB=-1;
+    const writePaced=async(kbps)=>{
+      let off=0;confirmedOff=0;lastShownKB=-1;
       const sent=[];        // chunks awaiting ack: {addr, off, len}, oldest first
       const absorb=v=>{
         const a=notifyAddr(v);if(a===null)return;
         while(sent.length&&(sent[0].addr>>>0)<=(a>>>0)){confirmedOff=sent[0].off+sent[0].len;sent.shift();}
-        const kb=Math.round(confirmedOff/1024);
-        if(kb!==lastShownKB){lastShownKB=kb;qcOtaSetProgress(15+off/fw.length*80,'Writing… band committed '+kb+'/'+Math.round(fw.length/1024)+' KB');}
+        const kb=Math.round(off/1024);
+        if(kb!==lastShownKB){lastShownKB=kb;qcOtaSetProgress(15+off/fw.length*75,'Writing '+kb+'/'+Math.round(fw.length/1024)+' KB at '+kbps+' KB/s…');}
       };
+      const bytesPerMs=kbps*1024/1000;
+      const t0=Date.now();
       while(off<fw.length){
+        // Time-based schedule: never let the bytes sent run ahead of the pace.
+        const due=(Date.now()-t0)*bytesPerMs;
+        if(off>due){await sleep(Math.min(60,Math.max(5,Math.ceil((off-due)/bytesPerMs))));continue;}
         const n=Math.min(CHUNK_LADDER[chunkIdx],fw.length-off);const addr=(base+off)>>>0;
         try{
           await wch.writeValueWithoutResponse(otaWriteDataPkt(addr,fw.subarray(off,off+n)));
@@ -3709,95 +3696,103 @@ async function qcOtaFlashStart(){
         off+=n;
         while(nq.buf.length)absorb(nq.buf.shift());   // progress display only
       }
-      // All chunks are on the wire. Give the band a moment to drain its RX
-      // queue into flash, absorbing whatever acks arrive for the display —
-      // but do NOT require them: the boot-time CRC is the real arbiter.
-      qcOtaSetProgress(92,'All data sent — letting the band commit to flash…');
+      // All chunks are on the wire. Let the band drain its RX queue into
+      // flash, absorbing acks for the display — the boot CRC is the arbiter.
+      qcOtaSetProgress(91,'All data sent — letting the band commit to flash…');
       const settleEnd=Date.now()+4000;
       while(Date.now()<settleEnd&&sent.length){
         try{absorb(await nextNotify(Math.max(200,settleEnd-Date.now())));}catch(_){break;}
       }
-      if(sent.length)qcOtaLog('Proceeding with '+Math.round(confirmedOff/1024)+' KB ack-confirmed (acks lag the data; the boot CRC decides)','amber');
+      qcOtaLog('Band ack-confirmed '+Math.round(confirmedOff/1024)+'/'+Math.round(fw.length/1024)+' KB (acks lag the data; the boot CRC decides)',sent.length?'amber':'good');
     };
-    let linkEvents=0;
-    while(true){
-      const t0=Date.now();
-      try{
-        await writeAll();
-        qcOtaLog('Write pass complete in '+((Date.now()-t0)/1000).toFixed(1)+'s ('+CHUNK_LADDER[chunkIdx]+'-byte chunks)','good');
-        break;
-      }catch(e){
-        const m=(e&&e.message)||'';
-        if(!/disconnect|GATT|network|in progress|not ready|timeout/i.test(m))throw e;
-        if(++linkEvents>8)throw new Error('the link failed '+linkEvents+' times before the '+Math.round(fw.length/1024)+' KB image finished (best pass reached '+Math.round(confirmedOff/1024)+' KB). Move the band and Bluetooth adapter closer together, away from USB-3 ports and Wi-Fi congestion, and try again');
-        qcOtaLog('Link interrupted at '+Math.round(confirmedOff/1024)+' KB after '+((Date.now()-t0)/1000).toFixed(0)+'s ('+(m.length>60?m.slice(0,60)+'…':m)+') — reconnecting to restart ('+linkEvents+'/8)…','amber');
-        qcOtaSetProgress(15,'Reconnecting…');
-        try{if(dev.gatt&&dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
-        await sleep(1200);
-        await openOta('Reconnecting'); // throws if it truly can't get back
-        // Re-arm the band's OTA state and restart the stream from the base —
-        // this firmware refuses mid-stream resume (verified on hardware), and
-        // the pages stay erased so rewriting identical bytes is harmless.
-        ok(await send(otaCmd(OTA_CMD.GET_BASE),8000));
-      }
-    }
-    qcOtaLog('Image written ('+Math.round(fw.length/1024)+' KB'+(linkEvents?', '+linkEvents+' restart'+(linkEvents>1?'s':''):'')+')','good');
-    // 4) reboot + CRC. The reboot command is STATELESS against flash: whatever
-    //    was committed stays committed, and the bootloader validates the
-    //    whole-image CRC itself. So if the link dropped after the blast, we can
-    //    reconnect and still issue the reboot — the flash contents don't care.
-    qcOtaSetProgress(96,'Asking the band to verify & reboot…');
-    // 11-byte reboot packet — byte1 is the constant 0x0A the firmware expects
-    //    (NOT the payload length 0x08 that otaCmd would emit). Carries firmware
-    //    length + CRC32 so the bootloader validates and commits the new bank.
+    // Reboot command — 11 bytes, byte1 is the constant 0x0A the firmware
+    // expects; carries firmware length + CRC32. STATELESS against flash: if
+    // the link drops after the write we reconnect and still send it.
     const crc=otaImageCrc(fw);
     const rebootPl=new Uint8Array(11);
     rebootPl[0]=OTA_CMD.REBOOT;rebootPl[1]=0x0a;rebootPl[2]=0x00;
     rebootPl.set(otaU32(fw.length),3);rebootPl.set(otaU32(crc),7);
-    let rebootRsp=null;
-    for(let ra=0;ra<2&&rebootRsp===null;ra++){
-      try{
-        if(!(dev.gatt&&dev.gatt.connected)){
-          qcOtaLog('Link dropped before the reboot command — reconnecting to send it','amber');
-          await openOta('Reconnecting');
-          ok(await send(otaCmd(OTA_CMD.GET_BASE),8000)); // re-arm the OTA session
+    const sendReboot=async()=>{
+      let rsp=null;
+      for(let ra=0;ra<2&&rsp===null;ra++){
+        try{
+          if(!(dev.gatt&&dev.gatt.connected)){
+            qcOtaLog('Link down before the reboot command — reconnecting to send it','amber');
+            await openOta('Reconnecting');
+            ok(await send(otaCmd(OTA_CMD.GET_BASE),8000)); // re-arm the OTA session
+          }
+          rsp=await send(rebootPl,12000);
+        }catch(e){
+          // No reply can mean the band reset immediately — fine; the verify
+          // below settles it. Only loop again if the link died.
+          if(dev.gatt&&dev.gatt.connected)break;
         }
-        rebootRsp=await send(rebootPl,12000);
-      }catch(e){
-        // No reply can mean the band reset immediately — that's fine; the
-        // post-reboot verify below settles it. Only retry if the link died.
-        if(dev.gatt&&dev.gatt.connected)break;
       }
+      return rsp;
+    };
+    const readBackVer=async()=>{
+      try{if(dev.gatt&&dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
+      await sleep(9000);
+      try{
+        await openOta('Reconnecting to verify');
+        const vr2=ok(await send(otaCmd(OTA_CMD.READ_VER),8000));
+        return (vr2[4]|(vr2[5]<<8)|(vr2[6]<<16)|(vr2[7]<<24))>>>0;
+      }catch(e){qcOtaLog('Could not reconnect to verify ('+((e&&e.message)||e)+')','amber');return null;}
+    };
+    let verVerified=null,verReadFailed=false,lastGot=null;
+    for(let ai=0;ai<RATE_LADDER.length;ai++){
+      const rate=RATE_LADDER[ai];
+      if(ai>0){
+        qcOtaLog('Retrying at a gentler pace: '+rate+' KB/s (attempt '+(ai+1)+'/'+RATE_LADDER.length+')','amber');
+        if(!(dev.gatt&&dev.gatt.connected))await openOta('Reconnecting');
+        ok(await send(otaCmd(OTA_CMD.NVDS_TYPE)));      // fresh OTA session
+        ok(await send(otaCmd(OTA_CMD.GET_BASE),8000));
+      }
+      await eraseAll();
+      let drops=0;
+      while(true){
+        const t0=Date.now();
+        try{
+          await writePaced(rate);
+          qcOtaLog('Write pass complete in '+((Date.now()-t0)/1000).toFixed(1)+'s ('+rate+' KB/s · '+CHUNK_LADDER[chunkIdx]+'-byte chunks)','good');
+          break;
+        }catch(e){
+          const m=(e&&e.message)||'';
+          if(!/disconnect|GATT|network|in progress|not ready|timeout/i.test(m))throw e;
+          if(++drops>3)throw new Error('the link kept failing during the write ('+drops+' drops at '+rate+' KB/s, best reach '+Math.round(confirmedOff/1024)+' KB). Move the band and adapter closer together, away from USB-3 ports, and try again');
+          qcOtaLog('Link interrupted after '+((Date.now()-t0)/1000).toFixed(0)+'s ('+(m.length>50?m.slice(0,50)+'…':m)+') — reconnecting to restart the pass ('+drops+'/3)…','amber');
+          qcOtaSetProgress(15,'Reconnecting…');
+          try{if(dev.gatt&&dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
+          await sleep(1200);
+          await openOta('Reconnecting');
+          // This firmware refuses mid-stream resume (verified) — re-arm and
+          // the loop rewrites from the base; pages stay erased, identical
+          // bytes over already-written regions are harmless.
+          ok(await send(otaCmd(OTA_CMD.GET_BASE),8000));
+        }
+      }
+      qcOtaSetProgress(96,'Asking the band to verify & reboot…');
+      const rsp=await sendReboot();
+      if(rsp&&rsp[0]!==0)qcOtaLog('Band answered the reboot command with result='+rsp[0],'amber');
+      else if(rsp)qcOtaLog('Reboot command acknowledged — rebooting…','good');
+      else qcOtaLog('No reboot reply (normal if the band reset immediately) — verifying…','amber');
+      qcOtaSetProgress(97,'Waiting for the band to reboot…');
+      const got=await readBackVer();
+      if(got!==null&&binInfo&&binInfo.ver&&got===binInfo.ver){verVerified=got;break;}
+      if(got===null){verReadFailed=true;break;}
+      lastGot=got;
+      qcOtaLog('Band came back on '+(otaFmtVer(got)||('0x'+got.toString(16)))+' — the '+rate+' KB/s pass didn’t take (data outran the band’s flash drain)','amber');
     }
     const fromTxt=qcOta.curVer?(' (was on '+qcOta.curVer+')'):'';
-    if(rebootRsp&&rebootRsp[0]!==0){
-      // Explicit rejection: the band computed a CRC over its flash that doesn't
-      // match ours — data was corrupted/lost in transit. Nothing was committed.
-      throw new Error('band REJECTED the image at CRC check (result='+rebootRsp[0]+') — the flash contents don’t match. Try again; if it repeats, move the band closer to the adapter');
-    }
-    if(rebootRsp)qcOtaLog('Band accepted the image (CRC ok) — rebooting…','good');
-    else qcOtaLog('No reboot reply (normal if the band reset immediately) — verifying…','amber');
-    // 5) POST-REBOOT VERIFY — the only proof that counts: reconnect after the
-    //    reboot and read the running version back. Mirrors the app's post-flash
-    //    self-verification.
-    qcOtaSetProgress(97,'Waiting for the band to reboot…');
-    try{if(dev.gatt&&dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
-    await sleep(9000);
-    let verVerified=null;
-    try{
-      await openOta('Reconnecting to verify');
-      const vr2=ok(await send(otaCmd(OTA_CMD.READ_VER),8000));
-      verVerified=(vr2[4]|(vr2[5]<<8)|(vr2[6]<<16)|(vr2[7]<<24))>>>0;
-    }catch(e){qcOtaLog('Could not reconnect to verify ('+((e&&e.message)||e)+')','amber');}
-    if(verVerified!==null&&binInfo&&binInfo.ver&&verVerified===binInfo.ver){
+    if(verVerified!==null){
       qcOta.phase='done';qcOta.note='✓ VERIFIED — band rebooted and is running Firmware '+(otaFmtVer(verVerified)||rel.version)+fromTxt+'.';
       qcOtaLog(qcOta.note,'good');qcOtaSetProgress(100,'Verified');
-    }else if(verVerified!==null){
-      qcOta.phase='fail';qcOta.note='Update did NOT take — band came back on '+(otaFmtVer(verVerified)||('0x'+verVerified.toString(16)))+' instead of '+rel.version+'. The boot CRC check failed, so the band kept its previous firmware. Try again.';
-      qcOtaLog(qcOta.note,'amber');qcOtaSetProgress(100,'Failed');
-    }else{
-      qcOta.phase='done';qcOta.note='Image sent and acked. Could not reconnect to confirm the version — reconnect in a minute (or check the app) to verify it’s on '+rel.version+'.';
+    }else if(verReadFailed){
+      qcOta.phase='done';qcOta.note='Image sent. Could not reconnect to confirm the version — reconnect in a minute (or check the app) to verify it’s on '+rel.version+'.';
       qcOtaLog(qcOta.note,'amber');qcOtaSetProgress(100,'Sent');
+    }else{
+      qcOta.phase='fail';qcOta.note='Update did NOT take at any pace ('+RATE_LADDER.join('/')+' KB/s) — band is still on '+(lastGot!==null?(otaFmtVer(lastGot)||('0x'+lastGot.toString(16))):'its previous firmware')+'. The band keeps working; flash it from the mobile app, and send this log for analysis.';
+      qcOtaLog(qcOta.note,'amber');qcOtaSetProgress(100,'Failed');
     }
     try{rel.flashes=(rel.flashes||[]).concat([{at:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'',device:(dev&&dev.name)||'BLE band',result:(verVerified!==null&&binInfo&&verVerified===binInfo.ver)?'ota-verified':'ota',via:'bluetooth-ota',fromVersion:qcOta.curVer||null}]).slice(-30);RELEASES[relId]=rel;persistRelease(rel);}catch(e){}
   }catch(err){
