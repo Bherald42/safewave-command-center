@@ -3378,7 +3378,7 @@ const OTA_NOTIFY='02f00000-0000-0000-0000-00000000ff02';  // device -> app (resp
 /* Flasher build tag — bump on EVERY flasher change. Shown in the Flash card UI
    and logged at the top of every run, so an operator can verify they're on the
    deployed build BEFORE flashing (stale cached builds burned three test runs). */
-const QC_FLASHER_BUILD='2026-08-22b';
+const QC_FLASHER_BUILD='2026-08-22c';
 const OTA_CMD={NVDS_TYPE:0,GET_BASE:1,READ_VER:2,PAGE_ERASE:3,WRITE_DATA:5,REBOOT:9};
 /* Dual-bank flash addresses — must match the app's OTAProtocol (FIRST/SECOND_ADDR). */
 const OTA_FIRST_ADDR=0x00000000, OTA_SECOND_ADDR=0x00014000;
@@ -3534,7 +3534,7 @@ async function qcOtaFlashStart(){
     // file[256:length]; a padded length/tail would diverge from the app's proven
     // reboot packet and can make the bootloader reject the image.
     const fw=buf;
-    qcOtaLog('Flasher build '+QC_FLASHER_BUILD+' (large-chunk windowed writes · restart-on-drop · post-reboot verify)');
+    qcOtaLog('Flasher build '+QC_FLASHER_BUILD+' (link-paced blast write · boot-CRC arbiter · post-reboot verify)');
     qcOtaSetProgress(0,'Pick your band in the chooser…');qcOtaLog('Image '+fw.length+' bytes · CRC '+('0x'+otaImageCrc(fw).toString(16).toUpperCase()));
     // Read the version baked into this .bin so we can (a) show it and (b) refuse to
     // waste a flash the band would never boot (dual-bank bootloader runs the higher
@@ -3666,20 +3666,31 @@ async function qcOtaFlashStart(){
     if(typeof wch.writeValueWithoutResponse!=='function')throw new Error('this browser lacks write-without-response — update Chrome/Edge, or flash from the mobile app');
     const CHUNK_LADDER=(SETTINGS_QC.otaChunk&&SETTINGS_QC.otaChunk>=16&&SETTINGS_QC.otaChunk<=471)?[SETTINGS_QC.otaChunk]:[471,235,171];
     let chunkIdx=0;
-    const WINDOW=(SETTINGS_QC.otaWindow&&SETTINGS_QC.otaWindow>=1&&SETTINGS_QC.otaWindow<=32)?SETTINGS_QC.otaWindow:8;
+    // Ack-paced writing is mathematically dead on this link: the band acks at
+    // most ~26-30 chunks/s (one notify per connection interval), so even
+    // MTU-max 235-byte chunks give ~6 KB/s — a 194 KB image needs ~32 s
+    // against a hard ~25-30 s link budget (measured: passes died at 95-173 KB,
+    // never finishing). So DON'T pace on acks: blast the writes back-to-back —
+    // each awaited writeValueWithoutResponse is paced by Windows' link-layer
+    // credit flow (the first-ever hardware run pushed the full image in ~3 s
+    // this way, with the band staying connected and answering afterward). The
+    // band's ack notifies are consumed opportunistically for the progress bar
+    // only. Integrity does NOT depend on pacing: flash keeps whatever was
+    // committed, the BOOTLOADER validates the whole-image CRC at reboot, and
+    // the post-reboot version read reports the truth — a bad pass fails SAFE
+    // (band keeps its current firmware) and we simply retry.
     let confirmedOff=0;      // bytes the BAND has acked (progress display only)
     let lastShownKB=-1;
     const writeAll=async()=>{
       let off=0;confirmedOff=0;
-      const sent=[];        // in-flight chunks: {addr, off, len}, oldest first
+      const sent=[];        // chunks awaiting ack: {addr, off, len}, oldest first
       const absorb=v=>{
         const a=notifyAddr(v);if(a===null)return;
         while(sent.length&&(sent[0].addr>>>0)<=(a>>>0)){confirmedOff=sent[0].off+sent[0].len;sent.shift();}
         const kb=Math.round(confirmedOff/1024);
-        if(kb!==lastShownKB){lastShownKB=kb;qcOtaSetProgress(15+confirmedOff/fw.length*80,'Writing '+kb+'/'+Math.round(fw.length/1024)+' KB (band-confirmed)…');}
+        if(kb!==lastShownKB){lastShownKB=kb;qcOtaSetProgress(15+off/fw.length*80,'Writing… band committed '+kb+'/'+Math.round(fw.length/1024)+' KB');}
       };
       while(off<fw.length){
-        if(sent.length>=WINDOW){absorb(await nextNotify(10000));continue;}
         const n=Math.min(CHUNK_LADDER[chunkIdx],fw.length-off);const addr=(base+off)>>>0;
         try{
           await wch.writeValueWithoutResponse(otaWriteDataPkt(addr,fw.subarray(off,off+n)));
@@ -3696,9 +3707,17 @@ async function qcOtaFlashStart(){
         }
         sent.push({addr:addr,off:off,len:n});
         off+=n;
-        while(nq.buf.length)absorb(nq.buf.shift());   // drain acks without blocking
+        while(nq.buf.length)absorb(nq.buf.shift());   // progress display only
       }
-      while(sent.length)absorb(await nextNotify(10000)); // tail drain: all acked
+      // All chunks are on the wire. Give the band a moment to drain its RX
+      // queue into flash, absorbing whatever acks arrive for the display —
+      // but do NOT require them: the boot-time CRC is the real arbiter.
+      qcOtaSetProgress(92,'All data sent — letting the band commit to flash…');
+      const settleEnd=Date.now()+4000;
+      while(Date.now()<settleEnd&&sent.length){
+        try{absorb(await nextNotify(Math.max(200,settleEnd-Date.now())));}catch(_){break;}
+      }
+      if(sent.length)qcOtaLog('Proceeding with '+Math.round(confirmedOff/1024)+' KB ack-confirmed (acks lag the data; the boot CRC decides)','amber');
     };
     let linkEvents=0;
     while(true){
@@ -3722,12 +3741,12 @@ async function qcOtaFlashStart(){
         ok(await send(otaCmd(OTA_CMD.GET_BASE),8000));
       }
     }
-    qcOtaLog('Image written and fully acked by the band ('+Math.round(fw.length/1024)+' KB'+(linkEvents?', '+linkEvents+' reconnect'+(linkEvents>1?'s':''):'')+')','good');
-    // Give the band a beat to finish flushing the last packets to flash before we
-    // ask it to CRC the whole image and reboot.
-    await sleep(600);
-    // 4) reboot + CRC
-    qcOtaSetProgress(96,'Verifying CRC & rebooting…');
+    qcOtaLog('Image written ('+Math.round(fw.length/1024)+' KB'+(linkEvents?', '+linkEvents+' restart'+(linkEvents>1?'s':''):'')+')','good');
+    // 4) reboot + CRC. The reboot command is STATELESS against flash: whatever
+    //    was committed stays committed, and the bootloader validates the
+    //    whole-image CRC itself. So if the link dropped after the blast, we can
+    //    reconnect and still issue the reboot — the flash contents don't care.
+    qcOtaSetProgress(96,'Asking the band to verify & reboot…');
     // 11-byte reboot packet — byte1 is the constant 0x0A the firmware expects
     //    (NOT the payload length 0x08 that otaCmd would emit). Carries firmware
     //    length + CRC32 so the bootloader validates and commits the new bank.
@@ -3735,7 +3754,21 @@ async function qcOtaFlashStart(){
     const rebootPl=new Uint8Array(11);
     rebootPl[0]=OTA_CMD.REBOOT;rebootPl[1]=0x0a;rebootPl[2]=0x00;
     rebootPl.set(otaU32(fw.length),3);rebootPl.set(otaU32(crc),7);
-    let rebootRsp=null;try{rebootRsp=await send(rebootPl,12000);}catch(e){/* band may reset before replying */}
+    let rebootRsp=null;
+    for(let ra=0;ra<2&&rebootRsp===null;ra++){
+      try{
+        if(!(dev.gatt&&dev.gatt.connected)){
+          qcOtaLog('Link dropped before the reboot command — reconnecting to send it','amber');
+          await openOta('Reconnecting');
+          ok(await send(otaCmd(OTA_CMD.GET_BASE),8000)); // re-arm the OTA session
+        }
+        rebootRsp=await send(rebootPl,12000);
+      }catch(e){
+        // No reply can mean the band reset immediately — that's fine; the
+        // post-reboot verify below settles it. Only retry if the link died.
+        if(dev.gatt&&dev.gatt.connected)break;
+      }
+    }
     const fromTxt=qcOta.curVer?(' (was on '+qcOta.curVer+')'):'';
     if(rebootRsp&&rebootRsp[0]!==0){
       // Explicit rejection: the band computed a CRC over its flash that doesn't
