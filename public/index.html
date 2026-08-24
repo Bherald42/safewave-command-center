@@ -3378,7 +3378,7 @@ const OTA_NOTIFY='02f00000-0000-0000-0000-00000000ff02';  // device -> app (resp
 /* Flasher build tag — bump on EVERY flasher change. Shown in the Flash card UI
    and logged at the top of every run, so an operator can verify they're on the
    deployed build BEFORE flashing (stale cached builds burned three test runs). */
-const QC_FLASHER_BUILD='2026-08-22g';
+const QC_FLASHER_BUILD='2026-08-22h';
 const OTA_CMD={NVDS_TYPE:0,GET_BASE:1,READ_VER:2,PAGE_ERASE:3,WRITE_DATA:5,REBOOT:9};
 /* Dual-bank flash addresses — must match the app's OTAProtocol (FIRST/SECOND_ADDR). */
 const OTA_FIRST_ADDR=0x00000000, OTA_SECOND_ADDR=0x00014000;
@@ -3459,6 +3459,7 @@ function qcOtaCard(){
     +(imgs.length?'<p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Firmware image</p><select class="field" id="qc-ota-rel">'+opts+'</select>'
         :'<div class="d" style="color:var(--faint)">Upload a firmware <code>.bin</code> to a release first (Releases tab).</div>')
     +'<button class="btn" style="margin-top:6px"'+((bleOK&&imgs.length)?'':' disabled')+' onclick="qcOtaFlashStart()">'+(bleOK?'Connect band &amp; flash':'Web Bluetooth needs desktop Chrome/Edge')+'</button>'
+    +'<button class="btn ghost" style="width:auto;margin-top:6px;padding:8px 14px"'+(bleOK?'':' disabled')+' onclick="qcBandDiag()">🔍 Band diagnostics</button>'
     +(qcOta.phase==='done'||qcOta.phase==='fail'?'<div class="d" style="margin-top:8px;color:var(--'+(qcOta.phase==='done'?'good':'amber')+')">'+esc(qcOta.note)+'</div>':'')
     +((qcOta.phase==='done'||qcOta.phase==='fail')&&qcOta.log&&qcOta.log.length?'<div class="row" style="margin-top:12px;align-items:center"><p class="d" style="font-weight:600;color:var(--text);margin:0">Flash log <span class="d" style="font-weight:400;color:var(--faint)">— from the last run, cleared when you flash again</span></p><span class="grow"></span><button class="btn" style="padding:3px 10px;font-size:12px" onclick="qcOtaSaveLog()">Save log</button></div><div id="qc-ota-log" class="qc-log" style="margin-top:6px">'+qcOtaLogHTML()+'</div>':'')
     +'</div>';
@@ -3480,6 +3481,70 @@ function qcOtaSaveLog(){
   }catch(e){toast('Could not save log: '+((e&&e.message)||e));}
 }
 function qcOtaSetProgress(pct,note){qcOta.pct=Math.max(0,Math.min(100,Math.round(pct)));if(note)qcOta.note=note;const b=document.getElementById('qc-ota-bar');if(b)b.style.width=qcOta.pct+'%';const p=document.getElementById('qc-ota-pct');if(p)p.textContent=qcOta.pct+'%';const ph=document.getElementById('qc-ota-phase');if(ph&&note)ph.textContent=note;}
+/* Band diagnostics — connects like the flasher and probes BOTH of the band's
+   "doors": the open (unbonded) OTA service, and the bond-protected app-side
+   characteristics. A band whose bond store is scrambled (the "connects to the
+   computer but not the phone" disease the 1.0.46 bond-wipe fixed) answers the
+   OTA reads fine and fails the protected reads with an authentication/
+   encryption error — that error IS the diagnosis. */
+async function qcBandDiag(){
+  if(qcOta.running)return;
+  if(!(typeof navigator!=='undefined'&&navigator.bluetooth)){toast('Web Bluetooth needs desktop Chrome/Edge');return}
+  qcOta={running:true,phase:'diag',pct:0,note:'Band diagnostics…',relId:null,dev:null,log:[],curVer:null};renderQC();
+  const BAND_SVC='0000fffe-0000-1000-8000-00805f9b34fb';
+  let dev,server;
+  try{
+    qcOtaLog('Band diagnostics — build '+QC_FLASHER_BUILD);
+    dev=await navigator.bluetooth.requestDevice({filters:[{services:[BAND_SVC]},{namePrefix:'Safewave'}],optionalServices:[OTA_SVC,BAND_SVC,'battery_service','device_information']});
+    qcOtaLog('Device name: "'+(dev.name||'(none)')+'"');
+    qcOtaLog('Browser device id: '+dev.id);
+    server=await dev.gatt.connect();await new Promise(r=>setTimeout(r,700));
+    qcOtaLog('Connected (unbonded link)','good');
+    // --- Door 1: OTA service (no bond required) ---
+    try{
+      const svc=await server.getPrimaryService(OTA_SVC);
+      const w=await svc.getCharacteristic(OTA_WRITE);
+      const n=await svc.getCharacteristic(OTA_NOTIFY);
+      await n.startNotifications();
+      let pend=null;
+      const onN=e=>{const v=new Uint8Array(e.target.value.buffer.slice(0));if(pend){const p=pend;pend=null;p(v);}};
+      n.addEventListener('characteristicvaluechanged',onN);
+      const q=(pkt)=>new Promise((res,rej)=>{const t=setTimeout(()=>{pend=null;rej(new Error('timeout'))},6000);pend=v=>{clearTimeout(t);res(v)};w.writeValueWithResponse(pkt).catch(er=>{clearTimeout(t);pend=null;rej(er)});});
+      const u32=v=>((v[4]|(v[5]<<8)|(v[6]<<16)|(v[7]<<24))>>>0);
+      const vr=await q(otaCmd(OTA_CMD.READ_VER));
+      qcOtaLog('OTA door: firmware '+(otaFmtVer(u32(vr))||('0x'+u32(vr).toString(16)))+' (raw '+u32(vr)+')','good');
+      const nt=await q(otaCmd(OTA_CMD.NVDS_TYPE));
+      qcOtaLog('OTA door: device type '+(((nt[4]&0x10)!==0)?'BK8010H (write-in-place)':'BK8010 (dual-bank)'),'good');
+      const gb=await q(otaCmd(OTA_CMD.GET_BASE));
+      qcOtaLog('OTA door: running bank 0x'+u32(gb).toString(16).toUpperCase(),'good');
+      try{n.removeEventListener('characteristicvaluechanged',onN);await n.stopNotifications();}catch(_){}
+    }catch(e){qcOtaLog('OTA door FAILED: '+((e&&e.message)||e),'amber');}
+    // --- Door 2: bond-protected app-side reads ---
+    let bondErr=null;
+    try{
+      const ms=await server.getPrimaryService(BAND_SVC);
+      const bc=await ms.getCharacteristic('47cd799a-8233-11ed-a1eb-0242ac120002');
+      const v=await bc.readValue();
+      qcOtaLog('App door: battery/status read OK: ['+Array.from(new Uint8Array(v.buffer)).join(',')+'] — bond NOT required by this characteristic','good');
+    }catch(e){bondErr=(e&&e.message)||String(e);qcOtaLog('App door read failed: '+bondErr,'amber');}
+    try{
+      const ds=await server.getPrimaryService('device_information');
+      const chars=await ds.getCharacteristics();
+      for(const c of chars){
+        try{const v=await c.readValue();qcOtaLog('Device info '+c.uuid.slice(4,8)+': "'+new TextDecoder().decode(v.buffer)+'"');}catch(e){qcOtaLog('Device info '+c.uuid.slice(4,8)+' read failed: '+((e&&e.message)||e),'amber');}
+      }
+    }catch(e){qcOtaLog('Device Information service: '+((e&&e.message)||e),'amber');}
+    if(bondErr&&/auth|encrypt|insufficient|security/i.test(bondErr)){
+      qcOtaLog('DIAGNOSIS: the open OTA door works but the bonded door demands authentication this link can’t complete — consistent with a scrambled bond store (the disease the 1.0.46+ first-boot bond wipe cures). Update this band via a phone it has never paired with, and the wipe fixes it for every phone.','amber');
+    }
+    qcOta.phase='done';qcOta.note='Diagnostics complete — use Save log to capture this.';qcOtaLog(qcOta.note,'good');qcOtaSetProgress(100,'Done');
+  }catch(err){
+    qcOta.phase='fail';qcOta.note='Diagnostics failed — '+((err&&err.message)||err);qcOtaLog(qcOta.note,'amber');
+  }finally{
+    try{if(dev&&dev.gatt&&dev.gatt.connected)dev.gatt.disconnect();}catch(_){}
+    qcOta.running=false;renderQC();
+  }
+}
 async function qcOtaFlashStart(){
   if(qcOta.running)return;
   const relId=(document.getElementById('qc-ota-rel')||{}).value;const rel=RELEASES[relId];const im=rel&&rel.image;
