@@ -5200,6 +5200,7 @@ function renderProjectDetail(body,pid){
     +'<div class="kv"><span>Timeline</span><b>'+(p.start?fmtDate(new Date(dayMs(p.start))):'—')+' → '+(p.end?fmtDate(new Date(dayMs(p.end))):'—')+'</b></div>'
     +(function(){const sp=projectSpend(pid);return (sp.budget||sp.spent)?'<div class="kv"><span>Dev cost</span><b>'+fmtMoney(sp.spent)+' spent'+(sp.budget?' / '+fmtMoney(sp.budget)+' budget':'')+'</b></div>':''})()
     +'<div class="progress" style="margin-top:10px"><i style="width:'+prog+'%"></i></div></div>';
+  html+=projAttachSection(p);
   html+='<div class="sec-head" style="margin-top:16px"><h2>Timeline</h2><span class="pill dim">Gantt</span></div>'+ganttHTML(p,ts);
   html+='<div class="sec-head" style="margin-top:16px"><h2>Tasks</h2><span class="pill '+(ts.length?'wave':'dim')+'">'+ts.length+'</span></div>';
   html+=ts.length?ts.slice().sort((a,b)=>(dayMs(a.due)||9e15)-(dayMs(b.due)||9e15)).map(t=>focusCard(t,taskScore(t))).join(''):'<div class="empty"><div class="d">No tasks yet — add the first one.</div></div>';
@@ -5263,6 +5264,49 @@ function saveProject(){if(buildReadOnly()){toast('Read-only — oversight access
   const savedId=pjEditId||BUILDP[0].id;persistProject(BUILDP.find(x=>x.id===savedId));
   closeSheets();renderBuild();toast('✓ Project saved')}
 function deleteProject(){if(buildReadOnly()){toast('Read-only — oversight access');return}if(!pjEditId)return;const id=pjEditId;BUILDP=BUILDP.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('build_projects').doc(id).delete().catch(()=>{});if(buildProj===id)buildProj=null;closeSheets();renderBuild();toast('Project deleted')}
+/* ---- project attachments: ongoing chats (links) + files ---- */
+function projAttachSection(p){
+  const at=p.attachments||[];
+  let h='<div class="sec-head" style="margin-top:16px"><h2>Chats &amp; files</h2><span class="pill '+(at.length?'wave':'dim')+'">'+at.length+'</span></div><div class="card">';
+  h+=at.length?at.map((a,i)=>{
+    const icon=a.kind==='file'?(/^image\//.test(a.type||'')?'🖼️':'📎'):(/claude\.(ai|com)|chat/i.test(a.url||'')?'💬':'🔗');
+    return '<div class="row"'+(i?' style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"':'')+'><div class="grow"><a href="'+esc(a.url)+'" target="_blank" rel="noopener" style="color:var(--wave);font-weight:600;text-decoration:none">'+icon+' '+esc(a.name||a.url)+'</a><div class="d" style="font-size:11.5px;margin-top:2px">'+esc([a.by,a.at].filter(Boolean).join(' · '))+'</div></div>'
+      +(buildReadOnly()?'':'<button class="btn ghost" style="padding:3px 10px;font-size:12px;flex:0 0 auto;width:auto" title="Remove" onclick="pjRemoveAttachment(\''+p.id+'\','+i+')">✕</button>')+'</div>';
+  }).join(''):'<div class="d" style="color:var(--faint)">Nothing attached yet — paste a link to an ongoing chat (claude.ai, docs…) or add a file.</div>';
+  if(!buildReadOnly()){
+    h+='<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap;align-items:stretch">'
+      +'<input class="field" id="pj-att-url" placeholder="Paste a chat or doc link (https://…)" style="flex:2 1 200px;margin:0" onkeydown="if(event.key===\'Enter\')pjAddLink(\''+p.id+'\')">'
+      +'<input class="field" id="pj-att-label" placeholder="Label (optional)" style="flex:1 1 120px;margin:0" onkeydown="if(event.key===\'Enter\')pjAddLink(\''+p.id+'\')">'
+      +'<button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="pjAddLink(\''+p.id+'\')">＋ Link</button>'
+      +'<label class="btn ghost" style="flex:0 0 auto;width:auto;cursor:pointer">📎 File<input type="file" id="pj-att-file" style="display:none" onchange="pjAttachFile(\''+p.id+'\')"></label></div>';
+  }
+  return h+'</div>';
+}
+function pjAttStamp(){return {by:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}}
+function pjAddLink(pid){if(buildReadOnly()){toast('Read-only — oversight access');return}
+  const p=BUILDP.find(x=>x.id===pid);if(!p)return;
+  const url=(document.getElementById('pj-att-url').value||'').trim();
+  const label=(document.getElementById('pj-att-label').value||'').trim();
+  if(!/^https?:\/\//i.test(url)){toast('Paste a full link starting with https://');return}
+  p.attachments=(p.attachments||[]).concat([Object.assign({kind:'link',url:url,name:label||url.replace(/^https?:\/\//,'').slice(0,60)},pjAttStamp())]);
+  persistProject(p);renderBuild();toast('✓ Link attached');
+}
+async function pjAttachFile(pid){if(buildReadOnly()){toast('Read-only — oversight access');return}
+  const p=BUILDP.find(x=>x.id===pid);if(!p)return;
+  const inp=document.getElementById('pj-att-file');const f=inp&&inp.files[0];if(!f)return;
+  try{toast('Uploading…');
+    if(!(typeof firebase!=='undefined'&&firebase.storage))throw new Error('storage-unavailable');
+    const path='build/projects/'+pid+'/'+Date.now()+'_'+f.name.replace(/[^\w.\-]/g,'_');
+    const ref=firebase.storage().ref(path);await ref.put(f);const url=await ref.getDownloadURL();
+    p.attachments=(p.attachments||[]).concat([Object.assign({kind:'file',url:url,name:f.name,type:f.type||''},pjAttStamp())]);
+    persistProject(p);renderBuild();toast('✓ File attached');
+  }catch(e){toast((e&&e.message)==='storage-unavailable'?'Turn on Firebase Storage to attach files':'Upload failed')}
+}
+function pjRemoveAttachment(pid,idx){if(buildReadOnly()){toast('Read-only — oversight access');return}
+  const p=BUILDP.find(x=>x.id===pid);if(!p||!(p.attachments||[])[idx])return;
+  const a=p.attachments[idx];if(!confirm('Remove "'+(a.name||a.url)+'" from this project?'))return;
+  p.attachments.splice(idx,1);persistProject(p);renderBuild();toast('Attachment removed');
+}
 /* ---- task create/edit with status, watchers, updates, files ---- */
 function projectOptions(sel){return '<option value="">— No project —</option><option value="support"'+(sel==='support'?' selected':'')+'>Customer support</option>'+BUILDP.map(p=>'<option value="'+p.id+'"'+(sel===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')}
 function watcherChips(sel){sel=sel||[];return (TEAM||[]).map(m=>'<button type="button" data-v="'+esc(m.name)+'" class="'+(sel.indexOf(m.name)>=0?'on':'')+'" onclick="this.classList.toggle(\'on\')">'+esc(m.name)+'</button>').join('')||'<span class="d" style="color:var(--faint)">No teammates yet</span>'}
