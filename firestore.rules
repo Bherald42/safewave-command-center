@@ -65,14 +65,20 @@ service cloud.firestore {
     }
 
     // Build tasks + projects — shared project board (assignee, dates, status).
-    // Everyone signed in can read; oversight accounts are read-only here.
+    // Everyone signed in can read. Oversight accounts are read-only on the
+    // board's STRUCTURE, but updates/feedback and attached chats & files are
+    // open to the whole team — commenting isn't editing the board.
     match /build_tasks/{id} {
       allow read: if signedIn();
-      allow write: if signedIn() && !isOversightEmail();
+      allow create, delete: if signedIn() && !isOversightEmail();
+      allow update: if signedIn() && (!isOversightEmail()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updates']));
     }
     match /build_projects/{id} {
       allow read: if signedIn();
-      allow write: if signedIn() && !isOversightEmail();
+      allow create, delete: if signedIn() && !isOversightEmail();
+      allow update: if signedIn() && (!isOversightEmail()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updates', 'attachments']));
     }
 
     // Inventory (locations) + order fulfillment records — shared ops.
