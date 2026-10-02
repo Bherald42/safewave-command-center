@@ -1158,7 +1158,7 @@ input[type=date]{color-scheme:dark}
       <div class="row" style="gap:8px">
         <label class="btn ghost" style="flex:0 0 auto;cursor:pointer">📎 Photo/file<input type="file" id="bt-update-file" style="display:none" onchange="btFilePicked()"></label>
         <span class="d" id="bt-file-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-        <button class="btn" onclick="addUpdate()">Post</button>
+        <button class="btn" id="bt-update-post" onclick="addUpdate()">Post</button>
       </div>
     </div>
     <button class="btn" style="margin-top:14px" id="bt-save" onclick="saveBuildTask()">Save task</button>
@@ -5201,6 +5201,7 @@ function renderProjectDetail(body,pid){
     +(function(){const sp=projectSpend(pid);return (sp.budget||sp.spent)?'<div class="kv"><span>Dev cost</span><b>'+fmtMoney(sp.spent)+' spent'+(sp.budget?' / '+fmtMoney(sp.budget)+' budget':'')+'</b></div>':''})()
     +'<div class="progress" style="margin-top:10px"><i style="width:'+prog+'%"></i></div></div>';
   html+=projAttachSection(p);
+  html+=projUpdatesSection(p);
   html+='<div class="sec-head" style="margin-top:16px"><h2>Timeline</h2><span class="pill dim">Gantt</span></div>'+ganttHTML(p,ts);
   html+='<div class="sec-head" style="margin-top:16px"><h2>Tasks</h2><span class="pill '+(ts.length?'wave':'dim')+'">'+ts.length+'</span></div>';
   html+=ts.length?ts.slice().sort((a,b)=>(dayMs(a.due)||9e15)-(dayMs(b.due)||9e15)).map(t=>focusCard(t,taskScore(t))).join(''):'<div class="empty"><div class="d">No tasks yet — add the first one.</div></div>';
@@ -5271,9 +5272,11 @@ function projAttachSection(p){
   h+=at.length?at.map((a,i)=>{
     const icon=a.kind==='file'?(/^image\//.test(a.type||'')?'🖼️':'📎'):(/claude\.(ai|com)|chat/i.test(a.url||'')?'💬':'🔗');
     return '<div class="row"'+(i?' style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"':'')+'><div class="grow"><a href="'+esc(a.url)+'" target="_blank" rel="noopener" style="color:var(--wave);font-weight:600;text-decoration:none">'+icon+' '+esc(a.name||a.url)+'</a><div class="d" style="font-size:11.5px;margin-top:2px">'+esc([a.by,a.at].filter(Boolean).join(' · '))+'</div></div>'
-      +(buildReadOnly()?'':'<button class="btn ghost" style="padding:3px 10px;font-size:12px;flex:0 0 auto;width:auto" title="Remove" onclick="pjRemoveAttachment(\''+p.id+'\','+i+')">✕</button>')+'</div>';
+      +'<button class="btn ghost" style="padding:3px 10px;font-size:12px;flex:0 0 auto;width:auto" title="Remove" onclick="pjRemoveAttachment(\''+p.id+'\','+i+')">✕</button></div>';
   }).join(''):'<div class="d" style="color:var(--faint)">Nothing attached yet — paste a link to an ongoing chat (claude.ai, docs…) or add a file.</div>';
-  if(!buildReadOnly()){
+  // Attaching is open to EVERYONE on the team (oversight included) — the
+  // rules only protect the project's structure, not its chats & files.
+  {
     h+='<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap;align-items:stretch">'
       +'<input class="field" id="pj-att-url" placeholder="Paste a chat or doc link (https://…)" style="flex:2 1 200px;margin:0" onkeydown="if(event.key===\'Enter\')pjAddLink(\''+p.id+'\')">'
       +'<input class="field" id="pj-att-label" placeholder="Label (optional)" style="flex:1 1 120px;margin:0" onkeydown="if(event.key===\'Enter\')pjAddLink(\''+p.id+'\')">'
@@ -5283,7 +5286,7 @@ function projAttachSection(p){
   return h+'</div>';
 }
 function pjAttStamp(){return {by:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}}
-function pjAddLink(pid){if(buildReadOnly()){toast('Read-only — oversight access');return}
+function pjAddLink(pid){
   const p=BUILDP.find(x=>x.id===pid);if(!p)return;
   const url=(document.getElementById('pj-att-url').value||'').trim();
   const label=(document.getElementById('pj-att-label').value||'').trim();
@@ -5291,7 +5294,7 @@ function pjAddLink(pid){if(buildReadOnly()){toast('Read-only — oversight acces
   p.attachments=(p.attachments||[]).concat([Object.assign({kind:'link',url:url,name:label||url.replace(/^https?:\/\//,'').slice(0,60)},pjAttStamp())]);
   persistProject(p);renderBuild();toast('✓ Link attached');
 }
-async function pjAttachFile(pid){if(buildReadOnly()){toast('Read-only — oversight access');return}
+async function pjAttachFile(pid){
   const p=BUILDP.find(x=>x.id===pid);if(!p)return;
   const inp=document.getElementById('pj-att-file');const f=inp&&inp.files[0];if(!f)return;
   try{toast('Uploading…');
@@ -5302,10 +5305,51 @@ async function pjAttachFile(pid){if(buildReadOnly()){toast('Read-only — oversi
     persistProject(p);renderBuild();toast('✓ File attached');
   }catch(e){toast((e&&e.message)==='storage-unavailable'?'Turn on Firebase Storage to attach files':'Upload failed')}
 }
-function pjRemoveAttachment(pid,idx){if(buildReadOnly()){toast('Read-only — oversight access');return}
+function pjRemoveAttachment(pid,idx){
   const p=BUILDP.find(x=>x.id===pid);if(!p||!(p.attachments||[])[idx])return;
   const a=p.attachments[idx];if(!confirm('Remove "'+(a.name||a.url)+'" from this project?'))return;
   p.attachments.splice(idx,1);persistProject(p);renderBuild();toast('Attachment removed');
+}
+/* ---- project updates & feedback: open to the WHOLE team (oversight too).
+   Same shape as task updates ({by,at,text,files}) so the rendering matches;
+   files upload to build/projects/<pid>/. The Firestore rules let every
+   signed-in member write the updates/attachments fields even when the rest
+   of the project is read-only for them. ---- */
+let pjUpdFile=null;
+function projUpdatesSection(p){
+  const us=p.updates||[];
+  let h='<div class="sec-head" style="margin-top:16px"><h2>Updates &amp; feedback</h2><span class="pill '+(us.length?'wave':'dim')+'">'+us.length+'</span></div><div class="card">';
+  h+=us.length?us.slice().reverse().map(u=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([u.by,u.at].filter(Boolean).join(' · '))+'</div>'+(u.text?esc(u.text):'')+((u.files||[]).length?'<div class="upd-files">'+u.files.map(f=>/^image\//.test(f.type)?'<a href="'+esc(f.url)+'" target="_blank" rel="noopener"><img src="'+esc(f.url)+'" alt="'+esc(f.name)+'"></a>':'<a href="'+esc(f.url)+'" target="_blank" rel="noopener" class="upd-file">📎 '+esc(f.name)+'</a>').join('')+'</div>':'')+'</div>').join('')
+    :'<div class="d" style="color:var(--faint)">No updates yet — post feedback, test results, screenshots, anything the team should see.</div>';
+  h+='<textarea class="field" id="pj-upd-text" placeholder="Post feedback or an update for this project…" style="min-height:56px;resize:vertical;font-family:var(--font-b);margin-top:10px"></textarea>'
+    +'<div class="row" style="gap:8px;margin-top:6px">'
+    +'<label class="btn ghost" style="flex:0 0 auto;width:auto;cursor:pointer">📎 Photo/file<input type="file" id="pj-upd-file" style="display:none" onchange="pjUpdFilePicked()"></label>'
+    +'<span class="d" id="pj-upd-fname" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
+    +'<button class="btn" style="flex:0 0 auto;width:auto" onclick="pjPostUpdate(\''+p.id+'\')">Post</button></div>';
+  return h+'</div>';
+}
+function pjUpdFilePicked(){const f=document.getElementById('pj-upd-file').files[0];pjUpdFile=f||null;document.getElementById('pj-upd-fname').textContent=f?f.name:''}
+async function pjPostUpdate(pid){
+  const p=BUILDP.find(x=>x.id===pid);if(!p)return;
+  const text=(document.getElementById('pj-upd-text').value||'').trim();
+  if(!text&&!pjUpdFile){toast('Write an update or attach a file');return}
+  let files=[];
+  if(pjUpdFile){try{toast('Uploading…');
+    if(!(typeof firebase!=='undefined'&&firebase.storage))throw new Error('storage-unavailable');
+    const path='build/projects/'+pid+'/'+Date.now()+'_'+pjUpdFile.name.replace(/[^\w.\-]/g,'_');
+    const ref=firebase.storage().ref(path);await ref.put(pjUpdFile);const url=await ref.getDownloadURL();
+    files=[{name:pjUpdFile.name,url:url,type:pjUpdFile.type||''}];
+  }catch(e){toast((e&&e.message)==='storage-unavailable'?'Turn on Firebase Storage to attach files':'Upload failed');return}}
+  p.updates=(p.updates||[]).concat([Object.assign({text:text,files:files},pjAttStamp())]);
+  persistProject(p);pjUpdFile=null;
+  renderBuild();
+  // Let the people living in this project know: owner + everyone watching
+  // any of its tasks (deduped, never yourself).
+  const me=(CURRENT_USER&&CURRENT_USER.name)||'';
+  const who={};if(p.owner)who[p.owner]=1;
+  BUILDT.filter(t=>t.projectId===pid).forEach(t=>(t.watchers||[]).forEach(w=>who[w]=1));
+  Object.keys(who).filter(w=>w&&w!==me).forEach(w=>notifyAssignee(w,'Update on '+p.name,(text||'New file attached').slice(0,80),'s-build'));
+  toast('✓ Update posted');
 }
 /* ---- task create/edit with status, watchers, updates, files ---- */
 function projectOptions(sel){return '<option value="">— No project —</option><option value="support"'+(sel==='support'?' selected':'')+'>Customer support</option>'+BUILDP.map(p=>'<option value="'+p.id+'"'+(sel===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')}
@@ -5339,17 +5383,20 @@ function buildApplySheetRO(sheetId,saveId,delId){
   const ro=buildReadOnly();const s=document.getElementById(sheetId);if(!s)return;
   s.querySelectorAll('input,textarea,select').forEach(el=>{el.disabled=ro});
   s.querySelectorAll('.rolepick button').forEach(el=>{el.disabled=ro});
+  // Updates/feedback stay OPEN for oversight — commenting isn't editing the
+  // board. Re-enable the composer the loop above just disabled.
+  ['bt-update-text','bt-update-file'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=false});
   const sv=document.getElementById(saveId);if(sv)sv.style.display=ro?'none':'';
   if(ro){const dl=document.getElementById(delId);if(dl)dl.style.display='none';}
   let note=s.querySelector('.ro-note');
-  if(ro&&!note){note=document.createElement('div');note.className='note ro-note';note.style.margin='0 0 10px';note.innerHTML='👁 <b>Read-only</b> — oversight access. You can view the build board but not change it.';const body=s.querySelector('.sheet-body');const grab=body.querySelector('.grab');if(grab&&grab.nextSibling)body.insertBefore(note,grab.nextSibling);else body.appendChild(note);}
+  if(ro&&!note){note=document.createElement('div');note.className='note ro-note';note.style.margin='0 0 10px';note.innerHTML='👁 <b>Read-only</b> — oversight access. You can view the board and post updates, but not change its structure.';const body=s.querySelector('.sheet-body');const grab=body.querySelector('.grab');if(grab&&grab.nextSibling)body.insertBefore(note,grab.nextSibling);else body.appendChild(note);}
   if(note)note.style.display=ro?'':'none';
 }
 function renderUpdates(t){const el=document.getElementById('bt-updates');if(!el)return;const us=(t.updates||[]);
   el.innerHTML=us.length?us.slice().reverse().map(u=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([u.by,u.at].filter(Boolean).join(' · '))+'</div>'+(u.text?esc(u.text):'')+((u.files||[]).length?'<div class="upd-files">'+u.files.map(f=>/^image\//.test(f.type)?'<a href="'+esc(f.url)+'" target="_blank" rel="noopener"><img src="'+esc(f.url)+'" alt="'+esc(f.name)+'"></a>':'<a href="'+esc(f.url)+'" target="_blank" rel="noopener" class="upd-file">📎 '+esc(f.name)+'</a>').join('')+'</div>':'')+'</div>').join(''):'<div class="d" style="color:var(--faint)">No updates yet.</div>';
 }
 function btFilePicked(){const f=document.getElementById('bt-update-file').files[0];btFile=f||null;document.getElementById('bt-file-name').textContent=f?f.name:''}
-async function addUpdate(){if(buildReadOnly()){toast('Read-only — oversight access');return}if(!btEditId){toast('Save the task first');return}const t=BUILDT.find(x=>x.id===btEditId);if(!t)return;
+async function addUpdate(){if(!btEditId){toast('Save the task first');return}const t=BUILDT.find(x=>x.id===btEditId);if(!t)return;
   const text=document.getElementById('bt-update-text').value.trim();if(!text&&!btFile){toast('Write an update or attach a file');return}
   let files=[];
   if(btFile){try{toast('Uploading…');files=[await uploadBuildFile(t.id,btFile)]}catch(e){toast((e&&e.message)==='storage-unavailable'?'Turn on Firebase Storage to attach files':'Upload failed');return}}
