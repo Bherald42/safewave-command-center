@@ -1054,7 +1054,7 @@ input[type=date]{color-scheme:dark}
     <input type="hidden" id="rel-id">
     <p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Product</p>
     <div class="rolepick" id="rel-product">
-      <button data-v="firmware" class="on" onclick="setTimeout(relDraftVis,0)">Band firmware</button><button data-v="app" onclick="setTimeout(relDraftVis,0)">Mobile app</button>
+      <button data-v="firmware" class="on" onclick="setTimeout(relDraftVis,0)">Band firmware</button><button data-v="app_consumer" onclick="setTimeout(relDraftVis,0)">Safewave (iOS)</button><button data-v="app_business" onclick="setTimeout(relDraftVis,0)">For Business (iOS)</button><button data-v="app_android" onclick="setTimeout(relDraftVis,0)">Google Play</button>
     </div>
     <div class="row" style="gap:8px;margin-top:12px">
       <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Version</p><input class="field" id="rel-version" placeholder="e.g. 1.4.0" style="margin:0"></div>
@@ -1066,6 +1066,15 @@ input[type=date]{color-scheme:dark}
       <button class="btn ghost" id="rel-draftbtn" style="width:auto;padding:5px 10px;font-size:12px;white-space:nowrap" onclick="draftReleaseNotesFromGitHub()">✨ Draft from GitHub</button>
     </div>
     <textarea class="field" id="rel-notes" placeholder="• Fixed BLE reconnect after sleep&#10;• Stronger alert vibration profile&#10;• Battery reporting accuracy" style="min-height:96px;resize:vertical;font-family:var(--font-b)"></textarea>
+    <div class="row" style="gap:8px;margin-top:12px">
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Build # <span style="color:var(--faint);font-weight:400">(TestFlight / bin)</span></p><input class="field" id="rel-build" placeholder="e.g. 15" style="margin:0"></div>
+    </div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Links <span style="color:var(--faint);font-weight:400">(optional)</span></p>
+    <input class="field" id="rel-link-tf" placeholder="TestFlight / Play Console link" style="margin:0 0 8px">
+    <input class="field" id="rel-link-eas" placeholder="EAS / CI build link" style="margin:0 0 8px">
+    <input class="field" id="rel-link-commit" placeholder="GitHub commit / tag link" style="margin:0">
+    <p class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Internal notes <span style="color:var(--faint);font-weight:400">(team-only — not user-facing)</span></p>
+    <textarea class="field" id="rel-internal" placeholder="Known risks, migration notes, rollback plan…" style="min-height:64px;resize:vertical;font-family:var(--font-b)"></textarea>
     <button class="btn" style="margin-top:12px" onclick="saveRelease()">Save release</button>
     <button class="btn ghost" id="rel-del" onclick="deleteRelease()" style="margin-top:8px;display:none">Delete</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
@@ -1082,6 +1091,17 @@ input[type=date]{color-scheme:dark}
     <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Event log</p>
     <div id="qcrun-log" class="qc-log"></div>
     <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-qc-attach" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">ATTACH EVIDENCE</span>
+    <h1 style="font-size:19px;margin:11px 0 4px">Attach this run to a release</h1>
+    <p class="d" style="margin:0 0 8px">The full log becomes permanent QC evidence on the release you pick — it shows in the release history and in launch reports.</p>
+    <div id="qc-attach-list"></div>
+    <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Cancel</button>
   </div>
 </div>
 
@@ -2138,10 +2158,21 @@ async function runComplyCheck(){
    monitor; a fully-working Simulated band lets the whole flow run without
    hardware. A release can't be marked Released without a passing soak run
    (super-admin override is logged). Amber = fail/disconnect — never red. */
-const QC_PRODUCTS={firmware:'Band firmware',app:'Mobile app'};
+const QC_PRODUCTS={firmware:'Band firmware',app_consumer:'Safewave (iOS)',app_business:'Safewave for Business (iOS)',app_android:'Safewave (Google Play)'};
+const QC_LANES=['firmware','app_consumer','app_business','app_android'];
+/* Legacy releases were saved with product:'app' before the consumer/business/
+   Android split — read them as the consumer lane. */
+function qcProd(p){return p==='app'?'app_consumer':(p||'firmware')}
+const QC_LAUNCHSTATUS={planning:{label:'Planning',pill:'dim'},ready:{label:'Ready ✓',pill:'good'},launched:{label:'Launched 🚀',pill:'good'},aborted:{label:'Aborted',pill:'amber'}};
+/* Enterprise QA checklists (ISO 29119-shaped: plan → cases → logs → report).
+   Super admin can override per-lane via settings/qc.checklists.<lane> = [labels]. */
+const QC_APP_CHECKLIST=['Fresh install → onboarding → pair band','Upgrade-in-place from previous build (data survives)','Login & signup incl. Apple / Google sign-in','Alarm end-to-end with phone locked','Aware: listen → detect → confirm → band buzz','Notifications end-to-end (band buzz on push)','OTA screen: current band happy path','OTA screen: legacy 0.x band path (acked writes)','Airplane-mode / offline behavior sane','Splash, icons & branding correct for this variant'];
+const QC_DEFAULT_CHECKLISTS={
+  firmware:['OTA update from previous production version','OTA from oldest fleet version (0.0.x) — acked writes','OTA resumes after mid-write interruption','Alarm fires with phone locked & app killed','Reconnects after 10 min out of range','8-hour battery soak (simulator or bench)','LED heartbeat visible — no solid-on drain','Life-safety buzz: continuous max until button press'],
+  app_consumer:QC_APP_CHECKLIST,app_business:QC_APP_CHECKLIST,app_android:QC_APP_CHECKLIST};
 const QC_CHAN={dev:{label:'Dev',pill:'dim'},beta:{label:'Beta',pill:'wave'},prod:{label:'Production',pill:'wave'}};
 const QC_RELSTATUS={draft:{label:'Draft',pill:'dim'},testing:{label:'In QC',pill:'wave'},passed:{label:'Passed QC',pill:'good'},failed:{label:'Failed QC',pill:'amber'},released:{label:'Released ✓',pill:'good'}};
-let RELEASES={}, QCRUNS={}, SETTINGS_QC={}, qcUnsubR=null, qcUnsubRun=null, qcTab='releases', qcRelView=null, qcProdFilter='all';
+let RELEASES={}, QCRUNS={}, LAUNCHES={}, SETTINGS_QC={}, qcUnsubR=null, qcUnsubRun=null, qcUnsubL=null, qcTab='launches', qcRelView=null, qcLaunchView=null, qcProdFilter='all';
 let qcBench={running:false,run:null,dev:null,tickTimer:null,alertTimer:null,connected:false,connectedMs:0,lastTickAt:0,t0:0,downSince:0,selRel:null};
 let qcSerial={port:null,reader:null,reading:false};
 let qcFwUploading=false, qcFwPickTarget=null;
@@ -2156,11 +2187,17 @@ function subscribeQC(){
     RELEASES={};qs.forEach(d=>RELEASES[d.id]=Object.assign({id:d.id},d.data()));
     const scr=document.getElementById('s-qc');if(scr&&scr.classList.contains('on')){if(!qcBench.running)renderQC()}else refreshPulse();
   },e=>{});}catch(e){}
+  if(qcUnsubL){try{qcUnsubL()}catch(e){}}
+  try{qcUnsubL=firebase.firestore().collection('launches').onSnapshot(qs=>{
+    LAUNCHES={};qs.forEach(d=>LAUNCHES[d.id]=Object.assign({id:d.id},d.data()));
+    if(ACTIVE==='s-qc')renderQC();
+  })}catch(e){}
   try{qcUnsubRun=firebase.firestore().collection('qc_runs').orderBy('startedAt','desc').limit(200).onSnapshot(qs=>{
     QCRUNS={};qs.forEach(d=>QCRUNS[d.id]=Object.assign({id:d.id},d.data()));
     const scr=document.getElementById('s-qc');if(scr&&scr.classList.contains('on')&&!qcBench.running)renderQC();
   },e=>{});}catch(e){}
 }
+function persistLaunch(l){if(hasFirestore())firebase.firestore().collection('launches').doc(l.id).set(l,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
 function persistRelease(r){if(hasFirestore())firebase.firestore().collection('releases').doc(r.id).set(r,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
 function persistRun(run){if(hasFirestore())firebase.firestore().collection('qc_runs').doc(run.id).set(run,{merge:true}).catch(e=>{})}
 function qcThresholds(){return {minDurationMin:SETTINGS_QC.minDurationMin||30,alertSec:SETTINGS_QC.alertSec||20,maxDisconnects:(SETTINGS_QC.maxDisconnects!=null?SETTINGS_QC.maxDisconnects:0),minDeliveryPct:SETTINGS_QC.minDeliveryPct||99}}
@@ -2170,10 +2207,10 @@ function qcVerdictChip(v){const m=({pass:['good','PASS'],fail:['amber','FAIL'],r
 function releaseRuns(id){return Object.values(QCRUNS).filter(x=>x.releaseId===id).sort((a,b)=>(b.startedAt||'').localeCompare(a.startedAt||''))}
 function releasePassed(r){return Object.values(QCRUNS).some(x=>x.releaseId===r.id&&x.version===r.version&&x.verdict==='pass')}
 function qcNotifyLeads(title,body){if(typeof notifyAll==='function')notifyAll(title,body,'s-qc')}
-function setQcTab(t){qcTab=t;qcRelView=null;renderQC()}
+function setQcTab(t){qcTab=t;qcRelView=null;qcLaunchView=null;renderQC()}
 function qcSetProd(p){qcProdFilter=p;renderQC()}
 function renderQC(){
-  const tabs=[['releases','Releases'],['sim','Device simulator'],['flash','Flash & monitor']];
+  const tabs=[['launches','Launches'],['releases','Releases'],['sim','Device simulator'],['flash','Flash & monitor']];
   const tb=document.getElementById('qc-tabs');
   if(tb)tb.innerHTML=tabs.map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
   const n=Object.keys(RELEASES).length;
@@ -2184,13 +2221,14 @@ function renderQC(){
   if(qcRelView){renderQcReleaseDetail(body);return}
   if(qcTab==='sim'){body.innerHTML=qcSimView();simAfterRender();}
   else if(qcTab==='flash')body.innerHTML=qcFlashView();
+  else if(qcTab==='launches')body.innerHTML=qcLaunchView?qcLaunchDetailView():qcLaunchesView();
   else body.innerHTML=qcReleasesView();
 }
 function qcReleasesView(){
-  const prods=[['all','All'],['firmware','Firmware'],['app','App']];
+  const prods=[['all','All'],['firmware','Firmware'],['app_consumer','Consumer'],['app_business','Business'],['app_android','Android']];
   const filt='<div class="row" style="gap:8px;margin-bottom:12px;align-items:center"><div class="chips" style="margin:0">'+prods.map(p=>'<button class="chip'+(qcProdFilter===p[0]?' on':'')+'" onclick="qcSetProd('+ocjson(p[0])+')">'+p[1]+'</button>').join('')+'</div><div class="grow"></div><button class="btn" style="width:auto;white-space:nowrap" onclick="openRelease()">＋ New release</button></div>';
   let list=Object.values(RELEASES);
-  if(qcProdFilter!=='all')list=list.filter(r=>r.product===qcProdFilter);
+  if(qcProdFilter!=='all')list=list.filter(r=>qcProd(r.product)===qcProdFilter);
   list.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   const body=list.length?list.map(qcReleaseCard).join(''):'<div class="empty"><div class="ico">🚀</div><div class="t">No releases yet</div><div class="d">Create a firmware or app release, write the notes, then soak-test it on a band before it ships.</div></div>';
   return filt+body;
@@ -2199,7 +2237,7 @@ function qcReleaseCard(r){
   const st=QC_RELSTATUS[r.status]||QC_RELSTATUS.draft;const passed=releasePassed(r);const last=releaseRuns(r.id)[0];
   const notesPrev=(r.notes||'').split('\n').map(l=>l.trim()).filter(Boolean).slice(0,2).map(esc).join('<br>');
   return '<div class="card tap" tabindex="0" onclick="openQcRelease('+ocjson(r.id)+')">'
-    +'<div class="row"><div class="grow"><div class="t">'+esc((QC_PRODUCTS[r.product]||r.product)+' '+(r.version||''))+' <span class="pill '+((QC_CHAN[r.channel]||{}).pill||'dim')+'" style="font-size:10px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+'</span></div>'
+    +'<div class="row"><div class="grow"><div class="t">'+esc((QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+(r.version||''))+' <span class="pill '+((QC_CHAN[r.channel]||{}).pill||'dim')+'" style="font-size:10px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+'</span></div>'
     +(notesPrev?'<div class="d" style="margin-top:4px">'+notesPrev+'</div>':'<div class="d" style="color:var(--faint)">No notes yet</div>')+'</div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
     +'<div class="d" style="margin-top:8px;color:var(--faint)">'+(last?('Last soak: '+qcVerdictChip(last.verdict)+' · '+fmtDur(last.durationSec||0)+' · '+(last.disconnects||0)+' disconnect'+(last.disconnects===1?'':'s')):'Not soak-tested yet')+(passed||r.status==='released'?'':' · <span style="color:var(--amber)">release blocked</span>')+'</div>'
     +'</div>';
@@ -2218,11 +2256,14 @@ function renderQcReleaseDetail(body){
   const notes=(r.notes||'').trim();
   body.innerHTML=''
     +'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;margin-bottom:12px" onclick="qcBackReleases()">← All releases</button>'
-    +'<div class="row" style="align-items:flex-start"><div class="grow"><h2 style="margin:0;font-size:20px">'+esc((QC_PRODUCTS[r.product]||r.product)+' '+(r.version||''))+'</h2><div class="d" style="margin-top:2px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+' channel · created '+qcTime(r.createdAt)+' · '+esc(r.createdBy||'')+'</div></div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
+    +'<div class="row" style="align-items:flex-start"><div class="grow"><h2 style="margin:0;font-size:20px">'+esc((QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+(r.version||''))+'</h2><div class="d" style="margin-top:2px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+' channel · created '+qcTime(r.createdAt)+' · '+esc(r.createdBy||'')+'</div></div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
     +'<div class="row" style="gap:8px;margin:12px 0"><button class="btn ghost" style="flex:1" onclick="openRelease('+ocjson(r.id)+')">Edit / notes</button><button class="btn ghost" style="flex:1" onclick="qcStartFromRelease('+ocjson(r.id)+')">Soak test</button></div>'
     +gate
     +(r.product==='firmware'?qcImageCard(r):'')
-    +'<p class="eyebrow" style="margin:16px 0 8px">Release notes</p><div class="card"><div class="d" style="white-space:pre-wrap;color:var(--text)">'+(notes?esc(notes):'<span style="color:var(--faint)">No notes yet — add what changed.</span>')+'</div></div>'
+    +qcChecklistCard(r)
+    +'<p class="eyebrow" style="margin:16px 0 8px">Release notes'+(notes?'':' <span class="pill amber" style="font-size:10px">MISSING</span>')+'</p><div class="card"><div class="d" style="white-space:pre-wrap;color:var(--text)">'+(notes?esc(notes):'<span style="color:var(--faint)">No notes yet — a launch is blocked until every release has user-facing notes.</span>')+'</div>'
+    +((r.buildNumber||r.links&&(r.links.testflight||r.links.easBuild||r.links.commit))?'<div class="d" style="margin-top:8px;color:var(--faint)">'+(r.buildNumber?('Build '+esc(r.buildNumber)+' · '):'')+[['testflight','TestFlight'],['easBuild','EAS build'],['commit','Commit']].map(function(x){var u=r.links&&r.links[x[0]];return u?'<a href="'+esc(u)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+x[1]+'</a>':''}).filter(Boolean).join(' · ')+'</div>':'')
+    +((r.internalNotes||'').trim()?'<div class="note" style="margin-top:8px">Internal: '+esc(r.internalNotes)+'</div>':'')+'</div>'
     +'<p class="eyebrow" style="margin:16px 0 8px">Soak test history <span class="pill dim" style="font-size:10px">'+runs.length+'</span></p>'
     +(runs.length?runs.map(qcRunRow).join(''):'<div class="empty"><div class="d">No soak runs yet.</div></div>');
 }
@@ -2269,19 +2310,273 @@ async function qcOnFirmwareFile(input){
   qcFwUploading=false;renderQC();
 }
 function qcRunRow(run){
+  if(run.kind==='custom')return '<div class="card tap" tabindex="0" onclick="openQcRun('+ocjson(run.id)+')"><div class="row"><div class="grow"><div class="t">'+qcVerdictChip(run.verdict)+' '+esc(run.title||'Custom test')+'</div><div class="d" style="margin-top:4px">'+esc(run.device||'device')+' · '+(run.passed||0)+' passed · '+(run.failed||0)+' failed · by '+esc(run.by||'')+'</div></div><div class="d" style="color:var(--faint);white-space:nowrap">'+qcTime(run.startedAt)+'</div></div></div>';
   return '<div class="card tap" tabindex="0" onclick="openQcRun('+ocjson(run.id)+')"><div class="row"><div class="grow"><div class="t">'+qcVerdictChip(run.verdict)+' '+fmtDur(run.durationSec||0)+' soak</div><div class="d" style="margin-top:4px">'+esc(run.device||'device')+' · '+(run.alertsAcked||0)+'/'+(run.alertsSent||0)+' alerts · '+(run.disconnects||0)+' disconnect'+(run.disconnects===1?'':'s')+(run.uptimePct!=null?' · '+run.uptimePct+'% uptime':'')+'</div></div><div class="d" style="color:var(--faint);white-space:nowrap">'+qcTime(run.startedAt)+'</div></div></div>';
 }
 function markReleased(id){const r=RELEASES[id];if(!r)return;if(!releasePassed(r)){toast('Blocked — needs a passing soak test first');return}
   r.status='released';r.releasedAt=new Date().toISOString();r.releasedBy=(CURRENT_USER&&CURRENT_USER.name)||'';RELEASES[id]=r;persistRelease(r);renderQC();
-  toast('🚀 '+(QC_PRODUCTS[r.product]||r.product)+' '+r.version+' released');
-  qcNotifyLeads('Release shipped',(QC_PRODUCTS[r.product]||r.product)+' '+r.version+' released after passing QC');
+  toast('🚀 '+(QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+r.version+' released');
+  qcNotifyLeads('Release shipped',(QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+r.version+' released after passing QC');
 }
 function overrideRelease(id){const r=RELEASES[id];if(!r)return;if(!isSuperAdmin()){toast('Super admin only');return}
   const reason=prompt('Releasing WITHOUT a passing soak test — this is logged. Why?');if(!reason||!reason.trim())return;
   r.status='released';r.releasedAt=new Date().toISOString();r.releasedBy=(CURRENT_USER&&CURRENT_USER.name)||'';r.overrideReason=reason.trim();r.overrideBy=(CURRENT_USER&&CURRENT_USER.name)||'';RELEASES[id]=r;persistRelease(r);renderQC();
   toast('Released with override — logged');
-  qcNotifyLeads('Release override',(QC_PRODUCTS[r.product]||r.product)+' '+r.version+' released WITHOUT passing QC by '+((CURRENT_USER&&CURRENT_USER.name)||'')+' — '+reason.trim());
+  qcNotifyLeads('Release override',(QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+r.version+' released WITHOUT passing QC by '+((CURRENT_USER&&CURRENT_USER.name)||'')+' — '+reason.trim());
 }
+/* ================= QA CHECKLISTS (per release) ================= */
+/* ISO 29119-shaped: the checklist is the test-case list, each tick a log
+   entry (who/when/state/note), and the launch report is the completion
+   report. Defaults per lane above; settings/qc.checklists overrides. */
+function relChecklist(r){
+  if(r.checklist&&r.checklist.length)return r.checklist;
+  const lane=qcProd(r.product);
+  const src=(SETTINGS_QC.checklists&&SETTINGS_QC.checklists[lane])||QC_DEFAULT_CHECKLISTS[lane]||[];
+  return src.map((label,i)=>({id:'c'+i,label:label,state:'open',by:'',at:'',note:''}));
+}
+function checklistStats(r){const c=relChecklist(r);const done=c.filter(i=>i.state!=='open').length;const fails=c.filter(i=>i.state==='fail').length;
+  return {total:c.length,done:done,fails:fails,complete:c.length>0&&done===c.length&&fails===0}}
+function qcCycleCheck(relId,itemId){
+  if(!canQC()){toast('Tech / leadership only');return}
+  const r=RELEASES[relId];if(!r)return;
+  r.checklist=relChecklist(r).map(i=>Object.assign({},i));
+  const it=r.checklist.find(i=>i.id===itemId);if(!it)return;
+  const order=['open','pass','fail','na'];
+  it.state=order[(order.indexOf(it.state)+1)%order.length];
+  it.by=(CURRENT_USER&&CURRENT_USER.name)||'';it.at=new Date().toISOString();
+  if(it.state==='fail'){const n=prompt('What failed? (goes in the report)');it.note=(n||'').trim()}
+  if(it.state==='pass'||it.state==='na')it.note=it.note||'';
+  RELEASES[relId]=r;persistRelease(r);renderQC();
+}
+function qcCheckGlyph(st){return st==='pass'?'<span style="color:var(--good)">✓</span>':st==='fail'?'<span style="color:var(--amber)">✕</span>':st==='na'?'<span style="color:var(--faint)">Ø</span>':'<span style="color:var(--faint)">○</span>'}
+function qcChecklistCard(r){
+  const c=relChecklist(r);const stt=checklistStats(r);
+  const rows=c.map(i=>'<div class="row tap" tabindex="0" style="padding:7px 0;border-top:1px solid var(--line);align-items:flex-start" onclick="qcCycleCheck('+ocjson(r.id)+','+ocjson(i.id)+')">'
+    +'<div style="flex:0 0 22px;font-size:15px;font-weight:700">'+qcCheckGlyph(i.state)+'</div>'
+    +'<div class="grow"><div class="d" style="color:var(--text)">'+esc(i.label)+'</div>'
+    +(i.by?'<div class="d" style="font-size:11px;color:var(--faint);margin-top:1px">'+esc(i.by)+' · '+qcTime(i.at)+(i.note?' · '+esc(i.note):'')+'</div>':'')
+    +'</div></div>').join('');
+  return '<p class="eyebrow" style="margin:16px 0 8px">QA checklist <span class="pill '+(stt.complete?'good':(stt.fails?'amber':'dim'))+'" style="font-size:10px">'+stt.done+'/'+stt.total+(stt.fails?' · '+stt.fails+' FAIL':'')+'</span></p>'
+    +'<div class="card"><div class="d" style="color:var(--faint);margin-bottom:2px">Tap a line to cycle ○ open → ✓ pass → ✕ fail → Ø n/a. Every tick is stamped and lands in the launch report.</div>'+rows+'</div>';
+}
+/* A release is launch-grade when it passed QC on this exact version, has
+   user-facing notes, and its checklist is complete with no open fails. */
+function relBlockers(r){
+  const b=[];
+  if(!releasePassed(r))b.push('no passing QC run for '+(r.version||'this version'));
+  if(!(r.notes||'').trim())b.push('release notes missing');
+  const stt=checklistStats(r);
+  if(!stt.complete)b.push(stt.fails?('checklist has '+stt.fails+' failing item'+(stt.fails===1?'':'s')):('checklist '+stt.done+'/'+stt.total));
+  return b;
+}
+
+/* ================= LAUNCHES (ties one release per lane to a ship event) ================= */
+function launchEvidence(l){
+  const lanes=[];let attached=0;
+  QC_LANES.forEach(k=>{
+    const rid=l.products&&l.products[k];const r=rid?RELEASES[rid]:null;
+    if(rid&&!r){lanes.push({lane:k,blockers:['release missing']});return}
+    if(!r)return;
+    attached++;const b=relBlockers(r);if(b.length)lanes.push({lane:k,blockers:b});
+  });
+  const blockers=[];
+  if(!attached)blockers.push('no releases attached yet');
+  lanes.forEach(x=>x.blockers.forEach(b=>blockers.push(QC_PRODUCTS[x.lane]+': '+b)));
+  return {ok:blockers.length===0&&attached>0,blockers:blockers,attached:attached};
+}
+function launchApproved(l){return (l.signoffs||[]).some(sg=>sg.decision==='approve'&&(sg.role==='admin'||sg.role==='superadmin'))}
+function launchReadiness(l){
+  const ev=launchEvidence(l);const approved=launchApproved(l);
+  const blockers=ev.blockers.slice();if(ev.ok&&!approved)blockers.push('needs an approve sign-off from an admin');
+  return {ready:ev.ok&&approved,evidenceOk:ev.ok,approved:approved,blockers:blockers,attached:ev.attached};
+}
+function qcNewLaunch(){
+  if(!canQC()){toast('Tech / leadership only');return}
+  const name=prompt('Name this launch (e.g. "October GA — fw 1.0.51 + apps")');if(!name||!name.trim())return;
+  const id='LN'+Date.now().toString(36).toUpperCase().slice(-7);
+  const l={id:id,name:name.trim(),targetDate:'',status:'planning',summary:'',products:{},signoffs:[],createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()};
+  LAUNCHES[id]=l;persistLaunch(l);qcLaunchView=id;renderQC();
+}
+function qcOpenLaunch(id){qcLaunchView=id;renderQC();window.scrollTo(0,0)}
+function qcBackLaunches(){qcLaunchView=null;renderQC()}
+function qcLaunchField(id,k,v){const l=LAUNCHES[id];if(!l||!canQC())return;l[k]=v;LAUNCHES[id]=l;persistLaunch(l)}
+function qcLaunchAssign(id,lane,relId){const l=LAUNCHES[id];if(!l||!canQC())return;l.products=l.products||{};l.products[lane]=relId||null;LAUNCHES[id]=l;persistLaunch(l);renderQC()}
+function qcDeleteLaunch(id){const l=LAUNCHES[id];if(!l)return;if(!isSuperAdmin()){toast('Super admin only');return}
+  if(!confirm('Delete launch "'+l.name+'"? Releases and QC evidence stay.'))return;
+  delete LAUNCHES[id];if(hasFirestore())firebase.firestore().collection('launches').doc(id).delete().catch(()=>{});qcLaunchView=null;renderQC();toast('Launch deleted')}
+function qcSignoff(id,decision){
+  const l=LAUNCHES[id];if(!l)return;const u=CURRENT_USER;if(!u)return;
+  if(decision==='approve'&&!(u.role==='admin'||u.role==='superadmin')){toast('Approvals need admin / super admin');return}
+  const note=prompt(decision==='approve'?'Sign-off note (optional):':'What blocks this launch?');
+  if(decision==='block'&&(!note||!note.trim()))return;
+  l.signoffs=(l.signoffs||[]).concat([{by:u.name||'',email:u.email||'',role:u.role||'',decision:decision,note:(note||'').trim(),at:new Date().toISOString()}]);
+  const ev=launchEvidence(l);
+  if(decision==='approve'&&ev.ok){l.status='ready';l.readinessSnapshot=launchReportData(l);}
+  LAUNCHES[id]=l;persistLaunch(l);renderQC();
+  toast(decision==='approve'?'✓ Signed off':'Block recorded');
+  qcNotifyLeads('Launch '+decision,(u.name||'')+' '+(decision==='approve'?'approved':'blocked')+' "'+l.name+'"'+(note?(' — '+note):''));
+}
+function qcMarkLaunched(id){
+  const l=LAUNCHES[id];if(!l)return;
+  const rd=launchReadiness(l);
+  if(!rd.ready){
+    if(!isSuperAdmin()){toast('Blocked — '+(rd.blockers[0]||'not ready'));return}
+    const reason=prompt('Launching while NOT ready — this is logged. Why?\n\nBlockers:\n• '+rd.blockers.join('\n• '));
+    if(!reason||!reason.trim())return;
+    l.signoffs=(l.signoffs||[]).concat([{by:(CURRENT_USER&&CURRENT_USER.name)||'',email:(CURRENT_USER&&CURRENT_USER.email)||'',role:(CURRENT_USER&&CURRENT_USER.role)||'',decision:'approve',note:'OVERRIDE: '+reason.trim(),at:new Date().toISOString()}]);
+  }
+  if(!l.readinessSnapshot)l.readinessSnapshot=launchReportData(l);
+  l.status='launched';l.launchedAt=new Date().toISOString();LAUNCHES[id]=l;persistLaunch(l);renderQC();
+  toast('🚀 "'+l.name+'" launched');
+  qcNotifyLeads('Launched','"'+l.name+'" marked launched by '+((CURRENT_USER&&CURRENT_USER.name)||''));
+}
+function qcLaunchesView(){
+  const head='<div class="row" style="gap:8px;margin-bottom:12px;align-items:center"><div class="d" style="color:var(--faint)">A launch ties one release per product to a single ship decision — evidence, notes, sign-offs and the readiness report live here.</div><div class="grow"></div><button class="btn" style="width:auto;white-space:nowrap" onclick="qcNewLaunch()">＋ New launch</button></div>';
+  const list=Object.values(LAUNCHES).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  if(!list.length)return head+'<div class="empty"><div class="ico">🚀</div><div class="t">No launches yet</div><div class="d">Create one, attach the firmware + app releases it ships, and gate it on QC evidence and sign-off.</div></div>';
+  return head+list.map(l=>{
+    const st=QC_LAUNCHSTATUS[l.status]||QC_LAUNCHSTATUS.planning;const rd=launchReadiness(l);
+    const lanes=QC_LANES.filter(k=>l.products&&l.products[k]).map(k=>{const r=RELEASES[l.products[k]];return r?('<span class="pill dim" style="font-size:10px">'+esc(QC_PRODUCTS[k].split(' (')[0]+' '+(r.version||''))+'</span>'):''}).join(' ');
+    return '<div class="card tap" tabindex="0" onclick="qcOpenLaunch('+ocjson(l.id)+')"><div class="row"><div class="grow"><div class="t">'+esc(l.name)+'</div><div class="d" style="margin-top:4px">'+(lanes||'<span style="color:var(--faint)">No releases attached</span>')+'</div></div><span class="pill '+(l.status==='launched'?st.pill:(rd.ready?'good':st.pill))+'">'+(l.status==='launched'||l.status==='aborted'?st.label:(rd.ready?'Ready ✓':st.label))+'</span></div>'
+      +(l.status!=='launched'&&l.status!=='aborted'&&rd.blockers.length?'<div class="d" style="margin-top:8px;color:var(--amber)">'+esc(rd.blockers[0])+(rd.blockers.length>1?' · +'+(rd.blockers.length-1)+' more':'')+'</div>':'')
+      +(l.targetDate?'<div class="d" style="margin-top:6px;color:var(--faint)">Target '+esc(l.targetDate)+'</div>':'')+'</div>';
+  }).join('');
+}
+function qcLaneCard(l,lane){
+  const rid=l.products&&l.products[lane];const r=rid?RELEASES[rid]:null;
+  const opts=Object.values(RELEASES).filter(x=>qcProd(x.product)===lane).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  const sel='<select class="field" style="margin:0" onchange="qcLaunchAssign('+ocjson(l.id)+','+ocjson(lane)+',this.value)"><option value="">— none —</option>'+opts.map(x=>'<option value="'+esc(x.id)+'"'+(rid===x.id?' selected':'')+'>'+esc((x.version||'')+(x.buildNumber?(' ('+x.buildNumber+')'):'')+' · '+((QC_CHAN[x.channel]||{}).label||''))+'</option>').join('')+'</select>';
+  let body='';
+  if(r){
+    const b=relBlockers(r);const stt=checklistStats(r);const runs=releaseRuns(r.id);
+    body='<div class="d" style="margin-top:8px">'
+      +(releasePassed(r)?'<span class="pill good" style="font-size:10px">QC PASS</span>':'<span class="pill amber" style="font-size:10px">NO PASSING RUN</span>')+' '
+      +((r.notes||'').trim()?'<span class="pill good" style="font-size:10px">NOTES ✓</span>':'<span class="pill amber" style="font-size:10px">NOTES MISSING</span>')+' '
+      +'<span class="pill '+(stt.complete?'good':'dim')+'" style="font-size:10px">CHECKLIST '+stt.done+'/'+stt.total+'</span> '
+      +'<span class="pill dim" style="font-size:10px">'+runs.length+' RUN'+(runs.length===1?'':'S')+'</span></div>'
+      +(b.length?'<div class="d" style="margin-top:6px;color:var(--amber)">'+b.map(esc).join(' · ')+'</div>':'')
+      +'<button class="btn ghost" style="margin-top:8px;width:auto;padding:6px 12px;font-size:12px" onclick="qcTab=\'releases\';openQcRelease('+ocjson(r.id)+')">Open release →</button>';
+  }
+  return '<div class="card"><div class="row" style="align-items:center;gap:8px"><div class="grow"><div class="t" style="font-size:14px">'+esc(QC_PRODUCTS[lane])+'</div></div><div style="flex:0 0 55%">'+sel+'</div></div>'+body+'</div>';
+}
+function qcLaunchDetailView(){
+  const l=LAUNCHES[qcLaunchView];if(!l){qcLaunchView=null;return qcLaunchesView()}
+  const st=QC_LAUNCHSTATUS[l.status]||QC_LAUNCHSTATUS.planning;const rd=launchReadiness(l);
+  const banner=l.status==='launched'
+    ?'<div class="card" style="border-color:var(--good)"><div class="t" style="color:var(--good)">🚀 Launched '+qcTime(l.launchedAt)+'</div><div class="d" style="margin-top:2px">The readiness report below is the frozen record of what was verified.</div></div>'
+    :(rd.ready
+      ?'<div class="card" style="border-color:var(--good)"><div class="t" style="color:var(--good)">✓ READY TO LAUNCH</div><div class="d" style="margin-top:2px">Every attached release passed QC with complete checklists and notes, and the launch is signed off. No question on this release being ready.</div><button class="btn" style="margin-top:10px" onclick="qcMarkLaunched('+ocjson(l.id)+')">🚀 Mark launched</button></div>'
+      :'<div class="card" style="border-color:var(--amber)"><div class="t" style="color:var(--amber)">Not ready — '+rd.blockers.length+' blocker'+(rd.blockers.length===1?'':'s')+'</div><div class="d" style="margin-top:6px">'+rd.blockers.map(b=>'• '+esc(b)).join('<br>')+'</div>'
+        +(isSuperAdmin()?'<button class="btn ghost" style="margin-top:10px" onclick="qcMarkLaunched('+ocjson(l.id)+')">Launch anyway (override, logged)</button>':'')+'</div>');
+  const signRows=(l.signoffs||[]).map(sg=>'<div class="row" style="padding:6px 0;border-top:1px solid var(--line)"><div class="grow"><div class="d" style="color:var(--text)">'+(sg.decision==='approve'?'<span style="color:var(--good)">✓ Approved</span>':'<span style="color:var(--amber)">✕ Blocked</span>')+' by '+esc(sg.by)+' <span style="color:var(--faint)">('+esc(sg.role)+')</span></div>'+(sg.note?'<div class="d" style="font-size:11.5px;color:var(--faint)">'+esc(sg.note)+'</div>':'')+'</div><div class="d" style="color:var(--faint);white-space:nowrap">'+qcTime(sg.at)+'</div></div>').join('');
+  return ''
+    +'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;margin-bottom:12px" onclick="qcBackLaunches()">← All launches</button>'
+    +'<div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><input class="field" style="margin:0;font-size:18px;font-weight:700" value="'+esc(l.name)+'" onchange="qcLaunchField('+ocjson(l.id)+',\'name\',this.value)"><div class="d" style="margin-top:4px">Created '+qcTime(l.createdAt)+' by '+esc(l.createdBy||'')+'</div></div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
+    +'<div class="row" style="gap:8px;margin:12px 0"><div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Target date</p><input type="date" class="field" style="margin:0" value="'+esc(l.targetDate||'')+'" onchange="qcLaunchField('+ocjson(l.id)+',\'targetDate\',this.value)"></div></div>'
+    +'<textarea class="field" placeholder="Launch summary — what this launch ships and why" style="min-height:56px;resize:vertical;font-family:var(--font-b)" onchange="qcLaunchField('+ocjson(l.id)+',\'summary\',this.value)">'+esc(l.summary||'')+'</textarea>'
+    +banner
+    +'<p class="eyebrow" style="margin:16px 0 8px">Releases in this launch</p>'
+    +QC_LANES.map(k=>qcLaneCard(l,k)).join('')
+    +'<p class="eyebrow" style="margin:16px 0 8px">Sign-offs</p><div class="card">'
+    +(signRows||'<div class="d" style="color:var(--faint)">No sign-offs yet. An admin approval is part of READY.</div>')
+    +'<div class="row" style="gap:8px;margin-top:10px"><button class="btn" style="flex:1" onclick="qcSignoff('+ocjson(l.id)+',\'approve\')">✓ Approve</button><button class="btn ghost" style="flex:1" onclick="qcSignoff('+ocjson(l.id)+',\'block\')">✕ Block</button></div></div>'
+    +'<p class="eyebrow" style="margin:16px 0 8px">Launch readiness report</p><div class="card">'
+    +'<div class="d">'+(l.readinessSnapshot?'Snapshot frozen '+qcTime(l.readinessSnapshot.generatedAt)+' — exports reproduce it exactly, even if releases change later.':'No frozen snapshot yet — it locks in at sign-off. Exports below use live data until then.')+'</div>'
+    +'<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
+    +'<button class="btn" style="flex:1;min-width:140px" onclick="qcExportLaunchPDF('+ocjson(l.id)+')">⤓ Export PDF</button>'
+    +'<button class="btn ghost" style="flex:1;min-width:140px" onclick="qcDownloadLaunchMD('+ocjson(l.id)+')">Download .md</button>'
+    +'<button class="btn ghost" style="flex:1;min-width:140px" onclick="qcCopyLaunchMD('+ocjson(l.id)+')">Copy report</button></div></div>'
+    +(isSuperAdmin()?'<button class="btn ghost" style="margin-top:14px;color:var(--amber)" onclick="qcDeleteLaunch('+ocjson(l.id)+')">Delete launch</button>':'');
+}
+
+/* ================= LAUNCH READINESS REPORT (data → md → pdf) ================= */
+function launchReportData(l){
+  const rd=launchReadiness(l);
+  return {generatedAt:new Date().toISOString(),
+    launch:{name:l.name,targetDate:l.targetDate||'',status:l.status,summary:l.summary||'',createdBy:l.createdBy||'',launchedAt:l.launchedAt||''},
+    readiness:{ready:rd.ready,blockers:rd.blockers},
+    signoffs:(l.signoffs||[]).slice(),
+    lanes:QC_LANES.map(k=>{
+      const rid=l.products&&l.products[k];const r=rid?RELEASES[rid]:null;
+      if(!r)return {lane:k,label:QC_PRODUCTS[k],missing:true};
+      return {lane:k,label:QC_PRODUCTS[k],version:r.version||'',buildNumber:r.buildNumber||'',channel:(QC_CHAN[r.channel]||{}).label||r.channel||'',status:(QC_RELSTATUS[r.status]||{}).label||r.status,notes:r.notes||'',internalNotes:r.internalNotes||'',links:r.links||{},sha256:(r.image&&r.image.sha256)||'',
+        checklist:relChecklist(r).map(i=>({label:i.label,state:i.state,by:i.by,at:i.at,note:i.note||''})),
+        runs:releaseRuns(r.id).map(run=>({title:run.kind==='custom'?(run.title||'Custom test'):('Soak '+fmtDur(run.durationSec||0)),verdict:run.verdict||'',by:run.by||'',device:run.device||'',startedAt:run.startedAt||'',endedAt:run.endedAt||'',passed:run.passed,failed:run.failed,alertsSent:run.alertsSent,alertsAcked:run.alertsAcked,disconnects:run.disconnects,uptimePct:run.uptimePct,
+          events:(run.events||[]).map(e=>({t:e.t||'',type:e.type||'',detail:e.detail||''}))}))};
+    })};
+}
+function qcLaunchReport(l){return l.readinessSnapshot||launchReportData(l)}
+function launchReportMD(d){
+  let md='# Safewave Launch Report — '+d.launch.name+'\n\n';
+  md+='Generated '+d.generatedAt+' · Status: '+d.launch.status.toUpperCase()+(d.launch.targetDate?' · Target '+d.launch.targetDate:'')+'\n\n';
+  md+='**Readiness: '+(d.readiness.ready?'READY ✓':'NOT READY')+'**'+(d.readiness.blockers.length?'\n\nBlockers:\n'+d.readiness.blockers.map(b=>'- '+b).join('\n'):'')+'\n\n';
+  if(d.launch.summary)md+=d.launch.summary+'\n\n';
+  md+='## Sign-offs\n\n'+(d.signoffs.length?d.signoffs.map(sg=>'- '+(sg.decision==='approve'?'APPROVED':'BLOCKED')+' by '+sg.by+' ('+sg.role+') — '+sg.at+(sg.note?' — '+sg.note:'')).join('\n'):'_None_')+'\n\n';
+  d.lanes.forEach(L=>{
+    md+='---\n\n## '+L.label+(L.missing?' — not in this launch\n\n':' '+L.version+(L.buildNumber?' (build '+L.buildNumber+')':'')+'\n\n');
+    if(L.missing)return;
+    md+='Channel: '+L.channel+' · QC status: '+L.status+(L.sha256?' · SHA-256 `'+L.sha256+'`':'')+'\n\n';
+    md+='### Release notes\n\n'+(L.notes||'_missing_')+'\n\n';
+    md+='### QA checklist\n\n'+L.checklist.map(i=>'- ['+(i.state==='pass'?'x':i.state==='fail'?'FAIL':i.state==='na'?'n/a':' ')+'] '+i.label+(i.by?' — '+i.by+' '+i.at:'')+(i.note?' — '+i.note:'')).join('\n')+'\n\n';
+    md+='### Test runs ('+L.runs.length+')\n\n';
+    L.runs.forEach(run=>{
+      md+='**'+run.title+'** — '+String(run.verdict).toUpperCase()+' · '+run.device+' · by '+run.by+' · '+run.startedAt+'\n\n';
+      run.events.forEach(e=>{md+='    '+(e.t?String(e.t).slice(11,19):'')+'  '+(e.type==='pass'?'PASS':e.type==='fail'?'FAIL':'·')+'  '+e.detail+'\n'});
+      md+='\n';
+    });
+  });
+  return md;
+}
+function qcDownloadLaunchMD(id){const l=LAUNCHES[id];if(!l)return;const md=launchReportMD(qcLaunchReport(l));
+  const blob=new Blob([md],{type:'text/markdown'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=(l.name||'launch-report').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.md';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function qcCopyLaunchMD(id){const l=LAUNCHES[id];if(!l)return;const md=launchReportMD(qcLaunchReport(l));
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(md).then(()=>toast('✓ Report copied'),()=>toast('Copy failed — use Download'));else toast('Copy unsupported — use Download')}
+/* PDF: the house print-window pattern (same as return labels) — white page,
+   one section per product lane, page breaks between sections, browser's
+   Save-as-PDF does the rendering. Exports the frozen snapshot when one exists. */
+function qcExportLaunchPDF(id){
+  const l=LAUNCHES[id];if(!l)return;const d=qcLaunchReport(l);
+  const E=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const chk=i=>i.state==='pass'?'✓':i.state==='fail'?'✕ FAIL':i.state==='na'?'n/a':'○';
+  let h='<html><head><title>Safewave Launch Report — '+E(d.launch.name)+'</title><style>'
+    +'body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:34px 40px;font-size:12.5px;line-height:1.5}'
+    +'h1{font-size:23px;margin:0 0 4px}h2{font-size:17px;margin:0 0 2px}h3{font-size:13px;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.06em;color:#333}'
+    +'.meta{color:#555;font-size:11.5px}.sec{page-break-before:always;padding-top:8px}'
+    +'.verdict{display:inline-block;padding:4px 12px;border-radius:14px;font-weight:700;font-size:13px;margin:10px 0}'
+    +'.ok{background:#e4f6ec;color:#116b3e;border:1px solid #9cd9b6}.no{background:#fdf2df;color:#8a5a00;border:1px solid #ecc06b}'
+    +'table{border-collapse:collapse;width:100%;page-break-inside:avoid}td,th{border:1px solid #ccc;padding:5px 8px;text-align:left;font-size:11.5px;vertical-align:top}th{background:#f2f4f6}'
+    +'.log{font-family:Menlo,Consolas,monospace;font-size:10px;background:#f7f8fa;border:1px solid #ddd;border-radius:6px;padding:8px 10px;white-space:pre-wrap;page-break-inside:avoid;margin:6px 0 14px}'
+    +'.notes{white-space:pre-wrap;border-left:3px solid #19b5ec;padding:2px 0 2px 12px;margin:6px 0 4px}'
+    +'.foot{color:#999;font-size:10px;margin-top:24px;border-top:1px solid #ddd;padding-top:6px}'
+    +'@media print{.sec{page-break-before:always}}'
+    +'</style></head><body>';
+  h+='<h1>Safewave Launch Report</h1><div class="meta">'+E(d.launch.name)+(d.launch.targetDate?' · target '+E(d.launch.targetDate):'')+' · generated '+E(d.generatedAt)+(l.readinessSnapshot?' · FROZEN SNAPSHOT':' · live data')+'</div>';
+  h+='<div class="verdict '+(d.readiness.ready?'ok':'no')+'">'+(d.readiness.ready?'READY TO LAUNCH ✓':'NOT READY')+'</div>';
+  if(d.readiness.blockers.length)h+='<div>Blockers:<ul>'+d.readiness.blockers.map(b=>'<li>'+E(b)+'</li>').join('')+'</ul></div>';
+  if(d.launch.summary)h+='<p>'+E(d.launch.summary)+'</p>';
+  h+='<h3>Sign-offs</h3>'+(d.signoffs.length?'<table><tr><th>Decision</th><th>By</th><th>Role</th><th>When</th><th>Note</th></tr>'+d.signoffs.map(sg=>'<tr><td>'+(sg.decision==='approve'?'APPROVED':'BLOCKED')+'</td><td>'+E(sg.by)+'</td><td>'+E(sg.role)+'</td><td>'+E(sg.at)+'</td><td>'+E(sg.note)+'</td></tr>').join('')+'</table>':'<div class="meta">None recorded.</div>');
+  d.lanes.forEach(L=>{
+    h+='<div class="sec"><h2>'+E(L.label)+(L.missing?'':' — '+E(L.version)+(L.buildNumber?' (build '+E(L.buildNumber)+')':''))+'</h2>';
+    if(L.missing){h+='<div class="meta">Not part of this launch.</div></div>';return}
+    h+='<div class="meta">'+E(L.channel)+' channel · QC: '+E(L.status)+(L.sha256?' · SHA-256 '+E(L.sha256):'')+'</div>';
+    h+='<h3>Release notes</h3><div class="notes">'+(L.notes?E(L.notes):'<i>missing</i>')+'</div>';
+    h+='<h3>QA checklist</h3><table><tr><th style="width:52px">State</th><th>Item</th><th style="width:170px">By / when</th><th>Note</th></tr>'
+      +L.checklist.map(i=>'<tr><td>'+chk(i)+'</td><td>'+E(i.label)+'</td><td>'+E(i.by)+(i.at?'<br>'+E(String(i.at).slice(0,16).replace('T',' ')):'')+'</td><td>'+E(i.note)+'</td></tr>').join('')+'</table>';
+    h+='<h3>Test runs ('+L.runs.length+')</h3>';
+    if(!L.runs.length)h+='<div class="meta">No QC runs recorded.</div>';
+    L.runs.forEach(run=>{
+      h+='<div style="margin-top:10px;page-break-inside:avoid"><b>'+E(run.title)+'</b> — '+E(String(run.verdict).toUpperCase())+' · '+E(run.device)+' · by '+E(run.by)+' · '+E(run.startedAt)
+        +(run.alertsSent!=null?' · alerts '+E(run.alertsAcked)+'/'+E(run.alertsSent):'')+(run.passed!=null?' · '+E(run.passed)+'✓ '+E(run.failed)+'✕':'')+'</div>';
+      if(run.events&&run.events.length)h+='<div class="log">'+run.events.map(e=>E((e.t?String(e.t).slice(11,19):'')+'  '+(e.type==='pass'?'PASS':e.type==='fail'?'FAIL':'  · ')+'  '+e.detail)).join('\n')+'</div>';
+    });
+    h+='</div>';
+  });
+  h+='<div class="foot">Safewave Launch Report · '+E(d.launch.name)+' · generated '+E(d.generatedAt)+' — produced by Safewave Command Center Release QC.</div>';
+  h+='<script>setTimeout(function(){window.print()},300)<\/script></body></html>';
+  const w=window.open('','_blank');if(!w){toast('Pop-up blocked — allow pop-ups to export');return}
+  w.document.write(h);w.document.close();
+}
+
 /* ---- Test bench ---- */
 function qcStartFromRelease(id){qcTab='sim';qcRelView=null;renderQC();var s=document.getElementById('sim-soak-rel');if(s){s.value=id;}window.scrollTo(0,0)}
 function qcModePick(v){const so=document.getElementById('qc-simopt');if(so)so.style.display=(v==='sim')?'':'none'}
@@ -2636,7 +2931,32 @@ function simRenderRunLog(){
 }
 function qcRunLogText(){var L=qcRunLog;if(!L)return '';var s='Safewave QC — '+L.title+'\n'+L.band+' · '+L.device+' · '+L.os+' · firmware '+L.firmware+'\nStarted '+L.startedAt+'\n'+L.passed+' passed · '+L.failed+' failed\n\n';L.entries.forEach(function(e){s+=(e.ts||'').slice(11,19)+'  '+(e.type==='run'?'· ':(e.ok?'PASS ':'FAIL '))+e.msg+'\n';});return s;}
 function qcDownloadRunLog(fmt){if(!qcRunLog)return;var data=fmt==='json'?JSON.stringify(qcRunLog,null,2):qcRunLogText();var blob=new Blob([data],{type:fmt==='json'?'application/json':'text/plain'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=(qcRunLog.title||'qc-run').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.'+fmt;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},1000);}
-function qcAttachRunLog(){if(!qcRunLog)return;var rels=Object.values(RELEASES);if(!rels.length){toast('No releases to attach to');return;}toast('Pick a release from the Releases tab to log against — coming from run '+qcRunLog.passed+'✓/'+qcRunLog.failed+'✕');}
+function qcAttachRunLog(){
+  if(!qcRunLog){toast('Run a test first');return}
+  if(qcRunLog.endedAt==null){toast('Finish the run first');return}
+  var rels=Object.values(RELEASES).sort(function(a,b){return (b.createdAt||'').localeCompare(a.createdAt||'')});
+  if(!rels.length){toast('No releases to attach to — create one in Releases');return}
+  var box=document.getElementById('qc-attach-list');
+  if(box)box.innerHTML=rels.map(function(r){return '<button class="btn ghost" style="margin-top:8px;text-align:left" onclick="qcDoAttachRun('+ocjson(r.id)+')">'+esc((QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+(r.version||''))+' <span class="pill dim" style="font-size:10px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+'</span></button>'}).join('');
+  closeSheets();openSheet('sh-qc-attach');
+}
+/* Save the simulator/custom run as permanent qc_runs evidence on a release.
+   Entries map onto the soak-run event shape so openQcRun renders them. */
+function qcDoAttachRun(relId){
+  var L=qcRunLog,r=RELEASES[relId];if(!L||!r){closeSheets();return}
+  var id='run'+Date.now().toString(36);
+  var run={id:id,releaseId:relId,product:qcProd(r.product),version:r.version||'',kind:'custom',title:L.title||'Custom test',
+    verdict:(L.failed===0&&L.passed>0)?'pass':'fail',by:(CURRENT_USER&&CURRENT_USER.name)||'',
+    device:(L.device||'')+(L.band?(' · '+L.band):''),os:L.os||'',firmware:L.firmware||'',
+    startedAt:L.startedAt,endedAt:L.endedAt||new Date().toISOString(),
+    durationSec:Math.max(1,Math.round((new Date(L.endedAt||Date.now())-new Date(L.startedAt))/1000)),
+    passed:L.passed||0,failed:L.failed||0,
+    events:(L.entries||[]).map(function(e){return {t:e.ts,type:e.type==='run'?'info':(e.ok?'pass':'fail'),detail:e.msg}})};
+  QCRUNS[id]=run;persistRun(run);
+  if(r.status!=='released'){r.status=(run.verdict==='pass'&&releasePassed(r))?'passed':(run.verdict==='fail'?'failed':r.status);RELEASES[relId]=r;persistRelease(r)}
+  closeSheets();renderQC();
+  toast('✓ Log attached to '+(QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+(r.version||''));
+}
 
 /* ================= IN-PHONE MODALS / DIALOGS =================
    Faithful web replicas of the app's sheets, modals and alert dialogs so every
@@ -3030,7 +3350,7 @@ function simRenderSoak(){
   }
   const rels=Object.values(RELEASES).filter(function(r){return r.status!=='released'}).sort(function(a,b){return (b.createdAt||'').localeCompare(a.createdAt||'')});
   host.innerHTML='<div class="sim-field"><label>Attach to release (gates QC)</label><select id="sim-soak-rel"><option value="">— practice run (not attached) —</option>'
-      +rels.map(function(r){return '<option value="'+esc(r.id)+'">'+esc((QC_PRODUCTS[r.product]||r.product)+' '+(r.version||''))+'</option>'}).join('')+'</select></div>'
+      +rels.map(function(r){return '<option value="'+esc(r.id)+'">'+esc((QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+(r.version||''))+'</option>'}).join('')+'</select></div>'
     +'<div class="sim-btnrow"><div class="sim-field" style="margin:0"><label>Duration (min)</label><input class="sim-in" id="sim-soak-dur" type="number" min="1" value="480"></div>'
       +'<div class="sim-field" style="margin:0"><label>Speed</label><select id="sim-soak-speed"><option value="60">Accelerated ×60</option><option value="1">Realtime</option></select></div></div>'
     +'<div class="sim-btnrow" style="margin-top:9px"><div class="sim-field" style="margin:0"><label>Band</label><select id="sim-soak-band"><option value="virtual">Virtual</option><option value="ble">Real (Bluetooth)</option></select></div>'
@@ -3167,7 +3487,7 @@ function simFinishSoak(reason){
 function qcBenchView(){
   if(qcBench.running)return qcRunningPanel();
   const rels=Object.values(RELEASES).filter(r=>r.status!=='released').sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-  const opts=rels.map(r=>'<option value="'+esc(r.id)+'"'+(qcBench.selRel===r.id?' selected':'')+'>'+esc((QC_PRODUCTS[r.product]||r.product)+' '+r.version+' ('+((QC_CHAN[r.channel]||{}).label||r.channel)+')')+'</option>').join('');
+  const opts=rels.map(r=>'<option value="'+esc(r.id)+'"'+(qcBench.selRel===r.id?' selected':'')+'>'+esc((QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+r.version+' ('+((QC_CHAN[r.channel]||{}).label||r.channel)+')')+'</option>').join('');
   const th=qcThresholds();const bleOK=(typeof navigator!=='undefined'&&navigator.bluetooth);
   return '<div class="note" style="margin:0 0 12px">The soak test connects a band, then for the whole window keeps the link open and fires alerts on a set interval — logging every disconnect and every alert sent → acknowledged. It passes only if it holds the connection and delivers alerts for the full window. That verdict gates the release.</div>'
    +'<div class="card">'
@@ -3289,7 +3609,7 @@ function qcFinish(reason){
   const rel=RELEASES[run.releaseId];
   if(rel&&rel.status!=='released'){rel.status=(run.verdict==='pass')?'passed':(run.verdict==='fail'?'failed':'testing');rel.latestVerdict=run.verdict;RELEASES[rel.id]=rel;persistRelease(rel);}
   try{b.dev&&b.dev.disconnect&&b.dev.disconnect();}catch(e){}
-  const relName=(QC_PRODUCTS[run.product]||run.product)+' '+run.version;
+  const relName=(QC_PRODUCTS[qcProd(run.product)]||run.product)+' '+run.version;
   if(run.verdict==='pass')qcNotifyLeads('QC passed · '+relName,'Soak passed — '+fmtDur(run.durationSec)+', '+run.disconnects+' disconnects, '+deliveryPct+'% delivery');
   else if(run.verdict==='fail')qcNotifyLeads('QC failed · '+relName,reasons.join('; '));
   renderQC();
@@ -3299,7 +3619,7 @@ function qcStopRun(){if(qcBench.running)qcFinish('abort')}
 function qcRunningPanel(){
   const run=qcBench.run;
   return '<div class="card">'
-   +'<div class="row"><div class="grow"><div class="t">'+esc((QC_PRODUCTS[run.product]||run.product)+' '+run.version)+' · soak test</div><div class="d">'+esc(run.device)+' · target '+fmtDur(run.durationTargetSec)+'</div></div><button class="btn ghost" style="width:auto;padding:8px 12px" onclick="qcStopRun()">Stop</button></div>'
+   +'<div class="row"><div class="grow"><div class="t">'+esc((QC_PRODUCTS[qcProd(run.product)]||run.product)+' '+run.version)+' · soak test</div><div class="d">'+esc(run.device)+' · target '+fmtDur(run.durationTargetSec)+'</div></div><button class="btn ghost" style="width:auto;padding:8px 12px" onclick="qcStopRun()">Stop</button></div>'
    +'<div class="row" id="qc-conn" style="margin-top:10px;align-items:center"><span class="qc-dot live up"></span><span class="d" id="qc-conntxt" style="color:var(--good)">Connected</span><span class="grow"></span><span class="d" id="qc-elapsed" style="font-family:var(--font-m)">0s / '+fmtDur(run.durationTargetSec)+'</span></div>'
    +'<div class="progress" style="height:8px;margin-top:10px"><i id="qc-prog" style="width:0%"></i></div>'
    +'<div class="row" style="gap:8px;margin-top:12px"><div class="qc-stat"><div class="n" id="qc-sent">0</div><div class="l">alerts sent</div></div><div class="qc-stat"><div class="n" id="qc-ack" style="color:var(--good)">0</div><div class="l">delivered</div></div><div class="qc-stat"><div class="n" id="qc-dc">0</div><div class="l">disconnects</div></div><div class="qc-stat"><div class="n" id="qc-up">100%</div><div class="l">uptime</div></div></div>'
@@ -3867,10 +4187,16 @@ function openRelease(id){
   document.getElementById('rel-id').value=r?r.id:'';
   document.getElementById('rel-tag').textContent=r?'EDIT RELEASE':'NEW RELEASE';
   document.getElementById('rel-h').textContent=r?'Edit release':'New release';
-  const pg=document.getElementById('rel-product');pg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===((r&&r.product)||'firmware')));
+  const pg=document.getElementById('rel-product');pg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===qcProd((r&&r.product)||'firmware')));
   document.getElementById('rel-version').value=r?(r.version||''):'';
   document.getElementById('rel-channel').value=r?(r.channel||'dev'):'dev';
   document.getElementById('rel-notes').value=r?(r.notes||''):'';
+  document.getElementById('rel-build').value=r?(r.buildNumber||''):'';
+  const lk=(r&&r.links)||{};
+  document.getElementById('rel-link-tf').value=lk.testflight||'';
+  document.getElementById('rel-link-eas').value=lk.easBuild||'';
+  document.getElementById('rel-link-commit').value=lk.commit||'';
+  document.getElementById('rel-internal').value=r?(r.internalNotes||''):'';
   document.getElementById('rel-del').style.display=r?'block':'none';
   relDraftVis();
   closeSheets();openSheet('sh-release');
@@ -3917,19 +4243,19 @@ function saveRelease(){
   const pb=document.querySelector('#rel-product button.on');const product=(pb&&pb.dataset&&pb.dataset.v)||'firmware';
   const version=document.getElementById('rel-version').value.trim();if(!version){toast('Give it a version');return}
   const prev=RELEASES[id]||{};
-  const r=Object.assign({},prev,{id:id,product:product,version:version,channel:document.getElementById('rel-channel').value,notes:document.getElementById('rel-notes').value.trim(),createdBy:prev.createdBy||((CURRENT_USER&&CURRENT_USER.name)||''),createdAt:prev.createdAt||new Date().toISOString(),status:prev.status||'draft'});
+  const r=Object.assign({},prev,{id:id,product:product,version:version,channel:document.getElementById('rel-channel').value,notes:document.getElementById('rel-notes').value.trim(),buildNumber:document.getElementById('rel-build').value.trim(),links:{testflight:document.getElementById('rel-link-tf').value.trim(),easBuild:document.getElementById('rel-link-eas').value.trim(),commit:document.getElementById('rel-link-commit').value.trim()},internalNotes:document.getElementById('rel-internal').value.trim(),createdBy:prev.createdBy||((CURRENT_USER&&CURRENT_USER.name)||''),createdAt:prev.createdAt||new Date().toISOString(),status:prev.status||'draft'});
   // Remember the firmware-repo HEAD the notes were drafted from, so the next
   // firmware release can diff commits from here (GitHub compare API).
   if(product==='firmware'){const sha=(relDraftedSha!=null?relDraftedSha:prev.fwHeadSha)||null;if(sha)r.fwHeadSha=sha;}
-  RELEASES[id]=r;persistRelease(r);closeSheets();renderQC();toast('✓ '+(QC_PRODUCTS[product]||product)+' '+version+' saved');
+  RELEASES[id]=r;persistRelease(r);closeSheets();renderQC();toast('✓ '+(QC_PRODUCTS[qcProd(product)]||product)+' '+version+' saved');
 }
 function deleteRelease(){const id=document.getElementById('rel-id').value;const r=RELEASES[id];if(!r)return;
-  if(!confirm('Delete '+(QC_PRODUCTS[r.product]||r.product)+' '+r.version+'? Soak history stays.'))return;
+  if(!confirm('Delete '+(QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+r.version+'? Soak history stays.'))return;
   delete RELEASES[id];if(hasFirestore())firebase.firestore().collection('releases').doc(id).delete().catch(()=>{});qcRelView=null;closeSheets();renderQC();toast('Release deleted');
 }
 function openQcRun(id){const run=QCRUNS[id];if(!run)return;
   document.getElementById('qcrun-tag').textContent=(run.verdict||'run').toUpperCase();
-  document.getElementById('qcrun-h').textContent=(QC_PRODUCTS[run.product]||run.product)+' '+run.version+' soak';
+  document.getElementById('qcrun-h').textContent=(QC_PRODUCTS[qcProd(run.product)]||run.product)+' '+run.version+' soak';
   document.getElementById('qcrun-meta').textContent=(run.device||'device')+' · '+qcTime(run.startedAt)+' · by '+(run.by||'');
   const deliv=run.deliveryPct!=null?run.deliveryPct:(run.alertsSent?Math.round(run.alertsAcked/run.alertsSent*100):0);
   document.getElementById('qcrun-summary').innerHTML='<div class="row" style="gap:8px;flex-wrap:wrap">'
