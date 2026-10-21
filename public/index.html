@@ -136,6 +136,16 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex-shrink:0;background:var(--surface);border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:600;padding:7px 13px;border-radius:99px;cursor:pointer;font-family:var(--font-b)}
+.qs-grp{font-family:var(--font-m);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:14px 0 4px;border-top:1px solid var(--line)}
+.qs-nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:6px;margin:8px 0 6px}
+.qs-num{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;min-width:0}
+.qs-num b{display:block;font-size:16px;font-family:var(--font-m);color:var(--text)}
+.qs-num span{display:block;font-size:11px;color:var(--muted)}
+.qs-num i{display:block;font-style:normal;font-size:10px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qs-num.qs-ok b{color:var(--good)}.qs-num.qs-warn b{color:var(--amber)}.qs-num.qs-warn{border-color:var(--amber)}
+.qs-ipbox{margin:0 0 10px 28px;padding:10px 12px;background:var(--surface-2);border-radius:10px}
+.qs-in{display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px;font-size:11.5px;color:var(--muted);position:relative}
+.qs-in .field{margin:0}.qs-in em{position:absolute;right:10px;bottom:9px;font-style:normal;color:var(--faint)}
 .qs-step{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line)}
 .qs-g{flex:0 0 18px;font-size:15px;font-weight:700;line-height:1.35}
 .qs-sub{font-size:11.5px;color:var(--faint);margin-top:1px}
@@ -2236,6 +2246,81 @@ function renderQC(){
   else if(qcTab==='launches')body.innerHTML=qcLaunchView?qcLaunchDetailView():qcLaunchesView();
   else body.innerHTML=qcReleasesView();
 }
+/* ================= IN-PERSON TESTS (real band + real phone, on site) =================
+   Hands-on tests Trevon runs with the band on a wrist and the phone in a
+   pocket. Each records the real numbers (counts, minutes, seconds) — not a
+   tick — so uptime, connectivity and ANCS delivery are measured, and the
+   gate passes only when the numbers clear the bar. Bars come from the QC
+   thresholds (settings/qc): minDeliveryPct, maxDisconnects, minUptimePct. */
+const QC_INPERSON={
+  app:[
+    {id:'ancs_locked',label:'ANCS: notifications buzz the band with the phone locked',how:'Lock the phone. Send 20 texts from another phone, a few seconds apart. Count the band buzzes.',kind:'ratio',a:'Buzzed',b:'Sent',bDef:20,bar:'delivery',metric:'ancs'},
+    {id:'ancs_killed',label:'ANCS: notifications still buzz with the app force-quit',how:'Swipe the app away. Send 5 texts. Count the band buzzes.',kind:'ratio',a:'Buzzed',b:'Sent',bDef:5,bar:'delivery',metric:'ancs'},
+    {id:'admin_alerts',label:'Admin alerts: delivered and acknowledged',how:'From the dashboard, send 10 alerts to this phone. Acknowledge each on the band or phone. Count what the dashboard shows as Acknowledged.',kind:'ratio',a:'Acknowledged',b:'Sent',bDef:10,bar:'delivery',metric:'alerts'},
+    {id:'uptime',label:'Connection uptime over an hour of normal wear',how:'Wear the band and carry the phone for 60 minutes of normal use. Add up the minutes the app showed Connected.',kind:'ratio',a:'Minutes connected',b:'Minutes worn',bDef:60,bar:'uptime',metric:'uptime'},
+    {id:'disconnects',label:'Unexpected disconnects during that hour',how:'Count every disconnect you did not cause on purpose during the 60 minutes.',kind:'max',a:'Disconnects',unit:'',bar:'disconnects',metric:'disconnects'},
+    {id:'reconnect',label:'Reconnects by itself after walking out of range',how:'Walk away until the app shows disconnected, then come back. Time from stepping back in range to Connected. Do it 5 times; enter the slowest.',kind:'max',a:'Slowest reconnect',unit:'s',bar:30,metric:'reconnect'}],
+  firmware:[
+    {id:'uptime',label:'8-hour wear on a real band: connection uptime',how:'Wear the band for a full 8-hour day with the phone nearby. Add up the minutes the app showed Connected.',kind:'ratio',a:'Minutes connected',b:'Minutes worn',bDef:480,bar:'uptime',metric:'uptime'},
+    {id:'disconnects',label:'Unexpected disconnects during the 8 hours',how:'Count every disconnect you did not cause on purpose.',kind:'max',a:'Disconnects',unit:'',bar:'disconnects',metric:'disconnects'},
+    {id:'reconnect',label:'Reconnects by itself after walking out of range',how:'Walk away until disconnected, come back. Time to Connected, 5 times; enter the slowest.',kind:'max',a:'Slowest reconnect',unit:'s',bar:30,metric:'reconnect'},
+    {id:'ota',label:'Update in person on 3 bands, one of them a legacy 0.0.x band',how:'Run the app’s firmware update on each band, phone plugged in and next to the band. Count the bands that finish on 1.0.51.',kind:'ratio',a:'Updated',b:'Attempted',bDef:3,bar:100,metric:'ota'},
+    {id:'safety_stop',label:'Life-safety buzz runs continuously and stops on the band button',how:'Trigger 5 life-safety alerts. Count the times it buzzed continuously and stopped on one button press.',kind:'ratio',a:'Worked',b:'Tries',bDef:5,bar:100},
+    {id:'battery',label:'Battery used over the 8 hours (recorded)',how:'Battery % at the start and at the end of the 8-hour wear.',kind:'drain',a:'Start %',b:'End %',hours:8,metric:'battery'}]};
+function qcIPTests(r){return qcProd(r.product)==='firmware'?QC_INPERSON.firmware:QC_INPERSON.app}
+function qcIPBar(t){const th=qcThresholds();if(t.bar==='delivery')return th.minDeliveryPct;if(t.bar==='uptime')return SETTINGS_QC.minUptimePct||99;if(t.bar==='disconnects')return th.maxDisconnects;return t.bar}
+function qcIPNum(v){return v===''||v==null||isNaN(+v)?null:+v}
+/* → {state:'open'|'pass'|'fail', text, bar, pct} */
+function qcIPEval(t,v){
+  v=v||{};const a=qcIPNum(v.a),b=qcIPNum(v.b),bar=qcIPBar(t);
+  if(t.kind==='ratio'){if(a==null||b==null||b<=0)return {state:'open',bar:'≥ '+bar+'%'};const pct=Math.round(a/b*1000)/10;
+    return {state:pct>=bar?'pass':'fail',text:a+' / '+b+' · '+pct+'%',bar:'≥ '+bar+'%',pct:pct,a:a,b:b};}
+  if(t.kind==='max'){if(a==null)return {state:'open',bar:'≤ '+bar+t.unit};return {state:a<=bar?'pass':'fail',text:a+t.unit,bar:'≤ '+bar+t.unit,a:a};}
+  if(a==null||b==null)return {state:'open',bar:'recorded'};
+  return {state:'pass',text:a+'% → '+b+'% · '+(Math.round((a-b)/(t.hours||1)*10)/10)+'%/h',bar:'recorded',a:a,b:b};
+}
+function qcIPStats(r){const ts=qcIPTests(r),v=r.inperson||{};let done=0,fails=0;ts.forEach(function(t){const e=qcIPEval(t,v[t.id]);if(e.state!=='open')done++;if(e.state==='fail')fails++});return {total:ts.length,done:done,fails:fails}}
+function qcIPSave(relId,tid){
+  if(!canQC()){toast('Tech / leadership only');return}
+  const r=RELEASES[relId];if(!r)return;const t=qcIPTests(r).find(function(x){return x.id===tid});if(!t)return;
+  const g=function(k){const e=document.getElementById('qi-'+k+'-'+relId+'-'+tid);return e?e.value.trim():''};
+  const a=g('a'),b=g('b'),note=g('n');
+  if(qcIPNum(a)==null||(t.kind!=='max'&&qcIPNum(b)==null)){toast('Enter the number'+(t.kind==='max'?'':'s'));return}
+  r.inperson=Object.assign({},r.inperson||{});
+  r.inperson[tid]={a:+a,b:t.kind==='max'?null:+b,note:note,by:(CURRENT_USER&&CURRENT_USER.name)||'',at:new Date().toISOString()};
+  RELEASES[relId]=r;persistRelease(r);qcShipOpen[relId+':ip:'+tid]=false;renderQC();
+  const e=qcIPEval(t,r.inperson[tid]);toast(e.state==='fail'?'Recorded — below the bar ('+e.bar+')':'✓ Recorded');
+}
+function qcIPEditor(r,t){
+  const v=(r.inperson||{})[t.id]||{},id=esc(r.id)+'-'+t.id,inp=function(k,label,val,unit){return '<label class="qs-in"><span>'+esc(label)+'</span><input class="field" type="number" inputmode="decimal" id="qi-'+k+'-'+id+'" value="'+(val==null?'':esc(String(val)))+'"'+(unit?' aria-label="'+esc(label+' ('+unit+')')+'"':'')+'>'+(unit?'<em>'+esc(unit)+'</em>':'')+'</label>'};
+  return '<div class="qs-ipbox"><div class="d" style="margin-bottom:8px">'+esc(t.how)+'</div><div class="row" style="gap:8px;flex-wrap:wrap">'
+    +inp('a',t.a,v.a!=null?v.a:'',t.unit)+(t.kind==='max'?'':inp('b',t.b,v.b!=null?v.b:(t.bDef!=null?t.bDef:''),''))+'</div>'
+    +'<input class="field" id="qi-n-'+id+'" placeholder="Note — phone model, where, anything odd" value="'+esc(v.note||'')+'" style="margin:8px 0">'
+    +'<div class="row" style="gap:8px"><button class="btn" style="flex:1" onclick="qcIPSave('+ocjson(r.id)+','+ocjson(t.id)+')">Save result</button><button class="btn ghost" style="flex:1" onclick="qcShipToggle('+ocjson(r.id+':ip:'+t.id)+')">Cancel</button></div></div>';
+}
+/* Connection numbers: in-person when recorded, otherwise the latest soak. */
+function qcConnNumbers(r){
+  const lane=qcProd(r.product),v=r.inperson||{},ts=qcIPTests(r),run=releaseRuns(r.id).find(function(x){return x.kind!=='custom'})||null,out=[];
+  const ip=function(id){const t=ts.find(function(x){return x.id===id});return t?{t:t,e:qcIPEval(t,v[id])}:null};
+  const tile=function(label,val,ok,src){out.push({label:label,val:val,ok:ok,src:src})};
+  const up=ip('uptime');
+  if(up&&up.e.state!=='open')tile('Uptime',up.e.pct+'%',up.e.state==='pass','in person');
+  else if(run&&run.uptimePct!=null)tile('Uptime',run.uptimePct+'%',run.uptimePct>=(SETTINGS_QC.minUptimePct||99),'soak');else tile('Uptime','—',null,'');
+  const dc=ip('disconnects');
+  if(dc&&dc.e.state!=='open')tile('Disconnects',String(dc.e.a),dc.e.state==='pass','in person');
+  else if(run&&run.disconnects!=null)tile('Disconnects',String(run.disconnects),run.disconnects<=qcThresholds().maxDisconnects,'soak');else tile('Disconnects','—',null,'');
+  const rc=ip('reconnect');
+  if(rc&&rc.e.state!=='open')tile('Slowest reconnect',rc.e.a+'s',rc.e.state==='pass','in person');
+  else if(run&&run.maxGapMs)tile('Longest gap',Math.round(run.maxGapMs/1000)+'s',run.maxGapMs<=30000,'soak');else tile('Slowest reconnect','—',null,'');
+  const al=ip('admin_alerts');
+  if(al&&al.e.state!=='open')tile('Alert delivery',al.e.pct+'%',al.e.state==='pass','in person');
+  else if(run&&run.alertsSent){const p=Math.round((run.alertsAcked||0)/run.alertsSent*1000)/10;tile('Alert delivery',p+'%',p>=qcThresholds().minDeliveryPct,'soak');}else tile('Alert delivery','—',null,'');
+  if(lane==='firmware'){const o=ip('ota');tile('OTA',o&&o.e.state!=='open'?(o.e.a+'/'+o.e.b):'—',o&&o.e.state!=='open'?o.e.state==='pass':null,o&&o.e.state!=='open'?'in person':'');}
+  else{const a1=ip('ancs_locked'),a2=ip('ancs_killed');let s=0,n=0,any=false;[a1,a2].forEach(function(x){if(x&&x.e.state!=='open'){any=true;s+=x.e.a;n+=x.e.b}});
+    const p=any&&n?Math.round(s/n*1000)/10:null;tile('ANCS',p==null?'—':p+'%',p==null?null:p>=qcThresholds().minDeliveryPct,any?'in person · '+s+'/'+n:'');}
+  return out;
+}
+function qcConnStrip(r){return '<div class="qs-nums">'+qcConnNumbers(r).map(function(x){return '<div class="qs-num'+(x.ok===true?' qs-ok':x.ok===false?' qs-warn':'')+'"><b>'+esc(x.val)+'</b><span>'+esc(x.label)+'</span>'+(x.src?'<i>'+esc(x.src)+'</i>':'')+'</div>'}).join('')+'</div>'}
 /* ================= SHIP — one page, one checklist per product =================
    The ship we're working on is pre-loaded (QC_SHIP): one release per product,
    attached to one launch. Every step the gate checks is a row here with its
@@ -2284,6 +2369,10 @@ function qcShipSteps(r){
   steps.push({key:'soak',label:'Soak test passed'+(lane==='firmware'?' (8 h on a band)':' (2 h)'),done:passed,fail:!passed&&last&&last.verdict==='fail',
     sub:last?(qcVerdictChip(last.verdict)+' '+esc(fmtDur(last.durationSec||0))+' · '+(last.alertsAcked||0)+'/'+(last.alertsSent||0)+' alerts · '+esc(last.device||'')):'Runs in the device simulator on a real or virtual band.',
     act:'<button class="btn ghost qs-act" onclick="qcStartFromRelease('+id+')">'+(passed?'Re-run':'▶ Run')+'</button>'});
+  qcIPTests(r).forEach(function(t){const v=(r.inperson||{})[t.id],e=qcIPEval(t,v);
+    steps.push({key:'ip:'+t.id,ip:t,label:t.label,done:e.state!=='open',fail:e.state==='fail',
+      sub:(e.text?'<b style="color:var(--'+(e.state==='fail'?'amber':'text')+')">'+esc(e.text)+'</b> · ':'')+'bar '+esc(e.bar)+(v&&v.by?' · '+esc(v.by)+' · '+qcTime(v.at):'')+(v&&v.note?' · '+esc(v.note):''),
+      act:'<button class="btn ghost qs-act" onclick="qcShipToggle('+ocjson(r.id+':ip:'+t.id)+')">'+(e.state==='open'?'Enter':'Edit')+'</button>'})});
   relChecklist(r).forEach(function(i){steps.push({key:i.id,check:true,label:i.label,done:i.state==='pass'||i.state==='na',na:i.state==='na',fail:i.state==='fail',
     sub:i.by?(esc(i.by)+' · '+qcTime(i.at)+(i.note?' · '+esc(i.note):'')):'',click:'qcCycleCheck('+id+','+ocjson(i.id)+')'})});
   return steps;
@@ -2295,8 +2384,11 @@ function qcShipStepRow(r,s){
   const glyph=s.fail?'<span style="color:var(--amber)">✕</span>':s.na?'<span style="color:var(--faint)">Ø</span>':s.done?'<span style="color:var(--good)">✓</span>':'<span style="color:var(--faint)">○</span>';
   let h='<div class="qs-step'+(s.click?' tap':'')+'"'+(s.click?' tabindex="0" onclick="'+s.click+'"':'')+'><div class="qs-g">'+glyph+'</div><div class="grow"><div class="d" style="color:var(--text)'+(s.done&&!s.fail?';opacity:.75':'')+'">'+esc(s.label)+'</div>'+(s.sub?'<div class="d qs-sub">'+s.sub+'</div>':'')+'</div>'+(s.act||'')+'</div>';
   if(s.key==='notes'&&qcShipOpen[r.id+':notes'])h+='<div style="padding:0 0 10px 30px"><textarea class="field" id="qs-notes-'+esc(r.id)+'" style="min-height:150px;resize:vertical;font-family:var(--font-b);margin:0 0 8px">'+esc((r.notes||'').trim()||r.notesDraft||'')+'</textarea><div class="row" style="gap:8px"><button class="btn" style="flex:1" onclick="qcShipSaveNotes('+ocjson(r.id)+')">Save notes</button><button class="btn ghost" style="flex:1" onclick="qcShipToggle('+ocjson(r.id+':notes')+')">Cancel</button></div></div>';
+  if(s.ip&&qcShipOpen[r.id+':ip:'+s.ip.id])h+=qcIPEditor(r,s.ip);
   return h;
 }
+function qcShipGrouped(r,steps){let h='',prev='core';steps.forEach(function(s){const g=s.ip?'ip':s.check?'qa':'core';
+  if(g!==prev){h+='<div class="qs-grp">'+(g==='ip'?'In person · real band + phone · on site with Trevon':'QA checklist')+'</div>';prev=g;}h+=qcShipStepRow(r,s)});return h}
 function qcShipView(){
   qcEnsureShip();
   const l=qcCurrentShip();
@@ -2311,9 +2403,9 @@ function qcShipView(){
     const next=steps.find(function(s){return s.fail})||steps.find(function(s){return !s.done});
     return '<div class="card qs-lane"><div class="row tap" tabindex="0" style="align-items:center;gap:8px" onclick="qcShipToggle('+ocjson('lane:'+k)+')" aria-expanded="'+(open?'true':'false')+'"><div class="grow"><div class="eyebrow" style="margin:0">'+esc(QC_SHIP_LABEL[k]||QC_PRODUCTS[k])+'</div><div class="t" style="font-size:19px;margin-top:2px">'+esc(r.version||'')+(r.buildNumber?' <span style="color:var(--faint);font-weight:600">· build '+esc(r.buildNumber)+'</span>':'')+'</div></div>'
       +'<span class="pill '+(left===0?'good':(fails?'amber':'dim'))+'">'+(left===0?'Ready ✓':(fails?fails+' failing':n+' of '+steps.length))+'</span><span style="color:var(--faint);font-size:13px">'+(open?'▾':'▸')+'</span></div>'
-      +'<div class="qs-bar"><i style="width:'+Math.round(n/steps.length*100)+'%"></i></div>'
+      +'<div class="qs-bar"><i style="width:'+Math.round(n/steps.length*100)+'%"></i></div>'+qcConnStrip(r)
       +(!open?(next?'<div class="d" style="margin-top:6px"><span style="color:var(--faint)">Next:</span> '+esc(next.label)+(left>1?' <span style="color:var(--faint)">· '+(left-1)+' more</span>':'')+'</div>':'<div class="d" style="margin-top:6px;color:var(--good)">Every line done.</div>'):
-      steps.map(function(s){return qcShipStepRow(r,s)}).join('')
+      qcShipGrouped(r,steps)
       +'<div class="d" style="color:var(--faint);margin-top:8px">Tap a checklist line to cycle ○ → ✓ pass → ✕ fail → Ø n/a. <a href="#" style="color:var(--wave)" onclick="qcTab=\'releases\';openQcRelease('+ocjson(r.id)+');return false">Full release record →</a></div>')+'</div>';
   }).join('');
   const approved=launchApproved(l),signed=(l.signoffs||[]).slice(-1)[0];total++;if(approved)done++;
@@ -2477,6 +2569,7 @@ function relBlockers(r){
   const b=[];
   if(!releasePassed(r))b.push('no passing QC run for '+(r.version||'this version'));
   if(qcProd(r.product)==='firmware'&&!r.image)b.push('firmware .bin not uploaded');
+  const ips=qcIPStats(r);if(ips.fails)b.push('in person: '+ips.fails+' test'+(ips.fails===1?'':'s')+' below the bar');else if(ips.done<ips.total)b.push('in-person tests '+ips.done+'/'+ips.total);
   if(!(r.notes||'').trim())b.push('release notes missing');
   const stt=checklistStats(r);
   if(!stt.complete)b.push(stt.fails?('checklist has '+stt.fails+' failing item'+(stt.fails===1?'':'s')):('checklist '+stt.done+'/'+stt.total));
@@ -2614,6 +2707,8 @@ function launchReportData(l){
       if(!r)return {lane:k,label:QC_PRODUCTS[k],missing:true};
       return {lane:k,label:QC_PRODUCTS[k],version:r.version||'',buildNumber:r.buildNumber||'',channel:(QC_CHAN[r.channel]||{}).label||r.channel||'',status:(QC_RELSTATUS[r.status]||{}).label||r.status,notes:r.notes||'',internalNotes:r.internalNotes||'',links:r.links||{},sha256:(r.image&&r.image.sha256)||'',
         checklist:relChecklist(r).map(i=>({label:i.label,state:i.state,by:i.by,at:i.at,note:i.note||''})),
+        inperson:qcIPTests(r).map(t=>{const v=(r.inperson||{})[t.id]||{},e=qcIPEval(t,v);return {label:t.label,result:e.text||'',bar:e.bar,state:e.state,by:v.by||'',at:v.at||'',note:v.note||''}}),
+        numbers:qcConnNumbers(r).map(x=>({label:x.label,val:x.val,ok:x.ok,src:x.src})),
         runs:releaseRuns(r.id).map(run=>({title:run.kind==='custom'?(run.title||'Custom test'):('Soak '+fmtDur(run.durationSec||0)),verdict:run.verdict||'',by:run.by||'',device:run.device||'',startedAt:run.startedAt||'',endedAt:run.endedAt||'',passed:run.passed,failed:run.failed,alertsSent:run.alertsSent,alertsAcked:run.alertsAcked,disconnects:run.disconnects,uptimePct:run.uptimePct,
           events:(run.events||[]).map(e=>({t:e.t||'',type:e.type||'',detail:e.detail||''}))}))};
     })};
@@ -2631,6 +2726,8 @@ function launchReportMD(d){
     md+='Channel: '+L.channel+' · QC status: '+L.status+(L.sha256?' · SHA-256 `'+L.sha256+'`':'')+'\n\n';
     md+='### Release notes\n\n'+(L.notes||'_missing_')+'\n\n';
     md+='### QA checklist\n\n'+L.checklist.map(i=>'- ['+(i.state==='pass'?'x':i.state==='fail'?'FAIL':i.state==='na'?'n/a':' ')+'] '+i.label+(i.by?' — '+i.by+' '+i.at:'')+(i.note?' — '+i.note:'')).join('\n')+'\n\n';
+    if(L.numbers)md+='### Connection numbers\n\n'+L.numbers.map(x=>'- '+x.label+': **'+x.val+'**'+(x.src?' ('+x.src+')':'')+(x.ok===false?' — BELOW BAR':'')).join('\n')+'\n\n';
+    if(L.inperson)md+='### In-person tests\n\n'+L.inperson.map(t=>'- ['+(t.state==='pass'?'x':t.state==='fail'?'FAIL':' ')+'] '+t.label+' — '+(t.result||'not run')+' (bar '+t.bar+')'+(t.by?' — '+t.by+' '+t.at:'')+(t.note?' — '+t.note:'')).join('\n')+'\n\n';
     md+='### Test runs ('+L.runs.length+')\n\n';
     L.runs.forEach(run=>{
       md+='**'+run.title+'** — '+String(run.verdict).toUpperCase()+' · '+run.device+' · by '+run.by+' · '+run.startedAt+'\n\n';
@@ -2675,6 +2772,9 @@ function qcExportLaunchPDF(id){
     h+='<h3>Release notes</h3><div class="notes">'+(L.notes?E(L.notes):'<i>missing</i>')+'</div>';
     h+='<h3>QA checklist</h3><table><tr><th style="width:52px">State</th><th>Item</th><th style="width:170px">By / when</th><th>Note</th></tr>'
       +L.checklist.map(i=>'<tr><td>'+chk(i)+'</td><td>'+E(i.label)+'</td><td>'+E(i.by)+(i.at?'<br>'+E(String(i.at).slice(0,16).replace('T',' ')):'')+'</td><td>'+E(i.note)+'</td></tr>').join('')+'</table>';
+    if(L.numbers)h+='<h3>Connection numbers</h3><table><tr>'+L.numbers.map(x=>'<th>'+E(x.label)+'</th>').join('')+'</tr><tr>'+L.numbers.map(x=>'<td><b>'+E(x.val)+'</b>'+(x.ok===false?' <span style="color:#8a5a00">below bar</span>':'')+(x.src?'<br><span class="meta">'+E(x.src)+'</span>':'')+'</td>').join('')+'</tr></table>';
+    if(L.inperson)h+='<h3>In-person tests</h3><table><tr><th style="width:52px">State</th><th>Test</th><th>Result</th><th style="width:70px">Bar</th><th style="width:150px">By / when</th><th>Note</th></tr>'
+      +L.inperson.map(t=>'<tr><td>'+(t.state==='pass'?'✓':t.state==='fail'?'✕ FAIL':'○')+'</td><td>'+E(t.label)+'</td><td>'+E(t.result||'not run')+'</td><td>'+E(t.bar)+'</td><td>'+E(t.by)+(t.at?'<br>'+E(String(t.at).slice(0,16).replace('T',' ')):'')+'</td><td>'+E(t.note)+'</td></tr>').join('')+'</table>';
     h+='<h3>Test runs ('+L.runs.length+')</h3>';
     if(!L.runs.length)h+='<div class="meta">No QC runs recorded.</div>';
     L.runs.forEach(run=>{
