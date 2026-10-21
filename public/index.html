@@ -3430,9 +3430,9 @@ function simInjectDuring(kind,ctx,r){
 function simSoakChaos(){
   const s=simSoak;if(!s.running)return;const roll=Math.random();
   if(roll<0.35){ // drop the link for a scaled moment
-    if(qcSim.band.connected){qcSim.band.connected=false;s.disconnects++;s.downSince=Date.now();qcLogSoak('chaos','link dropped');
+    if(qcSim.band.connected){qcSim.band.connected=false;s.disconnects++;s.chaosDrops=(s.chaosDrops||0)+1;s.downSince=Date.now();qcLogSoak('chaos','link dropped');
       if(s.band==='ble'&&s.dev&&s.dev.disconnect)s.dev.disconnect();
-      setTimeout(function(){if(!s.running)return;qcSim.band.connected=true;qcLogSoak('chaos','reconnected');simRenderSummary();},700+Math.random()*1800);}
+      setTimeout(function(){if(!s.running)return;qcSim.band.connected=true;s.chaosRecovered=(s.chaosRecovered||0)+1;qcLogSoak('chaos','reconnected');simRenderSummary();},700+Math.random()*1800);}
   }else if(roll<0.55){qcSim.appState=(qcSim.appState==='foreground')?'background':'foreground';const st=document.getElementById('sim-st');if(st)st.value=qcSim.appState;qcLogSoak('chaos','app '+qcSim.appState);}
   else if(roll<0.70&&qcSim.os==='ios'){qcSim.band.ancs=qcSim.band.ancs===1?0:1;qcLogSoak('chaos','ANCS '+(qcSim.band.ancs?'restored':'lost'));}
   else if(roll<0.82){qcSim.dnd=qcSim.dnd==='on'?'off':'on';const d=document.getElementById('sim-dnd');if(d)d.value=qcSim.dnd;qcLogSoak('chaos','Focus '+qcSim.dnd);}
@@ -3453,11 +3453,18 @@ function simFinishSoak(reason){
   const run=s.run;run.endedAt=new Date().toISOString();run.durationSec=Math.round(realEl*s.speed);
   run.uptimePct=realEl>0?Math.round(s.connectedMs/1000/realEl*100):100;
   const del=s.expected?Math.round(s.delivered/s.expected*100):100;run.deliveryPct=del;run.eventsInjected=s.ev;run.safetyMisses=s.safetyMiss;
+  run.chaos=!!s.chaos;run.chaosDrops=s.chaosDrops||0;run.chaosRecovered=s.chaosRecovered||0;
+  if(s.band!=='ble'){run.alertsSent=s.expected;run.alertsAcked=s.delivered;}
   const th=run.thresholds,reasons=[];
   if(reason==='abort'){run.verdict='aborted';reasons.push('Stopped early by tester');}
   else{
     if(run.durationSec<th.minDurationSec-2)reasons.push('Ran '+fmtDur(run.durationSec)+' of '+fmtDur(th.minDurationSec));
-    if(s.disconnects>th.maxDisconnects)reasons.push(s.disconnects+' disconnects (max '+th.maxDisconnects+')');
+    const chaosDrops=s.chaosDrops||0, chaosRecovered=s.chaosRecovered||0;
+    const unexpected=Math.max(0,s.disconnects-chaosDrops), unrecovered=Math.max(0,chaosDrops-chaosRecovered);
+    if(s.chaos){
+      if(unexpected>th.maxDisconnects)reasons.push(unexpected+' unexpected disconnect'+(unexpected===1?'':'s')+' beyond the '+chaosDrops+' chaos-injected (max '+th.maxDisconnects+')');
+      if(unrecovered>0)reasons.push(unrecovered+' chaos drop'+(unrecovered===1?'':'s')+' never reconnected');
+    }else if(s.disconnects>th.maxDisconnects)reasons.push(s.disconnects+' disconnects (max '+th.maxDisconnects+')');
     if(del<th.minDeliveryPct)reasons.push('Delivery '+del+'% (min '+th.minDeliveryPct+'%)');
     if(s.safetyMiss>0)reasons.push(s.safetyMiss+' life-safety alert'+(s.safetyMiss===1?'':'s')+' missed');
     run.verdict=reasons.length?'fail':'pass';
@@ -3476,7 +3483,10 @@ function simFinishSoak(reason){
   qcRunLog.entries.push({ts:run.endedAt,type:'run',msg:'Duration '+fmtDur(run.durationSec)+' · '+s.ev+' events injected',ok:true});
   var mk=function(msg,ok){qcRunLog.entries.push({ts:run.endedAt,type:'metric',msg:msg,ok:ok});if(ok)qcRunLog.passed++;else qcRunLog.failed++;};
   mk('Delivery '+del+'% (min '+th.minDeliveryPct+'%)',del>=th.minDeliveryPct);
-  mk('Disconnects '+s.disconnects+' (max '+th.maxDisconnects+')',s.disconnects<=th.maxDisconnects);
+  if(s.chaos){var _un=Math.max(0,s.disconnects-(s.chaosDrops||0));
+    mk('Chaos drops '+(s.chaosDrops||0)+' injected · '+(s.chaosRecovered||0)+' recovered',(s.chaosRecovered||0)>=(s.chaosDrops||0));
+    mk('Unexpected disconnects '+_un+' (max '+th.maxDisconnects+')',_un<=th.maxDisconnects);
+  }else mk('Disconnects '+s.disconnects+' (max '+th.maxDisconnects+')',s.disconnects<=th.maxDisconnects);
   mk('Uptime '+run.uptimePct+'%',run.uptimePct>=90);
   mk('Life-safety misses '+s.safetyMiss,s.safetyMiss===0);
   qcRunLog.entries.push({ts:run.endedAt,type:'run',msg:'■ Verdict: '+(run.verdict||'').toUpperCase()+(reasons.length?' — '+reasons.join('; '):''),ok:run.verdict==='pass'});
