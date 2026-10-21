@@ -242,6 +242,11 @@ service cloud.firestore {
     match /releases/{id} {
       allow read, write: if signedIn();
     }
+    // Launches — the ship-decision records that tie one release per product
+    // lane to QC evidence, sign-offs and a frozen readiness snapshot.
+    match /launches/{id} {
+      allow read, write: if signedIn();
+    }
     match /qc_runs/{id} {
       allow read, write: if signedIn();
     }
