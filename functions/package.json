@@ -1,7 +1,7 @@
 {
   "name": "safewave-command-center-functions",
   "description": "Backend for Safewave Command Center — email ingest, replies, ticket auto-capture, overdue nudges.",
-  "engines": { "node": "20" },
+  "engines": { "node": "22" },
   "main": "index.js",
   "scripts": {
     "serve": "firebase emulators:start --only functions",
