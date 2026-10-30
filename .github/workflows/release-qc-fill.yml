@@ -1,0 +1,42 @@
+# One-off: fill Release QC Gates 1–2 for the November release and record the
+# office / Pace stock counts. Runs only on pushes to this throwaway branch.
+name: Release QC — fill Gates 1–2 (one-off)
+on:
+  push:
+    branches: [ claude/release-qc-fill ]
+permissions:
+  contents: read
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out firmware 1.0.51 (commit 7cc0cb9)
+        uses: actions/checkout@v4
+        with:
+          repository: Bherald42/safewave-band-firmware
+          ref: 7cc0cb984fbb8e6e19dc04a58328a5c0250d18ed
+          token: ${{ secrets.FW_REPO_TOKEN }}
+          path: fw
+      - name: Install ARM GCC (arm-none-eabi 10-2020-q4, same pin as the firmware CI)
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: '10-2020-q4'
+      - name: Build firmware
+        working-directory: fw
+        run: |
+          grep -E '^[[:space:]]*#define[[:space:]]+APP_VERSION[[:space:]]+0x0011051' band-010010/examples/none_evm/ble_band/code/app.h
+          chmod +x build.sh && ./build.sh
+          test -f output/fr8000_project.bin
+          sha256sum output/fr8000_project.bin
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install firebase-admin
+        run: npm ci --prefix functions || npm install --prefix functions
+      - name: Fill Gates 1–2 and stock
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FW_BIN: fw/output/fr8000_project.bin
+          NODE_PATH: functions/node_modules
+        run: node tools/release-qc-fill/fill.js
