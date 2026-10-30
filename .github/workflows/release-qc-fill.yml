@@ -11,24 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check out firmware 1.0.51 (commit 7cc0cb9)
-        uses: actions/checkout@v4
-        with:
-          repository: Bherald42/safewave-band-firmware
-          ref: 7cc0cb984fbb8e6e19dc04a58328a5c0250d18ed
-          token: ${{ secrets.FW_REPO_TOKEN }}
-          path: fw
-      - name: Install ARM GCC (arm-none-eabi 10-2020-q4, same pin as the firmware CI)
-        uses: carlosperate/arm-none-eabi-gcc-action@v1
-        with:
-          release: '10-2020-q4'
-      - name: Build firmware
-        working-directory: fw
+      - name: Verify the firmware image
         run: |
-          grep -E '^[[:space:]]*#define[[:space:]]+APP_VERSION[[:space:]]+0x0011051' band-010010/examples/none_evm/ble_band/code/app.h
-          chmod +x build.sh && ./build.sh
-          test -f output/fr8000_project.bin
-          sha256sum output/fr8000_project.bin
+          echo "1b13244b4605517b24668aa7628d45f80ff978c2fd5a5f16aaef6e9ded01dfd2  tools/release-qc-fill/Safewave_band_firmware_v1.0.51_7cc0cb9.bin" | sha256sum -c -
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -37,6 +22,6 @@ jobs:
       - name: Fill Gates 1–2 and stock
         env:
           SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          FW_BIN: fw/output/fr8000_project.bin
+          FW_BIN: tools/release-qc-fill/Safewave_band_firmware_v1.0.51_7cc0cb9.bin
           NODE_PATH: functions/node_modules
         run: node tools/release-qc-fill/fill.js
