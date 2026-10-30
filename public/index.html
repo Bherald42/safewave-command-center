@@ -161,6 +161,43 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .qs-act{width:auto;padding:5px 12px;font-size:12px;flex:0 0 auto}
 .qs-bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin:10px 0 4px}
 .qs-bar i{display:block;height:100%;background:var(--good);transition:width .3s}
+/* Release QC — four gate tiles, tasks testers check off (✓) or flag (⚑). Flags are amber; red stays life-safety only. */
+.rg-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 9px}
+@media(max-width:760px){.rg-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rg-tile{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;cursor:pointer;color:var(--text);font-family:var(--font-b);box-shadow:var(--shadow)}
+.rg-tile.on{border-color:var(--wave);box-shadow:inset 0 0 0 1px var(--wave)}
+.rg-tile.rg-warn:not(.on){border-color:var(--amber)}
+.rg-tile:focus-visible,.rg-ok:focus-visible,.rg-flag:focus-visible,.rg-owner:focus-visible,.rg-link:focus-visible{outline:2px solid var(--wave);outline-offset:2px}
+.rg-tile .qs-bar{width:100%}
+.rg-n{font-family:var(--font-m);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.rg-name{font-weight:700;font-size:15px;line-height:1.25}
+.rg-who{font-size:11.5px;color:var(--muted)}
+.rg-comps{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rg-comp{display:inline-flex;flex-direction:column;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:5px 9px;font-size:11px;color:var(--muted);min-width:0}
+.rg-comp b{font-family:var(--font-m);font-size:12.5px;color:var(--text)}
+.rg-task{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+.rg-task .grow{min-width:0}
+.rg-btns{display:flex;gap:6px;flex:0 0 auto}
+.rg-ok,.rg-flag{width:46px;height:42px;border-radius:11px;border:1px solid var(--line);background:var(--surface-2);color:var(--muted);font-size:17px;font-weight:700;cursor:pointer;font-family:var(--font-b)}
+.rg-ok.on{background:var(--good);border-color:var(--good);color:#fff}
+.rg-flag.on{background:var(--amber);border-color:var(--amber);color:#241700}
+.rg-owner{border:1px solid var(--line);background:var(--surface-2);color:var(--muted);border-radius:99px;font-size:10.5px;font-weight:600;padding:1px 8px;margin-left:4px;cursor:pointer;font-family:var(--font-b);vertical-align:1px}
+.rg-link{background:none;border:0;padding:4px 0 0;color:var(--wave);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font-b);display:block}
+.rg-box{margin:0 0 10px 28px;padding:10px 12px;background:var(--surface-2);border-radius:10px;border-left:3px solid var(--amber)}
+.rg-box-ok{border-left-color:var(--good)}
+.rg-flagtxt{margin-top:4px;padding:6px 9px;background:var(--amber-dim);border-radius:8px;color:var(--text);font-size:12.5px}
+.rg-flagtxt span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.rg-notes{white-space:pre-wrap;font-size:13px;color:var(--text);border-left:3px solid var(--wave);padding:2px 0 2px 12px;margin:8px 0 4px}
+.rg-ship{margin-top:12px;padding:12px;border-radius:12px;border:1px solid var(--line);font-size:13px;color:var(--text)}
+.rg-ship.rg-go{border-color:var(--good);background:var(--good-dim)}
+.rg-ship.rg-go b{color:var(--good)}
+.rg-rrow{display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:12.5px;color:var(--text)}
+.rg-rrow .grow{min-width:0}
+.rg-rrow i{display:block;font-style:normal;color:var(--muted);font-size:11.5px}
+.rg-rs{flex:0 0 150px;color:var(--faint);font-size:12px;font-weight:600}
+.rg-rs.rg-rs-ok{color:var(--good)}.rg-rs.rg-rs-warn{color:var(--amber)}
+@media(max-width:520px){.rg-rrow{flex-direction:column;gap:2px}.rg-rs{flex:none}}
+.rg-h2{font-size:18px;margin:22px 0 10px}
 .chip.on{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
 .chip:focus-visible{outline:2px solid var(--wave);outline-offset:1px}
 .rolepick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
@@ -2199,7 +2236,7 @@ const QC_DEFAULT_CHECKLISTS={
   app_consumer:QC_APP_CHECKLIST,app_business:QC_APP_CHECKLIST,app_android:QC_APP_CHECKLIST};
 const QC_CHAN={dev:{label:'Dev',pill:'dim'},beta:{label:'Beta',pill:'wave'},prod:{label:'Production',pill:'wave'}};
 const QC_RELSTATUS={draft:{label:'Draft',pill:'dim'},testing:{label:'In QC',pill:'wave'},passed:{label:'Passed QC',pill:'good'},failed:{label:'Failed QC',pill:'amber'},released:{label:'Released ✓',pill:'good'}};
-let RELEASES={}, QCRUNS={}, LAUNCHES={}, SETTINGS_QC={}, qcUnsubR=null, qcUnsubRun=null, qcUnsubL=null, qcTab='ship', qcRelView=null, qcLaunchView=null, qcProdFilter='all';
+let RELEASES={}, QCRUNS={}, LAUNCHES={}, SETTINGS_QC={}, qcUnsubR=null, qcUnsubRun=null, qcUnsubL=null, qcTab='release', qcRelView=null, qcLaunchView=null, qcProdFilter='all';
 let qcBench={running:false,run:null,dev:null,tickTimer:null,alertTimer:null,connected:false,connectedMs:0,lastTickAt:0,t0:0,downSince:0,selRel:null};
 let qcSerial={port:null,reader:null,reading:false};
 let qcFwUploading=false, qcFwPickTarget=null;
@@ -2211,17 +2248,17 @@ function subscribeQC(){
   if(qcUnsubR){try{qcUnsubR()}catch(e){}}
   if(qcUnsubRun){try{qcUnsubRun()}catch(e){}}
   try{qcUnsubR=firebase.firestore().collection('releases').onSnapshot(qs=>{
-    RELEASES={};qs.forEach(d=>RELEASES[d.id]=Object.assign({id:d.id},d.data()));qcLoadedR=true;qcEnsureShip();
-    const scr=document.getElementById('s-qc');if(scr&&scr.classList.contains('on')){if(!qcBench.running)renderQC()}else refreshPulse();
+    RELEASES={};qs.forEach(d=>RELEASES[d.id]=Object.assign({id:d.id},d.data()));qcLoadedR=true;relEnsure();
+    const scr=document.getElementById('s-qc');if(scr&&scr.classList.contains('on')){if(qcTab==='release')renderQC()}else refreshPulse();
   },e=>{});}catch(e){}
   if(qcUnsubL){try{qcUnsubL()}catch(e){}}
   try{qcUnsubL=firebase.firestore().collection('launches').onSnapshot(qs=>{
-    LAUNCHES={};qs.forEach(d=>LAUNCHES[d.id]=Object.assign({id:d.id},d.data()));qcLoadedL=true;qcEnsureShip();
-    if(ACTIVE==='s-qc')renderQC();
+    LAUNCHES={};qs.forEach(d=>LAUNCHES[d.id]=Object.assign({id:d.id},d.data()));qcLoadedL=true;relEnsure();
+    if(ACTIVE==='s-qc'&&qcTab==='release')renderQC();
   })}catch(e){}
   try{qcUnsubRun=firebase.firestore().collection('qc_runs').orderBy('startedAt','desc').limit(200).onSnapshot(qs=>{
     QCRUNS={};qs.forEach(d=>QCRUNS[d.id]=Object.assign({id:d.id},d.data()));
-    const scr=document.getElementById('s-qc');if(scr&&scr.classList.contains('on')&&!qcBench.running)renderQC();
+    const scr=document.getElementById('s-qc');if(scr&&scr.classList.contains('on')&&qcTab==='release')renderQC();
   },e=>{});}catch(e){}
 }
 function persistLaunch(l){if(hasFirestore())firebase.firestore().collection('launches').doc(l.id).set(l,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
@@ -2234,532 +2271,390 @@ function qcVerdictChip(v){const m=({pass:['good','PASS'],fail:['amber','FAIL'],r
 function releaseRuns(id){return Object.values(QCRUNS).filter(x=>x.releaseId===id).sort((a,b)=>(b.startedAt||'').localeCompare(a.startedAt||''))}
 function releasePassed(r){return Object.values(QCRUNS).some(x=>x.releaseId===r.id&&x.version===r.version&&x.verdict==='pass')}
 function qcNotifyLeads(title,body){if(typeof notifyAll==='function')notifyAll(title,body,'s-qc')}
-function setQcTab(t){qcTab=t;qcRelView=null;qcLaunchView=null;renderQC()}
-function qcSetProd(p){qcProdFilter=p;renderQC()}
+function setQcTab(t){qcTab=t;qcRelView=null;renderQC();window.scrollTo(0,0)}
 function renderQC(){
-  // One page (Ship) with the tools behind it — not four tabs in front of it.
-  const tools=[['sim','Device simulator'],['flash','Flash & monitor'],['releases','All releases'],['launches','Past ships']];
-  const tb=document.getElementById('qc-tabs');
-  if(tb)tb.innerHTML=(qcTab==='ship'?'<span class="d" style="color:var(--faint);align-self:center">Tools</span>':'<button class="chip on" onclick="setQcTab(\'ship\')">← Ship checklist</button>')
-    +tools.map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
-  const n=Object.keys(RELEASES).length;
-  const testing=Object.values(RELEASES).filter(r=>r.status==='testing').length,ready=Object.values(RELEASES).filter(r=>r.status==='passed').length;
-  const sub=document.getElementById('qc-sub');
-  if(sub&&qcTab==='ship')sub.textContent='One checklist per product. Finish every line, get an admin sign-off, ship.';
-  else if(sub)sub.textContent=n?(n+' release'+(n===1?'':'s')+' · '+testing+' in QC · '+ready+' ready to ship'):'Every build earns its release — soak-tested on a real band before it ships.';
+  // Two tabs: the release (four gates → report) and an open simulator with the firmware flasher.
+  if(qcTab!=='sim')qcTab='release';
   const body=document.getElementById('qc-body');if(!body)return;
-  if(qcRelView){renderQcReleaseDetail(body);return}
-  if(qcTab==='ship')body.innerHTML=qcShipView();
-  else if(qcTab==='sim'){body.innerHTML=qcSimView();simAfterRender();}
-  else if(qcTab==='flash')body.innerHTML=qcFlashView();
-  else if(qcTab==='launches')body.innerHTML=qcLaunchView?qcLaunchDetailView():qcLaunchesView();
-  else body.innerHTML=qcReleasesView();
+  // A teammate's check-off arriving while you type must not wipe what you're typing.
+  const ae=document.activeElement;
+  if(qcTab==='release'&&ae&&body.contains(ae)&&(ae.tagName==='TEXTAREA'||(ae.tagName==='INPUT'&&ae.type!=='date'))){
+    if(!ae.__qcDefer){ae.__qcDefer=true;ae.addEventListener('blur',function(){setTimeout(renderQC,0)},{once:true})}return}
+  const tb=document.getElementById('qc-tabs');
+  if(tb)tb.innerHTML=[['release','Release'],['sim','Simulator & flashing']].map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
+  const sub=document.getElementById('qc-sub');
+  if(sub)sub.textContent=qcTab==='release'?'One release, four gates. Check off what works, flag what doesn’t, and the report writes itself.':'Try the app on any phone and OS, run soak tests, and flash firmware to a band.';
+  if(qcTab==='release')body.innerHTML=relView();
+  else{body.innerHTML=qcSimView()+'<h2 class="rg-h2">Flash firmware to a band</h2>'+qcFlashView();simAfterRender();}
 }
-/* ================= IN-PERSON TESTS (real band + real phone, on site) =================
-   Hands-on tests Trevon runs with the band on a wrist and the phone in a
-   pocket. Each records the real numbers (counts, minutes, seconds) — not a
-   tick — so uptime, connectivity and ANCS delivery are measured, and the
-   gate passes only when the numbers clear the bar. Bars come from the QC
-   thresholds (settings/qc): minDeliveryPct, maxDisconnects, minUptimePct. */
-const QC_INPERSON={
-  app:[
-    {id:'ancs_locked',label:'ANCS: notifications buzz the band with the phone locked',how:'Lock the phone. Send 20 texts from another phone, a few seconds apart. Count the band buzzes.',kind:'ratio',a:'Buzzed',b:'Sent',bDef:20,bar:'delivery',metric:'ancs'},
-    {id:'ancs_killed',label:'ANCS: notifications still buzz with the app force-quit',how:'Swipe the app away. Send 5 texts. Count the band buzzes.',kind:'ratio',a:'Buzzed',b:'Sent',bDef:5,bar:'delivery',metric:'ancs'},
-    {id:'admin_alerts',label:'Admin alerts: delivered and acknowledged',how:'From the dashboard, send 10 alerts to this phone. Acknowledge each on the band or phone. Count what the dashboard shows as Acknowledged.',kind:'ratio',a:'Acknowledged',b:'Sent',bDef:10,bar:'delivery',metric:'alerts'},
-    {id:'uptime',label:'Connection uptime over an hour of normal wear',how:'Wear the band and carry the phone for 60 minutes of normal use. Add up the minutes the app showed Connected.',kind:'ratio',a:'Minutes connected',b:'Minutes worn',bDef:60,bar:'uptime',metric:'uptime'},
-    {id:'disconnects',label:'Unexpected disconnects during that hour',how:'Count every disconnect you did not cause on purpose during the 60 minutes.',kind:'max',a:'Disconnects',unit:'',bar:'disconnects',metric:'disconnects'},
-    {id:'reconnect',label:'Reconnects by itself after walking out of range',how:'Walk away until the app shows disconnected, then come back. Time from stepping back in range to Connected. Do it 5 times; enter the slowest.',kind:'max',a:'Slowest reconnect',unit:'s',bar:30,metric:'reconnect'}],
-  firmware:[
-    {id:'uptime',label:'8-hour wear on a real band: connection uptime',how:'Wear the band for a full 8-hour day with the phone nearby. Add up the minutes the app showed Connected.',kind:'ratio',a:'Minutes connected',b:'Minutes worn',bDef:480,bar:'uptime',metric:'uptime'},
-    {id:'disconnects',label:'Unexpected disconnects during the 8 hours',how:'Count every disconnect you did not cause on purpose.',kind:'max',a:'Disconnects',unit:'',bar:'disconnects',metric:'disconnects'},
-    {id:'reconnect',label:'Reconnects by itself after walking out of range',how:'Walk away until disconnected, come back. Time to Connected, 5 times; enter the slowest.',kind:'max',a:'Slowest reconnect',unit:'s',bar:30,metric:'reconnect'},
-    {id:'ota',label:'Update in person on 3 bands, one of them a legacy 0.0.x band',how:'Run the app’s firmware update on each band, phone plugged in and next to the band. Count the bands that finish on 1.0.51.',kind:'ratio',a:'Updated',b:'Attempted',bDef:3,bar:100,metric:'ota'},
-    {id:'safety_stop',label:'Life-safety buzz runs continuously and stops on the band button',how:'Trigger 5 life-safety alerts. Count the times it buzzed continuously and stopped on one button press.',kind:'ratio',a:'Worked',b:'Tries',bDef:5,bar:100},
-    {id:'battery',label:'Battery used over the 8 hours (recorded)',how:'Battery % at the start and at the end of the 8-hour wear.',kind:'drain',a:'Start %',b:'End %',hours:8,metric:'battery'}]};
-function qcIPTests(r){return qcProd(r.product)==='firmware'?QC_INPERSON.firmware:QC_INPERSON.app}
-function qcIPBar(t){const th=qcThresholds(),sl=qcCurrentShip(),qa=sl&&qcQaApplies(sl);
-  if(t.bar==='delivery')return qa?qcQaT(sl,'delivery'):th.minDeliveryPct;if(t.metric==='reconnect'&&qa)return qcQaT(sl,'rc99');if(t.bar==='uptime')return SETTINGS_QC.minUptimePct||99;if(t.bar==='disconnects')return th.maxDisconnects;return t.bar}
-function qcIPNum(v){return v===''||v==null||isNaN(+v)?null:+v}
-/* → {state:'open'|'pass'|'fail', text, bar, pct} */
-function qcIPEval(t,v){
-  v=v||{};const a=qcIPNum(v.a),b=qcIPNum(v.b),bar=qcIPBar(t);
-  if(t.kind==='ratio'){if(a==null||b==null||b<=0)return {state:'open',bar:'≥ '+bar+'%'};const pct=Math.round(a/b*1000)/10;
-    return {state:pct>=bar?'pass':'fail',text:a+' / '+b+' · '+pct+'%',bar:'≥ '+bar+'%',pct:pct,a:a,b:b};}
-  if(t.kind==='max'){if(a==null)return {state:'open',bar:'≤ '+bar+t.unit};return {state:a<=bar?'pass':'fail',text:a+t.unit,bar:'≤ '+bar+t.unit,a:a};}
-  if(a==null||b==null)return {state:'open',bar:'recorded'};
-  return {state:'pass',text:a+'% → '+b+'% · '+(Math.round((a-b)/(t.hours||1)*10)/10)+'%/h',bar:'recorded',a:a,b:b};
-}
-function qcIPStats(r){const ts=qcIPTests(r),v=r.inperson||{};let done=0,fails=0;ts.forEach(function(t){const e=qcIPEval(t,v[t.id]);if(e.state!=='open')done++;if(e.state==='fail')fails++});return {total:ts.length,done:done,fails:fails}}
-function qcIPSave(relId,tid){
-  if(!canQC()){toast('Tech / leadership only');return}
-  const r=RELEASES[relId];if(!r)return;const t=qcIPTests(r).find(function(x){return x.id===tid});if(!t)return;
-  const g=function(k){const e=document.getElementById('qi-'+k+'-'+relId+'-'+tid);return e?e.value.trim():''};
-  const a=g('a'),b=g('b'),note=g('n'),ev={phone:g('ph'),hw:g('hw'),vib:g('vb'),svc:g('sv'),log:g('lg')};
-  if(qcIPNum(a)==null||(t.kind!=='max'&&qcIPNum(b)==null)){toast('Enter the number'+(t.kind==='max'?'':'s'));return}
-  if(!ev.phone||!ev.vib){toast('Evidence package: add the phone model/OS and how the vibration was confirmed');return}
-  r.inperson=Object.assign({},r.inperson||{});
-  r.inperson[tid]={a:+a,b:t.kind==='max'?null:+b,note:note,phone:ev.phone,hw:ev.hw,vib:ev.vib,svc:ev.svc,log:ev.log,by:(CURRENT_USER&&CURRENT_USER.name)||'',at:new Date().toISOString()};
-  RELEASES[relId]=r;persistRelease(r);qcShipOpen[relId+':ip:'+tid]=false;renderQC();
-  const e=qcIPEval(t,r.inperson[tid]);toast(e.state==='fail'?'Recorded — below the bar ('+e.bar+')':'✓ Recorded');
-}
-function qcIPEditor(r,t){
-  const v=(r.inperson||{})[t.id]||{},id=esc(r.id)+'-'+t.id,inp=function(k,label,val,unit){return '<label class="qs-in"><span>'+esc(label)+'</span><input class="field" type="number" inputmode="decimal" id="qi-'+k+'-'+id+'" value="'+(val==null?'':esc(String(val)))+'"'+(unit?' aria-label="'+esc(label+' ('+unit+')')+'"':'')+'>'+(unit?'<em>'+esc(unit)+'</em>':'')+'</label>'};
-  return '<div class="qs-ipbox"><div class="d" style="margin-bottom:8px">'+esc(t.how)+'</div><div class="row" style="gap:8px;flex-wrap:wrap">'
-    +inp('a',t.a,v.a!=null?v.a:'',t.unit)+(t.kind==='max'?'':inp('b',t.b,v.b!=null?v.b:(t.bDef!=null?t.bDef:''),''))+'</div>'
-    +'<div class="d qs-sub" style="margin:8px 0 4px">Evidence package — required for every build</div><div class="row" style="gap:6px;flex-wrap:wrap">'
-    +'<input class="field" id="qi-ph-'+id+'" placeholder="Phone model & OS (required)" value="'+esc(v.phone||'')+'" style="margin:0;flex:1;min-width:170px">'
-    +'<input class="field" id="qi-hw-'+id+'" placeholder="Band hardware rev" value="'+esc(v.hw||'')+'" style="margin:0;width:140px">'
-    +'<select class="field" id="qi-vb-'+id+'" style="margin:0;width:auto"><option value="">Vibration confirmed by… (required)</option>'+[['human','A person felt it'],['video','Video'],['sensor','Sensor']].map(function(o){return '<option value="'+o[0]+'"'+(v.vib===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'
-    +'<select class="field" id="qi-sv-'+id+'" style="margin:0;width:auto"><option value="">ANCS / Android service state…</option>'+['ready','not ready','n/a'].map(function(o){return '<option'+(v.svc===o?' selected':'')+'>'+o+'</option>'}).join('')+'</select>'
-    +'<input class="field" id="qi-lg-'+id+'" placeholder="Link to raw logs" value="'+esc(v.log||'')+'" style="margin:0;flex:1;min-width:170px"></div>'
-    +'<input class="field" id="qi-n-'+id+'" placeholder="Note — where, conditions, anything odd" value="'+esc(v.note||'')+'" style="margin:8px 0">'
-    +'<div class="row" style="gap:8px"><button class="btn" style="flex:1" onclick="qcIPSave('+ocjson(r.id)+','+ocjson(t.id)+')">Save result</button><button class="btn ghost" style="flex:1" onclick="qcShipToggle('+ocjson(r.id+':ip:'+t.id)+')">Cancel</button></div></div>';
-}
-/* Connection numbers: in-person when recorded, otherwise the latest soak. */
-function qcConnNumbers(r){
-  const lane=qcProd(r.product),v=r.inperson||{},ts=qcIPTests(r),run=releaseRuns(r.id).find(function(x){return x.kind!=='custom'})||null,out=[];
-  const ip=function(id){const t=ts.find(function(x){return x.id===id});return t?{t:t,e:qcIPEval(t,v[id])}:null};
-  const tile=function(label,val,ok,src){out.push({label:label,val:val,ok:ok,src:src})};
-  const up=ip('uptime');
-  if(up&&up.e.state!=='open')tile('Uptime',up.e.pct+'%',up.e.state==='pass','in person · '+up.e.a+'/'+up.e.b+' min');
-  else if(run&&run.uptimePct!=null)tile('Uptime',run.uptimePct+'%',run.uptimePct>=(SETTINGS_QC.minUptimePct||99),'soak · '+fmtDur(run.durationSec||0)+(run.mode==='ble'?' real band':' simulated'));else tile('Uptime','—',null,'');
-  const dc=ip('disconnects');
-  if(dc&&dc.e.state!=='open')tile('Disconnects',String(dc.e.a),dc.e.state==='pass','in person');
-  else if(run&&run.disconnects!=null)tile('Disconnects',String(run.disconnects),run.disconnects<=qcThresholds().maxDisconnects,'soak');else tile('Disconnects','—',null,'');
-  const rc=ip('reconnect');
-  if(rc&&rc.e.state!=='open')tile('Slowest reconnect',rc.e.a+'s',rc.e.state==='pass','in person');
-  else if(run&&run.maxGapMs)tile('Longest gap',Math.round(run.maxGapMs/1000)+'s',run.maxGapMs<=30000,'soak');else tile('Slowest reconnect','—',null,'');
-  const al=ip('admin_alerts');
-  if(al&&al.e.state!=='open')tile('Alert delivery',al.e.pct+'%',al.e.state==='pass','in person · '+al.e.a+'/'+al.e.b);
-  else if(run&&run.alertsSent){const p=Math.round((run.alertsAcked||0)/run.alertsSent*1000)/10;tile('Alert delivery',p+'%',p>=qcThresholds().minDeliveryPct,'soak · '+(run.alertsAcked||0)+'/'+run.alertsSent+(run.mode==='ble'?' real band':' simulated'));}else tile('Alert delivery','—',null,'');
-  if(lane==='firmware'){const o=ip('ota');tile('OTA',o&&o.e.state!=='open'?(o.e.a+'/'+o.e.b):'—',o&&o.e.state!=='open'?o.e.state==='pass':null,o&&o.e.state!=='open'?'in person':'');}
-  else{const a1=ip('ancs_locked'),a2=ip('ancs_killed');let s=0,n=0,any=false;[a1,a2].forEach(function(x){if(x&&x.e.state!=='open'){any=true;s+=x.e.a;n+=x.e.b}});
-    const p=any&&n?Math.round(s/n*1000)/10:null;tile('ANCS',p==null?'—':p+'%',p==null?null:p>=qcThresholds().minDeliveryPct,any?'in person · '+s+'/'+n:'');}
-  return out;
-}
-function qcConnStrip(r){return '<div class="qs-nums">'+qcConnNumbers(r).map(function(x){return '<div class="qs-num'+(x.ok===true?' qs-ok':x.ok===false?' qs-warn':'')+'"><b>'+esc(x.val)+'</b><span>'+esc(x.label)+'</span>'+(x.src?'<i>'+esc(x.src)+'</i>':'')+'</div>'}).join('')+'</div>'}
-/* ================= QA PROTOCOL — "Safewave QA Engineering Test Plan" v1.0 =================
-   The engineering baseline (20 Oct 2026) as a working checklist on the ship:
-   phase gates 0–4, negative tests, P0–P3 defects, the device matrix (which
-   doubles as the physical-lab ledger), proposed targets with a change log
-   (never silently changed), team review of every requirement, a weekly
-   review, and two sign-offs (CEO/product + engineering). Stored on the
-   launch doc as l.qa. Release principle: a passing simulation never stands in
-   for a physical-device test, and a lab pass never stands in for field evidence. */
-const QA_PLAN_VERSION='1.0';
-const QA_PHASES=[
-  {name:'Audit & instrumentation',do:'Brad demos the current dashboard and tests, and documents the test architecture, simulator vs hardware, supported devices, firmware/app builds, event logs, known defects and baseline results.',
-    items:[['p0_demo','Live demo of the current QA'],['p0_inventory','Inventory: what is simulated vs tested on physical hardware'],['p0_logs','Sample raw logs for one passing and one failing notification'],['p0_faildemo','A deliberate failure demonstrated live'],['p0_gaps','Gaps against this plan, with estimated effort and owners'],['p0_roadmap','Dated implementation roadmap returned'],['p0_tests','Every test has an owner, reproducible steps, expected + actual outcome and timestamped evidence']],
-    auto:['matrix','review']},
-  {name:'Simulation / component',do:'Protocol and state-machine tests, notification parsing, reconnect backoff, ANCS state transitions, Android service recovery and fault injection — at least 1,000 scenario executions across a defined matrix.',
-    counts:[['p1_runs','Scenario executions across the defined matrix',1000]],
-    items:[['p1_crit','100% of critical-path assertions pass'],['p1_inject','Intentionally injected failures are caught (shown, not assumed)']],
-    auto:['p0p1']},
-  {name:'Automated physical lab',do:'Real bands with real iPhones and Android phones. At least 1,000 eligible notifications in total, at least 100 per device/OS in the matrix, and at least 30 disconnect/reconnect cycles per device. Record the numbers in the device matrix.',
-    items:[['p2_unexplained','Zero unexplained missed critical-path notifications'],['p2_logs','All test logs complete']],
-    scen:true,auto:['lab_total','lab_combo','lab_delivery','lab_reconnect','lab_latency']},
-  {name:'Supervised field pilot',do:'At least 5 wearers for at least 5 full workdays each: daily notification and connection audits, range transitions, phone locks, overnight charging and a failure diary.',
-    counts:[['p3_wearers','Wearers',5],['p3_days','Full workdays each (fewest of any wearer)',5],['p3_events','Eligible field notifications',null],['p3_delivered','Delivered (observed buzz)',null]],
-    items:[['p3_audits','Daily notification and connection audits done'],['p3_diary','Failure diary kept: range transitions, phone locks, overnight charging'],['p3_recov','Recoveries and user alerts demonstrated']],
-    auto:['p0p1','field_delivery']},
-  {name:'Release candidate / controlled rollout',do:'Freeze versions, repeat the regression suite, deploy to a small monitored cohort, and capture failures and rollback readiness.',
-    items:[['p4_freeze','Versions frozen (no changes after this point)'],['p4_regress','Regression suite repeated on the frozen builds'],['p4_cohort','Deployed to a small monitored cohort'],['p4_rollback','Rollback verified'],['p4_owner','Monitoring / incident owner assigned (name in the note)']],
-    auto:['p0p1']}];
-/* Section 2 — minimum starting coverage. */
-const QA_SCEN=['Fresh install and pair','100-notification burst / sequence','App in foreground and in background','Screen locked','Phone idle','OS notification permissions toggled','ANCS permission denied, then re-granted','Band power cycle','Phone reboot','Bluetooth off / on','Walk out of range and return','App force-closed','Low battery','Firmware update','Multiple paired devices','Day-long wear'];
-const QA_NTYPES=['Phone calls','Text messages','Third-party app #1','Third-party app #2','Third-party app #3','Per-app patterns, strength, counts and duplicate suppression confirmed'];
-/* Section 5 — must be shown live; the QA system has to catch each one. */
-const QA_NEG=[['bt_off','Disable Bluetooth'],['notif_perm','Revoke notification permission'],['ancs_deny','Deny ANCS'],['android_kill','Kill / restrict the Android background service'],['range','Walk out of range'],['band_off','Power down the band'],['wrong_pattern','Trigger an intentionally wrong vibration pattern'],['suppress','Suppress one expected notification']];
-/* Section 6 */
-const QA_SEV={P0:{name:'Stop ship',def:'Safety-relevant alert silently missed, a false “delivered” claim, systemic notification failure, or unrecoverable pairing on a supported device. Halt the phase/release and find the root cause.'},
-  P1:{name:'Block advancement',def:'Repeated ANCS loss, failed automatic reconnection, Android service stops without recovery guidance, a major regression, or missing test evidence. Fix and rerun the affected suite.'},
-  P2:{name:'Conditional',def:'Non-critical UX, an intermittent delay within agreed tolerance, or a documented edge case. May advance only with written risk acceptance and an owner/date.'},
-  P3:{name:'Backlog',def:'Cosmetic / non-functional, no effect on delivery or recovery. Track and prioritize.'}};
-/* Section 4 — proposed; confirm after baseline. Changes need a reason and are logged. */
-const QA_TARGET_DEFS=[['delivery','Notification delivery (observed)','%',99.9,'≥'],['lat95','Latency: 95% of buzzes within','s',5,'≤'],['lat99','Latency: 99% of buzzes within','s',10,'≤'],['rc99','Reconnect: 99% usable within','s',30,'≤'],['rcMed','Reconnect: median','s',10,'≤']];
-const QA_TARGET_TEXT=['ANCS: zero silent “connected but not receiving” passes in every scripted transition; any loss of authorization produces a detectable state and a clear recovery path.','Android: OS-specific behavior verified; never assume the app can detect or alert after a force-stop. Limits documented and user recovery tested on each supported device family.'];
-/* Requirements the team reviews (section 8: Accept / Modify / Not feasible + rationale). */
-const QA_REQS=[['§1 Definitions',[['d_delivery','End-to-end delivery: eligible notification seen at the phone AND the correct band vibration within the latency window; both endpoints logged'],['d_uptime','Connection uptime: connected + notification-capable minutes ÷ eligible in-range, powered-on minutes; exclusions reported separately'],['d_reconnect','Reconnection: from verified return to range until connection AND notification readiness AND a successful test vibration'],['d_ancs','ANCS readiness (iOS): authorization state plus an actual delivered test notification after pair, app restart, range loss, phone restart and band restart'],['d_android','Android readiness: service/background permissions stay effective through process death, OS restrictions and battery optimization, with clear recovery instructions'],['d_falsepass','False pass (says pass when the band did not vibrate correctly) is a test-system defect']]],
-  ['§2 Test matrix',[['m_devices','Published supported device/OS policy, including a lower-end and an older device'],['m_scen','The 16 scenarios as the minimum starting coverage'],['m_types','Calls, texts and at least three third-party apps; patterns, strength, counts and duplicate suppression']]],
-  ['§3 Phase gates',[['g_0','Phase 0 — Audit & instrumentation gate'],['g_1','Phase 1 — Simulation gate: 1,000 executions, 100% critical path'],['g_2','Phase 2 — Physical lab gate: ≥1,000 / ≥100 per device, ≥30 cycles, ≥99.9%, ≥99% reconnect ≤30 s'],['g_3','Phase 3 — Field pilot gate: ≥5 wearers × ≥5 workdays, ≥99.9% with confidence'],['g_4','Phase 4 — Release candidate gate: two sign-offs, rollback verified, owner assigned']]],
-  ['§4 Targets',[['t_delivery','99.9% delivery, reported with sample size and confidence bounds, overall and per platform, device and notification type'],['t_latency','95% within 5 s and 99% within 10 s, phone notification → band vibration'],['t_reconnect','99% usable reconnect within 30 s, median ≤ 10 s, separate from link-only reconnect'],['t_ancs','Zero silent ANCS passes'],['t_android','Android limits documented, recovery tested per device family']]],
-  ['§5–8 Process',[['n_live','The 8 negative tests run live; each failure detected, classified and evidenced'],['s_rules','P0–P3 severity and release rules'],['e_package','The QA evidence package for every build; denominators and exclusions shown, not just a green %'],['w_weekly','Weekly review: delivery trend, reconnect latency, ANCS and Android failures, open P0/P1, coverage, top 3 root causes']]]];
-function qcMe(){return (CURRENT_USER&&CURRENT_USER.name)||''}
-function qcQaApplies(l){return !!l&&(l.id===QC_SHIP.id||!!l.qa)}
-function qcQaNew(){return {version:QA_PLAN_VERSION,gates:{},counts:{},signed:{},neg:{},defects:[],devices:[
-  {model:'iPhone 16 Pro',platform:'ios',os:'',tier:'current'},{model:'iPhone 15 Pro',platform:'ios',os:'',tier:'current'},{model:'iPhone SE',platform:'ios',os:'',tier:'older / lower-end'},
-  {model:'Pixel 8',platform:'android',os:'',tier:'current'},{model:'Galaxy S24',platform:'android',os:'',tier:'current'},{model:'Budget Android (e.g. Galaxy A-series)',platform:'android',os:'',tier:'lower-end'}].map(function(d){return Object.assign({status:'proposed'},d)}),
-  targets:{},targetLog:[],review:{},weekly:[]}}
-function qcQa(l){return l.qa||qcQaNew()}
-function qcQaW(l){if(!l.qa)l.qa=qcQaNew();return l.qa}
-function qcQaSave(l,msg){LAUNCHES[l.id]=l;persistLaunch(l);renderQC();if(msg)toast(msg)}
-function qcQaT(l,k){const q=qcQa(l);const d=QA_TARGET_DEFS.find(function(x){return x[0]===k});return q.targets&&q.targets[k]!=null?q.targets[k]:(d?d[3]:null)}
-function qcWilsonLow(k,n){if(!n)return null;const z=1.96,p=k/n,d=1+z*z/n,c=p+z*z/(2*n),m=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n));return Math.max(0,(c-m)/d*100)}
-function qcPct(k,n){return n?Math.round(k/n*10000)/100:null}
-function qcQaOpenP01(l){return (qcQa(l).defects||[]).filter(function(d){return (d.sev==='P0'||d.sev==='P1')&&d.status==='open'}).length}
-function qcQaLab(l){const ds=qcQa(l).devices||[];let sent=0,del=0,cyc=0,ok30=0;ds.forEach(function(d){sent+=+d.sent||0;del+=+d.delivered||0;cyc+=+d.cycles||0;ok30+=+d.cyc30||0});return {sent:sent,del:del,cyc:cyc,ok30:ok30,devices:ds}}
-/* Automatic gate checks → {ok, label, detail} */
-function qcQaAuto(l,key){
-  const q=qcQa(l),T=function(k){return qcQaT(l,k)};
-  if(key==='p0p1'){const n=qcQaOpenP01(l);return {ok:n===0,label:'No unresolved P0 / P1 defects',detail:n?n+' open':'none open'}}
-  if(key==='matrix'){const ds=q.devices||[];const ios=ds.some(function(d){return d.platform==='ios'}),and=ds.some(function(d){return d.platform==='android'}),low=ds.some(function(d){return /lower/i.test(d.tier||'')}),old=ds.some(function(d){return /older/i.test(d.tier||'')}),os=ds.length&&ds.every(function(d){return (d.os||'').trim()});
-    return {ok:ios&&and&&low&&old&&os,label:'Supported device matrix: iOS + Android, an older and a lower-end device, OS versions filled in',detail:ds.length+' devices'+(os?'':' · OS versions missing')}}
-  if(key==='review'){const all=[];QA_REQS.forEach(function(g){g[1].forEach(function(r){all.push(r[0])})});const done=all.filter(function(id){const fb=(q.review||{})[id]||[];return fb.length&&fb.every(function(f){return f.decision==='accept'||(f.note||'').trim()})}).length;
-    return {ok:done===all.length,label:'Every requirement marked Accept / Modify / Not feasible, with rationale',detail:done+' of '+all.length+' reviewed'}}
-  const lab=qcQaLab(l);
-  if(key==='lab_total')return {ok:lab.sent>=1000,label:'At least 1,000 eligible notifications in total',detail:lab.sent.toLocaleString()+' / 1,000'};
-  if(key==='lab_combo'){const ds=lab.devices,ok=ds.filter(function(d){return (+d.sent||0)>=100&&(+d.cycles||0)>=30}).length;return {ok:ds.length>0&&ok===ds.length,label:'Every device/OS: ≥ 100 notifications and ≥ 30 disconnect/reconnect cycles',detail:ok+' of '+ds.length+' devices'}}
-  if(key==='lab_delivery'){const p=qcPct(lab.del,lab.sent),lo=qcWilsonLow(lab.del,lab.sent);return {ok:p!=null&&p>=T('delivery'),label:'Observed delivery ≥ '+T('delivery')+'% (sample size + confidence reported)',detail:p==null?'no data':(p+'% · '+lab.del.toLocaleString()+'/'+lab.sent.toLocaleString()+' · 95% lower bound '+(Math.round(lo*100)/100)+'%')}}
-  if(key==='lab_reconnect'){const p=qcPct(lab.ok30,lab.cyc);return {ok:p!=null&&p>=99,label:'≥ 99% reconnect-and-ready within '+T('rc99')+' s',detail:p==null?'no data':(p+'% · '+lab.ok30+'/'+lab.cyc+' cycles')}}
-  if(key==='lab_latency'){const ds=lab.devices.filter(function(d){return d.lat95!==''&&d.lat95!=null});const bad=ds.filter(function(d){return +d.lat95>T('lat95')||(d.lat99!==''&&d.lat99!=null&&+d.lat99>T('lat99'))}).length;
-    return {ok:ds.length===lab.devices.length&&ds.length>0&&!bad,label:'Latency: 95% ≤ '+T('lat95')+' s and 99% ≤ '+T('lat99')+' s on every device',detail:ds.length+' of '+lab.devices.length+' measured'+(bad?' · '+bad+' over':'')}}
-  if(key==='field_delivery'){const c=q.counts||{},n=+c.p3_events||0,k=+c.p3_delivered||0,p=qcPct(k,n),lo=qcWilsonLow(k,n);return {ok:p!=null&&p>=T('delivery'),label:'Field delivery ≥ '+T('delivery')+'% (sample size + confidence reported)',detail:p==null?'no data':(p+'% · '+k+'/'+n+' · 95% lower bound '+(Math.round(lo*100)/100)+'%')}}
-  return {ok:false,label:key,detail:''};
-}
-function qcQaPhaseState(l,i){
-  const q=qcQa(l),P=QA_PHASES[i],rows=[];
-  (P.counts||[]).forEach(function(c){const v=(q.counts||{})[c[0]];rows.push({ok:c[2]==null?(v!==''&&v!=null):(+v||0)>=c[2]})});
-  (P.items||[]).forEach(function(it){const g=(q.gates||{})[it[0]];rows.push({ok:!!g&&(g.state==='pass'||g.state==='na'),fail:!!g&&g.state==='fail'})});
-  if(P.scen)QA_SCEN.concat(QA_NTYPES).forEach(function(s,j){const g=(q.gates||{})['sc'+j];rows.push({ok:!!g&&(g.state==='pass'||g.state==='na'),fail:!!g&&g.state==='fail'})});
-  (P.auto||[]).forEach(function(a){rows.push({ok:qcQaAuto(l,a).ok})});
-  const done=rows.filter(function(r){return r.ok}).length;
-  return {total:rows.length,done:done,fails:rows.filter(function(r){return r.fail}).length,ready:done===rows.length,signed:(q.signed||{})[i]||null};
-}
-function qcQaCurrentPhase(l){for(let i=0;i<QA_PHASES.length;i++){if(!(qcQa(l).signed||{})[i])return i}return QA_PHASES.length}
-function qcQaNegDone(l){const n=qcQa(l).neg||{};return QA_NEG.filter(function(x){const v=n[x[0]];return v&&v.detected&&v.classified&&(v.evidence||'').trim()}).length}
-/* Blockers this protocol adds to the ship's readiness. */
-function qcQaBlockers(l){
-  const b=[],cur=qcQaCurrentPhase(l),q=qcQa(l);
-  if(cur<QA_PHASES.length)b.push('QA protocol: Phase '+cur+' — '+QA_PHASES[cur].name+' gate not signed'+(cur<4?' (and '+(4-cur)+' later phase'+(4-cur===1?'':'s')+')':''));
-  const p01=qcQaOpenP01(l);if(p01)b.push(p01+' open P0/P1 defect'+(p01===1?'':'s'));
-  const p2=(q.defects||[]).filter(function(d){return d.sev==='P2'&&d.status==='open'&&!(d.accept||'').trim()}).length;if(p2)b.push(p2+' open P2 defect'+(p2===1?'':'s')+' without written risk acceptance');
-  const nd=qcQaNegDone(l);if(nd<QA_NEG.length)b.push('negative tests '+nd+'/'+QA_NEG.length+' detected, classified and evidenced');
-  return b;
-}
-/* ---- actions ---- */
-function qcQaCycle(lid,id){if(!canQC()){toast('Tech / leadership only');return}const l=LAUNCHES[lid];if(!l)return;const q=qcQaW(l);q.gates=q.gates||{};
-  const g=Object.assign({state:'open'},q.gates[id]||{}),order=['open','pass','fail','na'];g.state=order[(order.indexOf(g.state)+1)%order.length];g.by=qcMe();g.at=new Date().toISOString();
-  if(g.state==='fail'){const n=prompt('What failed? (goes in the report — log a defect for anything P0–P2)');g.note=(n||'').trim()}
-  q.gates[id]=g;qcQaSave(l)}
-function qcQaNote(lid,id){const l=LAUNCHES[lid];if(!l)return;const q=qcQaW(l);q.gates=q.gates||{};const g=Object.assign({state:'open'},q.gates[id]||{});
-  const n=prompt('Evidence / note — link to logs, video, who did it:',g.note||'');if(n==null)return;g.note=n.trim();g.by=g.by||qcMe();g.at=g.at||new Date().toISOString();q.gates[id]=g;qcQaSave(l)}
-function qcQaCount(lid,id,v){const l=LAUNCHES[lid];if(!l||!canQC())return;const q=qcQaW(l);q.counts=q.counts||{};q.counts[id]=v===''?'':+v;q.countsBy=q.countsBy||{};q.countsBy[id]={by:qcMe(),at:new Date().toISOString()};qcQaSave(l)}
-function qcQaSign(lid,i){if(!canQC()){toast('Tech / leadership only');return}const l=LAUNCHES[lid];if(!l)return;
-  if(i>0&&!(qcQa(l).signed||{})[i-1]){toast('Sign Phase '+(i-1)+' first');return}
-  const st=qcQaPhaseState(l,i);if(!st.ready){toast('Gate not met — '+(st.total-st.done)+' item'+(st.total-st.done===1?'':'s')+' left');return}
-  const note=prompt('Signing the Phase '+i+' gate ('+QA_PHASES[i].name+'). Note (optional):');if(note==null)return;
-  const q=qcQaW(l);q.signed=q.signed||{};q.signed[i]={by:qcMe(),role:(CURRENT_USER&&CURRENT_USER.role)||'',at:new Date().toISOString(),note:(note||'').trim()};
-  qcQaOpen['phase']=Math.min(i+1,QA_PHASES.length-1);qcQaSave(l,'✓ Phase '+i+' gate signed');qcNotifyLeads('QA gate signed','Phase '+i+' — '+QA_PHASES[i].name+' signed by '+qcMe()+' on "'+l.name+'"')}
-function qcQaUnsign(lid,i){if(!isSuperAdmin()){toast('Super admin only');return}const l=LAUNCHES[lid];if(!l)return;if(!confirm('Re-open the Phase '+i+' gate and every later one?'))return;const q=qcQaW(l);for(let k=i;k<QA_PHASES.length;k++)delete q.signed[k];qcQaSave(l,'Gate re-opened')}
-function qcQaNeg(lid,id,k){if(!canQC()){toast('Tech / leadership only');return}const l=LAUNCHES[lid];if(!l)return;const q=qcQaW(l);q.neg=q.neg||{};const v=Object.assign({},q.neg[id]||{});
-  if(k==='evidence'){const e=prompt('Evidence the QA system caught it — log link, screenshot, what it classified it as:',v.evidence||'');if(e==null)return;v.evidence=e.trim()}else v[k]=!v[k];
-  v.by=qcMe();v.at=new Date().toISOString();q.neg[id]=v;qcQaSave(l)}
-function qcQaAddDefect(lid){if(!canQC()){toast('Tech / leadership only');return}const l=LAUNCHES[lid];if(!l)return;const g=function(i){const e=document.getElementById(i);return e?e.value.trim():''};
-  const title=g('qa-df-title'),sev=g('qa-df-sev')||'P1',prod=g('qa-df-prod'),owner=g('qa-df-owner');if(!title){toast('Describe the defect');return}
-  const q=qcQaW(l);q.defects=(q.defects||[]).concat([{id:'DF'+Date.now().toString(36).toUpperCase().slice(-6),sev:sev,title:title,product:prod,owner:owner,status:'open',by:qcMe(),at:new Date().toISOString(),accept:'',retest:''}]);
-  qcQaSave(l,sev+' logged');if(sev==='P0')qcNotifyLeads('P0 — stop ship',title+' (logged by '+qcMe()+')')}
-function qcQaDefect(lid,did,act){const l=LAUNCHES[lid];if(!l||!canQC())return;const q=qcQaW(l);const d=(q.defects||[]).find(function(x){return x.id===did});if(!d)return;
-  if(act==='fixed'){const r=prompt('Retest result — what was rerun and what it showed:');if(!r||!r.trim())return;d.status='fixed';d.retest=r.trim();d.fixedBy=qcMe();d.fixedAt=new Date().toISOString()}
-  else if(act==='accept'){const r=prompt('Written risk acceptance — why it can advance, the owner, and the date it gets fixed by:',d.accept||'');if(!r||!r.trim())return;d.accept=r.trim();d.acceptBy=qcMe();d.acceptAt=new Date().toISOString()}
-  else if(act==='reopen'){d.status='open'}
-  else if(act==='sev'){const s=prompt('Severity (P0, P1, P2 or P3):',d.sev);if(!s||!QA_SEV[s.trim().toUpperCase()])return;d.sev=s.trim().toUpperCase()}
-  qcQaSave(l)}
-function qcQaDev(lid,i,k,v){const l=LAUNCHES[lid];if(!l||!canQC())return;const q=qcQaW(l);const d=(q.devices||[])[i];if(!d)return;d[k]=(['sent','delivered','cycles','cyc30','lat95','lat99'].indexOf(k)>=0&&v!=='')?+v:v;d.by=qcMe();d.at=new Date().toISOString();qcQaSave(l)}
-function qcQaAddDev(lid){const l=LAUNCHES[lid];if(!l||!canQC())return;const q=qcQaW(l);q.devices=(q.devices||[]).concat([{model:'',platform:'ios',os:'',tier:'current',status:'proposed'}]);qcQaSave(l)}
-function qcQaDelDev(lid,i){const l=LAUNCHES[lid];if(!l||!canQC())return;if(!confirm('Remove this device from the matrix?'))return;const q=qcQaW(l);q.devices.splice(i,1);qcQaSave(l)}
-function qcQaTarget(lid,k){if(!canQC()){toast('Tech / leadership only');return}const l=LAUNCHES[lid];if(!l)return;const d=QA_TARGET_DEFS.find(function(x){return x[0]===k});const cur=qcQaT(l,k);
-  const v=prompt('New value for “'+d[1]+'” ('+d[2]+'). Current: '+cur+d[2]+'.\n\nThresholds are never changed silently — the old value, new value and your reason are logged in the report.',cur);if(v==null||v===''||isNaN(+v))return;
-  const why=prompt('Why change it? (required)');if(!why||!why.trim())return;
-  const q=qcQaW(l);q.targets=q.targets||{};q.targetLog=(q.targetLog||[]).concat([{key:k,label:d[1],from:cur,to:+v,why:why.trim(),by:qcMe(),at:new Date().toISOString()}]);q.targets[k]=+v;qcQaSave(l,'Target changed — logged');
-  qcNotifyLeads('QA target changed',d[1]+': '+cur+' → '+v+d[2]+' by '+qcMe()+' — '+why.trim())}
-function qcQaReview(lid,rid,dec){if(!CURRENT_USER){return}const l=LAUNCHES[lid];if(!l)return;let note='';
-  if(dec!=='accept'){note=prompt((dec==='modify'?'What should change, and why?':'Why is it not feasible? What would you propose instead?')+' (required)');if(!note||!note.trim())return;note=note.trim()}
-  else{const n=prompt('Accept — optional comment:');if(n==null)return;note=(n||'').trim()}
-  const q=qcQaW(l);q.review=q.review||{};const me=(CURRENT_USER.email||qcMe()).toLowerCase();
-  q.review[rid]=((q.review[rid]||[]).filter(function(f){return (f.email||f.by||'').toLowerCase()!==me})).concat([{by:qcMe(),email:CURRENT_USER.email||'',role:CURRENT_USER.role||'',decision:dec,note:note,at:new Date().toISOString()}]);
-  qcQaSave(l,'Feedback saved')}
-function qcQaWeekly(lid){if(!canQC())return;const l=LAUNCHES[lid];if(!l)return;const g=function(i){const e=document.getElementById(i);return e?e.value.trim():''};
-  const q=qcQaW(l);q.weekly=(q.weekly||[]).concat([{week:g('qa-wk-week'),delivery:g('qa-wk-del'),reconnect:g('qa-wk-rc'),ancs:g('qa-wk-ancs'),android:g('qa-wk-and'),p01:qcQaOpenP01(l),coverage:g('qa-wk-cov'),causes:g('qa-wk-causes'),by:qcMe(),at:new Date().toISOString()}]);
-  qcQaOpen.weekly=false;qcQaSave(l,'Weekly review recorded')}
-let qcQaOpen={phase:null};
-function qcQaToggle(k){qcQaOpen[k]=!qcQaOpen[k];renderQC()}
-function qcQaPick(i){qcQaOpen.phase=i;renderQC()}
-/* ---- views ---- */
-function qcQaGlyph(st){return st==='pass'?'<span style="color:var(--good)">✓</span>':st==='fail'?'<span style="color:var(--amber)">✕</span>':st==='na'?'<span style="color:var(--faint)">Ø</span>':'<span style="color:var(--faint)">○</span>'}
-function qcQaItemRow(l,id,label){const g=(qcQa(l).gates||{})[id]||{};const lid=ocjson(l.id);
-  return '<div class="qs-step"><div class="qs-g tap" tabindex="0" onclick="qcQaCycle('+lid+','+ocjson(id)+')" title="Tap to cycle">'+qcQaGlyph(g.state)+'</div><div class="grow tap" onclick="qcQaCycle('+lid+','+ocjson(id)+')"><div class="d" style="color:var(--text)">'+esc(label)+'</div>'+(g.by?'<div class="d qs-sub">'+esc(g.by)+' · '+qcTime(g.at)+(g.note?' · '+esc(g.note):'')+'</div>':'')+'</div><button class="btn ghost qs-act" onclick="qcQaNote('+lid+','+ocjson(id)+')">'+(g.note?'Edit note':'+ Evidence')+'</button></div>'}
-function qcQaAutoRow(l,key){const a=qcQaAuto(l,key);return '<div class="qs-step"><div class="qs-g">'+(a.ok?'<span style="color:var(--good)">✓</span>':'<span style="color:var(--faint)">○</span>')+'</div><div class="grow"><div class="d" style="color:var(--text)">'+esc(a.label)+' <span class="pill dim" style="font-size:9.5px">AUTO</span></div><div class="d qs-sub">'+esc(a.detail)+'</div></div></div>'}
-function qcQaPhaseBody(l,i){
-  const P=QA_PHASES[i],q=qcQa(l),st=qcQaPhaseState(l,i),lid=ocjson(l.id),cur=qcQaCurrentPhase(l);
-  let h='<div class="d" style="margin:6px 0 4px"><b>Do:</b> '+esc(P.do)+'</div>';
-  (P.counts||[]).forEach(function(c){const v=(q.counts||{})[c[0]];const ok=c[2]==null?(v!==''&&v!=null):(+v||0)>=c[2];
-    h+='<div class="qs-step" style="align-items:center"><div class="qs-g">'+(ok?'<span style="color:var(--good)">✓</span>':'<span style="color:var(--faint)">○</span>')+'</div><div class="grow"><div class="d" style="color:var(--text)">'+esc(c[1])+(c[2]!=null?' <span style="color:var(--faint)">· need '+c[2].toLocaleString()+'</span>':'')+'</div></div><input class="field" type="number" min="0" style="margin:0;width:110px" value="'+(v==null?'':esc(String(v)))+'" onchange="qcQaCount('+lid+','+ocjson(c[0])+',this.value)" aria-label="'+esc(c[1])+'"></div>'});
-  (P.items||[]).forEach(function(it){h+=qcQaItemRow(l,it[0],it[1])});
-  if(P.scen){h+='<div class="qs-grp">Scenario coverage — minimum starting matrix</div>'+QA_SCEN.map(function(s,j){return qcQaItemRow(l,'sc'+j,s)}).join('')
-    +'<div class="qs-grp">Notification types</div>'+QA_NTYPES.map(function(s,j){return qcQaItemRow(l,'sc'+(QA_SCEN.length+j),s)}).join('')+'<div class="qs-grp">Gate checks</div>';}
-  (P.auto||[]).forEach(function(a){h+=qcQaAutoRow(l,a)});
-  h+='<div class="row" style="gap:8px;margin-top:10px;align-items:center">';
-  if(st.signed)h+='<div class="d grow" style="color:var(--good)">✓ Gate signed by '+esc(st.signed.by)+' · '+qcTime(st.signed.at)+(st.signed.note?' · '+esc(st.signed.note):'')+'</div>'+(isSuperAdmin()?'<button class="btn ghost qs-act" onclick="qcQaUnsign('+lid+','+i+')">Re-open</button>':'');
-  else h+='<div class="d grow" style="color:var(--faint)">'+(st.ready?'Every item is met — sign the gate to move on.':(st.total-st.done)+' of '+st.total+' left before this gate can be signed.')+'</div><button class="btn" style="width:auto;padding:8px 14px"'+(st.ready&&i===cur?'':' disabled')+' onclick="qcQaSign('+lid+','+i+')">Sign Phase '+i+' gate →</button>';
-  return h+'</div>';
-}
-function qcQaCard(key,title,summary,ok,body,okLabel){const open=!!qcQaOpen[key];
-  return '<div class="card qs-lane"><div class="row tap" tabindex="0" style="align-items:center;gap:8px" onclick="qcQaToggle('+ocjson(key)+')" aria-expanded="'+(open?'true':'false')+'"><div class="grow"><div class="t" style="font-size:15px">'+title+'</div><div class="d qs-sub" style="margin-top:2px">'+summary+'</div></div><span class="pill '+(ok===true?'good':ok===false?'amber':'dim')+'">'+(ok===true?(okLabel||'Done ✓'):ok===false?'Open':'—')+'</span><span style="color:var(--faint);font-size:13px">'+(open?'▾':'▸')+'</span></div>'+(open?'<div style="margin-top:6px">'+body+'</div>':'')+'</div>'}
-function qcQaBlock(l){
-  const q=qcQa(l),lid=ocjson(l.id),cur=qcQaCurrentPhase(l);
-  const show=qcQaOpen.phase==null?Math.min(cur,QA_PHASES.length-1):qcQaOpen.phase;
-  const pills=QA_PHASES.map(function(P,i){const st=qcQaPhaseState(l,i),signed=!!st.signed,now=i===cur;
-    return '<button class="qa-ph'+(signed?' done':'')+(now?' now':'')+(i===show?' sel':'')+'" onclick="qcQaPick('+i+')"><b>'+(signed?'✓':i)+'</b><span>'+esc(P.name)+'</span><i>'+(signed?'signed':(st.done+'/'+st.total))+'</i></button>'}).join('');
-  const st=qcQaPhaseState(l,show);
-  let h='<div class="card"><div class="row" style="align-items:center;gap:8px"><div class="grow"><div class="eyebrow" style="margin:0">QA protocol · Gen 1 test plan v'+esc(q.version||QA_PLAN_VERSION)+'</div><div class="t" style="font-size:17px;margin-top:2px">'+(cur>=QA_PHASES.length?'All five gates signed ✓':'Now: Phase '+cur+' — '+esc(QA_PHASES[cur].name))+'</div></div></div>'
-    +'<div class="d qs-sub" style="margin-top:4px">A passing simulation never substitutes for a physical-device test, and a lab pass never substitutes for field evidence. No release with an unresolved safety/alert-delivery defect.</div>'
-    +'<div class="qa-phases">'+pills+'</div>'
-    +'<div class="eyebrow" style="margin:12px 0 0">Phase '+show+' — '+esc(QA_PHASES[show].name)+' · '+st.done+' of '+st.total+'</div>'+qcQaPhaseBody(l,show)+'</div>';
-  // Negative tests
-  const nd=qcQaNegDone(l);
-  h+=qcQaCard('neg','Negative tests — prove the tests work',nd+' of '+QA_NEG.length+' detected, classified and evidenced · run live',nd===QA_NEG.length,
-    '<div class="d" style="margin-bottom:6px">Run each live. The QA system must detect the failure, classify it, and show evidence. A green dashboard without a verified physical vibration is not proof of delivery.</div>'
-    +QA_NEG.map(function(x){const v=(q.neg||{})[x[0]]||{};const done=v.detected&&v.classified&&(v.evidence||'').trim();
-      return '<div class="qs-step"><div class="qs-g">'+(done?'<span style="color:var(--good)">✓</span>':'<span style="color:var(--faint)">○</span>')+'</div><div class="grow"><div class="d" style="color:var(--text)">'+esc(x[1])+'</div>'+(v.evidence?'<div class="d qs-sub">'+esc(v.evidence)+' · '+esc(v.by||'')+' · '+qcTime(v.at)+'</div>':'')+'</div>'
-        +'<button class="chip'+(v.detected?' on':'')+'" style="padding:5px 9px" onclick="qcQaNeg('+lid+','+ocjson(x[0])+',\'detected\')">Detected</button><button class="chip'+(v.classified?' on':'')+'" style="padding:5px 9px" onclick="qcQaNeg('+lid+','+ocjson(x[0])+',\'classified\')">Classified</button><button class="chip'+((v.evidence||'').trim()?' on':'')+'" style="padding:5px 9px" onclick="qcQaNeg('+lid+','+ocjson(x[0])+',\'evidence\')">Evidence</button></div>'}).join(''));
-  // Defects
-  const ds=q.defects||[],open=ds.filter(function(d){return d.status==='open'}),p01=qcQaOpenP01(l);
-  h+=qcQaCard('defects','Defects — P0 to P3',(open.length?open.length+' open'+(p01?' · '+p01+' P0/P1 blocking':''):'none open')+' · '+ds.length+' logged',p01===0&&!open.some(function(d){return d.sev==='P2'&&!(d.accept||'').trim()}),
-    '<div class="qa-sev">'+Object.keys(QA_SEV).map(function(k){return '<div><b>'+k+' — '+esc(QA_SEV[k].name)+'</b><span>'+esc(QA_SEV[k].def)+'</span></div>'}).join('')+'</div>'
-    +'<div class="row" style="gap:6px;flex-wrap:wrap;margin:10px 0"><input class="field" id="qa-df-title" placeholder="What happened (steps, device, build)" style="margin:0;flex:2;min-width:200px"><select class="field" id="qa-df-sev" style="margin:0;width:auto">'+['P0','P1','P2','P3'].map(function(s){return '<option'+(s==='P1'?' selected':'')+'>'+s+'</option>'}).join('')+'</select>'
-    +'<select class="field" id="qa-df-prod" style="margin:0;width:auto"><option value="">All / unknown</option>'+QC_SHIP_LANES.map(function(k){return '<option value="'+k+'">'+esc(QC_SHIP_LABEL[k])+'</option>'}).join('')+'</select><input class="field" id="qa-df-owner" placeholder="Owner" style="margin:0;width:120px"><button class="btn" style="width:auto;padding:8px 14px" onclick="qcQaAddDefect('+lid+')">Log defect</button></div>'
-    +(ds.length?ds.slice().reverse().map(function(d){const blk=d.status==='open'&&(d.sev==='P0'||d.sev==='P1'||(d.sev==='P2'&&!(d.accept||'').trim()));
-      return '<div class="qs-step"><span class="pill '+(blk?'amber':d.status==='open'?'dim':'good')+'" style="font-size:10px;flex:0 0 auto">'+esc(d.sev)+(d.sev==='P0'?' STOP':'')+'</span><div class="grow"><div class="d" style="color:var(--text)">'+esc(d.title)+'</div><div class="d qs-sub">'+esc(d.id)+' · '+(d.product?esc(QC_SHIP_LABEL[d.product]||d.product)+' · ':'')+(d.owner?'owner '+esc(d.owner)+' · ':'')+esc(d.status)+' · '+esc(d.by)+' · '+qcTime(d.at)+(d.accept?' · risk accepted: '+esc(d.accept):'')+(d.retest?' · retest: '+esc(d.retest):'')+'</div></div>'
-        +(d.status==='open'?'<button class="btn ghost qs-act" onclick="qcQaDefect('+lid+','+ocjson(d.id)+',\'fixed\')">Fixed + retested</button>'+(d.sev==='P2'?'<button class="btn ghost qs-act" onclick="qcQaDefect('+lid+','+ocjson(d.id)+',\'accept\')">Accept risk</button>':''):'<button class="btn ghost qs-act" onclick="qcQaDefect('+lid+','+ocjson(d.id)+',\'reopen\')">Reopen</button>')
-        +'<button class="btn ghost qs-act" onclick="qcQaDefect('+lid+','+ocjson(d.id)+',\'sev\')">Severity</button></div>'}).join(''):'<div class="d" style="color:var(--faint)">No defects logged.</div>'),'Clear ✓');
-  // Device matrix + lab ledger
-  const lab=qcQaLab(l),mx=qcQaAuto(l,'matrix');
-  const inp=function(i,k,v,w,type){return '<input class="field" '+(type==='n'?'type="number" min="0" ':'')+'style="margin:0;width:'+w+'px;padding:6px 8px" value="'+(v==null?'':esc(String(v)))+'" onchange="qcQaDev('+lid+','+i+','+ocjson(k)+',this.value)">'};
-  h+=qcQaCard('devices','Device matrix & physical-lab ledger',(q.devices||[]).length+' devices · '+lab.sent.toLocaleString()+' notifications · '+lab.cyc+' reconnect cycles'+(mx.ok?'':' · matrix not complete (OS versions, an older + a lower-end device)'),mx.ok&&qcQaAuto(l,'lab_combo').ok,
-    '<div class="d" style="margin-bottom:8px">“All iOS and Android” is not a testable claim. This is the supported-device policy: test against it, including at least one older and one lower-end device. Enter real-band results per device (Phase 2 reads these).</div><div style="overflow-x:auto"><table class="qa-tbl"><tr><th>Device</th><th>OS</th><th>Platform</th><th>Tier</th><th>Sent</th><th>Delivered</th><th>Cycles</th><th>Ready ≤30 s</th><th>p95 s</th><th>p99 s</th><th></th></tr>'
-    +(q.devices||[]).map(function(d,i){const p=qcPct(+d.delivered||0,+d.sent||0);return '<tr><td>'+inp(i,'model',d.model,150)+'</td><td>'+inp(i,'os',d.os,90)+'</td><td><select class="field" style="margin:0;padding:6px" onchange="qcQaDev('+lid+','+i+',\'platform\',this.value)"><option value="ios"'+(d.platform==='ios'?' selected':'')+'>iOS</option><option value="android"'+(d.platform==='android'?' selected':'')+'>Android</option></select></td>'
-      +'<td><select class="field" style="margin:0;padding:6px" onchange="qcQaDev('+lid+','+i+',\'tier\',this.value)">'+['current','older','lower-end','older / lower-end'].map(function(t){return '<option'+(d.tier===t?' selected':'')+'>'+t+'</option>'}).join('')+'</select></td>'
-      +'<td>'+inp(i,'sent',d.sent,70,'n')+'</td><td>'+inp(i,'delivered',d.delivered,70,'n')+(p!=null?'<div class="qs-sub">'+p+'%</div>':'')+'</td><td>'+inp(i,'cycles',d.cycles,60,'n')+'</td><td>'+inp(i,'cyc30',d.cyc30,60,'n')+'</td><td>'+inp(i,'lat95',d.lat95,54,'n')+'</td><td>'+inp(i,'lat99',d.lat99,54,'n')+'</td><td><button class="btn ghost qs-act" onclick="qcQaDelDev('+lid+','+i+')" aria-label="Remove">✕</button></td></tr>'}).join('')
-    +'<tr><td colspan="4"><b>Total</b></td><td><b>'+lab.sent.toLocaleString()+'</b></td><td><b>'+lab.del.toLocaleString()+'</b>'+(lab.sent?'<div class="qs-sub">'+qcPct(lab.del,lab.sent)+'% · 95% lower bound '+Math.round(qcWilsonLow(lab.del,lab.sent)*100)/100+'%</div>':'')+'</td><td><b>'+lab.cyc+'</b></td><td><b>'+lab.ok30+'</b></td><td colspan="3"></td></tr></table></div>'
-    +'<button class="btn ghost" style="width:auto;padding:6px 12px;margin-top:8px" onclick="qcQaAddDev('+lid+')">＋ Add device</button>');
-  // Targets
-  const log=q.targetLog||[];
-  h+=qcQaCard('targets','Targets — proposed, confirm after baseline',QA_TARGET_DEFS.map(function(d){return d[4]+' '+qcQaT(l,d[0])+d[2]}).join(' · ')+(log.length?' · '+log.length+' change'+(log.length===1?'':'s')+' logged':''),null,
-    QA_TARGET_DEFS.map(function(d){return '<div class="qs-step" style="align-items:center"><div class="grow"><div class="d" style="color:var(--text)">'+esc(d[1])+'</div></div><b style="font-family:var(--font-m)">'+d[4]+' '+qcQaT(l,d[0])+d[2]+'</b><button class="btn ghost qs-act" onclick="qcQaTarget('+lid+','+ocjson(d[0])+')">Change…</button></div>'}).join('')
-    +QA_TARGET_TEXT.map(function(t){return '<div class="qs-step"><div class="grow d" style="color:var(--text)">'+esc(t)+'</div></div>'}).join('')
-    +'<div class="d qs-sub" style="margin-top:6px">With 1,000 attempts even 0 failures is not strong proof of 99.9% field reliability — every delivery number here shows its sample size and 95% lower bound.</div>'
-    +(log.length?'<div class="qs-grp">Change log</div>'+log.map(function(x){return '<div class="d qs-sub" style="padding:3px 0">'+esc(x.label)+': '+esc(String(x.from))+' → '+esc(String(x.to))+' · '+esc(x.by)+' · '+qcTime(x.at)+' — '+esc(x.why)+'</div>'}).join(''):''));
-  // Team review
-  const rv=qcQaAuto(l,'review'),me=((CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||'').toLowerCase();
-  h+=qcQaCard('review','Team review of the plan',esc(rv.detail)+' · Accept / Modify / Not feasible, with rationale',rv.ok,
-    '<div class="d" style="margin-bottom:6px">Everyone on the team can weigh in. Mark each requirement; Modify and Not feasible need a reason. Brad’s engineering call plus the CEO’s release decision come from this list — nothing changes silently.</div>'
-    +QA_REQS.map(function(g){return '<div class="qs-grp">'+esc(g[0])+'</div>'+g[1].map(function(r){const fb=(q.review||{})[r[0]]||[];const mine=fb.find(function(f){return (f.email||f.by||'').toLowerCase()===me});
-      const t={accept:0,modify:0,notfeasible:0};fb.forEach(function(f){t[f.decision]=(t[f.decision]||0)+1});
-      const chip=function(dec,label){return '<button class="chip'+(mine&&mine.decision===dec?' on':'')+'" style="padding:5px 9px" onclick="qcQaReview('+lid+','+ocjson(r[0])+','+ocjson(dec)+')">'+label+(t[dec]?' '+t[dec]:'')+'</button>'};
-      return '<div class="qs-step" style="flex-wrap:wrap"><div class="grow" style="min-width:220px"><div class="d" style="color:var(--text)">'+esc(r[1])+'</div>'
-        +fb.map(function(f){return '<div class="d qs-sub">'+(f.decision==='accept'?'✓ Accept':f.decision==='modify'?'✎ Modify':'✕ Not feasible')+' — '+esc(f.by)+(f.note?': '+esc(f.note):'')+' · '+qcTime(f.at)+'</div>'}).join('')+'</div>'
-        +'<div class="row" style="gap:4px">'+chip('accept','✓ Accept')+chip('modify','✎ Modify')+chip('notfeasible','✕ Not feasible')+'</div></div>'}).join('')}).join(''));
-  // Weekly review
-  const wk=q.weekly||[];
-  h+=qcQaCard('weekly','Weekly review',wk.length?('Last: '+esc(wk[wk.length-1].week||qcTime(wk[wk.length-1].at))+' · '+wk.length+' recorded'):'Nothing recorded yet',null,
-    (wk.length?'<div style="overflow-x:auto"><table class="qa-tbl"><tr><th>Week</th><th>Delivery %</th><th>Reconnect</th><th>ANCS fails</th><th>Android bg fails</th><th>Open P0/P1</th><th>Coverage</th><th>Top 3 root causes</th><th>By</th></tr>'+wk.map(function(w){return '<tr><td>'+esc(w.week)+'</td><td>'+esc(w.delivery)+'</td><td>'+esc(w.reconnect)+'</td><td>'+esc(w.ancs)+'</td><td>'+esc(w.android)+'</td><td>'+esc(String(w.p01))+'</td><td>'+esc(w.coverage)+'</td><td>'+esc(w.causes)+'</td><td>'+esc(w.by)+'</td></tr>'}).join('')+'</table></div>':'')
-    +'<div class="qs-grp">Record this week</div><div class="row" style="gap:6px;flex-wrap:wrap">'
-    +'<input class="field" id="qa-wk-week" placeholder="Week of…" value="'+esc(new Date().toISOString().slice(0,10))+'" style="margin:0;width:120px">'
-    +'<input class="field" id="qa-wk-del" placeholder="Delivery %" value="'+(lab.sent?qcPct(lab.del,lab.sent)+'% ('+lab.del+'/'+lab.sent+')':'')+'" style="margin:0;width:150px">'
-    +'<input class="field" id="qa-wk-rc" placeholder="Reconnect (median / % ≤30 s)" value="'+(lab.cyc?qcPct(lab.ok30,lab.cyc)+'% ≤30 s':'')+'" style="margin:0;width:170px">'
-    +'<input class="field" id="qa-wk-ancs" placeholder="ANCS readiness fails" style="margin:0;width:150px"><input class="field" id="qa-wk-and" placeholder="Android background fails" style="margin:0;width:170px">'
-    +'<input class="field" id="qa-wk-cov" placeholder="Coverage by device/OS" value="'+(q.devices||[]).filter(function(d){return (+d.sent||0)>=100}).length+' of '+(q.devices||[]).length+' devices ≥100" style="margin:0;width:190px">'
-    +'<input class="field" id="qa-wk-causes" placeholder="Top three root causes" style="margin:0;flex:1;min-width:200px"><button class="btn" style="width:auto;padding:8px 14px" onclick="qcQaWeekly('+lid+')">Save week</button></div>'
-    +'<div class="d qs-sub" style="margin-top:6px">Open P0/P1 is filled in automatically ('+qcQaOpenP01(l)+' now). The CEO approves risk tolerance and the release decision; engineering owns technical validation and evidence.</div>');
-  return h;
-}
-/* For the launch report (frozen with the snapshot at sign-off). */
-function qcQaReport(l){
-  if(!qcQaApplies(l))return null;const q=qcQa(l);
-  return {version:q.version||QA_PLAN_VERSION,
-    phases:QA_PHASES.map(function(P,i){const st=qcQaPhaseState(l,i);return {n:i,name:P.name,done:st.done,total:st.total,signed:st.signed,
-      items:(P.items||[]).map(function(it){const g=(q.gates||{})[it[0]]||{};return {label:it[1],state:g.state||'open',by:g.by||'',at:g.at||'',note:g.note||''}})
-        .concat(P.scen?QA_SCEN.concat(QA_NTYPES).map(function(s,j){const g=(q.gates||{})['sc'+j]||{};return {label:'Scenario: '+s,state:g.state||'open',by:g.by||'',at:g.at||'',note:g.note||''}}):[]),
-      counts:(P.counts||[]).map(function(c){return {label:c[1],value:(q.counts||{})[c[0]],need:c[2]}}),
-      auto:(P.auto||[]).map(function(a){return qcQaAuto(l,a)})}}),
-    negative:QA_NEG.map(function(x){const v=(q.neg||{})[x[0]]||{};return {label:x[1],detected:!!v.detected,classified:!!v.classified,evidence:v.evidence||'',by:v.by||'',at:v.at||''}}),
-    defects:(q.defects||[]).slice(),devices:(q.devices||[]).slice(),lab:qcQaLab(l),
-    targets:QA_TARGET_DEFS.map(function(d){return {label:d[1],value:d[4]+' '+qcQaT(l,d[0])+d[2]}}),targetLog:(q.targetLog||[]).slice(),
-    review:QA_REQS.map(function(g){return {section:g[0],reqs:g[1].map(function(r){return {label:r[1],feedback:((q.review||{})[r[0]]||[]).slice()}})}}),
-    weekly:(q.weekly||[]).slice()};
-}
-function qcShipSignCard(l){
-  const lid=ocjson(l.id),two=qcQaApplies(l),S=l.signoffs||[];
-  const row=function(as,label,who){const sg=S.filter(function(x){return x.decision==='approve'&&(x.role==='admin'||x.role==='superadmin')&&(!two||x.as===as)}).slice(-1)[0];
-    return '<div class="qs-step"><div class="qs-g">'+(sg?'<span style="color:var(--good)">✓</span>':'<span style="color:var(--faint)">○</span>')+'</div><div class="grow"><div class="d" style="color:var(--text)">'+label+'</div><div class="d qs-sub">'+(sg?'Approved by '+esc(sg.by)+' · '+qcTime(sg.at)+(sg.note?' · '+esc(sg.note):''):who)+'</div></div><button class="btn qs-act" onclick="qcSignoff('+lid+',\'approve\','+ocjson(as)+')">✓ Approve</button></div>'};
-  const blk=S.filter(function(x){return x.decision==='block'}).slice(-1)[0];
-  return '<div class="card qs-lane"><div class="eyebrow" style="margin:0">Final step</div><div class="t" style="font-size:17px;margin-top:2px">'+(two?'Two sign-offs':'Admin sign-off')+'</div>'
-    +(two?row('eng','Engineering approves the technical validation and evidence','After every QA gate is signed.')+row('ceo','CEO / product approves the risk tolerance and the release decision','Do this last — it freezes the report as the record of what shipped.'):row('','An admin approves the ship','Do this last — it freezes the report as the record of what shipped.'))
-    +(blk?'<div class="d qs-sub" style="color:var(--amber);margin-top:6px">Last block: '+esc(blk.by)+' · '+qcTime(blk.at)+' — '+esc(blk.note)+'</div>':'')
-    +'<button class="btn ghost" style="margin-top:8px" onclick="qcSignoff('+lid+',\'block\')">✕ Block this ship</button></div>';
-}
-/* ================= SHIP — one page, one checklist per product =================
-   The ship we're working on is pre-loaded (QC_SHIP): one release per product,
-   attached to one launch. Every step the gate checks is a row here with its
-   action inline; the simulator, flasher, release list and past launches are
-   tools behind it, not tabs in front of it. */
-const QC_SHIP_APP_DRAFT='• New Safewave look: the band-and-shield logo on the app icon, splash screen and inside the app.\n• Aware is now three simple tabs: Listen, Sounds and Teach.\n• Aware recognizes sounds live through the iPhone microphone, from a built-in library of 207 everyday sounds — no training needed.\n• One Alert certainty slider sets how sure Aware must be before your band buzzes.\n• Teach Aware your own sounds by recording a few 8–15 second clips.\n• Firmware updates are more reliable on older bands.\n• Notification History now lives under Account.';
-const QC_SHIP={id:'LNNOV26',name:'November ship — HKNC pilot',targetDate:'2026-11-06',
-  summary:'Firmware 1.0.51, Safewave for Business 1.0.1 (23) and Safewave 1.4.0 (15), signed off before the HKNC on-site week (Nov 9–13).',
-  lanes:{
-    firmware:{id:'RLFW1051',version:'1.0.51',buildNumber:'',channel:'prod',draft:''},
-    app_business:{id:'RLBIZ101B23',version:'1.0.1',buildNumber:'23',channel:'beta',draft:QC_SHIP_APP_DRAFT},
-    app_consumer:{id:'RLCONS140B15',version:'1.4.0',buildNumber:'15',channel:'beta',draft:QC_SHIP_APP_DRAFT}}};
-const QC_SHIP_LANES=['app_business','app_consumer','firmware'];
-const QC_SHIP_LABEL={firmware:'Band firmware',app_business:'Enterprise app · Safewave for Business',app_consumer:'Consumer app · Safewave',app_android:'Android · Google Play'};
-let qcLoadedR=false,qcLoadedL=false,qcShipSeeded=false,qcShipOpen={};
-/* Seed the current ship once. Reuses a release that already exists for the same
-   product + version (+ build), so nothing anyone entered is duplicated. */
-function qcEnsureShip(){
-  if(!canQC()||qcShipSeeded)return;
+/* ================= RELEASE — one release, four gates =================
+   Everything that ships together — band firmware, and Safewave and Safewave
+   for Business on iPhone and Android — is ONE release with four gates:
+     1 Builds              every build exists and testers can install it (Brad)
+     2 Bench & simulator   flashed, soak-tested, simulated (Brad)
+     3 Physical testing    real bands, real phones (Trevon & Jared): check each
+                           task off, or flag it and say what happened; plus
+                           general feedback on the apps
+     4 Sign-off & report   release notes, no open flags, two sign-offs, then the
+                           report of every check plus the release notes.
+   Stored as one doc in `launches` (kind:'release'). Each check is written to
+   its own field path, so two testers checking off at once never overwrite
+   each other. Flags are amber — red stays reserved for life-safety. */
+const REL_ID='RLNOV26';
+const REL_COMPS=[
+  {k:'fw',name:'Band firmware',app:'Firmware',where:'.bin + checksum, flashed over Bluetooth'},
+  {k:'ios_biz',name:'Safewave for Business · iPhone',app:'Safewave for Business',where:'TestFlight'},
+  {k:'ios_cons',name:'Safewave · iPhone',app:'Safewave',where:'TestFlight'},
+  {k:'and_biz',name:'Safewave for Business · Android',app:'Safewave for Business',where:'Google Play internal testing'},
+  {k:'and_cons',name:'Safewave · Android',app:'Safewave',where:'Google Play internal testing'}];
+const REL_NOTES_DRAFT='Safewave and Safewave for Business\n• New Safewave look: the band-and-shield logo on the app icon, splash screen and inside the app.\n• Aware is now three simple tabs: Listen, Sounds and Teach.\n• Aware recognizes sounds live through the iPhone microphone, from a built-in library of 207 everyday sounds — no training needed.\n• One Alert certainty slider sets how sure Aware must be before your band buzzes.\n• Teach Aware your own sounds by recording a few 8–15 second clips.\n• Notification History now lives under Account.\n\nBand firmware 1.0.51\n• Firmware updates are more reliable on older bands.';
+const REL_SEED={name:'November release — HKNC pilot',targetDate:'2026-11-06',
+  comps:{fw:{version:'1.0.51',build:''},ios_biz:{version:'1.0.1',build:'23'},ios_cons:{version:'1.4.0',build:'15'},and_biz:{version:'1.0.1',build:'5'},and_cons:{version:'1.4.0',build:'17'}}};
+const REL_TESTERS=['Trevon','Jared'];
+let qcLoadedR=false,qcLoadedL=false,relSeeded=false;
+let relSel=null,relWho=null,relEdit={},relDraft={},relShowVers=false,relShowReport=false;
+function relDoc(){return LAUNCHES[REL_ID]||null}
+function relShipped(){const l=relDoc();return !!l&&l.status==='shipped'}
+function relLocked(){if(relShipped()){toast('This release has shipped — its report is frozen');return true}return false}
+function relAdmin(){const r=CURRENT_USER&&CURRENT_USER.role;return r==='admin'||r==='superadmin'}
+function relVer(l,k){const c=((l&&l.comps)||{})[k]||{};return (c.version||'?')+(c.build?' ('+c.build+')':'')}
+function relFwRel(l){return l&&l.fwRelId?RELEASES[l.fwRelId]||null:null}
+/* Create the release once. Reuses the firmware release record that already
+   exists for this version (it carries the uploaded .bin and the soak runs). */
+function relEnsure(){
+  if(!canQC()||relSeeded)return;
   if(hasFirestore()&&!(qcLoadedR&&qcLoadedL))return;
-  qcShipSeeded=true;if(LAUNCHES[QC_SHIP.id])return;
-  const now=new Date().toISOString(),by=(CURRENT_USER&&CURRENT_USER.name)||'Command Center',products={};
-  QC_SHIP_LANES.forEach(function(k){const d=QC_SHIP.lanes[k];
-    let r=Object.values(RELEASES).find(function(x){return qcProd(x.product)===k&&x.version===d.version&&(!d.buildNumber||!x.buildNumber||String(x.buildNumber)===d.buildNumber)});
-    if(!r){r={id:d.id,product:k,version:d.version,buildNumber:d.buildNumber,channel:d.channel,status:'draft',notes:'',notesDraft:d.draft,createdAt:now,createdBy:by};RELEASES[r.id]=r;persistRelease(r);}
-    else if(!(r.notes||'').trim()&&!r.notesDraft&&d.draft){r.notesDraft=d.draft;RELEASES[r.id]=r;persistRelease(r);}
-    products[k]=r.id;});
-  const l={id:QC_SHIP.id,name:QC_SHIP.name,targetDate:QC_SHIP.targetDate,status:'planning',summary:QC_SHIP.summary,products:products,signoffs:[],createdBy:by,createdAt:now};
-  LAUNCHES[l.id]=l;persistLaunch(l);
+  relSeeded=true;
+  const now=new Date().toISOString(),by=qcMe()||'Command Center';
+  let l=relDoc();
+  const fwVer=((l&&l.comps&&l.comps.fw)||REL_SEED.comps.fw).version;
+  let fw=Object.values(RELEASES).find(function(x){return qcProd(x.product)==='firmware'&&x.version===fwVer});
+  if(!fw){fw={id:'RLFW'+fwVer.replace(/\D/g,''),product:'firmware',version:fwVer,buildNumber:'',channel:'prod',status:'draft',notes:'',createdAt:now,createdBy:by};RELEASES[fw.id]=fw;persistRelease(fw);}
+  if(l){if(!l.fwRelId)relUpd('fwRelId',fw.id);return}
+  l={id:REL_ID,kind:'release',name:REL_SEED.name,targetDate:REL_SEED.targetDate,status:'open',comps:JSON.parse(JSON.stringify(REL_SEED.comps)),
+    fwRelId:fw.id,checks:{},owners:{},feedback:{},signoffs:{},notes:'',notesDraft:REL_NOTES_DRAFT,createdBy:by,createdAt:now};
+  LAUNCHES[REL_ID]=l;
+  if(hasFirestore())firebase.firestore().collection('launches').doc(REL_ID).set(l).catch(function(e){toast('Save failed — '+((e&&e.code)||''))});
 }
-/* The ship on screen: the open launch (pre-loaded one first), else the latest. */
-function qcCurrentShip(){
-  const open=Object.values(LAUNCHES).filter(function(l){return l.status!=='launched'&&l.status!=='aborted'});
-  const pre=open.find(function(l){return l.id===QC_SHIP.id});if(pre)return pre;
-  const by=function(a,b){return (b.createdAt||'').localeCompare(a.createdAt||'')};
-  return open.sort(by)[0]||Object.values(LAUNCHES).sort(by)[0]||null;
+/* Write one field path (e.g. 'checks.f_range'); null deletes it. */
+function relUpd(path,val){
+  const l=relDoc();if(!l)return;
+  const parts=path.split('.');let o=l;for(let i=0;i<parts.length-1;i++){if(!o[parts[i]]||typeof o[parts[i]]!=='object')o[parts[i]]={};o=o[parts[i]]}
+  if(val===null)delete o[parts[parts.length-1]];else o[parts[parts.length-1]]=val;
+  LAUNCHES[REL_ID]=l;
+  if(hasFirestore()){const u={};u[path]=val===null?firebase.firestore.FieldValue.delete():val;
+    firebase.firestore().collection('launches').doc(REL_ID).update(u).catch(function(e){toast('Save failed — '+((e&&e.code)||''))})}
 }
-/* Steps per product, in the order you do them. Each: {label, done, fail, sub, act} */
-function qcShipSteps(r){
-  const lane=qcProd(r.product),steps=[],id=ocjson(r.id),notes=(r.notes||'').trim();
-  steps.push({key:'notes',label:'Release notes written',done:!!notes,sub:notes?esc(notes.split('\n')[0])+(notes.indexOf('\n')>=0?' …':''):(r.notesDraft?'A draft from the commit history is ready — review it and save.':'Write what changed, in plain words for the people using it.'),
-    act:'<button class="btn ghost qs-act" onclick="qcShipToggle('+ocjson(r.id+':notes')+')">'+(notes?'Edit':'Write')+'</button>'});
-  if(lane==='firmware')steps.push({key:'image',label:'Firmware image uploaded (.bin + SHA-256)',done:!!r.image,sub:r.image?esc(r.image.name)+' · '+qcFwKB(r.image.size):'The exact image that gets soak-tested and flashed.',
-    act:'<button class="btn ghost qs-act"'+(qcFwUploading?' disabled':'')+' onclick="qcPickFirmware('+id+')">'+(r.image?'Replace':(qcFwUploading?'Uploading…':'⤒ Upload'))+'</button>'});
-  const runs=releaseRuns(r.id),last=runs[0],passed=releasePassed(r);
-  steps.push({key:'soak',label:'Soak test passed'+(lane==='firmware'?' (8 h on a band)':' (2 h)'),done:passed,fail:!passed&&last&&last.verdict==='fail',
-    sub:last?(qcVerdictChip(last.verdict)+' '+esc(fmtDur(last.durationSec||0))+' · '+(last.alertsAcked||0)+'/'+(last.alertsSent||0)+' alerts · '+esc(last.device||'')):'Runs in the device simulator on a real or virtual band.',
-    act:'<button class="btn ghost qs-act" onclick="qcStartFromRelease('+id+')">'+(passed?'Re-run':'▶ Run')+'</button>'});
-  qcIPTests(r).forEach(function(t){const v=(r.inperson||{})[t.id],e=qcIPEval(t,v);
-    steps.push({key:'ip:'+t.id,ip:t,label:t.label,done:e.state!=='open',fail:e.state==='fail',
-      sub:(e.text?'<b style="color:var(--'+(e.state==='fail'?'amber':'text')+')">'+esc(e.text)+'</b> · ':'')+'bar '+esc(e.bar)+(v&&v.by?' · '+esc(v.by)+' · '+qcTime(v.at):'')+(v&&v.phone?' · '+esc(v.phone):'')+(v&&v.vib?' · vibration: '+esc(v.vib):'')+(v&&v.by&&!v.log?' · <span style="color:var(--amber)">no raw log link</span>':'')+(v&&v.note?' · '+esc(v.note):''),
-      act:'<button class="btn ghost qs-act" onclick="qcShipToggle('+ocjson(r.id+':ip:'+t.id)+')">'+(e.state==='open'?'Enter':'Edit')+'</button>'})});
-  relChecklist(r).forEach(function(i){steps.push({key:i.id,check:true,label:i.label,done:i.state==='pass'||i.state==='na',na:i.state==='na',fail:i.state==='fail',
-    sub:i.by?(esc(i.by)+' · '+qcTime(i.at)+(i.note?' · '+esc(i.note):'')):'',click:'qcCycleCheck('+id+','+ocjson(i.id)+')'})});
-  return steps;
+function relD(k,v){relDraft[k]=v}
+function qcMe(){return (CURRENT_USER&&CURRENT_USER.name)||''}
+
+/* ---- the four gates ---- */
+function relGates(l){
+  const v=function(k){return relVer(l,k)},fwv=((l.comps||{}).fw||{}).version||'';
+  return [
+    {n:1,name:'Builds',who:'Brad',ask:'Every build exists, has the right version number, and Trevon and Jared can install it.',groups:[['',[
+      {id:'b_fw',label:'Firmware '+v('fw')+' image uploaded, with its checksum',auto:'fwimage'},
+      {id:'b_ios_biz',label:'Safewave for Business '+v('ios_biz')+' is on TestFlight'},
+      {id:'b_ios_cons',label:'Safewave '+v('ios_cons')+' is on TestFlight'},
+      {id:'b_and_biz',label:'Safewave for Business '+v('and_biz')+' is on Google Play internal testing'},
+      {id:'b_and_cons',label:'Safewave '+v('and_cons')+' is on Google Play internal testing'},
+      {id:'b_testers',label:'Trevon and Jared are invited on TestFlight and on the Play internal track'}]]]},
+    {n:2,name:'Bench & simulator',who:'Brad',ask:'Before anyone wears it: flash it, soak it, and run it through the simulator.',groups:[['',[
+      {id:'s_flash',label:'Flash '+fwv+' to a bench band from the Simulator tab — the band reads back '+fwv},
+      {id:'s_ota_old',label:'Update an oldest-fleet 0.0.x band to '+fwv+' over Bluetooth'},
+      {id:'s_soak',label:'Soak test passes on a real band: no unexpected disconnects, every alert delivered',auto:'soak'},
+      {id:'s_sim_ios',label:'Simulator, iPhone: texts, calls, alarms and life-safety alerts buzz right with the phone locked'},
+      {id:'s_sim_and',label:'Simulator, Android: the same, plus after the app is swiped away and with battery saver on'},
+      {id:'s_sim_neg',label:'Simulator: Bluetooth off, band off and out of range each show clearly and recover'}]]]},
+    {n:3,name:'Physical testing',who:'Trevon & Jared',field:true,ask:'Real bands on a wrist, real phones in a pocket. Do each task. If it worked, check it off. If it didn’t, flag it and say what happened.',groups:[
+      ['Band & firmware',[
+        {id:'f_update',who:'Trevon',label:'Update 3 bands to '+fwv+' from the app — one of them an older band',how:'Phone plugged in and right next to the band. Each band should finish, and still buzz afterwards.'},
+        {id:'f_safety',who:'Trevon',label:'A life-safety alert buzzes nonstop until you press the band button',how:'Send a life-safety alert from the dashboard (Users → Notify → tick Life-safety). It should buzz without stopping, and stop on one press.'},
+        {id:'f_range',who:'Trevon',label:'The band reconnects by itself after you walk away and come back',how:'Walk away until the app says disconnected. Come back. It should show Connected within 30 seconds without touching anything.'},
+        {id:'f_day',who:'Trevon',label:'Wear it a full workday: it stays connected and the battery lasts',how:'Put the battery % at the start and at the end in your note.'}]],
+      ['iPhone · Safewave for Business '+v('ios_biz'),[
+        {id:'ib_install',who:'Trevon',label:'Install from TestFlight — Settings shows '+v('ios_biz')},
+        {id:'ib_pair',who:'Trevon',label:'Sign in with your work account and pair a band'},
+        {id:'ib_texts',who:'Trevon',label:'Texts buzz the band with the phone locked',how:'Lock the phone. Have someone send 10 texts. All 10 should buzz.'},
+        {id:'ib_killed',who:'Trevon',label:'Texts still buzz after you swipe the app away',how:'Swipe Safewave away, then have someone send 5 texts.'},
+        {id:'ib_alert',who:'Trevon',label:'A dashboard alert buzzes the band, and the dashboard shows Acknowledged',how:'Dashboard → Users → Notify yourself. Press the band button. Last Alert should turn Acknowledged.'}]],
+      ['iPhone · Safewave '+v('ios_cons'),[
+        {id:'ic_install',who:'Jared',label:'Install from TestFlight — Settings shows '+v('ios_cons')},
+        {id:'ic_pair',who:'Jared',label:'Create an account (or sign in with Apple) and pair a band'},
+        {id:'ic_texts',who:'Jared',label:'Texts buzz the band with the phone locked',how:'Lock the phone. Have someone send 10 texts. All 10 should buzz.'},
+        {id:'ic_aware',who:'Jared',label:'Aware: a smoke alarm sound buzzes nonstop until the band button',how:'Aware → Listen. Play a smoke-alarm video near the phone. The band should keep buzzing, not stop after 3.'},
+        {id:'ic_alarm',who:'Jared',label:'An alarm goes off on the band with the phone locked',how:'Set an alarm 2 minutes out and lock the phone.'}]],
+      ['Android · Safewave for Business '+v('and_biz'),[
+        {id:'ab_install',who:'Trevon',label:'Install from Google Play internal testing — app info shows '+v('and_biz')},
+        {id:'ab_pair',who:'Trevon',label:'Sign in with your work account and pair a band'},
+        {id:'ab_notif',who:'Trevon',label:'Notifications buzz the band with the screen off',how:'Screen off. Have someone send 10 texts. All 10 should buzz.'},
+        {id:'ab_alert',who:'Trevon',label:'A dashboard alert buzzes the band, and the dashboard shows Acknowledged'},
+        {id:'ab_restart',who:'Trevon',label:'Still works after restarting the phone',how:'Restart the phone. Don’t open the app. Have someone send a text.'}]],
+      ['Android · Safewave '+v('and_cons'),[
+        {id:'ac_install',who:'Jared',label:'Install from Google Play internal testing — app info shows '+v('and_cons')},
+        {id:'ac_pair',who:'Jared',label:'Create an account (or sign in with Google) and pair a band'},
+        {id:'ac_notif',who:'Jared',label:'Notifications buzz the band with the screen off',how:'Screen off. Have someone send 10 texts. All 10 should buzz.'},
+        {id:'ac_saver',who:'Jared',label:'Still buzzes with battery saver on and the app swiped away'},
+        {id:'ac_alarm',who:'Jared',label:'An alarm goes off on the band with the screen off'}]],
+      ['When something goes wrong',[
+        {id:'n_bt',who:'Jared',label:'Bluetooth off: the app tells you plainly. Back on: it reconnects by itself'},
+        {id:'n_perm',who:'Jared',label:'Notifications turned off for Safewave: the app warns you'},
+        {id:'n_bandoff',who:'Jared',label:'Band powered off: the app shows disconnected within a minute'}]]]},
+    {n:4,name:'Sign-off & report',who:'Brad',final:true,ask:'Final release notes, no open flags, two sign-offs — then the report is the record of what shipped.',groups:[['',[
+      {id:'z_clear',label:'Gates 1–3 done, with no open flags',auto:'clear'},
+      {id:'z_notes',label:'Release notes final',auto:'notes'},
+      {id:'z_eng',label:'Engineering sign-off',auto:'eng'},
+      {id:'z_ceo',label:'CEO / product sign-off',auto:'ceo'}]]]}];
 }
-function qcShipToggle(k){qcShipOpen[k]=!qcShipOpen[k];renderQC()}
-function qcShipSaveNotes(relId){const r=RELEASES[relId];if(!r)return;const el=document.getElementById('qs-notes-'+relId);const v=((el&&el.value)||'').trim();
-  if(!v){toast('Notes can’t be empty');return}r.notes=v;RELEASES[relId]=r;persistRelease(r);qcShipOpen[relId+':notes']=false;renderQC();toast('✓ Release notes saved')}
-function qcShipStepRow(r,s){
-  const glyph=s.fail?'<span style="color:var(--amber)">✕</span>':s.na?'<span style="color:var(--faint)">Ø</span>':s.done?'<span style="color:var(--good)">✓</span>':'<span style="color:var(--faint)">○</span>';
-  let h='<div class="qs-step'+(s.click?' tap':'')+'"'+(s.click?' tabindex="0" onclick="'+s.click+'"':'')+'><div class="qs-g">'+glyph+'</div><div class="grow"><div class="d" style="color:var(--text)'+(s.done&&!s.fail?';opacity:.75':'')+'">'+esc(s.label)+'</div>'+(s.sub?'<div class="d qs-sub">'+s.sub+'</div>':'')+'</div>'+(s.act||'')+'</div>';
-  if(s.key==='notes'&&qcShipOpen[r.id+':notes'])h+='<div style="padding:0 0 10px 30px"><textarea class="field" id="qs-notes-'+esc(r.id)+'" style="min-height:150px;resize:vertical;font-family:var(--font-b);margin:0 0 8px">'+esc((r.notes||'').trim()||r.notesDraft||'')+'</textarea><div class="row" style="gap:8px"><button class="btn" style="flex:1" onclick="qcShipSaveNotes('+ocjson(r.id)+')">Save notes</button><button class="btn ghost" style="flex:1" onclick="qcShipToggle('+ocjson(r.id+':notes')+')">Cancel</button></div></div>';
-  if(s.ip&&qcShipOpen[r.id+':ip:'+s.ip.id])h+=qcIPEditor(r,s.ip);
+function relTasks(g){const out=[];g.groups.forEach(function(gr){gr[1].forEach(function(t){out.push(t)})});return out}
+function relOwner(l,t){return ((l.owners||{})[t.id])||t.who||''}
+/* Automatic checks → {done, detail, act} */
+function relAuto(l,t){
+  const fw=relFwRel(l),idq=fw?ocjson(fw.id):'';
+  if(t.auto==='fwimage'){const im=fw&&fw.image;return {done:!!im,detail:im?esc(im.name)+' · '+qcFwKB(im.size)+' · SHA-256 '+esc((im.sha256||'').slice(0,12))+'…':'Not uploaded yet.',
+    act:fw?'<button class="btn ghost qs-act"'+(qcFwUploading?' disabled':'')+' onclick="qcPickFirmware('+idq+')">'+(im?'Replace':(qcFwUploading?'Uploading…':'⤒ Upload .bin'))+'</button>':''}}
+  if(t.auto==='soak'){const runs=fw?releaseRuns(fw.id).filter(function(x){return x.kind!=='custom'}):[],last=runs[0],ok=!!fw&&releasePassed(fw);
+    return {done:ok,detail:last?(qcVerdictChip(last.verdict)+' '+esc(fmtDur(last.durationSec||0))+' · '+(last.alertsAcked||0)+'/'+(last.alertsSent||0)+' alerts · '+(last.disconnects||0)+' disconnects · '+esc(last.device||'')):'No soak run yet — runs in the Simulator tab.',
+      act:fw?'<button class="btn ghost qs-act" onclick="qcStartFromRelease('+idq+')">'+(ok?'Re-run':'▶ Run')+'</button>':''}}
+  if(t.auto==='clear'){const gs=relGates(l).slice(0,3),st=gs.map(function(g){return relGateStats(l,g)}),left=st.reduce(function(a,s){return a+(s.total-s.done)},0),fl=st.reduce(function(a,s){return a+s.flags},0);
+    return {done:left===0,detail:left===0?'All clear.':(fl?fl+' open flag'+(fl===1?'':'s')+' · ':'')+(left-fl)+' not done yet'}}
+  if(t.auto==='notes'){const n=(l.notes||'').trim();return {done:!!n,detail:n?'Saved by '+esc(l.notesBy||'')+' · '+qcTime(l.notesAt):'Review the draft below and save it.'}}
+  const s=(l.signoffs||{})[t.auto];
+  return {done:!!s,detail:s?'Approved by '+esc(s.by)+' · '+qcTime(s.at)+(s.note?' · '+esc(s.note):''):(t.auto==='eng'?'Brad or another admin, once gates 1–3 are clear.':'Last. This locks the report as the record of what shipped.'),
+    act:!s&&relAdmin()?'<button class="btn qs-act" onclick="relSign(\''+t.auto+'\')">✓ Approve</button>':''};
+}
+function relState(l,t){if(t.auto)return relAuto(l,t).done?'pass':'open';const c=(l.checks||{})[t.id];return c?c.state:'open'}
+function relGateStats(l,g){let total=0,done=0,flags=0;relTasks(g).forEach(function(t){total++;const s=relState(l,t);if(s==='pass'||s==='accepted')done++;else if(s==='flag')flags++});return {total:total,done:done,flags:flags,complete:done===total}}
+function relReady(l){return relGates(l).every(function(g){return relGateStats(l,g).complete})}
+
+/* ---- actions ---- */
+function relPass(id){
+  if(!canQC()){toast('Testers and admins only');return}if(relLocked())return;const l=relDoc();if(!l)return;const prev=(l.checks||{})[id];
+  if(prev&&prev.state==='pass'){relUpd('checks.'+id,null);relEdit[id]=null;renderQC();return}
+  const hist=prev?(prev.hist||[]).concat([{state:prev.state,by:prev.by,at:prev.at,note:prev.note||''}]):[];
+  relUpd('checks.'+id,{state:'pass',by:qcMe(),at:new Date().toISOString(),note:'',hist:hist});relEdit[id]=null;renderQC();
+}
+function relOpen(id,mode){if(relLocked())return;relEdit[id]=relEdit[id]===mode?null:mode;renderQC();setTimeout(function(){const e=document.getElementById('rf-'+id);if(e)e.focus()},0)}
+function relSaveFlag(id,label){
+  if(!canQC()){toast('Testers and admins only');return}const l=relDoc();if(!l)return;
+  const text=(relDraft['f:'+id]||'').trim(),phone=(relDraft['p:'+id]||'').trim();
+  if(!text){toast('Say what happened — that’s what gets it fixed');return}
+  const prev=(l.checks||{})[id],hist=prev?(prev.hist||[]).concat([{state:prev.state,by:prev.by,at:prev.at,note:prev.note||''}]):[];
+  relUpd('checks.'+id,{state:'flag',by:qcMe(),at:new Date().toISOString(),note:text,phone:phone,hist:hist});
+  delete relDraft['f:'+id];delete relDraft['p:'+id];relEdit[id]=null;renderQC();toast('⚑ Flagged — Brad gets a notification');
+  if(typeof notifySuper==='function')notifySuper('⚑ Release flag: '+label,qcMe()+': '+text+(phone?' ('+phone+')':''),'s-qc');
+}
+function relSaveNote(id){
+  const l=relDoc();if(!l||!canQC())return;const c=(l.checks||{})[id];if(!c)return;
+  relUpd('checks.'+id+'.note',(relDraft['n:'+id]||'').trim());delete relDraft['n:'+id];relEdit[id]=null;renderQC();toast('✓ Note saved');
+}
+function relAccept(id){
+  if(!relAdmin()){toast('Admins only');return}const l=relDoc();if(!l)return;const c=(l.checks||{})[id];if(!c)return;
+  const why=prompt('Ship with this flag open? Say why it’s acceptable (goes in the report):');if(why==null||!why.trim())return;
+  relUpd('checks.'+id,Object.assign({},c,{state:'accepted',acceptedBy:qcMe(),acceptedAt:new Date().toISOString(),acceptNote:why.trim()}));renderQC();
+}
+function relCycleOwner(id,cur){if(!canQC()||relLocked())return;const i=REL_TESTERS.indexOf(cur);relUpd('owners.'+id,REL_TESTERS[(i+1)%REL_TESTERS.length]);renderQC()}
+function relPostFeedback(){
+  if(!canQC()){toast('Testers and admins only');return}const text=(relDraft.fb||'').trim();if(!text){toast('Write your feedback first');return}
+  const id='F'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  relUpd('feedback.'+id,{by:qcMe(),at:new Date().toISOString(),app:relDraft.fbApp||'All apps',text:text});
+  relDraft.fb='';renderQC();toast('✓ Feedback posted');
+  if(typeof notifySuper==='function')notifySuper('Release feedback',qcMe()+': '+text,'s-qc');
+}
+function relFbDone(id){if(!relAdmin())return;const l=relDoc();const f=l&&(l.feedback||{})[id];if(!f)return;relUpd('feedback.'+id+'.done',f.done?null:{by:qcMe(),at:new Date().toISOString()});renderQC()}
+function relSaveNotes(){
+  if(!canQC())return;const v=(relDraft.notes!=null?relDraft.notes:((relDoc()||{}).notes||(relDoc()||{}).notesDraft||'')).trim();
+  if(!v){toast('Notes can’t be empty');return}relUpd('notes',v);relUpd('notesBy',qcMe());relUpd('notesAt',new Date().toISOString());delete relDraft.notes;relEdit.notes=false;renderQC();toast('✓ Release notes saved');
+}
+function relSign(as){
+  if(!relAdmin()){toast('Admins only');return}if(relLocked())return;const l=relDoc();if(!l)return;
+  if(!relAuto(l,{auto:'clear'}).done){toast('Gates 1–3 need to be done, with no open flags, first');return}
+  if(!(l.notes||'').trim()){toast('Save the release notes first');return}
+  if(as==='ceo'&&!(l.signoffs||{}).eng){toast('Engineering signs off first');return}
+  relUpd('signoffs.'+as,{by:qcMe(),role:(CURRENT_USER&&CURRENT_USER.role)||'',at:new Date().toISOString()});renderQC();toast('✓ Signed off');
+}
+function relShip(){
+  if(!relAdmin()){toast('Admins only');return}const l=relDoc();if(!l)return;if(!relReady(l)){toast('Not every gate is done yet');return}
+  if(!confirm('Mark this release shipped? The report is frozen as the record of what shipped.'))return;
+  const now=new Date().toISOString();relUpd('status','shipped');relUpd('shippedAt',now);relUpd('shippedBy',qcMe());
+  relUpd('snapshot',JSON.parse(JSON.stringify(relReportData(relDoc()))));relShowReport=true;renderQC();
+  qcNotifyLeads('🚀 Release shipped',l.name+' — signed off and shipped. The report is in Release QC.');
+}
+function relPick(n){relSel=n;relShowReport=false;renderQC();const e=document.getElementById('rel-gate');if(e&&e.scrollIntoView)e.scrollIntoView({block:'nearest'})}
+function relSetWho(w){relWho=w;renderQC()}
+function relMyName(){const n=((CURRENT_USER&&CURRENT_USER.name)||'').split(' ')[0];return REL_TESTERS.find(function(t){return t.toLowerCase()===n.toLowerCase()})||null}
+
+/* ---- views ---- */
+function relGlyph(s){return s==='pass'?'<span style="color:var(--good)">✓</span>':s==='flag'?'<span style="color:var(--amber)">⚑</span>':s==='accepted'?'<span style="color:var(--amber)">✓</span>':'<span style="color:var(--faint)">○</span>'}
+function relTaskRow(l,t,showOwner){
+  const lbl=ocjson(t.label);
+  if(t.auto){const a=relAuto(l,t);return '<div class="rg-task"><div class="qs-g">'+relGlyph(a.done?'pass':'open')+'</div><div class="grow"><div class="d" style="color:var(--text)">'+esc(t.label)+'</div><div class="d qs-sub">'+a.detail+'</div></div>'+(a.act||'')+'</div>'}
+  const c=(l.checks||{})[t.id]||null,s=c?c.state:'open',own=relOwner(l,t),mode=relEdit[t.id];
+  let sub='';
+  if(t.how&&s==='open')sub+='<div class="d qs-sub">'+esc(t.how)+'</div>';
+  if(c&&s==='pass')sub+='<div class="d qs-sub">Checked by '+esc(c.by)+' · '+qcTime(c.at)+(c.note?' · '+esc(c.note):'')+'</div>';
+  if(c&&(s==='flag'||s==='accepted'))sub+='<div class="rg-flagtxt">⚑ '+esc(c.note)+'<span>'+esc(c.by)+' · '+qcTime(c.at)+(c.phone?' · '+esc(c.phone):'')+'</span>'
+    +(s==='accepted'?'<span>Accepted by '+esc(c.acceptedBy)+' — '+esc(c.acceptNote||'')+'</span>':'')+'</div>';
+  if(c&&c.hist&&c.hist.some(function(h){return h.state==='flag'})&&s==='pass'){const f=c.hist.filter(function(h){return h.state==='flag'}).slice(-1)[0];sub+='<div class="d qs-sub">Was flagged by '+esc(f.by)+': '+esc(f.note)+'</div>'}
+  let h='<div class="rg-task'+(s==='flag'?' rg-flagged':'')+'"><div class="qs-g">'+relGlyph(s)+'</div><div class="grow"><div class="d" style="color:var(--text)'+(s==='pass'?';opacity:.8':'')+'">'+esc(t.label)
+    +(showOwner&&own?' <button class="rg-owner" title="Change who does this" onclick="relCycleOwner('+ocjson(t.id)+','+ocjson(own)+')">'+esc(own)+'</button>':'')+'</div>'+sub
+    +(s==='pass'&&!c.note&&c.by===qcMe()&&!relShipped()?'<button class="rg-link" onclick="relOpen('+ocjson(t.id)+',\'note\')">+ add a note</button>':'')
+    +(s==='flag'&&relAdmin()&&!relShipped()?'<button class="rg-link" onclick="relAccept('+ocjson(t.id)+')">Accept the risk and ship with it</button>':'')+'</div>'
+    +'<div class="rg-btns"><button class="rg-ok'+(s==='pass'?' on':'')+'" aria-label="It worked" title="'+(s==='pass'?'Undo':'It worked')+'" onclick="relPass('+ocjson(t.id)+')">✓</button>'
+    +'<button class="rg-flag'+(s==='flag'||mode==='flag'?' on':'')+'" aria-label="Flag a problem" title="Flag a problem" onclick="relOpen('+ocjson(t.id)+',\'flag\')">⚑</button></div></div>';
+  if(mode==='flag')h+='<div class="rg-box"><div class="d" style="margin-bottom:6px;color:var(--text)">What happened?</div>'
+    +'<textarea class="field" id="rf-'+esc(t.id)+'" rows="3" style="margin:0 0 8px;resize:vertical" placeholder="e.g. 7 of 10 texts buzzed; the band showed Connected the whole time" oninput="relD(\'f:'+esc(t.id)+'\',this.value)">'+esc(relDraft['f:'+t.id]!=null?relDraft['f:'+t.id]:(s==='flag'?c.note:''))+'</textarea>'
+    +'<input class="field" style="margin:0 0 8px" placeholder="Phone and OS (e.g. iPhone 15, iOS 18.1)" value="'+esc(relDraft['p:'+t.id]!=null?relDraft['p:'+t.id]:((c&&c.phone)||''))+'" oninput="relD(\'p:'+esc(t.id)+'\',this.value)">'
+    +'<div class="row" style="gap:8px"><button class="btn" style="flex:1" onclick="relSaveFlag('+ocjson(t.id)+','+lbl+')">⚑ Save flag</button><button class="btn ghost" style="flex:1" onclick="relOpen('+ocjson(t.id)+',\'flag\')">Cancel</button></div></div>';
+  if(mode==='note')h+='<div class="rg-box rg-box-ok"><textarea class="field" id="rf-'+esc(t.id)+'" rows="2" style="margin:0 0 8px;resize:vertical" placeholder="Anything worth knowing (battery %, phone, conditions)" oninput="relD(\'n:'+esc(t.id)+'\',this.value)">'+esc(relDraft['n:'+t.id]||'')+'</textarea>'
+    +'<div class="row" style="gap:8px"><button class="btn" style="flex:1" onclick="relSaveNote('+ocjson(t.id)+')">Save note</button><button class="btn ghost" style="flex:1" onclick="relOpen('+ocjson(t.id)+',\'note\')">Cancel</button></div></div>';
   return h;
 }
-function qcShipGrouped(r,steps){let h='',prev='core';steps.forEach(function(s){const g=s.ip?'ip':s.check?'qa':'core';
-  if(g!==prev){h+='<div class="qs-grp">'+(g==='ip'?'In person · real band + phone · on site with Trevon':'QA checklist')+'</div>';prev=g;}h+=qcShipStepRow(r,s)});return h}
-function qcShipView(){
-  qcEnsureShip();
-  const l=qcCurrentShip();
-  if(!l)return '<div class="empty"><div class="ico">🚀</div><div class="t">Loading the ship…</div><div class="d">The current firmware and app releases load here.</div></div>';
-  const rd=launchReadiness(l),lanes=QC_SHIP_LANES.concat(QC_LANES.filter(function(k){return QC_SHIP_LANES.indexOf(k)<0})).filter(function(k){return l.products&&l.products[k]});
-  let total=0,done=0,autoOpened=false;
-  const cards=lanes.map(function(k){const r=RELEASES[l.products[k]];
-    if(!r)return '<div class="card"><div class="t">'+esc(QC_SHIP_LABEL[k]||QC_PRODUCTS[k])+'</div><div class="d" style="color:var(--amber);margin-top:4px">Release record missing — reload, or attach one under Past launches.</div></div>';
-    const steps=qcShipSteps(r),n=steps.filter(function(s){return s.done&&!s.fail}).length,left=steps.length-n,fails=steps.filter(function(s){return s.fail}).length;total+=steps.length;done+=n;
-    // Collapsed to progress + next step; the first unfinished product opens by itself.
-    let open=qcShipOpen['lane:'+k];if(open==null){open=!autoOpened&&left>0;if(open)autoOpened=true;}else if(open&&left>0)autoOpened=true;
-    const next=steps.find(function(s){return s.fail})||steps.find(function(s){return !s.done});
-    return '<div class="card qs-lane"><div class="row tap" tabindex="0" style="align-items:center;gap:8px" onclick="qcShipToggle('+ocjson('lane:'+k)+')" aria-expanded="'+(open?'true':'false')+'"><div class="grow"><div class="eyebrow" style="margin:0">'+esc(QC_SHIP_LABEL[k]||QC_PRODUCTS[k])+'</div><div class="t" style="font-size:19px;margin-top:2px">'+esc(r.version||'')+(r.buildNumber?' <span style="color:var(--faint);font-weight:600">· build '+esc(r.buildNumber)+'</span>':'')+'</div></div>'
-      +'<span class="pill '+(left===0?'good':(fails?'amber':'dim'))+'">'+(left===0?'Ready ✓':(fails?fails+' failing':n+' of '+steps.length))+'</span><span style="color:var(--faint);font-size:13px">'+(open?'▾':'▸')+'</span></div>'
-      +'<div class="qs-bar"><i style="width:'+Math.round(n/steps.length*100)+'%"></i></div>'+qcConnStrip(r)
-      +(!open?(next?'<div class="d" style="margin-top:6px"><span style="color:var(--faint)">Next:</span> '+esc(next.label)+(left>1?' <span style="color:var(--faint)">· '+(left-1)+' more</span>':'')+'</div>':'<div class="d" style="margin-top:6px;color:var(--good)">Every line done.</div>'):
-      qcShipGrouped(r,steps)
-      +'<div class="d" style="color:var(--faint);margin-top:8px">Tap a checklist line to cycle ○ → ✓ pass → ✕ fail → Ø n/a. <a href="#" style="color:var(--wave)" onclick="qcTab=\'releases\';openQcRelease('+ocjson(r.id)+');return false">Full release record →</a></div>')+'</div>';
-  }).join('');
-  const approved=launchApproved(l);total++;if(approved)done++;
-  if(qcQaApplies(l)){for(let i=0;i<QA_PHASES.length;i++){total++;if((qcQa(l).signed||{})[i])done++}total+=QA_NEG.length;done+=qcQaNegDone(l);}
+function relTile(l,g,on){
+  const st=relGateStats(l,g),pct=Math.round(st.done/st.total*100);
+  const pill=st.complete?'<span class="pill good">Done ✓</span>':st.flags?'<span class="pill amber">⚑ '+st.flags+' flag'+(st.flags===1?'':'s')+'</span>':st.done?'<span class="pill wave">'+st.done+' of '+st.total+'</span>':'<span class="pill dim">Not started</span>';
+  return '<button class="rg-tile'+(on?' on':'')+(st.flags?' rg-warn':'')+'" aria-pressed="'+(on?'true':'false')+'" onclick="relPick('+g.n+')"><span class="rg-n">Gate '+g.n+'</span><span class="rg-name">'+esc(g.name)+'</span><span class="rg-who">'+esc(g.who)+'</span>'
+    +'<span class="qs-bar" style="margin:4px 0 2px"><i style="width:'+pct+'%'+(st.flags?';background:var(--amber)':'')+'"></i></span>'+pill+'</button>';
+}
+function relGateView(l,g){
+  const st=relGateStats(l,g);
+  let h='<div class="card" id="rel-gate"><div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><div class="eyebrow" style="margin:0">Gate '+g.n+' · '+esc(g.who)+'</div><div class="t" style="font-size:19px;margin-top:2px">'+esc(g.name)+'</div><div class="d" style="margin-top:4px">'+esc(g.ask)+'</div></div><div style="text-align:right;flex:0 0 auto"><div class="t" style="font-size:20px">'+st.done+'<span style="color:var(--faint);font-size:14px"> / '+st.total+'</span></div>'+(st.flags?'<div class="d" style="color:var(--amber)">⚑ '+st.flags+' flagged</div>':'')+'</div></div>';
+  if(g.field){
+    const me=relMyName();if(relWho==null)relWho=me||'all';
+    const count=function(w){return relTasks(g).filter(function(t){return w==='all'||relOwner(l,t)===w}).length};
+    const left=function(w){return relTasks(g).filter(function(t){return (w==='all'||relOwner(l,t)===w)&&relState(l,t)==='open'}).length};
+    h+='<div class="chips" style="margin:12px 0 0;flex-wrap:wrap;gap:6px">'+[['all','Everyone']].concat(REL_TESTERS.map(function(t){return [t,t+(t===me?' (you)':'')]})).map(function(o){return '<button class="chip'+(relWho===o[0]?' on':'')+'" onclick="relSetWho('+ocjson(o[0])+')">'+esc(o[1])+' · '+left(o[0])+' left of '+count(o[0])+'</button>'}).join('')+'</div>';
+    h+='<div class="d qs-sub" style="margin-top:8px">✓ = it worked. ⚑ = it didn’t — say what happened. Tap a name to hand a task to the other person.</div>';
+  }
+  if(g.final)h+=relFinalTop(l);
+  g.groups.forEach(function(gr){
+    const ts=gr[1].filter(function(t){return !g.field||relWho==='all'||relOwner(l,t)===relWho});if(!ts.length)return;
+    if(gr[0])h+='<div class="qs-grp">'+esc(gr[0])+'</div>';
+    ts.forEach(function(t){h+=relTaskRow(l,t,!!g.field)});
+  });
+  if(g.final)h+=relFinalBottom(l);
+  h+='</div>';
+  if(g.field)h+=relFeedbackCard(l);
+  if(g.n===1)h+=relVersionsCard(l);
+  return h;
+}
+function relFinalTop(l){
+  const notes=(l.notes||'').trim(),open=relEdit.notes||!notes,val=relDraft.notes!=null?relDraft.notes:(notes||l.notesDraft||'');
+  return '<div class="qs-grp">Release notes</div>'
+    +(open?'<textarea class="field" rows="12" style="margin:8px 0;resize:vertical;font-family:var(--font-b)" oninput="relD(\'notes\',this.value)" aria-label="Release notes">'+esc(val)+'</textarea>'
+      +'<div class="row" style="gap:8px;margin-bottom:6px"><button class="btn" style="flex:1" onclick="relSaveNotes()">Save release notes</button>'+(notes?'<button class="btn ghost" style="flex:1" onclick="relEdit.notes=false;delete relDraft.notes;renderQC()">Cancel</button>':'')+'</div>'
+      +(!notes?'<div class="d qs-sub" style="margin-bottom:6px">A draft from what changed is filled in. Edit it in plain words for the people using it, then save.</div>':'')
+     :'<div class="rg-notes">'+esc(notes)+'</div><button class="rg-link" onclick="relEdit.notes=true;renderQC()">Edit release notes</button>')
+    +'<div class="qs-grp">Before it ships</div>';
+}
+function relFinalBottom(l){
+  const shipped=l.status==='shipped',ready=relReady(l);
+  let h='';
+  if(shipped)h+='<div class="rg-ship rg-go"><b>🚀 Shipped '+qcTime(l.shippedAt)+'</b> by '+esc(l.shippedBy||'')+'. The report below is the frozen record.</div>';
+  else if(ready)h+='<div class="rg-ship rg-go"><b>✓ Ready to ship.</b> Every gate is done and both sign-offs are in.'+(relAdmin()?'<button class="btn" style="margin-top:10px" onclick="relShip()">🚀 Mark shipped</button>':'')+'</div>';
+  h+='<button class="btn ghost" style="margin-top:10px" onclick="relShowReport=!relShowReport;renderQC()">'+(relShowReport?'Hide the report':'📄 View the report — every check + release notes')+'</button>';
+  return h;
+}
+function relFeedbackCard(l){
+  const apps=['All apps'].concat(REL_COMPS.map(function(c){return c.name})),cur=relDraft.fbApp||'All apps';
+  const list=Object.keys(l.feedback||{}).map(function(k){return Object.assign({id:k},l.feedback[k])}).sort(function(a,b){return (b.at||'').localeCompare(a.at||'')});
+  return '<div class="card"><div class="t" style="font-size:16px">General feedback on the apps</div><div class="d" style="margin:2px 0 10px">Anything you noticed that isn’t one of the tasks — confusing screens, wording, ideas. It all goes in the report.</div>'
+    +'<select class="field" style="margin:0 0 8px" onchange="relD(\'fbApp\',this.value)" aria-label="Which app">'+apps.map(function(a){return '<option'+(a===cur?' selected':'')+'>'+esc(a)+'</option>'}).join('')+'</select>'
+    +'<textarea class="field" rows="3" style="margin:0 0 8px;resize:vertical" placeholder="e.g. The pairing screen doesn’t say to hold the band close" oninput="relD(\'fb\',this.value)" aria-label="Feedback">'+esc(relDraft.fb||'')+'</textarea>'
+    +'<button class="btn" onclick="relPostFeedback()">Post feedback</button>'
+    +(list.length?list.map(function(f){return '<div class="rg-task"><div class="qs-g">'+(f.done?'<span style="color:var(--good)">✓</span>':'<span style="color:var(--wave)">•</span>')+'</div><div class="grow"><div class="d" style="color:var(--text)">'+esc(f.text)+'</div><div class="d qs-sub">'+esc(f.by)+' · '+esc(f.app)+' · '+qcTime(f.at)+(f.done?' · handled by '+esc(f.done.by):'')+'</div></div>'
+      +(relAdmin()?'<button class="btn ghost qs-act" onclick="relFbDone('+ocjson(f.id)+')">'+(f.done?'Reopen':'Handled')+'</button>':'')+'</div>'}).join(''):'')+'</div>';
+}
+function relVersionsCard(l){
+  if(!relShowVers)return '<button class="rg-link" style="margin:0 0 12px" onclick="relShowVers=true;renderQC()">Change version or build numbers</button>';
+  return '<div class="card"><div class="row" style="align-items:center"><div class="grow t" style="font-size:16px">Versions in this release</div><button class="btn ghost qs-act" onclick="relShowVers=false;renderQC()">Done</button></div>'
+    +REL_COMPS.map(function(c){const v=(l.comps||{})[c.k]||{};return '<div class="row" style="gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><div class="grow d" style="color:var(--text);min-width:180px">'+esc(c.name)+'<div class="d qs-sub">'+esc(c.where)+'</div></div>'
+      +'<input class="field" style="margin:0;width:96px" aria-label="'+esc(c.name)+' version" value="'+esc(v.version||'')+'" onchange="relUpd(\'comps.'+c.k+'.version\',this.value.trim());renderQC()">'
+      +'<input class="field" style="margin:0;width:80px" aria-label="'+esc(c.name)+' build" placeholder="build" value="'+esc(v.build||'')+'" onchange="relUpd(\'comps.'+c.k+'.build\',this.value.trim());renderQC()"></div>'}).join('')+'</div>';
+}
+function relView(){
+  relEnsure();
+  const l=relDoc();
+  if(!l)return '<div class="empty"><div class="ico">🚀</div><div class="t">Loading the release…</div><div class="d">Firmware and the iPhone and Android apps load here as one release.</div></div>';
+  const gates=relGates(l);
+  if(relSel==null){const me=relMyName();relSel=me?3:((gates.find(function(g){return !relGateStats(l,g).complete})||gates[3]).n)}
+  const g=gates[relSel-1]||gates[0];
+  let total=0,done=0,flags=0;gates.forEach(function(x){const s=relGateStats(l,x);total+=s.total;done+=s.done;flags+=s.flags});
   const pct=total?Math.round(done/total*100):0;
-  const launched=l.status==='launched';
-  const verdict=launched
-    ?'<div class="card" style="border-color:var(--good)"><div class="t" style="color:var(--good)">🚀 Shipped '+qcTime(l.launchedAt)+'</div><div class="d" style="margin-top:2px">The report is the frozen record of what was verified.</div></div>'
-    :(rd.ready
-      ?'<div class="card" style="border-color:var(--good)"><div class="t" style="color:var(--good)">✓ Ready to ship</div><div class="d" style="margin-top:2px">Every product passed its soak, notes, in-person tests and checklist, every QA gate is signed, and the sign-offs are in.</div><button class="btn" style="margin-top:10px" onclick="qcMarkLaunched('+ocjson(l.id)+')">🚀 Mark shipped</button></div>'
-      :'<div class="card" style="border-color:var(--amber)"><div class="t" style="color:var(--amber)">'+rd.blockers.length+' thing'+(rd.blockers.length===1?'':'s')+' left before this ships</div><div class="d" style="margin-top:6px">'+rd.blockers.slice(0,6).map(function(b){return '• '+esc(b)}).join('<br>')+(rd.blockers.length>6?'<br>• …and '+(rd.blockers.length-6)+' more':'')+'</div></div>');
-  return ''
-    +'<div class="card"><div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><input class="field" style="margin:0;font-size:18px;font-weight:700" value="'+esc(l.name)+'" onchange="qcLaunchField('+ocjson(l.id)+',\'name\',this.value)" aria-label="Ship name">'
-    +'<div class="d" style="margin-top:6px">'+esc(l.summary||'')+'</div></div><div style="text-align:right;flex:0 0 auto"><div class="t" style="font-size:24px">'+pct+'%</div><div class="d" style="color:var(--faint)">'+done+' of '+total+' done</div></div></div>'
-    +'<div class="qs-bar" style="margin-top:10px"><i style="width:'+pct+'%"></i></div>'
-    +'<div class="row" style="gap:8px;margin-top:10px;align-items:center"><span class="d">Sign off by</span><input type="date" class="field" style="margin:0;width:auto" value="'+esc(l.targetDate||'')+'" onchange="qcLaunchField('+ocjson(l.id)+',\'targetDate\',this.value)"><div class="grow"></div><button class="btn ghost" style="width:auto;padding:8px 12px" onclick="qcExportLaunchPDF('+ocjson(l.id)+')">⤓ PDF report</button></div></div>'
-    +verdict
-    +(qcQaApplies(l)?qcQaBlock(l):'')
-    +cards
-    +qcShipSignCard(l)
-    +(isSuperAdmin()&&!launched&&!rd.ready?'<button class="btn ghost" style="margin-top:4px" onclick="qcMarkLaunched('+ocjson(l.id)+')">Ship anyway (super-admin override, logged)</button>':'');
+  const comps=REL_COMPS.map(function(c){return '<span class="rg-comp"><b>'+esc(relVer(l,c.k))+'</b>'+esc(c.name)+'</span>'}).join('');
+  return '<div class="card"><div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><input class="field" style="margin:0;font-size:18px;font-weight:700" value="'+esc(l.name)+'" onchange="relUpd(\'name\',this.value.trim()||'+ocjson(REL_SEED.name)+')" aria-label="Release name"'+(relAdmin()?'':' readonly')+'>'
+    +'<div class="d" style="margin-top:6px">'+(l.status==='shipped'?'<span style="color:var(--good)">Shipped '+qcTime(l.shippedAt)+'</span>':'Sign off by '+esc(l.targetDate||'—'))+(flags?' · <span style="color:var(--amber)">⚑ '+flags+' open flag'+(flags===1?'':'s')+'</span>':'')+'</div></div>'
+    +'<div style="text-align:right;flex:0 0 auto"><div class="t" style="font-size:24px">'+pct+'%</div><div class="d" style="color:var(--faint)">'+done+' of '+total+' checks</div></div></div>'
+    +'<div class="qs-bar" style="margin-top:10px"><i style="width:'+pct+'%"></i></div><div class="rg-comps">'+comps+'</div></div>'
+    +'<div class="rg-tiles">'+gates.map(function(x){return relTile(l,x,x.n===g.n)}).join('')+'</div>'
+    +relGateView(l,g)
+    +(relShowReport&&g.final?relReportView(l):'');
 }
-function qcReleasesView(){
-  const prods=[['all','All'],['firmware','Firmware'],['app_consumer','Consumer'],['app_business','Business'],['app_android','Android']];
-  const filt='<div class="row" style="gap:8px;margin-bottom:12px;align-items:center"><div class="chips" style="margin:0">'+prods.map(p=>'<button class="chip'+(qcProdFilter===p[0]?' on':'')+'" onclick="qcSetProd('+ocjson(p[0])+')">'+p[1]+'</button>').join('')+'</div><div class="grow"></div><button class="btn" style="width:auto;white-space:nowrap" onclick="openRelease()">＋ New release</button></div>';
-  let list=Object.values(RELEASES);
-  if(qcProdFilter!=='all')list=list.filter(r=>qcProd(r.product)===qcProdFilter);
-  list.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-  const body=list.length?list.map(qcReleaseCard).join(''):'<div class="empty"><div class="ico">🚀</div><div class="t">No releases yet</div><div class="d">Create a firmware or app release, write the notes, then soak-test it on a band before it ships.</div></div>';
-  return filt+body;
+
+/* ---- report: every check + release notes ---- */
+function relReportData(l){
+  return {name:l.name,targetDate:l.targetDate||'',status:l.status||'open',shippedAt:l.shippedAt||'',shippedBy:l.shippedBy||'',generatedAt:new Date().toISOString(),
+    comps:REL_COMPS.map(function(c){return {name:c.name,version:relVer(l,c.k)}}),
+    gates:relGates(l).map(function(g){const st=relGateStats(l,g);return {n:g.n,name:g.name,who:g.who,done:st.done,total:st.total,flags:st.flags,
+      groups:g.groups.map(function(gr){return {name:gr[0],tasks:gr[1].map(function(t){
+        if(t.auto){const a=relAuto(l,t);return {label:t.label,state:a.done?'pass':'open',detail:a.detail.replace(/<[^>]+>/g,''),auto:true}}
+        const c=(l.checks||{})[t.id]||{};return {label:t.label,owner:g.field?relOwner(l,t):'',state:c.state||'open',by:c.by||'',at:c.at||'',note:c.note||'',phone:c.phone||'',acceptedBy:c.acceptedBy||'',acceptNote:c.acceptNote||'',
+          wasFlagged:(c.hist||[]).filter(function(h){return h.state==='flag'}).map(function(h){return h.by+': '+h.note})}})}})}}),
+    feedback:Object.keys(l.feedback||{}).map(function(k){return l.feedback[k]}).sort(function(a,b){return (a.at||'').localeCompare(b.at||'')}),
+    notes:(l.notes||'').trim(),signoffs:l.signoffs||{}};
 }
-function qcReleaseCard(r){
-  const st=QC_RELSTATUS[r.status]||QC_RELSTATUS.draft;const passed=releasePassed(r);const last=releaseRuns(r.id)[0];
-  const notesPrev=(r.notes||'').split('\n').map(l=>l.trim()).filter(Boolean).slice(0,2).map(esc).join('<br>');
-  return '<div class="card tap" tabindex="0" onclick="openQcRelease('+ocjson(r.id)+')">'
-    +'<div class="row"><div class="grow"><div class="t">'+esc((QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+(r.version||''))+' <span class="pill '+((QC_CHAN[r.channel]||{}).pill||'dim')+'" style="font-size:10px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+'</span></div>'
-    +(notesPrev?'<div class="d" style="margin-top:4px">'+notesPrev+'</div>':'<div class="d" style="color:var(--faint)">No notes yet</div>')+'</div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
-    +'<div class="d" style="margin-top:8px;color:var(--faint)">'+(last?('Last soak: '+qcVerdictChip(last.verdict)+' · '+fmtDur(last.durationSec||0)+' · '+(last.disconnects||0)+' disconnect'+(last.disconnects===1?'':'s')):'Not soak-tested yet')+(passed||r.status==='released'?'':' · <span style="color:var(--amber)">release blocked</span>')+'</div>'
-    +'</div>';
+function relStateWord(s){return s==='pass'?'✓ Passed':s==='flag'?'⚑ Flagged':s==='accepted'?'✓ Shipped with a known issue':'○ Not done'}
+function relReportView(l){
+  const d=l.status==='shipped'&&l.snapshot?l.snapshot:relReportData(l);
+  let h='<div class="card" id="rel-report"><div class="row" style="align-items:center;gap:8px"><div class="grow"><div class="eyebrow" style="margin:0">Release report'+(l.snapshot&&l.status==='shipped'?' · frozen when shipped':' · live')+'</div><div class="t" style="font-size:18px;margin-top:2px">'+esc(d.name)+'</div></div>'
+    +'<button class="btn ghost qs-act" onclick="relCopyReport()">Copy</button><button class="btn ghost qs-act" onclick="relReportPDF()">⤓ PDF</button></div>'
+    +'<div class="rg-comps" style="margin-top:8px">'+d.comps.map(function(c){return '<span class="rg-comp"><b>'+esc(c.version)+'</b>'+esc(c.name)+'</span>'}).join('')+'</div>';
+  d.gates.forEach(function(g){
+    h+='<div class="qs-grp">Gate '+g.n+' · '+esc(g.name)+' — '+g.done+' of '+g.total+(g.flags?' · ⚑ '+g.flags:'')+'</div>';
+    g.groups.forEach(function(gr){if(gr.name)h+='<div class="d" style="font-weight:700;color:var(--text);margin:8px 0 2px">'+esc(gr.name)+'</div>';
+      gr.tasks.forEach(function(t){h+='<div class="rg-rrow"><span class="rg-rs '+(t.state==='pass'?'rg-rs-ok':t.state==='open'?'':'rg-rs-warn')+'">'+relStateWord(t.state)+'</span><span class="grow">'+esc(t.label)
+        +(t.auto?'<i>'+esc(t.detail)+'</i>':'')+(t.by?'<i>'+esc(t.by)+' · '+qcTime(t.at)+(t.phone?' · '+esc(t.phone):'')+'</i>':'')+(t.note?'<i>'+(t.state==='flag'||t.state==='accepted'?'⚑ ':'')+esc(t.note)+'</i>':'')
+        +(t.acceptNote?'<i>Accepted by '+esc(t.acceptedBy)+': '+esc(t.acceptNote)+'</i>':'')+(t.wasFlagged&&t.wasFlagged.length&&t.state==='pass'?'<i>Earlier flag — '+esc(t.wasFlagged.slice(-1)[0])+'</i>':'')+'</span></div>'})});
+  });
+  h+='<div class="qs-grp">General feedback</div>'+(d.feedback.length?d.feedback.map(function(f){return '<div class="rg-rrow"><span class="rg-rs">'+esc(f.app)+'</span><span class="grow">'+esc(f.text)+'<i>'+esc(f.by)+' · '+qcTime(f.at)+(f.done?' · handled':'')+'</i></span></div>'}).join(''):'<div class="d qs-sub">None posted.</div>');
+  h+='<div class="qs-grp">Sign-offs</div>'+['eng','ceo'].map(function(k){const s=d.signoffs[k];return '<div class="rg-rrow"><span class="rg-rs '+(s?'rg-rs-ok':'')+'">'+(s?'✓ Approved':'○ Pending')+'</span><span class="grow">'+(k==='eng'?'Engineering':'CEO / product')+(s?'<i>'+esc(s.by)+' · '+qcTime(s.at)+'</i>':'')+'</span></div>'}).join('');
+  h+='<div class="qs-grp">Release notes</div><div class="rg-notes">'+(d.notes?esc(d.notes):'<span style="color:var(--faint)">Not saved yet.</span>')+'</div></div>';
+  return h;
 }
-function openQcRelease(id){qcRelView=id;renderQC();window.scrollTo(0,0)}
-function qcBackReleases(){qcRelView=null;renderQC()}
-function renderQcReleaseDetail(body){
-  const r=RELEASES[qcRelView];if(!r){qcRelView=null;return renderQC()}
-  const st=QC_RELSTATUS[r.status]||QC_RELSTATUS.draft;const passed=releasePassed(r);const runs=releaseRuns(r.id);
-  const passRun=runs.find(x=>x.verdict==='pass');
-  const gate=passed
-    ? '<div class="card" style="border-color:var(--good)"><div class="t" style="color:var(--good)">✓ Ready to release</div><div class="d" style="margin-top:2px">Passed a soak test on '+esc((passRun&&passRun.device)||'a band')+' — held the connection and delivered alerts for the full window.</div>'+(r.status!=='released'?'<button class="btn" style="margin-top:10px" onclick="markReleased('+ocjson(r.id)+')">🚀 Mark released</button>':'<div class="d" style="margin-top:8px;color:var(--good)">Released '+qcTime(r.releasedAt)+' by '+esc(r.releasedBy||'')+'</div>')+'</div>'
-    : (r.status==='released'
-      ? '<div class="card" style="border-color:var(--amber)"><div class="t" style="color:var(--amber)">Released without passing QC</div><div class="d" style="margin-top:2px">'+esc(r.overrideReason?('Override: '+r.overrideReason+' — '+(r.overrideBy||'')):'No passing soak on record.')+'</div></div>'
-      : '<div class="card" style="border-color:var(--amber)"><div class="t" style="color:var(--amber)">Release blocked</div><div class="d" style="margin-top:2px">No passing soak test for '+esc(r.version||'this version')+' yet. Run one on a band — a release ships only after it holds the connection and delivers alerts for the full window.</div><button class="btn" style="margin-top:10px" onclick="qcStartFromRelease('+ocjson(r.id)+')">▶ Start soak test</button>'+(isSuperAdmin()?'<button class="btn ghost" style="margin-top:8px" onclick="overrideRelease('+ocjson(r.id)+')">Override &amp; release anyway (logged)</button>':'')+'</div>');
-  const notes=(r.notes||'').trim();
-  body.innerHTML=''
-    +'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;margin-bottom:12px" onclick="qcBackReleases()">← All releases</button>'
-    +'<div class="row" style="align-items:flex-start"><div class="grow"><h2 style="margin:0;font-size:20px">'+esc((QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+(r.version||''))+'</h2><div class="d" style="margin-top:2px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+' channel · created '+qcTime(r.createdAt)+' · '+esc(r.createdBy||'')+'</div></div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
-    +'<div class="row" style="gap:8px;margin:12px 0"><button class="btn ghost" style="flex:1" onclick="openRelease('+ocjson(r.id)+')">Edit / notes</button><button class="btn ghost" style="flex:1" onclick="qcStartFromRelease('+ocjson(r.id)+')">Soak test</button></div>'
-    +gate
-    +(r.product==='firmware'?qcImageCard(r):'')
-    +qcChecklistCard(r)
-    +'<p class="eyebrow" style="margin:16px 0 8px">Release notes'+(notes?'':' <span class="pill amber" style="font-size:10px">MISSING</span>')+'</p><div class="card"><div class="d" style="white-space:pre-wrap;color:var(--text)">'+(notes?esc(notes):'<span style="color:var(--faint)">No notes yet — a launch is blocked until every release has user-facing notes.</span>')+'</div>'
-    +((r.buildNumber||r.links&&(r.links.testflight||r.links.easBuild||r.links.commit))?'<div class="d" style="margin-top:8px;color:var(--faint)">'+(r.buildNumber?('Build '+esc(r.buildNumber)+' · '):'')+[['testflight','TestFlight'],['easBuild','EAS build'],['commit','Commit']].map(function(x){var u=r.links&&r.links[x[0]];return u?'<a href="'+esc(u)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+x[1]+'</a>':''}).filter(Boolean).join(' · ')+'</div>':'')
-    +((r.internalNotes||'').trim()?'<div class="note" style="margin-top:8px">Internal: '+esc(r.internalNotes)+'</div>':'')+'</div>'
-    +'<p class="eyebrow" style="margin:16px 0 8px">Soak test history <span class="pill dim" style="font-size:10px">'+runs.length+'</span></p>'
-    +(runs.length?runs.map(qcRunRow).join(''):'<div class="empty"><div class="d">No soak runs yet.</div></div>');
+function relReportText(d){
+  const L=[];L.push('# '+d.name+' — release report');L.push((d.status==='shipped'?'Shipped '+d.shippedAt+' by '+d.shippedBy:'Not shipped yet')+' · generated '+d.generatedAt);L.push('');
+  d.comps.forEach(function(c){L.push('- '+c.name+': '+c.version)});
+  d.gates.forEach(function(g){L.push('');L.push('## Gate '+g.n+' — '+g.name+' ('+g.done+'/'+g.total+(g.flags?', '+g.flags+' flagged':'')+')');
+    g.groups.forEach(function(gr){if(gr.name)L.push('### '+gr.name);gr.tasks.forEach(function(t){L.push('- ['+(t.state==='pass'||t.state==='accepted'?'x':' ')+'] '+t.label+' — '+relStateWord(t.state).replace(/^[^ ]+ /,'')
+      +(t.by?' · '+t.by+' '+String(t.at).slice(0,16).replace('T',' '):'')+(t.phone?' · '+t.phone:'')+(t.note?' · '+t.note:'')+(t.detail?' · '+t.detail:'')+(t.acceptNote?' · accepted by '+t.acceptedBy+': '+t.acceptNote:''))})})});
+  L.push('');L.push('## General feedback');if(!d.feedback.length)L.push('None.');d.feedback.forEach(function(f){L.push('- ['+f.app+'] '+f.text+' — '+f.by)});
+  L.push('');L.push('## Sign-offs');['eng','ceo'].forEach(function(k){const s=d.signoffs[k];L.push('- '+(k==='eng'?'Engineering':'CEO / product')+': '+(s?s.by+' '+String(s.at).slice(0,16).replace('T',' '):'pending'))});
+  L.push('');L.push('## Release notes');L.push(d.notes||'(not saved)');
+  return L.join('\n');
 }
-/* Firmware image (.bin) — uploaded to Firebase Storage, checksummed, and
-   attached to the release so it can be soak-tested + flashed to a band. */
+function relCurReport(){const l=relDoc();if(!l)return null;return l.status==='shipped'&&l.snapshot?l.snapshot:relReportData(l)}
+function relCopyReport(){const d=relCurReport();if(!d)return;const t=relReportText(d);
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(function(){toast('✓ Report copied')},function(){toast('Copy failed')});else toast('Copy unsupported here')}
+/* PDF: the house print-window pattern — white page, browser's Save as PDF. */
+function relReportPDF(){
+  const d=relCurReport();if(!d)return;
+  const E=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')},T=function(t){return E(t?String(t).slice(0,16).replace('T',' '):'')};
+  let h='<html><head><title>Safewave Release Report — '+E(d.name)+'</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:34px 40px;font-size:12.5px;line-height:1.5}h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 6px}h3{font-size:12px;margin:12px 0 4px;text-transform:uppercase;letter-spacing:.06em;color:#444}.meta{color:#555;font-size:11.5px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:5px 8px;text-align:left;vertical-align:top;font-size:11.5px}th{background:#f2f4f6}.ok{color:#116b3e;font-weight:700}.warn{color:#8a5a00;font-weight:700}.notes{white-space:pre-wrap;border-left:3px solid #19b5ec;padding:2px 0 2px 12px}.foot{color:#999;font-size:10px;margin-top:24px;border-top:1px solid #ddd;padding-top:6px}</style></head><body>';
+  h+='<h1>Safewave Release Report</h1><div class="meta">'+E(d.name)+' · '+(d.status==='shipped'?'shipped '+T(d.shippedAt)+' by '+E(d.shippedBy):'not shipped yet')+' · generated '+T(d.generatedAt)+'</div>';
+  h+='<h2>What’s in it</h2><table>'+d.comps.map(function(c){return '<tr><td>'+E(c.name)+'</td><td><b>'+E(c.version)+'</b></td></tr>'}).join('')+'</table>';
+  d.gates.forEach(function(g){h+='<h2>Gate '+g.n+' — '+E(g.name)+' <span class="meta">('+g.done+' of '+g.total+(g.flags?', '+g.flags+' flagged':'')+')</span></h2>';
+    g.groups.forEach(function(gr){if(gr.name)h+='<h3>'+E(gr.name)+'</h3>';h+='<table><tr><th style="width:130px">Result</th><th>Check</th><th style="width:150px">By / when</th><th>Notes</th></tr>'
+      +gr.tasks.map(function(t){return '<tr><td class="'+(t.state==='pass'?'ok':t.state==='open'?'':'warn')+'">'+E(relStateWord(t.state))+'</td><td>'+E(t.label)+(t.owner?' <span class="meta">('+E(t.owner)+')</span>':'')+'</td><td>'+E(t.by)+(t.at?'<br>'+T(t.at):'')+(t.phone?'<br>'+E(t.phone):'')+'</td><td>'+E(t.note||t.detail||'')+(t.acceptNote?'<br>Accepted by '+E(t.acceptedBy)+': '+E(t.acceptNote):'')+(t.wasFlagged&&t.wasFlagged.length&&t.state==='pass'?'<br><i>Earlier flag — '+E(t.wasFlagged.slice(-1)[0])+'</i>':'')+'</td></tr>'}).join('')+'</table>'})});
+  h+='<h2>General feedback</h2>'+(d.feedback.length?'<table><tr><th>App</th><th>Feedback</th><th>By</th></tr>'+d.feedback.map(function(f){return '<tr><td>'+E(f.app)+'</td><td>'+E(f.text)+'</td><td>'+E(f.by)+'<br>'+T(f.at)+'</td></tr>'}).join('')+'</table>':'<div class="meta">None posted.</div>');
+  h+='<h2>Sign-offs</h2><table>'+['eng','ceo'].map(function(k){const s=d.signoffs[k];return '<tr><td>'+(k==='eng'?'Engineering':'CEO / product')+'</td><td>'+(s?'<span class="ok">Approved</span> — '+E(s.by)+' · '+T(s.at):'Pending')+'</td></tr>'}).join('')+'</table>';
+  h+='<h2>Release notes</h2><div class="notes">'+(d.notes?E(d.notes):'<i>not saved</i>')+'</div>';
+  h+='<div class="foot">Safewave Release Report · produced by Safewave Command Center Release QC.</div><script>setTimeout(function(){window.print()},300)<\/script></body></html>';
+  const w=window.open('','_blank');if(!w){toast('Pop-up blocked — allow pop-ups to export');return}w.document.write(h);w.document.close();
+}
+
+/* Firmware image (.bin) — checksummed and attached to the firmware release
+   record, so it can be soak-tested and flashed to a band. */
 function qcFwKB(bytes){bytes=bytes||0;return bytes<1024*100?(bytes/1024).toFixed(1)+' KB':(bytes/1024).toFixed(0)+' KB'}
-function qcImageCard(r){
-  const im=r.image;const head='<p class="eyebrow" style="margin:16px 0 8px">Firmware image</p>';
-  if(!im)return head+'<div class="card"><div class="d">No <code>.bin</code> uploaded for '+esc(r.version||'this version')+' yet. Build it on the pinned toolchain, then upload the image here — it gets a SHA-256 checksum and can be soak-tested and flashed to a band.</div><button class="btn" style="margin-top:10px"'+(qcFwUploading?' disabled':'')+' onclick="qcPickFirmware('+ocjson(r.id)+')">'+(qcFwUploading?'Uploading…':'⤒ Upload .bin')+'</button></div>';
-  return head+'<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(im.name)+' <span class="pill good" style="font-size:10px">uploaded</span></div><div class="d" style="margin-top:2px">'+qcFwKB(im.size)+' · '+qcTime(im.uploadedAt)+' · '+esc(im.uploadedBy||'')+'</div></div></div>'
-    +'<div class="d" style="margin-top:8px;color:var(--faint);font-family:var(--font-m);font-size:10.5px;word-break:break-all">SHA-256 '+esc(im.sha256||'')+'</div>'
-    +'<div class="row" style="gap:8px;margin-top:10px"><a class="btn ghost" style="flex:1;text-align:center;text-decoration:none" href="'+esc(im.url||'')+'" target="_blank" rel="noopener">⤓ Download</a><button class="btn ghost" style="flex:1"'+(qcFwUploading?' disabled':'')+' onclick="qcPickFirmware('+ocjson(r.id)+')">Replace</button></div>'
-    +'<div class="note" style="margin-top:10px">This image feeds the soak test and (next) the Bluetooth-OTA flasher — the band’s own update path. Until OTA is verified on a spare band, flash with your JLink using this exact image + checksum.</div>'
-    +'</div>';
-}
 function qcPickFirmware(id){qcFwPickTarget=id;const el=document.getElementById('qc-fw-file');if(el){el.value='';el.click()}}
 async function qcOnFirmwareFile(input){
   const f=input.files&&input.files[0];if(!f)return;const id=qcFwPickTarget;const r=RELEASES[id];if(!r){toast('Release not found');return}
@@ -2790,316 +2685,6 @@ async function qcOnFirmwareFile(input){
   }catch(e){const m=(e&&e.message)||'';toast(/needs-storage/.test(m)?'That file is over 600 KB — enable Firebase Storage in the console, or upload a firmware .bin (~128 KB, no setup needed).':(/storage|unauthorized|permission/i.test(m)?'Storage upload failed — enable Firebase Storage in the console, or use a .bin under 600 KB.':'Upload failed — '+((e&&e.message)||e)))}
   qcFwUploading=false;renderQC();
 }
-function qcRunRow(run){
-  if(run.kind==='custom')return '<div class="card tap" tabindex="0" onclick="openQcRun('+ocjson(run.id)+')"><div class="row"><div class="grow"><div class="t">'+qcVerdictChip(run.verdict)+' '+esc(run.title||'Custom test')+'</div><div class="d" style="margin-top:4px">'+esc(run.device||'device')+' · '+(run.passed||0)+' passed · '+(run.failed||0)+' failed · by '+esc(run.by||'')+'</div></div><div class="d" style="color:var(--faint);white-space:nowrap">'+qcTime(run.startedAt)+'</div></div></div>';
-  return '<div class="card tap" tabindex="0" onclick="openQcRun('+ocjson(run.id)+')"><div class="row"><div class="grow"><div class="t">'+qcVerdictChip(run.verdict)+' '+fmtDur(run.durationSec||0)+' soak</div><div class="d" style="margin-top:4px">'+esc(run.device||'device')+' · '+(run.alertsAcked||0)+'/'+(run.alertsSent||0)+' alerts · '+(run.disconnects||0)+' disconnect'+(run.disconnects===1?'':'s')+(run.uptimePct!=null?' · '+run.uptimePct+'% uptime':'')+'</div></div><div class="d" style="color:var(--faint);white-space:nowrap">'+qcTime(run.startedAt)+'</div></div></div>';
-}
-function markReleased(id){const r=RELEASES[id];if(!r)return;if(!releasePassed(r)){toast('Blocked — needs a passing soak test first');return}
-  r.status='released';r.releasedAt=new Date().toISOString();r.releasedBy=(CURRENT_USER&&CURRENT_USER.name)||'';RELEASES[id]=r;persistRelease(r);renderQC();
-  toast('🚀 '+(QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+r.version+' released');
-  qcNotifyLeads('Release shipped',(QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+r.version+' released after passing QC');
-}
-function overrideRelease(id){const r=RELEASES[id];if(!r)return;if(!isSuperAdmin()){toast('Super admin only');return}
-  const reason=prompt('Releasing WITHOUT a passing soak test — this is logged. Why?');if(!reason||!reason.trim())return;
-  r.status='released';r.releasedAt=new Date().toISOString();r.releasedBy=(CURRENT_USER&&CURRENT_USER.name)||'';r.overrideReason=reason.trim();r.overrideBy=(CURRENT_USER&&CURRENT_USER.name)||'';RELEASES[id]=r;persistRelease(r);renderQC();
-  toast('Released with override — logged');
-  qcNotifyLeads('Release override',(QC_PRODUCTS[qcProd(r.product)]||r.product)+' '+r.version+' released WITHOUT passing QC by '+((CURRENT_USER&&CURRENT_USER.name)||'')+' — '+reason.trim());
-}
-/* ================= QA CHECKLISTS (per release) ================= */
-/* ISO 29119-shaped: the checklist is the test-case list, each tick a log
-   entry (who/when/state/note), and the launch report is the completion
-   report. Defaults per lane above; settings/qc.checklists overrides. */
-function relChecklist(r){
-  if(r.checklist&&r.checklist.length)return r.checklist;
-  const lane=qcProd(r.product);
-  const src=(SETTINGS_QC.checklists&&SETTINGS_QC.checklists[lane])||QC_DEFAULT_CHECKLISTS[lane]||[];
-  return src.map((label,i)=>({id:'c'+i,label:label,state:'open',by:'',at:'',note:''}));
-}
-function checklistStats(r){const c=relChecklist(r);const done=c.filter(i=>i.state!=='open').length;const fails=c.filter(i=>i.state==='fail').length;
-  return {total:c.length,done:done,fails:fails,complete:c.length>0&&done===c.length&&fails===0}}
-function qcCycleCheck(relId,itemId){
-  if(!canQC()){toast('Tech / leadership only');return}
-  const r=RELEASES[relId];if(!r)return;
-  r.checklist=relChecklist(r).map(i=>Object.assign({},i));
-  const it=r.checklist.find(i=>i.id===itemId);if(!it)return;
-  const order=['open','pass','fail','na'];
-  it.state=order[(order.indexOf(it.state)+1)%order.length];
-  it.by=(CURRENT_USER&&CURRENT_USER.name)||'';it.at=new Date().toISOString();
-  if(it.state==='fail'){const n=prompt('What failed? (goes in the report)');it.note=(n||'').trim()}
-  if(it.state==='pass'||it.state==='na')it.note=it.note||'';
-  RELEASES[relId]=r;persistRelease(r);renderQC();
-}
-function qcCheckGlyph(st){return st==='pass'?'<span style="color:var(--good)">✓</span>':st==='fail'?'<span style="color:var(--amber)">✕</span>':st==='na'?'<span style="color:var(--faint)">Ø</span>':'<span style="color:var(--faint)">○</span>'}
-function qcChecklistCard(r){
-  const c=relChecklist(r);const stt=checklistStats(r);
-  const rows=c.map(i=>'<div class="row tap" tabindex="0" style="padding:7px 0;border-top:1px solid var(--line);align-items:flex-start" onclick="qcCycleCheck('+ocjson(r.id)+','+ocjson(i.id)+')">'
-    +'<div style="flex:0 0 22px;font-size:15px;font-weight:700">'+qcCheckGlyph(i.state)+'</div>'
-    +'<div class="grow"><div class="d" style="color:var(--text)">'+esc(i.label)+'</div>'
-    +(i.by?'<div class="d" style="font-size:11px;color:var(--faint);margin-top:1px">'+esc(i.by)+' · '+qcTime(i.at)+(i.note?' · '+esc(i.note):'')+'</div>':'')
-    +'</div></div>').join('');
-  return '<p class="eyebrow" style="margin:16px 0 8px">QA checklist <span class="pill '+(stt.complete?'good':(stt.fails?'amber':'dim'))+'" style="font-size:10px">'+stt.done+'/'+stt.total+(stt.fails?' · '+stt.fails+' FAIL':'')+'</span></p>'
-    +'<div class="card"><div class="d" style="color:var(--faint);margin-bottom:2px">Tap a line to cycle ○ open → ✓ pass → ✕ fail → Ø n/a. Every tick is stamped and lands in the launch report.</div>'+rows+'</div>';
-}
-/* A release is launch-grade when it passed QC on this exact version, has
-   user-facing notes, and its checklist is complete with no open fails. */
-function relBlockers(r){
-  const b=[];
-  if(!releasePassed(r))b.push('no passing QC run for '+(r.version||'this version'));
-  if(qcProd(r.product)==='firmware'&&!r.image)b.push('firmware .bin not uploaded');
-  const ips=qcIPStats(r);if(ips.fails)b.push('in person: '+ips.fails+' test'+(ips.fails===1?'':'s')+' below the bar');else if(ips.done<ips.total)b.push('in-person tests '+ips.done+'/'+ips.total);
-  if(!(r.notes||'').trim())b.push('release notes missing');
-  const stt=checklistStats(r);
-  if(!stt.complete)b.push(stt.fails?('checklist has '+stt.fails+' failing item'+(stt.fails===1?'':'s')):('checklist '+stt.done+'/'+stt.total));
-  return b;
-}
-
-/* ================= LAUNCHES (ties one release per lane to a ship event) ================= */
-function launchEvidence(l){
-  const lanes=[];let attached=0;
-  QC_LANES.forEach(k=>{
-    const rid=l.products&&l.products[k];const r=rid?RELEASES[rid]:null;
-    if(rid&&!r){lanes.push({lane:k,blockers:['release missing']});return}
-    if(!r)return;
-    attached++;const b=relBlockers(r);if(b.length)lanes.push({lane:k,blockers:b});
-  });
-  const blockers=[];
-  if(!attached)blockers.push('no releases attached yet');
-  lanes.forEach(x=>x.blockers.forEach(b=>blockers.push(QC_PRODUCTS[x.lane]+': '+b)));
-  return {ok:blockers.length===0&&attached>0,blockers:blockers,attached:attached};
-}
-function launchApproved(l){const ok=sg=>sg.decision==='approve'&&(sg.role==='admin'||sg.role==='superadmin');const S=l.signoffs||[];
-  // Test plan v1.0: CEO/product AND engineering sign-off.
-  if(qcQaApplies(l))return S.some(sg=>ok(sg)&&sg.as==='ceo')&&S.some(sg=>ok(sg)&&sg.as==='eng');
-  return S.some(ok)}
-function launchReadiness(l){
-  const ev=launchEvidence(l);const approved=launchApproved(l);
-  const blockers=ev.blockers.slice();const qa=qcQaApplies(l)?qcQaBlockers(l):[];qa.forEach(b=>blockers.push(b));
-  if(ev.ok&&!qa.length&&!approved)blockers.push(qcQaApplies(l)?'needs both sign-offs: engineering, then CEO / product':'needs an approve sign-off from an admin');
-  return {ready:ev.ok&&!qa.length&&approved,evidenceOk:ev.ok,approved:approved,blockers:blockers,attached:ev.attached};
-}
-function qcNewLaunch(){
-  if(!canQC()){toast('Tech / leadership only');return}
-  const name=prompt('Name this launch (e.g. "October GA — fw 1.0.51 + apps")');if(!name||!name.trim())return;
-  const id='LN'+Date.now().toString(36).toUpperCase().slice(-7);
-  const l={id:id,name:name.trim(),targetDate:'',status:'planning',summary:'',products:{},signoffs:[],createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()};
-  LAUNCHES[id]=l;persistLaunch(l);qcLaunchView=id;renderQC();
-}
-function qcOpenLaunch(id){qcLaunchView=id;renderQC();window.scrollTo(0,0)}
-function qcBackLaunches(){qcLaunchView=null;renderQC()}
-function qcLaunchField(id,k,v){const l=LAUNCHES[id];if(!l||!canQC())return;l[k]=v;LAUNCHES[id]=l;persistLaunch(l)}
-function qcLaunchAssign(id,lane,relId){const l=LAUNCHES[id];if(!l||!canQC())return;l.products=l.products||{};l.products[lane]=relId||null;LAUNCHES[id]=l;persistLaunch(l);renderQC()}
-function qcDeleteLaunch(id){const l=LAUNCHES[id];if(!l)return;if(!isSuperAdmin()){toast('Super admin only');return}
-  if(!confirm('Delete launch "'+l.name+'"? Releases and QC evidence stay.'))return;
-  delete LAUNCHES[id];if(hasFirestore())firebase.firestore().collection('launches').doc(id).delete().catch(()=>{});qcLaunchView=null;renderQC();toast('Launch deleted')}
-function qcSignoff(id,decision,as){
-  const l=LAUNCHES[id];if(!l)return;const u=CURRENT_USER;if(!u)return;
-  if(decision==='approve'&&!(u.role==='admin'||u.role==='superadmin')){toast('Approvals need admin / super admin');return}
-  const note=prompt(decision==='approve'?((as==='ceo'?'CEO / product sign-off — risk tolerance and release decision':as==='eng'?'Engineering sign-off — technical validation and evidence':'Sign-off')+'. Note (optional):'):'What blocks this launch?');
-  if(note==null)return;
-  if(decision==='block'&&(!note||!note.trim()))return;
-  l.signoffs=(l.signoffs||[]).concat([{by:u.name||'',email:u.email||'',role:u.role||'',decision:decision,as:as||'',note:(note||'').trim(),at:new Date().toISOString()}]);
-  if(decision==='approve'&&launchReadiness(l).ready){l.status='ready';l.readinessSnapshot=launchReportData(l);}
-  LAUNCHES[id]=l;persistLaunch(l);renderQC();
-  toast(decision==='approve'?'✓ Signed off':'Block recorded');
-  qcNotifyLeads('Launch '+decision,(u.name||'')+' '+(decision==='approve'?'approved':'blocked')+' "'+l.name+'"'+(note?(' — '+note):''));
-}
-function qcMarkLaunched(id){
-  const l=LAUNCHES[id];if(!l)return;
-  const rd=launchReadiness(l);
-  if(!rd.ready){
-    if(!isSuperAdmin()){toast('Blocked — '+(rd.blockers[0]||'not ready'));return}
-    const reason=prompt('Launching while NOT ready — this is logged. Why?\n\nBlockers:\n• '+rd.blockers.join('\n• '));
-    if(!reason||!reason.trim())return;
-    l.signoffs=(l.signoffs||[]).concat([{by:(CURRENT_USER&&CURRENT_USER.name)||'',email:(CURRENT_USER&&CURRENT_USER.email)||'',role:(CURRENT_USER&&CURRENT_USER.role)||'',decision:'approve',note:'OVERRIDE: '+reason.trim(),at:new Date().toISOString()}]);
-  }
-  if(!l.readinessSnapshot)l.readinessSnapshot=launchReportData(l);
-  l.status='launched';l.launchedAt=new Date().toISOString();LAUNCHES[id]=l;persistLaunch(l);renderQC();
-  toast('🚀 "'+l.name+'" launched');
-  qcNotifyLeads('Launched','"'+l.name+'" marked launched by '+((CURRENT_USER&&CURRENT_USER.name)||''));
-}
-function qcLaunchesView(){
-  const head='<div class="row" style="gap:8px;margin-bottom:12px;align-items:center"><div class="d" style="color:var(--faint)">A launch ties one release per product to a single ship decision — evidence, notes, sign-offs and the readiness report live here.</div><div class="grow"></div><button class="btn" style="width:auto;white-space:nowrap" onclick="qcNewLaunch()">＋ New launch</button></div>';
-  const list=Object.values(LAUNCHES).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-  if(!list.length)return head+'<div class="empty"><div class="ico">🚀</div><div class="t">No launches yet</div><div class="d">Create one, attach the firmware + app releases it ships, and gate it on QC evidence and sign-off.</div></div>';
-  return head+list.map(l=>{
-    const st=QC_LAUNCHSTATUS[l.status]||QC_LAUNCHSTATUS.planning;const rd=launchReadiness(l);
-    const lanes=QC_LANES.filter(k=>l.products&&l.products[k]).map(k=>{const r=RELEASES[l.products[k]];return r?('<span class="pill dim" style="font-size:10px">'+esc(QC_PRODUCTS[k].split(' (')[0]+' '+(r.version||''))+'</span>'):''}).join(' ');
-    return '<div class="card tap" tabindex="0" onclick="qcOpenLaunch('+ocjson(l.id)+')"><div class="row"><div class="grow"><div class="t">'+esc(l.name)+'</div><div class="d" style="margin-top:4px">'+(lanes||'<span style="color:var(--faint)">No releases attached</span>')+'</div></div><span class="pill '+(l.status==='launched'?st.pill:(rd.ready?'good':st.pill))+'">'+(l.status==='launched'||l.status==='aborted'?st.label:(rd.ready?'Ready ✓':st.label))+'</span></div>'
-      +(l.status!=='launched'&&l.status!=='aborted'&&rd.blockers.length?'<div class="d" style="margin-top:8px;color:var(--amber)">'+esc(rd.blockers[0])+(rd.blockers.length>1?' · +'+(rd.blockers.length-1)+' more':'')+'</div>':'')
-      +(l.targetDate?'<div class="d" style="margin-top:6px;color:var(--faint)">Target '+esc(l.targetDate)+'</div>':'')+'</div>';
-  }).join('');
-}
-function qcLaneCard(l,lane){
-  const rid=l.products&&l.products[lane];const r=rid?RELEASES[rid]:null;
-  const opts=Object.values(RELEASES).filter(x=>qcProd(x.product)===lane).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-  const sel='<select class="field" style="margin:0" onchange="qcLaunchAssign('+ocjson(l.id)+','+ocjson(lane)+',this.value)"><option value="">— none —</option>'+opts.map(x=>'<option value="'+esc(x.id)+'"'+(rid===x.id?' selected':'')+'>'+esc((x.version||'')+(x.buildNumber?(' ('+x.buildNumber+')'):'')+' · '+((QC_CHAN[x.channel]||{}).label||''))+'</option>').join('')+'</select>';
-  let body='';
-  if(r){
-    const b=relBlockers(r);const stt=checklistStats(r);const runs=releaseRuns(r.id);
-    body='<div class="d" style="margin-top:8px">'
-      +(releasePassed(r)?'<span class="pill good" style="font-size:10px">QC PASS</span>':'<span class="pill amber" style="font-size:10px">NO PASSING RUN</span>')+' '
-      +((r.notes||'').trim()?'<span class="pill good" style="font-size:10px">NOTES ✓</span>':'<span class="pill amber" style="font-size:10px">NOTES MISSING</span>')+' '
-      +'<span class="pill '+(stt.complete?'good':'dim')+'" style="font-size:10px">CHECKLIST '+stt.done+'/'+stt.total+'</span> '
-      +'<span class="pill dim" style="font-size:10px">'+runs.length+' RUN'+(runs.length===1?'':'S')+'</span></div>'
-      +(b.length?'<div class="d" style="margin-top:6px;color:var(--amber)">'+b.map(esc).join(' · ')+'</div>':'')
-      +'<button class="btn ghost" style="margin-top:8px;width:auto;padding:6px 12px;font-size:12px" onclick="qcTab=\'releases\';openQcRelease('+ocjson(r.id)+')">Open release →</button>';
-  }
-  return '<div class="card"><div class="row" style="align-items:center;gap:8px"><div class="grow"><div class="t" style="font-size:14px">'+esc(QC_PRODUCTS[lane])+'</div></div><div style="flex:0 0 55%">'+sel+'</div></div>'+body+'</div>';
-}
-function qcLaunchDetailView(){
-  const l=LAUNCHES[qcLaunchView];if(!l){qcLaunchView=null;return qcLaunchesView()}
-  const st=QC_LAUNCHSTATUS[l.status]||QC_LAUNCHSTATUS.planning;const rd=launchReadiness(l);
-  const banner=l.status==='launched'
-    ?'<div class="card" style="border-color:var(--good)"><div class="t" style="color:var(--good)">🚀 Launched '+qcTime(l.launchedAt)+'</div><div class="d" style="margin-top:2px">The readiness report below is the frozen record of what was verified.</div></div>'
-    :(rd.ready
-      ?'<div class="card" style="border-color:var(--good)"><div class="t" style="color:var(--good)">✓ READY TO LAUNCH</div><div class="d" style="margin-top:2px">Every attached release passed QC with complete checklists and notes, and the launch is signed off. No question on this release being ready.</div><button class="btn" style="margin-top:10px" onclick="qcMarkLaunched('+ocjson(l.id)+')">🚀 Mark launched</button></div>'
-      :'<div class="card" style="border-color:var(--amber)"><div class="t" style="color:var(--amber)">Not ready — '+rd.blockers.length+' blocker'+(rd.blockers.length===1?'':'s')+'</div><div class="d" style="margin-top:6px">'+rd.blockers.map(b=>'• '+esc(b)).join('<br>')+'</div>'
-        +(isSuperAdmin()?'<button class="btn ghost" style="margin-top:10px" onclick="qcMarkLaunched('+ocjson(l.id)+')">Launch anyway (override, logged)</button>':'')+'</div>');
-  const signRows=(l.signoffs||[]).map(sg=>'<div class="row" style="padding:6px 0;border-top:1px solid var(--line)"><div class="grow"><div class="d" style="color:var(--text)">'+(sg.decision==='approve'?'<span style="color:var(--good)">✓ Approved</span>':'<span style="color:var(--amber)">✕ Blocked</span>')+' by '+esc(sg.by)+' <span style="color:var(--faint)">('+esc(sg.role)+')</span></div>'+(sg.note?'<div class="d" style="font-size:11.5px;color:var(--faint)">'+esc(sg.note)+'</div>':'')+'</div><div class="d" style="color:var(--faint);white-space:nowrap">'+qcTime(sg.at)+'</div></div>').join('');
-  return ''
-    +'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;margin-bottom:12px" onclick="qcBackLaunches()">← All launches</button>'
-    +'<div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><input class="field" style="margin:0;font-size:18px;font-weight:700" value="'+esc(l.name)+'" onchange="qcLaunchField('+ocjson(l.id)+',\'name\',this.value)"><div class="d" style="margin-top:4px">Created '+qcTime(l.createdAt)+' by '+esc(l.createdBy||'')+'</div></div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
-    +'<div class="row" style="gap:8px;margin:12px 0"><div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Target date</p><input type="date" class="field" style="margin:0" value="'+esc(l.targetDate||'')+'" onchange="qcLaunchField('+ocjson(l.id)+',\'targetDate\',this.value)"></div></div>'
-    +'<textarea class="field" placeholder="Launch summary — what this launch ships and why" style="min-height:56px;resize:vertical;font-family:var(--font-b)" onchange="qcLaunchField('+ocjson(l.id)+',\'summary\',this.value)">'+esc(l.summary||'')+'</textarea>'
-    +banner
-    +'<p class="eyebrow" style="margin:16px 0 8px">Releases in this launch</p>'
-    +QC_LANES.map(k=>qcLaneCard(l,k)).join('')
-    +'<p class="eyebrow" style="margin:16px 0 8px">Sign-offs</p><div class="card">'
-    +(signRows||'<div class="d" style="color:var(--faint)">No sign-offs yet. An admin approval is part of READY.</div>')
-    +'<div class="row" style="gap:8px;margin-top:10px"><button class="btn" style="flex:1" onclick="qcSignoff('+ocjson(l.id)+',\'approve\')">✓ Approve</button><button class="btn ghost" style="flex:1" onclick="qcSignoff('+ocjson(l.id)+',\'block\')">✕ Block</button></div></div>'
-    +'<p class="eyebrow" style="margin:16px 0 8px">Launch readiness report</p><div class="card">'
-    +'<div class="d">'+(l.readinessSnapshot?'Snapshot frozen '+qcTime(l.readinessSnapshot.generatedAt)+' — exports reproduce it exactly, even if releases change later.':'No frozen snapshot yet — it locks in at sign-off. Exports below use live data until then.')+'</div>'
-    +'<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
-    +'<button class="btn" style="flex:1;min-width:140px" onclick="qcExportLaunchPDF('+ocjson(l.id)+')">⤓ Export PDF</button>'
-    +'<button class="btn ghost" style="flex:1;min-width:140px" onclick="qcDownloadLaunchMD('+ocjson(l.id)+')">Download .md</button>'
-    +'<button class="btn ghost" style="flex:1;min-width:140px" onclick="qcCopyLaunchMD('+ocjson(l.id)+')">Copy report</button></div></div>'
-    +(isSuperAdmin()?'<button class="btn ghost" style="margin-top:14px;color:var(--amber)" onclick="qcDeleteLaunch('+ocjson(l.id)+')">Delete launch</button>':'');
-}
-
-/* ================= LAUNCH READINESS REPORT (data → md → pdf) ================= */
-function launchReportData(l){
-  const rd=launchReadiness(l);
-  return {generatedAt:new Date().toISOString(),
-    launch:{name:l.name,targetDate:l.targetDate||'',status:l.status,summary:l.summary||'',createdBy:l.createdBy||'',launchedAt:l.launchedAt||''},
-    readiness:{ready:rd.ready,blockers:rd.blockers},
-    signoffs:(l.signoffs||[]).slice(),
-    qa:qcQaReport(l),
-    lanes:QC_LANES.map(k=>{
-      const rid=l.products&&l.products[k];const r=rid?RELEASES[rid]:null;
-      if(!r)return {lane:k,label:QC_PRODUCTS[k],missing:true};
-      return {lane:k,label:QC_PRODUCTS[k],version:r.version||'',buildNumber:r.buildNumber||'',channel:(QC_CHAN[r.channel]||{}).label||r.channel||'',status:(QC_RELSTATUS[r.status]||{}).label||r.status,notes:r.notes||'',internalNotes:r.internalNotes||'',links:r.links||{},sha256:(r.image&&r.image.sha256)||'',
-        checklist:relChecklist(r).map(i=>({label:i.label,state:i.state,by:i.by,at:i.at,note:i.note||''})),
-        inperson:qcIPTests(r).map(t=>{const v=(r.inperson||{})[t.id]||{},e=qcIPEval(t,v);return {label:t.label,result:e.text||'',bar:e.bar,state:e.state,by:v.by||'',at:v.at||'',note:[v.phone,v.hw?('band '+v.hw):'',v.vib?('vibration: '+v.vib):'',v.svc?('service: '+v.svc):'',v.log,v.note].filter(Boolean).join(' · ')}}),
-        numbers:qcConnNumbers(r).map(x=>({label:x.label,val:x.val,ok:x.ok,src:x.src})),
-        runs:releaseRuns(r.id).map(run=>({title:run.kind==='custom'?(run.title||'Custom test'):('Soak '+fmtDur(run.durationSec||0)),verdict:run.verdict||'',by:run.by||'',device:run.device||'',startedAt:run.startedAt||'',endedAt:run.endedAt||'',passed:run.passed,failed:run.failed,alertsSent:run.alertsSent,alertsAcked:run.alertsAcked,disconnects:run.disconnects,uptimePct:run.uptimePct,
-          events:(run.events||[]).map(e=>({t:e.t||'',type:e.type||'',detail:e.detail||''}))}))};
-    })};
-}
-function qcLaunchReport(l){return l.readinessSnapshot||launchReportData(l)}
-function launchReportMD(d){
-  let md='# Safewave Launch Report — '+d.launch.name+'\n\n';
-  md+='Generated '+d.generatedAt+' · Status: '+d.launch.status.toUpperCase()+(d.launch.targetDate?' · Target '+d.launch.targetDate:'')+'\n\n';
-  md+='**Readiness: '+(d.readiness.ready?'READY ✓':'NOT READY')+'**'+(d.readiness.blockers.length?'\n\nBlockers:\n'+d.readiness.blockers.map(b=>'- '+b).join('\n'):'')+'\n\n';
-  if(d.launch.summary)md+=d.launch.summary+'\n\n';
-  md+='## Sign-offs\n\n'+(d.signoffs.length?d.signoffs.map(sg=>'- '+(sg.decision==='approve'?'APPROVED':'BLOCKED')+(sg.as?' as '+(sg.as==='ceo'?'CEO/product':'engineering'):'')+' by '+sg.by+' ('+sg.role+') — '+sg.at+(sg.note?' — '+sg.note:'')).join('\n'):'_None_')+'\n\n';
-  if(d.qa){const Q=d.qa,ck=s=>s==='pass'?'x':s==='fail'?'FAIL':s==='na'?'n/a':' ';
-    md+='## QA protocol — test plan v'+Q.version+'\n\n';
-    Q.phases.forEach(P=>{md+='### Phase '+P.n+' — '+P.name+': '+(P.signed?'SIGNED by '+P.signed.by+' '+P.signed.at+(P.signed.note?' — '+P.signed.note:''):'not signed ('+P.done+'/'+P.total+')')+'\n\n';
-      P.counts.forEach(c=>{md+='- '+c.label+': '+(c.value===''||c.value==null?'—':c.value)+(c.need!=null?' (need '+c.need+')':'')+'\n'});
-      P.items.forEach(i=>{md+='- ['+ck(i.state)+'] '+i.label+(i.by?' — '+i.by+' '+i.at:'')+(i.note?' — '+i.note:'')+'\n'});
-      P.auto.forEach(a=>{md+='- ['+(a.ok?'x':' ')+'] '+a.label+' — '+a.detail+' (auto)\n'});md+='\n'});
-    md+='### Negative tests\n\n'+Q.negative.map(n=>'- ['+(n.detected&&n.classified&&n.evidence?'x':' ')+'] '+n.label+' — detected: '+(n.detected?'yes':'no')+', classified: '+(n.classified?'yes':'no')+(n.evidence?', evidence: '+n.evidence:'')).join('\n')+'\n\n';
-    md+='### Defects\n\n'+(Q.defects.length?Q.defects.map(x=>'- '+x.sev+' '+String(x.status).toUpperCase()+' — '+x.title+(x.owner?' — owner '+x.owner:'')+(x.accept?' — risk accepted: '+x.accept:'')+(x.retest?' — retest: '+x.retest:'')).join('\n'):'_None logged_')+'\n\n';
-    md+='### Device matrix & physical lab\n\n'+Q.lab.sent+' notifications, '+Q.lab.del+' delivered'+(Q.lab.sent?' ('+qcPct(Q.lab.del,Q.lab.sent)+'%, 95% lower bound '+(Math.round(qcWilsonLow(Q.lab.del,Q.lab.sent)*100)/100)+'%)':'')+'; '+Q.lab.cyc+' reconnect cycles, '+Q.lab.ok30+' ready within target.\n\n'
-      +Q.devices.map(x=>'- '+(x.model||'?')+' · '+(x.os||'OS ?')+' · '+x.platform+' · '+x.tier+' — sent '+(x.sent||0)+', delivered '+(x.delivered||0)+', cycles '+(x.cycles||0)+', ready '+(x.cyc30||0)+(x.lat95!=null&&x.lat95!==''?', p95 '+x.lat95+' s':'')+(x.lat99!=null&&x.lat99!==''?', p99 '+x.lat99+' s':'')).join('\n')+'\n\n';
-    md+='### Targets\n\n'+Q.targets.map(t=>'- '+t.label+': '+t.value).join('\n')+(Q.targetLog.length?'\n\nChanges (logged):\n'+Q.targetLog.map(x=>'- '+x.label+': '+x.from+' → '+x.to+' by '+x.by+' '+x.at+' — '+x.why).join('\n'):'')+'\n\n';
-    md+='### Team review of the plan\n\n'+Q.review.map(g=>g.reqs.map(r=>'- '+r.label+': '+(r.feedback.length?r.feedback.map(f=>(f.decision==='accept'?'Accept':f.decision==='modify'?'Modify':'Not feasible')+' ('+f.by+(f.note?': '+f.note:'')+')').join('; '):'not reviewed')).join('\n')).join('\n')+'\n\n';
-    if(Q.weekly.length)md+='### Weekly review\n\n'+Q.weekly.map(w=>'- '+w.week+': delivery '+w.delivery+' · reconnect '+w.reconnect+' · ANCS fails '+w.ancs+' · Android fails '+w.android+' · open P0/P1 '+w.p01+' · coverage '+w.coverage+' · root causes: '+w.causes).join('\n')+'\n\n';
-  }
-  d.lanes.forEach(L=>{
-    md+='---\n\n## '+L.label+(L.missing?' — not in this launch\n\n':' '+L.version+(L.buildNumber?' (build '+L.buildNumber+')':'')+'\n\n');
-    if(L.missing)return;
-    md+='Channel: '+L.channel+' · QC status: '+L.status+(L.sha256?' · SHA-256 `'+L.sha256+'`':'')+'\n\n';
-    md+='### Release notes\n\n'+(L.notes||'_missing_')+'\n\n';
-    md+='### QA checklist\n\n'+L.checklist.map(i=>'- ['+(i.state==='pass'?'x':i.state==='fail'?'FAIL':i.state==='na'?'n/a':' ')+'] '+i.label+(i.by?' — '+i.by+' '+i.at:'')+(i.note?' — '+i.note:'')).join('\n')+'\n\n';
-    if(L.numbers)md+='### Connection numbers\n\n'+L.numbers.map(x=>'- '+x.label+': **'+x.val+'**'+(x.src?' ('+x.src+')':'')+(x.ok===false?' — BELOW BAR':'')).join('\n')+'\n\n';
-    if(L.inperson)md+='### In-person tests\n\n'+L.inperson.map(t=>'- ['+(t.state==='pass'?'x':t.state==='fail'?'FAIL':' ')+'] '+t.label+' — '+(t.result||'not run')+' (bar '+t.bar+')'+(t.by?' — '+t.by+' '+t.at:'')+(t.note?' — '+t.note:'')).join('\n')+'\n\n';
-    md+='### Test runs ('+L.runs.length+')\n\n';
-    L.runs.forEach(run=>{
-      md+='**'+run.title+'** — '+String(run.verdict).toUpperCase()+' · '+run.device+' · by '+run.by+' · '+run.startedAt+'\n\n';
-      run.events.forEach(e=>{md+='    '+(e.t?String(e.t).slice(11,19):'')+'  '+(e.type==='pass'?'PASS':e.type==='fail'?'FAIL':'·')+'  '+e.detail+'\n'});
-      md+='\n';
-    });
-  });
-  return md;
-}
-function qcDownloadLaunchMD(id){const l=LAUNCHES[id];if(!l)return;const md=launchReportMD(qcLaunchReport(l));
-  const blob=new Blob([md],{type:'text/markdown'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=(l.name||'launch-report').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.md';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-function qcCopyLaunchMD(id){const l=LAUNCHES[id];if(!l)return;const md=launchReportMD(qcLaunchReport(l));
-  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(md).then(()=>toast('✓ Report copied'),()=>toast('Copy failed — use Download'));else toast('Copy unsupported — use Download')}
-/* PDF: the house print-window pattern (same as return labels) — white page,
-   one section per product lane, page breaks between sections, browser's
-   Save-as-PDF does the rendering. Exports the frozen snapshot when one exists. */
-function qcExportLaunchPDF(id){
-  const l=LAUNCHES[id];if(!l)return;const d=qcLaunchReport(l);
-  const E=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const chk=i=>i.state==='pass'?'✓':i.state==='fail'?'✕ FAIL':i.state==='na'?'n/a':'○';
-  let h='<html><head><title>Safewave Launch Report — '+E(d.launch.name)+'</title><style>'
-    +'body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:34px 40px;font-size:12.5px;line-height:1.5}'
-    +'h1{font-size:23px;margin:0 0 4px}h2{font-size:17px;margin:0 0 2px}h3{font-size:13px;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.06em;color:#333}'
-    +'.meta{color:#555;font-size:11.5px}.sec{page-break-before:always;padding-top:8px}'
-    +'.verdict{display:inline-block;padding:4px 12px;border-radius:14px;font-weight:700;font-size:13px;margin:10px 0}'
-    +'.ok{background:#e4f6ec;color:#116b3e;border:1px solid #9cd9b6}.no{background:#fdf2df;color:#8a5a00;border:1px solid #ecc06b}'
-    +'table{border-collapse:collapse;width:100%;page-break-inside:avoid}td,th{border:1px solid #ccc;padding:5px 8px;text-align:left;font-size:11.5px;vertical-align:top}th{background:#f2f4f6}'
-    +'.log{font-family:Menlo,Consolas,monospace;font-size:10px;background:#f7f8fa;border:1px solid #ddd;border-radius:6px;padding:8px 10px;white-space:pre-wrap;page-break-inside:avoid;margin:6px 0 14px}'
-    +'.notes{white-space:pre-wrap;border-left:3px solid #19b5ec;padding:2px 0 2px 12px;margin:6px 0 4px}'
-    +'.foot{color:#999;font-size:10px;margin-top:24px;border-top:1px solid #ddd;padding-top:6px}'
-    +'@media print{.sec{page-break-before:always}}'
-    +'</style></head><body>';
-  h+='<h1>Safewave Launch Report</h1><div class="meta">'+E(d.launch.name)+(d.launch.targetDate?' · target '+E(d.launch.targetDate):'')+' · generated '+E(d.generatedAt)+(l.readinessSnapshot?' · FROZEN SNAPSHOT':' · live data')+'</div>';
-  h+='<div class="verdict '+(d.readiness.ready?'ok':'no')+'">'+(d.readiness.ready?'READY TO LAUNCH ✓':'NOT READY')+'</div>';
-  if(d.readiness.blockers.length)h+='<div>Blockers:<ul>'+d.readiness.blockers.map(b=>'<li>'+E(b)+'</li>').join('')+'</ul></div>';
-  if(d.launch.summary)h+='<p>'+E(d.launch.summary)+'</p>';
-  h+='<h3>Sign-offs</h3>'+(d.signoffs.length?'<table><tr><th>Decision</th><th>By</th><th>Role</th><th>When</th><th>Note</th></tr>'+d.signoffs.map(sg=>'<tr><td>'+(sg.decision==='approve'?'APPROVED':'BLOCKED')+'</td><td>'+E(sg.by)+'</td><td>'+E(sg.role)+(sg.as?' · '+(sg.as==='ceo'?'CEO / product':'engineering'):'')+'</td><td>'+E(sg.at)+'</td><td>'+E(sg.note)+'</td></tr>').join('')+'</table>':'<div class="meta">None recorded.</div>');
-  if(d.qa){const Q=d.qa,st=s=>s==='pass'?'✓':s==='fail'?'✕ FAIL':s==='na'?'n/a':'○',tm=t=>E(t?String(t).slice(0,16).replace('T',' '):'');
-    h+='<div class="sec"><h2>QA protocol — test plan v'+E(Q.version)+'</h2><div class="meta">A passing simulation never substitutes for a physical-device test; a lab pass never substitutes for field evidence.</div>';
-    Q.phases.forEach(P=>{h+='<h3>Phase '+P.n+' — '+E(P.name)+' · '+(P.signed?'SIGNED by '+E(P.signed.by)+' '+tm(P.signed.at):'not signed ('+P.done+'/'+P.total+')')+'</h3><table><tr><th style="width:52px">State</th><th>Item</th><th style="width:150px">By / when</th><th>Note / evidence</th></tr>'
-      +P.counts.map(c=>'<tr><td>'+((c.need==null?(c.value!==''&&c.value!=null):(+c.value||0)>=c.need)?'✓':'○')+'</td><td>'+E(c.label)+(c.need!=null?' (need '+c.need+')':'')+'</td><td></td><td>'+E(c.value==null?'':c.value)+'</td></tr>').join('')
-      +P.items.map(i=>'<tr><td>'+st(i.state)+'</td><td>'+E(i.label)+'</td><td>'+E(i.by)+(i.at?'<br>'+tm(i.at):'')+'</td><td>'+E(i.note)+'</td></tr>').join('')
-      +P.auto.map(a=>'<tr><td>'+(a.ok?'✓':'○')+'</td><td>'+E(a.label)+' (auto)</td><td></td><td>'+E(a.detail)+'</td></tr>').join('')+'</table>'});
-    h+='<h3>Negative tests</h3><table><tr><th>Test</th><th>Detected</th><th>Classified</th><th>Evidence</th></tr>'+Q.negative.map(n=>'<tr><td>'+E(n.label)+'</td><td>'+(n.detected?'✓':'—')+'</td><td>'+(n.classified?'✓':'—')+'</td><td>'+E(n.evidence)+'</td></tr>').join('')+'</table>';
-    h+='<h3>Defects</h3>'+(Q.defects.length?'<table><tr><th>Sev</th><th>Status</th><th>Defect</th><th>Owner</th><th>Risk acceptance / retest</th></tr>'+Q.defects.map(x=>'<tr><td>'+E(x.sev)+'</td><td>'+E(x.status)+'</td><td>'+E(x.title)+'</td><td>'+E(x.owner)+'</td><td>'+E(x.accept)+(x.retest?' '+E(x.retest):'')+'</td></tr>').join('')+'</table>':'<div class="meta">None logged.</div>');
-    h+='<h3>Device matrix &amp; physical lab</h3><table><tr><th>Device</th><th>OS</th><th>Tier</th><th>Sent</th><th>Delivered</th><th>Cycles</th><th>Ready ≤ target</th><th>p95 / p99 s</th></tr>'+Q.devices.map(x=>'<tr><td>'+E(x.model)+'</td><td>'+E(x.os)+'</td><td>'+E(x.tier)+'</td><td>'+E(x.sent||0)+'</td><td>'+E(x.delivered||0)+'</td><td>'+E(x.cycles||0)+'</td><td>'+E(x.cyc30||0)+'</td><td>'+E(x.lat95==null?'':x.lat95)+' / '+E(x.lat99==null?'':x.lat99)+'</td></tr>').join('')+'</table>'
-      +'<div class="meta">Total '+Q.lab.sent+' sent, '+Q.lab.del+' delivered'+(Q.lab.sent?' — '+qcPct(Q.lab.del,Q.lab.sent)+'%, 95% lower bound '+(Math.round(qcWilsonLow(Q.lab.del,Q.lab.sent)*100)/100)+'%':'')+'; '+Q.lab.cyc+' reconnect cycles, '+Q.lab.ok30+' ready within target.</div>';
-    h+='<h3>Targets</h3><table>'+Q.targets.map(t=>'<tr><td>'+E(t.label)+'</td><td>'+E(t.value)+'</td></tr>').join('')+'</table>'+(Q.targetLog.length?'<div class="meta">Changes (logged): '+Q.targetLog.map(x=>E(x.label+': '+x.from+' → '+x.to+' by '+x.by+' — '+x.why)).join('; ')+'</div>':'');
-    h+='<h3>Team review of the plan</h3><table><tr><th>Requirement</th><th>Feedback</th></tr>'+Q.review.map(g=>g.reqs.map(r=>'<tr><td>'+E(r.label)+'</td><td>'+(r.feedback.length?r.feedback.map(f=>E((f.decision==='accept'?'Accept':f.decision==='modify'?'Modify':'Not feasible')+' — '+f.by+(f.note?': '+f.note:''))).join('<br>'):'<i>not reviewed</i>')+'</td></tr>').join('')).join('')+'</table>';
-    if(Q.weekly.length)h+='<h3>Weekly review</h3><table><tr><th>Week</th><th>Delivery</th><th>Reconnect</th><th>ANCS</th><th>Android</th><th>P0/P1</th><th>Coverage</th><th>Root causes</th></tr>'+Q.weekly.map(w=>'<tr><td>'+E(w.week)+'</td><td>'+E(w.delivery)+'</td><td>'+E(w.reconnect)+'</td><td>'+E(w.ancs)+'</td><td>'+E(w.android)+'</td><td>'+E(w.p01)+'</td><td>'+E(w.coverage)+'</td><td>'+E(w.causes)+'</td></tr>').join('')+'</table>';
-    h+='</div>';}
-  d.lanes.forEach(L=>{
-    h+='<div class="sec"><h2>'+E(L.label)+(L.missing?'':' — '+E(L.version)+(L.buildNumber?' (build '+E(L.buildNumber)+')':''))+'</h2>';
-    if(L.missing){h+='<div class="meta">Not part of this launch.</div></div>';return}
-    h+='<div class="meta">'+E(L.channel)+' channel · QC: '+E(L.status)+(L.sha256?' · SHA-256 '+E(L.sha256):'')+'</div>';
-    h+='<h3>Release notes</h3><div class="notes">'+(L.notes?E(L.notes):'<i>missing</i>')+'</div>';
-    h+='<h3>QA checklist</h3><table><tr><th style="width:52px">State</th><th>Item</th><th style="width:170px">By / when</th><th>Note</th></tr>'
-      +L.checklist.map(i=>'<tr><td>'+chk(i)+'</td><td>'+E(i.label)+'</td><td>'+E(i.by)+(i.at?'<br>'+E(String(i.at).slice(0,16).replace('T',' ')):'')+'</td><td>'+E(i.note)+'</td></tr>').join('')+'</table>';
-    if(L.numbers)h+='<h3>Connection numbers</h3><table><tr>'+L.numbers.map(x=>'<th>'+E(x.label)+'</th>').join('')+'</tr><tr>'+L.numbers.map(x=>'<td><b>'+E(x.val)+'</b>'+(x.ok===false?' <span style="color:#8a5a00">below bar</span>':'')+(x.src?'<br><span class="meta">'+E(x.src)+'</span>':'')+'</td>').join('')+'</tr></table>';
-    if(L.inperson)h+='<h3>In-person tests</h3><table><tr><th style="width:52px">State</th><th>Test</th><th>Result</th><th style="width:70px">Bar</th><th style="width:150px">By / when</th><th>Note</th></tr>'
-      +L.inperson.map(t=>'<tr><td>'+(t.state==='pass'?'✓':t.state==='fail'?'✕ FAIL':'○')+'</td><td>'+E(t.label)+'</td><td>'+E(t.result||'not run')+'</td><td>'+E(t.bar)+'</td><td>'+E(t.by)+(t.at?'<br>'+E(String(t.at).slice(0,16).replace('T',' ')):'')+'</td><td>'+E(t.note)+'</td></tr>').join('')+'</table>';
-    h+='<h3>Test runs ('+L.runs.length+')</h3>';
-    if(!L.runs.length)h+='<div class="meta">No QC runs recorded.</div>';
-    L.runs.forEach(run=>{
-      h+='<div style="margin-top:10px;page-break-inside:avoid"><b>'+E(run.title)+'</b> — '+E(String(run.verdict).toUpperCase())+' · '+E(run.device)+' · by '+E(run.by)+' · '+E(run.startedAt)
-        +(run.alertsSent!=null?' · alerts '+E(run.alertsAcked)+'/'+E(run.alertsSent):'')+(run.passed!=null?' · '+E(run.passed)+'✓ '+E(run.failed)+'✕':'')+'</div>';
-      if(run.events&&run.events.length)h+='<div class="log">'+run.events.map(e=>E((e.t?String(e.t).slice(11,19):'')+'  '+(e.type==='pass'?'PASS':e.type==='fail'?'FAIL':'  · ')+'  '+e.detail)).join('\n')+'</div>';
-    });
-    h+='</div>';
-  });
-  h+='<div class="foot">Safewave Launch Report · '+E(d.launch.name)+' · generated '+E(d.generatedAt)+' — produced by Safewave Command Center Release QC.</div>';
-  h+='<script>setTimeout(function(){window.print()},300)<\/script></body></html>';
-  const w=window.open('','_blank');if(!w){toast('Pop-up blocked — allow pop-ups to export');return}
-  w.document.write(h);w.document.close();
-}
-
 /* ---- Test bench ---- */
 function qcStartFromRelease(id){qcTab='sim';qcRelView=null;renderQC();var s=document.getElementById('sim-soak-rel');if(s){s.value=id;}window.scrollTo(0,0)}
 function qcModePick(v){const so=document.getElementById('qc-simopt');if(so)so.style.display=(v==='sim')?'':'none'}
@@ -4327,7 +3912,7 @@ function qcAppendLiveLog(type,detail){
 function qcFirmwareOptions(){const fw=Object.values(RELEASES).filter(r=>r.product==='firmware').sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));return fw.length?fw.map(r=>'<option value="'+esc(r.id)+'">'+esc('Firmware '+r.version+' ('+((QC_CHAN[r.channel]||{}).label||r.channel)+')')+'</option>').join(''):'<option value="">No firmware releases yet</option>'}
 function qcImagesList(){
   const imgs=Object.values(RELEASES).filter(r=>r.product==='firmware'&&r.image).sort((a,b)=>(b.image.uploadedAt||'').localeCompare(a.image.uploadedAt||''));
-  const body=imgs.length?imgs.map(r=>'<div class="row" style="gap:8px;align-items:center;margin-top:8px"><div class="grow"><div class="t" style="font-size:13px">Firmware '+esc(r.version)+' <span class="pill dim" style="font-size:9px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+'</span></div><div class="d" style="color:var(--faint);font-size:10.5px;word-break:break-all">'+qcFwKB(r.image.size)+' · '+esc((r.image.sha256||'').slice(0,16))+'…</div></div><a class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px;text-decoration:none" href="'+esc(r.image.url||'')+'" target="_blank" rel="noopener">⤓ .bin</a><button class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px" onclick="openQcRelease('+ocjson(r.id)+')">Open</button></div>').join(''):'<div class="d" style="color:var(--faint)">No firmware images uploaded yet — open a firmware release and upload its <code>.bin</code>.</div>';
+  const body=imgs.length?imgs.map(r=>'<div class="row" style="gap:8px;align-items:center;margin-top:8px"><div class="grow"><div class="t" style="font-size:13px">Firmware '+esc(r.version)+' <span class="pill dim" style="font-size:9px">'+esc((QC_CHAN[r.channel]||{}).label||r.channel||'')+'</span></div><div class="d" style="color:var(--faint);font-size:10.5px;word-break:break-all">'+qcFwKB(r.image.size)+' · '+esc((r.image.sha256||'').slice(0,16))+'…</div></div><a class="btn ghost" style="width:auto;padding:5px 10px;font-size:12px;text-decoration:none" href="'+esc(r.image.url||'')+'" target="_blank" rel="noopener">⤓ .bin</a></div>').join(''):'<div class="d" style="color:var(--faint)">No firmware images uploaded yet — open a firmware release and upload its <code>.bin</code>.</div>';
   return '<div class="card"><div class="t">Firmware images</div><div class="d" style="margin:2px 0 6px">The built <code>.bin</code> for each firmware release — checksummed and ready to flash.</div>'+body+'</div>';
 }
 function qcFlashView(){
