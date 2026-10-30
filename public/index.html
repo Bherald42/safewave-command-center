@@ -2309,7 +2309,7 @@ const REL_COMPS=[
   {k:'and_cons',name:'Safewave · Android',app:'Safewave',where:'Google Play internal testing'}];
 const REL_NOTES_DRAFT='Safewave and Safewave for Business\n• New Safewave look: the band-and-shield logo on the app icon, splash screen and inside the app.\n• Aware is now three simple tabs: Listen, Sounds and Teach.\n• Aware recognizes sounds live through the iPhone microphone, from a built-in library of 207 everyday sounds — no training needed.\n• One Alert certainty slider sets how sure Aware must be before your band buzzes.\n• Teach Aware your own sounds by recording a few 8–15 second clips.\n• Notification History now lives under Account.\n\nBand firmware 1.0.51\n• Firmware updates are more reliable on older bands.';
 const REL_SEED={name:'November release — HKNC pilot',targetDate:'2026-11-06',
-  comps:{fw:{version:'1.0.51',build:''},ios_biz:{version:'1.0.1',build:'23'},ios_cons:{version:'1.4.0',build:'15'},and_biz:{version:'1.0.1',build:'5'},and_cons:{version:'1.4.0',build:'17'}}};
+  comps:{fw:{version:'1.0.51',build:''},ios_biz:{version:'1.0.1',build:'24'},ios_cons:{version:'1.4.0',build:'16'},and_biz:{version:'1.0.1',build:'6'},and_cons:{version:'1.4.0',build:'18'}}};
 const REL_TESTERS=['Trevon','Jared'];
 let qcLoadedR=false,qcLoadedL=false,relSeeded=false;
 let relSel=null,relWho=null,relEdit={},relDraft={},relShowVers=false,relShowReport=false;
@@ -2363,9 +2363,9 @@ function relGates(l){
       {id:'s_flash',label:'Flash '+fwv+' to a bench band from the Simulator tab — the band reads back '+fwv},
       {id:'s_ota_old',label:'Update an oldest-fleet 0.0.x band to '+fwv+' over Bluetooth'},
       {id:'s_soak',label:'Soak test passes on a real band: no unexpected disconnects, every alert delivered',auto:'soak'},
-      {id:'s_sim_ios',label:'Simulator, iPhone: texts, calls, alarms and life-safety alerts buzz right with the phone locked'},
-      {id:'s_sim_and',label:'Simulator, Android: the same, plus after the app is swiped away and with battery saver on'},
-      {id:'s_sim_neg',label:'Simulator: Bluetooth off, band off and out of range each show clearly and recover'}]]]},
+      {id:'s_sim_ios',sim:'ios',label:'Simulator, iPhone: texts, calls, alarms, dashboard alerts and life-safety sounds buzz right — open, locked and swiped away'},
+      {id:'s_sim_and',sim:'android',label:'Simulator, Android: the same on Android phones, including a budget phone'},
+      {id:'s_sim_neg',sim:'neg',label:'Simulator: Bluetooth off, band off, out of range and permissions off each show clearly and recover'}]]]},
     {n:3,name:'Physical testing',who:'Trevon & Jared',field:true,ask:'Real bands on a wrist, real phones in a pocket. Do each task. If it worked, check it off. If it didn’t, flag it and say what happened.',groups:[
       ['Band & firmware',[
         {id:'f_update',who:'Trevon',label:'Update 3 bands to '+fwv+' from the app — one of them an older band',how:'Phone plugged in and right next to the band. Each band should finish, and still buzz afterwards.'},
@@ -2484,6 +2484,73 @@ function relPick(n){relSel=n;relShowReport=false;renderQC();const e=document.get
 function relSetWho(w){relWho=w;renderQC()}
 function relMyName(){const n=((CURRENT_USER&&CURRENT_USER.name)||'').split(' ')[0];return REL_TESTERS.find(function(t){return t.toLowerCase()===n.toLowerCase()})||null}
 
+/* ---- Gate 2: simulator checks, run through the simulator's own OS-behaviour
+   engine (simDecide). Each scenario says what must happen; any miss flags the
+   task and names the scenario, so a pass is evidence, not a tick. A simulation
+   never stands in for the physical tests in gate 3. */
+function relSimScenarios(kind){
+  const out=[],safe=SIM_STARTERS.filter(function(x){return x[2]}).map(function(x){return x[0]});
+  const add=function(name,setup,ev,ctx,expect){out.push({name:name,setup:setup,ev:ev,ctx:ctx||{},expect:expect||'buzz'})};
+  if(kind==='ios'||kind==='android'){
+    const devs=kind==='ios'?['iphone15pro','iphonese']:['pixel8','galaxys24','androidlow'];
+    devs.forEach(function(d){const dn=(SIM_DEVICES.find(function(x){return x.id===d})||{}).name||d;
+      [['foreground','open'],['background','locked / in the background'],['killed','swiped away']].forEach(function(st){
+        const S={device:d,appState:st[0]};
+        add(dn+' · dashboard alert · app '+st[1],S,'admin');
+        add(dn+' · text message · app '+st[1],S,'appnotif',{app:'com.apple.MobileSMS',text:'Running 5 min late'});
+        add(dn+' · phone call · app '+st[1],S,'appnotif',{app:'com.apple.mobilephone',text:'Incoming call'});
+        if(st[0]!=='killed')add(dn+' · wake alarm · app '+st[1],S,'alarm',{pattern:'escalate'});
+      });
+      [['biz','Safewave for Business'],['cons','Safewave']].forEach(function(v){const comp=(kind==='ios'?'ios_':'and_')+v[0];
+        safe.forEach(function(snd){add(dn+' · '+v[1]+' '+relVer(relDoc(),comp)+' · Aware hears '+snd+' (life-safety) · app open',{device:d,appState:'foreground',listening:true,comp:comp},'aware',{type:snd,conf:95},'continuous')})});
+    });
+  }else{
+    [['iphone15pro','iPhone 15 Pro'],['pixel8','Pixel 8']].forEach(function(d){
+      add(d[1]+' · Bluetooth off / band off / out of range → dashboard alert says so',{device:d[0],connected:false},'admin',{},'shown');
+      add(d[1]+' · band back in range → dashboard alert buzzes',{device:d[0],connected:true},'admin');
+      add(d[1]+' · band off → text message says so',{device:d[0],connected:false},'appnotif',{app:'com.apple.MobileSMS',text:'hi'},'shown');
+      add(d[1]+' · band off → wake alarm falls back to the phone',{device:d[0],connected:false},'alarm',{pattern:'escalate'},'shown');
+      add(d[1]+' · band button with the band off → not counted as an acknowledgement',{device:d[0],connected:false},'button',{},'quiet');
+    });
+    add('iPhone 15 Pro · notifications not reaching the band (ANCS off) → says so',{device:'iphone15pro',connected:true,ancs:0},'appnotif',{app:'com.apple.MobileSMS',text:'hi'},'shown');
+    add('iPhone 15 Pro · ANCS back on → text buzzes',{device:'iphone15pro',connected:true,ancs:1},'appnotif',{app:'com.apple.MobileSMS',text:'hi'});
+    add('Pixel 8 · exact-alarm permission off → app warns it may be late',{device:'pixel8',connected:true,exact:true},'alarm',{pattern:'escalate'},'shown');
+  }
+  return out;
+}
+function relSimRun(id){
+  if(!canQC()){toast('Testers and admins only');return}if(relLocked())return;
+  const g=relGates(relDoc())[1],t=relTasks(g).find(function(x){return x.id===id});if(!t||!t.sim)return;
+  if(!qcSim)simInit();
+  const saved=JSON.stringify(qcSim),results=[];
+  relSimScenarios(t.sim).forEach(function(sc){
+    qcSim=JSON.parse(saved);qcSim.device=sc.setup.device;simRefreshOS();
+    qcSim.appState=sc.setup.appState||'foreground';qcSim.dnd='off';qcSim.exactDenied=!!sc.setup.exact;
+    qcSim.band.connected=sc.setup.connected!==false;qcSim.band.ancs=sc.setup.ancs!=null?sc.setup.ancs:1;
+    if(sc.setup.listening){qcSim.aware.listening=true}
+    if(sc.setup.comp){qcSim.awareFixed=(+((((relDoc()||{}).comps||{})[sc.setup.comp]||{}).build)||0)>=SIM_AWARE_FIX[sc.setup.comp];qcSim.variant=/biz/.test(sc.setup.comp)?'business':'consumer'}
+    const ctx=Object.assign({},sc.ctx);if(ctx.app)ctx.app=qcSim.apps.find(function(a){return a.id===ctx.app});
+    let r;try{r=simDecide(sc.ev,ctx)}catch(e){r={buzz:false,level:'crit',reason:'Simulator error: '+e.message}}
+    let ok;
+    if(sc.expect==='buzz')ok=r.buzz&&r.level!=='warn'&&r.level!=='crit';
+    else if(sc.expect==='continuous')ok=r.buzz&&r.level!=='crit'&&!!r.sig&&r.sig.n===0;
+    else if(sc.expect==='shown')ok=r.level==='warn'&&!!(r.reason||'').trim();
+    else ok=!r.buzz&&!r.delivered;
+    results.push({n:sc.name,ok:ok,why:String(r.reason||'').slice(0,220)});
+  });
+  qcSim=JSON.parse(saved);
+  const bad=results.filter(function(x){return !x.ok}),prev=(relDoc().checks||{})[id];
+  const hist=prev?(prev.hist||[]).concat([{state:prev.state,by:prev.by,at:prev.at,note:prev.note||''}]):[];
+  const note=bad.length?bad.length+' of '+results.length+' scenarios failed in the simulator: '+bad.slice(0,2).map(function(x){return x.n+' — '+x.why.split(/[:.—]\s/)[0].slice(0,110)}).join(' | ')+(bad.length>2?' | …and '+(bad.length-2)+' more (Show the scenarios)':''):'All '+results.length+' scenarios passed in the simulator.';
+  relUpd('checks.'+id,{state:bad.length?'flag':'pass',by:qcMe(),at:new Date().toISOString(),note:note,sim:{ran:results.length,failed:bad.length,results:results},hist:hist});
+  relEdit['sim:'+id]=!!bad.length;renderQC();
+  toast(bad.length?'⚑ '+bad.length+' scenario'+(bad.length===1?'':'s')+' failed — flagged with the details':'✓ All '+results.length+' scenarios passed');
+  if(bad.length&&typeof notifySuper==='function')notifySuper('⚑ Simulator check failed: '+t.label,note,'s-qc');
+}
+function relSimDetail(c){
+  if(!c||!c.sim)return '';const rs=c.sim.results||[];
+  return '<div class="rg-box rg-box-ok" style="margin-left:0">'+rs.map(function(x){return '<div class="d" style="margin:3px 0;color:var(--'+(x.ok?'text':'amber')+')">'+(x.ok?'✓ ':'⚑ ')+esc(x.n)+(x.ok?'':'<div class="qs-sub">'+esc(x.why)+'</div>')+'</div>'}).join('')+'</div>';
+}
 /* ---- views ---- */
 function relGlyph(s){return s==='pass'?'<span style="color:var(--good)">✓</span>':s==='flag'?'<span style="color:var(--amber)">⚑</span>':s==='accepted'?'<span style="color:var(--amber)">✓</span>':'<span style="color:var(--faint)">○</span>'}
 function relTaskRow(l,t,showOwner){
@@ -2492,16 +2559,19 @@ function relTaskRow(l,t,showOwner){
   const c=(l.checks||{})[t.id]||null,s=c?c.state:'open',own=relOwner(l,t),mode=relEdit[t.id];
   let sub='';
   if(t.how&&s==='open')sub+='<div class="d qs-sub">'+esc(t.how)+'</div>';
+  if(t.sim&&s==='open')sub+='<div class="d qs-sub">Press ▶ Run — it plays every scenario through the simulator and checks this off, or flags exactly what failed.</div>';
   if(c&&s==='pass')sub+='<div class="d qs-sub">Checked by '+esc(c.by)+' · '+qcTime(c.at)+(c.note?' · '+esc(c.note):'')+'</div>';
   if(c&&(s==='flag'||s==='accepted'))sub+='<div class="rg-flagtxt">⚑ '+esc(c.note)+'<span>'+esc(c.by)+' · '+qcTime(c.at)+(c.phone?' · '+esc(c.phone):'')+'</span>'
     +(s==='accepted'?'<span>Accepted by '+esc(c.acceptedBy)+' — '+esc(c.acceptNote||'')+'</span>':'')+'</div>';
-  if(c&&c.hist&&c.hist.some(function(h){return h.state==='flag'})&&s==='pass'){const f=c.hist.filter(function(h){return h.state==='flag'}).slice(-1)[0];sub+='<div class="d qs-sub">Was flagged by '+esc(f.by)+': '+esc(f.note)+'</div>'}
+  if(c&&c.hist&&c.hist.some(function(h){return h.state==='flag'})&&s==='pass'){const f=c.hist.filter(function(h){return h.state==='flag'}).slice(-1)[0],fn=String(f.note||'');sub+='<div class="d qs-sub">Was flagged by '+esc(f.by)+': '+esc(fn.length>140?fn.slice(0,140)+'…':fn)+'</div>'}
   let h='<div class="rg-task'+(s==='flag'?' rg-flagged':'')+'"><div class="qs-g">'+relGlyph(s)+'</div><div class="grow"><div class="d" style="color:var(--text)'+(s==='pass'?';opacity:.8':'')+'">'+esc(t.label)
     +(showOwner&&own?' <button class="rg-owner" title="Change who does this" onclick="relCycleOwner('+ocjson(t.id)+','+ocjson(own)+')">'+esc(own)+'</button>':'')+'</div>'+sub
     +(s==='pass'&&!c.note&&c.by===qcMe()&&!relShipped()?'<button class="rg-link" onclick="relOpen('+ocjson(t.id)+',\'note\')">+ add a note</button>':'')
+    +(t.sim&&c&&c.sim?'<button class="rg-link" onclick="relEdit[\'sim:'+esc(t.id)+'\']=!relEdit[\'sim:'+esc(t.id)+'\'];renderQC()">'+(relEdit['sim:'+t.id]?'Hide':'Show')+' the '+c.sim.ran+' scenarios</button>':'')
     +(s==='flag'&&relAdmin()&&!relShipped()?'<button class="rg-link" onclick="relAccept('+ocjson(t.id)+')">Accept the risk and ship with it</button>':'')+'</div>'
-    +'<div class="rg-btns"><button class="rg-ok'+(s==='pass'?' on':'')+'" aria-label="It worked" title="'+(s==='pass'?'Undo':'It worked')+'" onclick="relPass('+ocjson(t.id)+')">✓</button>'
+    +'<div class="rg-btns">'+(t.sim?'<button class="btn qs-act" style="align-self:center" onclick="relSimRun('+ocjson(t.id)+')">'+(c?'↻ Re-run':'▶ Run')+'</button>':'')+'<button class="rg-ok'+(s==='pass'?' on':'')+'" aria-label="It worked" title="'+(s==='pass'?'Undo':'It worked')+'" onclick="relPass('+ocjson(t.id)+')">✓</button>'
     +'<button class="rg-flag'+(s==='flag'||mode==='flag'?' on':'')+'" aria-label="Flag a problem" title="Flag a problem" onclick="relOpen('+ocjson(t.id)+',\'flag\')">⚑</button></div></div>';
+  if(t.sim&&relEdit['sim:'+t.id])h+=relSimDetail(c);
   if(mode==='flag')h+='<div class="rg-box"><div class="d" style="margin-bottom:6px;color:var(--text)">What happened?</div>'
     +'<textarea class="field" id="rf-'+esc(t.id)+'" rows="3" style="margin:0 0 8px;resize:vertical" placeholder="e.g. 7 of 10 texts buzzed; the band showed Connected the whole time" oninput="relD(\'f:'+esc(t.id)+'\',this.value)">'+esc(relDraft['f:'+t.id]!=null?relDraft['f:'+t.id]:(s==='flag'?c.note:''))+'</textarea>'
     +'<input class="field" style="margin:0 0 8px" placeholder="Phone and OS (e.g. iPhone 15, iOS 18.1)" value="'+esc(relDraft['p:'+t.id]!=null?relDraft['p:'+t.id]:((c&&c.phone)||''))+'" oninput="relD(\'p:'+esc(t.id)+'\',this.value)">'
@@ -3408,7 +3478,11 @@ function simLibFind(n){var q=(n||'').toLowerCase();for(var i=0;i<SIM_LIB.length;
 function simStarter(n){var q=(n||'').toLowerCase(),x=SIM_STARTERS.find(function(r){return r[0].toLowerCase()===q});return x?{name:x[0],icon:x[1],lifeSafety:!!x[2],thr:x[3]}:null}
 /* The buzz exactly as AwareService resolves it: named signature, then the library
    entry's life-safety flag (continuous max), then the default 3× @ 70%. */
-function simAwareSig(type){var x=SIM_DET_SIG[type];if(x)return {strength:x[0],n:x[1]};var lib=simLibFind(type);if(lib&&lib.lifeSafety)return {strength:100,n:0};return {strength:70,n:3}}
+/* Builds 23/15 (Android 5/17) and earlier miss the life-safety starters (they
+   buzz 3× @ 70%); the fix (detectionSignatureFor) ships in the builds below.
+   qcSim.awareFixed is set when the simulated build has it. */
+const SIM_AWARE_FIX={ios_biz:24,ios_cons:16,and_biz:6,and_cons:18};
+function simAwareSig(type){var x=SIM_DET_SIG[type];if(x)return {strength:x[0],n:x[1]};var st=qcSim&&qcSim.awareFixed?simStarter(type):null;if(st&&st.lifeSafety)return {strength:100,n:0};var lib=simLibFind(type);if(lib&&lib.lifeSafety)return {strength:100,n:0};return {strength:70,n:3}}
 /* AwareService.getThreshold: per-sound → global '*' (the LISTEN slider) → starter default → 0.75 */
 function simAwareThr(type){var a=qcSim.aware;if(a.perSound[type]!=null)return a.perSound[type];if(a.globalSet)return a.certainty/100;var st=simStarter(type);return st?st.thr:0.75}
 function simAwareLog(type,conf){var a=qcSim.aware;a.dets.unshift({key:Date.now().toString(36)+Math.random().toString(36).slice(2,6),type:type,at:simClockStr(),conf:conf,answered:false});a.dets=a.dets.slice(0,20)}
