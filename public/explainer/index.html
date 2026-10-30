@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>How a Safewave release gets tested</title>
+<style>
+:root{--bg:#EEF3F5;--panel:#fff;--fg:#0C1B22;--muted:#41545C;--line:#DCE6EA;--blue:#0F8FC2}
+@media (prefers-color-scheme:dark){:root{--bg:#071A22;--panel:#0C2733;--fg:#EAF4F8;--muted:#93AEBA;--line:#1C3340;--blue:#1DAAE1}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;padding:24px max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))}
+.wrap{max-width:960px;margin:0 auto}
+.eb{font:600 11px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);margin-bottom:8px}
+h1{font-size:clamp(22px,3.4vw,32px);margin:0 0 8px}
+p{color:var(--muted);line-height:1.55;margin:0 0 16px;max-width:64ch}
+video{width:100%;aspect-ratio:16/9;background:#00151E;border-radius:12px;display:block}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-top:14px}
+button{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:left;font:inherit;color:inherit;cursor:pointer;display:flex;gap:10px;font-size:15px}
+button b{font:600 12px ui-monospace,Menlo,monospace;color:var(--blue);padding-top:2px}
+.note{font-size:14px;margin-top:16px}
+a{color:var(--blue)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eb">Safewave &middot; Release QC</div>
+  <h1>How a Safewave release gets tested</h1>
+  <p>One release, four gates, and a report you can trust. Narrated, and captioned throughout so it also works with the sound off.</p>
+  <video id="v" controls playsinline preload="metadata" poster="poster.jpg">
+    <source src="release-qc-explainer.mp4" type="video/mp4">
+  </video>
+  <div class="grid" id="ch"></div>
+  <p class="note"><b>Trevon and Jared:</b> your part starts at <b>3:26</b> (Gate 3). Trouble playing? <a href="release-qc-explainer.mp4">Open the video file directly</a>.</p>
+</div>
+<script>
+(function(){
+  var C=[[9,'Why test like this'],[29,'One release'],[43,'The four gates'],[68,'Theory: cheapest failure first'],[89,'Theory: a simulation never replaces a wrist'],[113,'Theory: evidence, not ticks'],[139,'Release QC: tabs, release and tiles'],[164,'Gates 1 and 2: builds and simulator checks'],[206,'Gate 3: check off or flag'],[268,'Gate 4: sign-off and the report'],[307,'Simulator tab'],[322,'Your part']];
+  var v=document.getElementById('v'),host=document.getElementById('ch');
+  C.forEach(function(c){var b=document.createElement('button');b.type='button';
+    b.innerHTML='<b>'+Math.floor(c[0]/60)+':'+String(c[0]%60).padStart(2,'0')+'</b><span></span>';b.lastChild.textContent=c[1];
+    b.onclick=function(){v.currentTime=c[0];v.play();};host.appendChild(b);});
+})();
+</script>
+</body>
+</html>

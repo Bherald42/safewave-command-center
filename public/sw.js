@@ -3,7 +3,7 @@
    Network-first for navigations so teammates always get the latest build;
    falls back to cache when offline. Live data (Firestore) is fetched by the
    page itself and is not cached here. */
-const CACHE = 'safewave-shell-v3';
+const CACHE = 'safewave-shell-v4';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -18,6 +18,9 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   // Only handle same-origin; let Firebase/CDN/Shopify requests pass straight through.
   if (url.origin !== self.location.origin) return;
+  // Static pages outside the app (the training video) go straight to the network:
+  // not cached as the app shell, and video range requests stay native.
+  if (url.pathname.startsWith('/explainer/')) return;
   if (req.mode === 'navigate') {
     // cache:'no-store' bypasses the HTTP cache entirely — during the OTA-flasher
     // debugging, stale builds kept being served through cache layers even after
