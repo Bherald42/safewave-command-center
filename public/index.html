@@ -2274,17 +2274,18 @@ function qcNotifyLeads(title,body){if(typeof notifyAll==='function')notifyAll(ti
 function setQcTab(t){qcTab=t;qcRelView=null;renderQC();window.scrollTo(0,0)}
 function renderQC(){
   // Two tabs: the release (four gates → report) and an open simulator with the firmware flasher.
-  if(qcTab!=='sim')qcTab='release';
+  if(qcTab!=='sim'&&qcTab!=='learn')qcTab='release';
   const body=document.getElementById('qc-body');if(!body)return;
   // A teammate's check-off arriving while you type must not wipe what you're typing.
   const ae=document.activeElement;
   if(qcTab==='release'&&ae&&body.contains(ae)&&(ae.tagName==='TEXTAREA'||(ae.tagName==='INPUT'&&ae.type!=='date'))){
     if(!ae.__qcDefer){ae.__qcDefer=true;ae.addEventListener('blur',function(){setTimeout(renderQC,0)},{once:true})}return}
   const tb=document.getElementById('qc-tabs');
-  if(tb)tb.innerHTML=[['release','Release'],['sim','Simulator & flashing']].map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
+  if(tb)tb.innerHTML=[['release','Release'],['sim','Simulator & flashing'],['learn','How it works']].map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
   const sub=document.getElementById('qc-sub');
-  if(sub)sub.textContent=qcTab==='release'?'One release, four gates. Check off what works, flag what doesn’t, and the report writes itself.':'Try the app on any phone and OS, run soak tests, and flash firmware to a band.';
+  if(sub)sub.textContent=qcTab==='learn'?'Six minutes on how a release gets tested, and what testers need to do.':qcTab==='release'?'One release, four gates. Check off what works, flag what doesn’t, and the report writes itself.':'Try the app on any phone and OS, run soak tests, and flash firmware to a band.';
   if(qcTab==='release')body.innerHTML=relView();
+  else if(qcTab==='learn')body.innerHTML=qcLearnView();
   else{body.innerHTML=qcSimView()+'<h2 class="rg-h2">Flash firmware to a band</h2>'+qcFlashView();simAfterRender();}
 }
 /* ================= RELEASE — one release, four gates =================
@@ -2589,6 +2590,7 @@ function relTile(l,g,on){
 function relGateView(l,g){
   const st=relGateStats(l,g);
   let h='<div class="card" id="rel-gate"><div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><div class="eyebrow" style="margin:0">Gate '+g.n+' · '+esc(g.who)+'</div><div class="t" style="font-size:19px;margin-top:2px">'+esc(g.name)+'</div><div class="d" style="margin-top:4px">'+esc(g.ask)+'</div></div><div style="text-align:right;flex:0 0 auto"><div class="t" style="font-size:20px">'+st.done+'<span style="color:var(--faint);font-size:14px"> / '+st.total+'</span></div>'+(st.flags?'<div class="d" style="color:var(--amber)">⚑ '+st.flags+' flagged</div>':'')+'</div></div>';
+  if(g.field)h+='<button class="rg-link" style="margin-top:8px" onclick="setQcTab(\'learn\')">New to this? Watch the 6-minute explainer →</button>';
   if(g.field){
     const me=relMyName();if(relWho==null)relWho=me||'all';
     const count=function(w){return relTasks(g).filter(function(t){return w==='all'||relOwner(l,t)===w}).length};
@@ -2661,6 +2663,31 @@ function relView(){
     +(relShowReport&&g.final?relReportView(l):'');
 }
 
+/* ---- How it works: the explainer video + what testers need to do ----
+   The video is a static file on this site (/explainer/), so anyone with the
+   link can play it on a phone without signing in; this tab plays the same file. */
+const QC_LEARN_URL='https://safewave-command-center.web.app/explainer/';
+const QC_LEARN_CH=[[9,'Why test like this'],[29,'One release'],[43,'The four gates'],[68,'Theory: cheapest failure first'],[89,'Theory: a simulation never replaces a wrist'],[113,'Theory: evidence, not ticks'],[139,'Release QC: tabs, release and tiles'],[164,'Gates 1 and 2: builds and simulator checks'],[206,'Gate 3: check off or flag'],[268,'Gate 4: sign-off and the report'],[307,'Simulator tab'],[322,'Your part']];
+function qcLearnSeek(t){const v=document.getElementById('qc-learn-v');if(!v)return;try{v.currentTime=t;v.play()}catch(e){}}
+function qcLearnCopy(){const u=QC_LEARN_URL;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(u).then(()=>toast('✓ Link copied'),()=>toast(u));else toast(u)}
+function qcLearnView(){
+  const ch=QC_LEARN_CH.map(c=>'<button class="rg-tile" style="flex-direction:row;align-items:baseline;gap:10px;padding:10px 12px" onclick="qcLearnSeek('+c[0]+')"><span class="rg-n" style="color:var(--wave)">'+Math.floor(c[0]/60)+':'+String(c[0]%60).padStart(2,'0')+'</span><span style="font-size:13.5px">'+esc(c[1])+'</span></button>').join('');
+  return '<div class="card"><video id="qc-learn-v" controls playsinline preload="metadata" poster="/explainer/poster.jpg" style="width:100%;aspect-ratio:16/9;border-radius:12px;background:#00151E;display:block"><source src="/explainer/release-qc-explainer.mp4" type="video/mp4"></video>'
+    +'<div class="d" style="margin-top:10px">Narrated, and captioned throughout. Testers: your part starts at <b>3:26</b>.</div>'
+    +'<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn ghost" style="width:auto;padding:8px 14px" onclick="qcLearnCopy()">Copy the share link</button><span class="d" style="align-self:center;color:var(--faint);word-break:break-all">'+esc(QC_LEARN_URL)+' · plays on any phone, no sign-in</span></div></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:0 0 12px">'+ch+'</div>'
+    +'<div class="card"><div class="eyebrow" style="margin:0">For Trevon and Jared</div><div class="t" style="font-size:18px;margin:4px 0 6px">What we need from you</div>'
+    +'<div class="d" style="color:var(--text);line-height:1.55">Test the release on real bands and real phones and finish your tasks in <b>Gate 3</b> two days before the sign-off date shown on the release. About 14 short tasks each; plan on two days, one of them a full workday wearing the band.</div>'
+    +'<div class="qs-grp">How to do it</div><ol class="d" style="color:var(--text);line-height:1.6;padding-left:20px;margin:6px 0">'
+    +'<li>Open the <b>Release</b> tab. It opens on Gate 3 with your tasks.</li>'
+    +'<li>Do each task the way the grey line under it says.</li>'
+    +'<li>It worked → tap <b>✓</b>. Tap again to undo.</li>'
+    +'<li>It didn’t, or only partly → tap <b>⚑</b>. Say what you expected, what happened, and the phone and OS, then <b>Save flag</b>. Brad is notified, fixes it, and you re-test.</li>'
+    +'<li>Anything else you notice → <b>General feedback on the apps</b>, at the bottom of Gate 3.</li></ol>'
+    +'<div class="d" style="color:var(--text)"><b>Flag it even if it failed only once.</b> Something that fails now and then is the most important thing to catch.</div>'
+    +'<div class="qs-grp">Before you start</div><div class="d" style="color:var(--text);line-height:1.55">Wait for Brad’s go and the TestFlight / Google Play invitations. Have a Safewave Band charged overnight, your phone with the test build installed, and someone who can send you texts.</div>'
+    +'<button class="btn" style="margin-top:12px" onclick="setQcTab(\'release\')">Go to my tasks →</button></div>';
+}
 /* ---- report: every check + release notes ---- */
 function relReportData(l){
   return {name:l.name,targetDate:l.targetDate||'',status:l.status||'open',shippedAt:l.shippedAt||'',shippedBy:l.shippedBy||'',generatedAt:new Date().toISOString(),
