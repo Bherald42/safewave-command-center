@@ -13,5 +13,5 @@ jobs:
           for f in "" index.html poster.jpg release-qc-explainer.mp4; do
             echo "=== $U/$f"; curl -sS -A "$UA" -o /tmp/b -D - "$U/$f" | grep -iE '^HTTP|content-type|content-length|accept-ranges|cache-control|etag'; head -c 120 /tmp/b | tr -c '[:print:]' '.'; echo
           done
-          echo "=== range request"; curl -sS -A "$UA" -r 0-1 -D - -o /dev/null "$U/release-qc-explainer.mp4" | grep -iE '^HTTP|content-range|content-length|content-type'
+          echo "=== range request x3"; for n in 1 2 3; do curl -sS -A "$UA" -r 0-1 -D - -o /dev/null "$U/release-qc-explainer.mp4" | grep -iE '^HTTP|content-range|content-length|cache-control'; sleep 2; done
           echo "=== sw.js"; curl -sS https://safewave-command-center.web.app/sw.js | grep -n "explainer\|CACHE ="
