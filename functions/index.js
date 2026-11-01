@@ -1100,3 +1100,33 @@ exports.mirrorFieldTelemetry = onSchedule(
     logger.info("mirrorFieldTelemetry done", { events, users, bands });
   }
 );
+
+/* ------------------------------------------------------------------ *
+ * TEAM SIGN-INS — when each teammate first signed in, last signed in
+ * and was last active, from Firebase Auth's own records. Super admin and
+ * the oversight accounts only (the same people who see the Users screen).
+ * lastRefreshTime moves roughly hourly while someone has the app open, so
+ * it is the best "last active" for the time before the app logged sessions.
+ * ------------------------------------------------------------------ */
+const SIGNIN_VIEWERS = ["jared@safewavetech.com", "trevon@safewavetech.com"];
+exports.teamSignIns = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  const me = await db.collection("users").doc(request.auth.uid).get();
+  const email = String(request.auth.token.email || "").toLowerCase();
+  const ok = (me.exists && me.data().role === "superadmin") || SIGNIN_VIEWERS.includes(email);
+  if (!ok) throw new HttpsError("permission-denied", "Super admin only.");
+  const out = [];
+  let page;
+  do {
+    page = await admin.auth().listUsers(1000, page && page.pageToken);
+    page.users.forEach((u) => out.push({
+      uid: u.uid,
+      email: u.email || "",
+      created: u.metadata.creationTime || null,
+      lastSignIn: u.metadata.lastSignInTime || null,
+      lastActive: u.metadata.lastRefreshTime || null,
+      disabled: !!u.disabled,
+    }));
+  } while (page.pageToken);
+  return { users: out };
+});

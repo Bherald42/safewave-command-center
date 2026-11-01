@@ -5444,7 +5444,7 @@ function enterApp(user){
   if(canVault())subscribeVault();
   if(canComply())subscribeCompliance();
   if(canQC())subscribeQC();
-  recordActivity();
+  recordActivity();startSessionTracking();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
   goto('s-pulse');
 }
@@ -5659,7 +5659,7 @@ function renderUsers(){
   body.innerHTML='<div class="d">Loading…</div>';
   firebase.firestore().collection('users').get().then(qs=>{
     USERS_ADMIN=qs.docs.map(d=>Object.assign({uid:d.id},d.data()));
-    renderUsersList();
+    renderUsersList();loadSignIns();
   }).catch(e=>{body.innerHTML=fsSetupNote((e&&e.code)||'permission-denied')});
 }
 function renderUsersList(){
@@ -5668,7 +5668,36 @@ function renderUsersList(){
   const q=((document.getElementById('users-q')||{}).value||'').trim().toLowerCase();
   let list=USERS_ADMIN.slice().sort((a,b)=>((a.name||a.email||'')+'').localeCompare((b.name||b.email||'')));
   if(q)list=list.filter(u=>[u.name,u.email].some(v=>(v||'').toLowerCase().includes(q)));
-  body.innerHTML=list.length?list.map(userAdminCard).join(''):'<div class="empty"><div class="d">No teammate matches.</div></div>';
+  body.innerHTML=signInTable(list)+(list.length?list.map(userAdminCard).join(''):'<div class="empty"><div class="d">No teammate matches.</div></div>');
+}
+let SIGNINS=null,signInErr='',signInOpen={};
+function loadSignIns(){
+  if(SIGNINS||!(typeof firebase!=='undefined'&&firebase.functions))return;
+  firebase.functions().httpsCallable('teamSignIns')({}).then(r=>{SIGNINS={};((r.data&&r.data.users)||[]).forEach(u=>{SIGNINS[u.uid]=u});renderUsersList()})
+    .catch(e=>{signInErr=(e&&e.message)||'unavailable';renderUsersList()});
+}
+function siDate(v){if(!v)return null;if(v.toDate)return v.toDate();const d=new Date(v);return isNaN(d)?null:d}
+function siAgo(d){if(!d)return '';const m=Math.round((Date.now()-d.getTime())/60000);if(m<2)return 'just now';if(m<60)return m+' min ago';const h=Math.round(m/60);if(h<24)return h+' h ago';const dd=Math.round(h/24);return dd+' day'+(dd===1?'':'s')+' ago'}
+function siWhen(d){return d?d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'—'}
+function siCell(d){return d?'<b style="font-weight:600">'+esc(siWhen(d))+'</b><div class="d qs-sub">'+esc(siAgo(d))+'</div>':'<span style="color:var(--faint)">—</span>'}
+function signInRow(u){
+  const a=(SIGNINS||{})[u.uid]||{};
+  const opened=siDate(u.lastLoginAt),seen=siDate(u.lastSeenAt),auth=siDate(a.lastActive),signed=siDate(a.lastSignIn),first=siDate(a.created);
+  const active=[seen,auth].filter(Boolean).sort((x,y)=>y-x)[0]||null;
+  return {u:u,active:active,opened:opened,signed:signed,first:first,count:u.loginCount||0};
+}
+function signInTable(list){
+  const rows=list.map(signInRow).sort((x,y)=>((y.active||0)-(x.active||0)));
+  const note=SIGNINS?'':(signInErr?'Firebase sign-in history unavailable ('+esc(signInErr)+') — showing sessions logged by the app.':'Loading Firebase sign-in history…');
+  let h='<div class="card"><div class="t" style="font-size:16px">Sign-in times</div><div class="d" style="margin:2px 0 8px">Most recently active first. <b>Last active</b> is the latest of the app’s heartbeat and Firebase’s token refresh; <b>Last opened</b> is the last time they opened Command Center (or came back after 30+ min away). Times in your time zone.</div>'
+    +(note?'<div class="d qs-sub" style="margin-bottom:6px">'+note+'</div>':'')
+    +'<div style="overflow-x:auto"><table class="qa-tbl" style="min-width:640px"><tr><th>Teammate</th><th>Last active</th><th>Last opened</th><th>Last signed in</th><th>First signed in</th><th>Sessions</th></tr>';
+  rows.forEach(r=>{const u=r.u,open=!!signInOpen[u.uid],rec=Array.isArray(u.recentLogins)?u.recentLogins:[];
+    h+='<tr><td><b>'+esc(u.name||u.email||u.uid)+'</b><div class="d qs-sub">'+esc(u.email||'')+'</div></td><td>'+siCell(r.active)+'</td><td>'+siCell(r.opened)+'</td><td>'+siCell(r.signed)+'</td><td>'+siCell(r.first)+'</td><td>'
+      +(rec.length?'<button class="rg-link" style="padding:0" onclick="signInOpen['+ocjson(u.uid)+']=!signInOpen['+ocjson(u.uid)+'];renderUsersList()">'+(r.count||rec.length)+' · '+(open?'hide':'show')+'</button>':(r.count||'—'))+'</td></tr>';
+    if(open&&rec.length)h+='<tr><td colspan="6"><div class="d" style="line-height:1.7">'+rec.map(x=>esc(siWhen(siDate(x.at)))+' · '+esc(x.device||'')).join('<br>')+'</div></td></tr>';
+  });
+  return h+'</table></div></div>';
 }
 function userAdminCard(u){
   const me=u.uid===CURRENT_USER.uid;
@@ -6153,6 +6182,34 @@ async function recordActivity(){
     const me=(TEAM||[]).find(t=>t.uid===CURRENT_USER.uid);if(me){me.streak=streak;me.bestStreak=best;me.activeDays=days}
     refreshPulse();
   }catch(e){}
+}
+/* ===== Sign-in times — each session and a "last seen" heartbeat =====
+   A session = opening Command Center, or coming back after 30+ minutes away.
+   Written to the user's own doc (owner-writable, never the role): lastLoginAt,
+   lastSeenAt, loginCount and the 20 most recent sessions. The Users screen
+   shows them beside Firebase Auth's own sign-in record. */
+const SESSION_GAP_MS=30*60*1000;let sessLastSeen=0,sessTimer=null;
+function sessDevice(){const u=navigator.userAgent||'';const os=/iPhone|iPad/.test(u)?'iPhone':/Android/.test(u)?'Android':/Mac OS X/.test(u)?'Mac':/Windows/.test(u)?'Windows':'Other';
+  const br=/Edg\//.test(u)?'Edge':/CriOS|Chrome\//.test(u)?'Chrome':/FxiOS|Firefox\//.test(u)?'Firefox':/Safari\//.test(u)?'Safari':'Browser';return br+' on '+os}
+async function recordSession(){
+  if(!hasFirestore()||!CURRENT_USER||!CURRENT_USER.uid)return;
+  try{const ref=firebase.firestore().collection('users').doc(CURRENT_USER.uid);const snap=await ref.get();const d=snap.exists?snap.data():{};
+    const recent=[{at:new Date().toISOString(),device:sessDevice()}].concat(Array.isArray(d.recentLogins)?d.recentLogins:[]).slice(0,20);
+    const FV=firebase.firestore.FieldValue;
+    await ref.set({lastLoginAt:FV.serverTimestamp(),lastSeenAt:FV.serverTimestamp(),loginCount:FV.increment(1),recentLogins:recent},{merge:true});
+    sessLastSeen=Date.now();
+  }catch(e){}
+}
+function sessHeartbeat(){
+  if(!hasFirestore()||!CURRENT_USER||!CURRENT_USER.uid||document.visibilityState!=='visible')return;
+  if(sessLastSeen&&Date.now()-sessLastSeen>SESSION_GAP_MS){recordSession();return}
+  sessLastSeen=Date.now();
+  firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({lastSeenAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}).catch(()=>{});
+}
+function startSessionTracking(){
+  recordSession();
+  if(sessTimer)clearInterval(sessTimer);sessTimer=setInterval(sessHeartbeat,3*60*1000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')sessHeartbeat()});
 }
 function outstandingByPerson(){const map={};collectTasks().forEach(x=>{if(!x.who)return;const k=x.who;if(!map[k])map[k]={open:0,overdue:0};map[k].open++;if(x.overdue)map[k].overdue++});return map}
 function renderTeamPulse(user){
