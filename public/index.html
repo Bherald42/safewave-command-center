@@ -5683,19 +5683,20 @@ function siCell(d){return d?'<b style="font-weight:600">'+esc(siWhen(d))+'</b><d
 function signInRow(u){
   const a=(SIGNINS||{})[u.uid]||{};
   const opened=siDate(u.lastLoginAt),seen=siDate(u.lastSeenAt),auth=siDate(a.lastActive),signed=siDate(a.lastSignIn),first=siDate(a.created);
+  const day=u.lastActive?new Date(u.lastActive+'T12:00:00'):null;
   const active=[seen,auth].filter(Boolean).sort((x,y)=>y-x)[0]||null;
-  return {u:u,active:active,opened:opened,signed:signed,first:first,count:u.loginCount||0};
+  return {u:u,active:active,day:day,opened:opened,signed:signed,first:first,count:u.loginCount||0,days:u.activeDays||0,streak:u.streak||0,best:u.bestStreak||0};
 }
 function signInTable(list){
-  const rows=list.map(signInRow).sort((x,y)=>((y.active||0)-(x.active||0)));
+  const rows=list.map(signInRow).sort((x,y)=>((y.active||y.day||0)-(x.active||x.day||0))||(y.days-x.days));
   const note=SIGNINS?'':(signInErr?'Firebase sign-in history unavailable ('+esc(signInErr)+') — showing sessions logged by the app.':'Loading Firebase sign-in history…');
-  let h='<div class="card"><div class="t" style="font-size:16px">Sign-in times</div><div class="d" style="margin:2px 0 8px">Most recently active first. <b>Last active</b> is the latest of the app’s heartbeat and Firebase’s token refresh; <b>Last opened</b> is the last time they opened Command Center (or came back after 30+ min away). Times in your time zone.</div>'
+  let h='<div class="card"><div class="t" style="font-size:16px">Sign-in times</div><div class="d" style="margin:2px 0 8px">Most recently active first. <b>Last active</b> is the latest of the app’s heartbeat and Firebase’s token refresh; <b>Days active</b> counts every day they used Command Center. Sessions are counted from Nov 1, when session logging started. Times in your time zone.</div>'
     +(note?'<div class="d qs-sub" style="margin-bottom:6px">'+note+'</div>':'')
-    +'<div style="overflow-x:auto"><table class="qa-tbl" style="min-width:640px"><tr><th>Teammate</th><th>Last active</th><th>Last opened</th><th>Last signed in</th><th>First signed in</th><th>Sessions</th></tr>';
+    +'<div style="overflow-x:auto"><table class="qa-tbl" style="min-width:720px"><tr><th>Teammate</th><th>Days active</th><th>Last active</th><th>Last opened</th><th>Last signed in</th><th>First signed in</th><th>Sessions <span style="font-weight:400">since Nov 1</span></th></tr>';
   rows.forEach(r=>{const u=r.u,open=!!signInOpen[u.uid],rec=Array.isArray(u.recentLogins)?u.recentLogins:[];
-    h+='<tr><td><b>'+esc(u.name||u.email||u.uid)+'</b><div class="d qs-sub">'+esc(u.email||'')+'</div></td><td>'+siCell(r.active)+'</td><td>'+siCell(r.opened)+'</td><td>'+siCell(r.signed)+'</td><td>'+siCell(r.first)+'</td><td>'
+    h+='<tr><td><b>'+esc(u.name||u.email||u.uid)+'</b><div class="d qs-sub">'+esc(u.email||'')+'</div></td><td><b style="font-weight:700;font-size:15px">'+(r.days||'—')+'</b>'+(r.days?'<div class="d qs-sub">'+(r.streak>1?r.streak+'-day streak · ':'')+'best '+r.best+'</div>':'')+'</td><td>'+(r.active?siCell(r.active):r.day?'<b style="font-weight:600">'+esc(r.day.toLocaleDateString('en-US',{month:'short',day:'numeric'}))+'</b>':siCell(null))+'</td><td>'+siCell(r.opened)+'</td><td>'+siCell(r.signed)+'</td><td>'+siCell(r.first)+'</td><td>'
       +(rec.length?'<button class="rg-link" style="padding:0" onclick="signInOpen['+ocjson(u.uid)+']=!signInOpen['+ocjson(u.uid)+'];renderUsersList()">'+(r.count||rec.length)+' · '+(open?'hide':'show')+'</button>':(r.count||'—'))+'</td></tr>';
-    if(open&&rec.length)h+='<tr><td colspan="6"><div class="d" style="line-height:1.7">'+rec.map(x=>esc(siWhen(siDate(x.at)))+' · '+esc(x.device||'')).join('<br>')+'</div></td></tr>';
+    if(open&&rec.length)h+='<tr><td colspan="7"><div class="d" style="line-height:1.7">'+rec.map(x=>esc(siWhen(siDate(x.at)))+' · '+esc(x.device||'')).join('<br>')+'</div></td></tr>';
   });
   return h+'</table></div></div>';
 }
