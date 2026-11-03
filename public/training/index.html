@@ -52,7 +52,7 @@ a{color:var(--blue)}
       <ol id="toc"></ol>
     </nav>
   </div>
-  <p class="note">No sound? Turn the volume up, and on an iPhone flip the ring/silent switch off. Every chapter has its own link: tap a chapter, then copy the address. To save or share the whole video, <a href="safewave-training.mp4" download>download the MP4</a> (48&nbsp;MB).</p>
+  <p class="note">No sound? Turn the volume up, and on an iPhone flip the ring/silent switch off. To send someone straight to one chapter, add its name to the link, for example <a href="#aware">/training/#aware</a>. To save or share the whole video, <a href="safewave-training.mp4" download>download the MP4</a> (48&nbsp;MB).</p>
 </div>
 <script>
 (function(){
@@ -73,7 +73,7 @@ a{color:var(--blue)}
     var li=document.createElement('li'),a=document.createElement('a');a.href='#'+c.id;
     a.innerHTML='<span class="ts"></span><span><span class="t"></span><span class="s"></span></span>';
     a.querySelector('.ts').textContent=mmss(c.t);a.querySelector('.t').textContent=c.n+' · '+c.h;a.querySelector('.s').textContent=c.s;
-    a.addEventListener('click',function(e){e.preventDefault();try{history.replaceState(null,'','#'+c.id)}catch(x){}jump(c,true)});
+    a.addEventListener('click',function(e){e.preventDefault();jump(c,true)});
     li.appendChild(a);toc.appendChild(li);links.push(a);
   });
   // iPhone Safari ignores a seek before the video has loaded its metadata: start playback inside the tap, then seek once it can.
@@ -89,6 +89,7 @@ a{color:var(--blue)}
   var last=null;v.addEventListener('timeupdate',function(){if(v.paused&&v.currentTime<0.5)return;var c=at(v.currentTime);if(c!==last){last=c;mark(c)}});
   var h=(location.hash||'').slice(1),start=C.filter(function(c){return c.id===h})[0];
   if(start)jump(start,false);else mark(C[0]);
+  window.addEventListener('hashchange',function(){var id=(location.hash||'').slice(1),c=C.filter(function(x){return x.id===id})[0];if(c)jump(c,false)});
 })();
 </script>
 </body>
