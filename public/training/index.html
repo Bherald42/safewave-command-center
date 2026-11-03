@@ -6,18 +6,31 @@
 <meta name="robots" content="noindex">
 <title>How Safewave works</title>
 <style>
-:root{--bg:#EEF3F5;--panel:#fff;--fg:#0C1B22;--muted:#41545C;--line:#DCE6EA;--blue:#0F8FC2}
-@media (prefers-color-scheme:dark){:root{--bg:#071A22;--panel:#0C2733;--fg:#EAF4F8;--muted:#93AEBA;--line:#1C3340;--blue:#1DAAE1}}
+:root{--bg:#EEF3F5;--panel:#fff;--fg:#0C1B22;--muted:#41545C;--line:#DCE6EA;--blue:#0F8FC2;--active:#E3F2F9}
+@media (prefers-color-scheme:dark){:root{--bg:#071A22;--panel:#0C2733;--fg:#EAF4F8;--muted:#93AEBA;--line:#1C3340;--blue:#1DAAE1;--active:#0F3444}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;padding:24px max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))}
-.wrap{max-width:960px;margin:0 auto}
+.wrap{max-width:1180px;margin:0 auto}
 .eb{font:600 11px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);margin-bottom:8px}
 h1{font-size:clamp(22px,3.4vw,32px);margin:0 0 8px}
 p{color:var(--muted);line-height:1.55;margin:0 0 16px;max-width:64ch}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+@media (max-width:900px){.main{grid-template-columns:1fr}}
+.player{min-width:0}
+@media (min-width:901px){.player{position:sticky;top:16px}}
 video{width:100%;aspect-ratio:16/9;background:#00151E;border-radius:12px;display:block}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-top:14px}
-button{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:left;font:inherit;color:inherit;cursor:pointer;display:flex;gap:10px;font-size:15px;min-height:44px}
-button b{font:600 12px ui-monospace,Menlo,monospace;color:var(--blue);padding-top:2px}
+.now{margin-top:10px;font-size:14px;color:var(--muted)}.now b{color:var(--fg)}
+.toc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px}
+.toc h2{margin:6px 10px 8px;font:600 11px ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.toc a{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;align-items:start;padding:10px;border-radius:10px;color:inherit;text-decoration:none;min-height:44px}
+.toc a:hover{background:var(--active)}
+.toc a[aria-current="true"]{background:var(--active)}
+.toc a[aria-current="true"] .t::after{content:" · playing";font-weight:500;color:var(--blue);font-size:13px}
+.toc .ts{font:600 12px ui-monospace,Menlo,monospace;color:var(--blue);padding-top:2px}
+.toc .t{display:block;font-weight:600;font-size:15px}
+.toc .s{display:block;font-size:13px;color:var(--muted);line-height:1.4;margin-top:2px}
+.toc a:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
 .note{font-size:14px;margin-top:16px}
 a{color:var(--blue)}
 </style>
@@ -26,20 +39,56 @@ a{color:var(--blue)}
 <div class="wrap">
   <div class="eb">Safewave &middot; Training</div>
   <h1>How Safewave works</h1>
-  <p>The dashboard, the Safewave for Business app, the Safewave watch and the band, with Safewave Aware sound recognition. A 22-minute narrated walkthrough in chapters: tap a chapter to jump to it.</p>
-  <video id="v" controls playsinline preload="metadata" poster="poster.jpg">
-    <source src="safewave-training.mp4" type="video/mp4">
-  </video>
-  <div class="grid" id="ch"></div>
-  <p class="note">No sound? Turn the volume up, and on an iPhone flip the ring/silent switch off. To save or share the video, <a href="safewave-training.mp4" download>download the MP4</a> (48&nbsp;MB).</p>
+  <p>The dashboard, the Safewave for Business app, the Safewave watch and the band, with Safewave Aware sound recognition. A 22-minute narrated walkthrough. Tap any chapter in the contents to jump straight to it.</p>
+  <div class="main">
+    <div class="player">
+      <video id="v" controls playsinline preload="metadata" poster="poster.jpg">
+        <source src="safewave-training.mp4" type="video/mp4">
+      </video>
+      <div class="now" id="now"></div>
+    </div>
+    <nav class="toc" aria-label="Contents">
+      <h2>Contents</h2>
+      <ol id="toc"></ol>
+    </nav>
+  </div>
+  <p class="note">No sound? Turn the volume up, and on an iPhone flip the ring/silent switch off. Every chapter has its own link: tap a chapter, then copy the address. To save or share the whole video, <a href="safewave-training.mp4" download>download the MP4</a> (48&nbsp;MB).</p>
 </div>
 <script>
 (function(){
-  var C=[[0,'Safewave: alerts you can feel'],[174,'1 · Getting set up'],[422,'2 · People and bands'],[599,'3 · Sending an alert'],[769,'4 · Alerts and alarms on the phone'],[840,'5 · Safewave Aware'],[1060,'6 · Messaging and support'],[1173,'7 · Keeping things healthy'],[1319,'Wrap-up']];
-  var v=document.getElementById('v'),host=document.getElementById('ch');
-  C.forEach(function(c){var b=document.createElement('button');b.type='button';
-    b.innerHTML='<b>'+Math.floor(c[0]/60)+':'+String(c[0]%60).padStart(2,'0')+'</b><span></span>';b.lastChild.textContent=c[1];
-    b.onclick=function(){v.currentTime=c[0];v.play();};host.appendChild(b);});
+  var C=[
+    {t:0,id:'overview',n:'Overview',h:'Safewave: alerts you can feel',s:'The whole system in three minutes: band, phone app, watch, dashboard and Aware.'},
+    {t:174,id:'setup',n:'Chapter 1',h:'Getting set up',s:'Dashboard sign-in, creating your organization and its codes, the phone app, and setting up a watch.'},
+    {t:422,id:'people',n:'Chapter 2',h:'People and bands',s:'Adding workers, checking bands out and in, Home on the phone, the watch ready for a shift.'},
+    {t:599,id:'alerts',n:'Chapter 3',h:'Sending an alert',s:'Notify, life-safety alerts, the alert on the phone (with or without a band) and on the watch.'},
+    {t:769,id:'phone',n:'Chapter 4',h:'Alerts and alarms on the phone',s:'Which apps buzz the band, Test on Band, and the silent alarm clock.'},
+    {t:840,id:'aware',n:'Chapter 5',h:'Safewave Aware',s:'Sound recognition on the phone and the watch: listen, choose sounds, a fire alarm on the wrist.'},
+    {t:1060,id:'messaging',n:'Chapter 6',h:'Messaging and support',s:'Dashboard Messages with channels and @mentions, and support threads with Safewave.'},
+    {t:1173,id:'health',n:'Chapter 7',h:'Keeping things healthy',s:'Band Health, history and firmware, Overview, Activity Logs, batteries, your profile.'},
+    {t:1319,id:'wrap-up',n:'Wrap-up',h:'Where to look when something is wrong',s:'Band Health, then Activity Logs, then Support.'}
+  ];
+  var v=document.getElementById('v'),toc=document.getElementById('toc'),now=document.getElementById('now'),links=[];
+  function mmss(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+  C.forEach(function(c){
+    var li=document.createElement('li'),a=document.createElement('a');a.href='#'+c.id;
+    a.innerHTML='<span class="ts"></span><span><span class="t"></span><span class="s"></span></span>';
+    a.querySelector('.ts').textContent=mmss(c.t);a.querySelector('.t').textContent=c.n+' · '+c.h;a.querySelector('.s').textContent=c.s;
+    a.addEventListener('click',function(e){e.preventDefault();try{history.replaceState(null,'','#'+c.id)}catch(x){}jump(c,true)});
+    li.appendChild(a);toc.appendChild(li);links.push(a);
+  });
+  // iPhone Safari ignores a seek before the video has loaded its metadata: start playback inside the tap, then seek once it can.
+  function jump(c,play){
+    if(play){var p=v.play();if(p&&p.catch)p.catch(function(){})}
+    if(v.readyState>=1){v.currentTime=c.t}
+    else{v.addEventListener('loadedmetadata',function(){v.currentTime=c.t},{once:true});if(!play){v.preload='metadata';v.load()}}
+    if(window.matchMedia('(max-width:900px)').matches)v.scrollIntoView({behavior:'smooth',block:'start'});
+    mark(c);
+  }
+  function mark(c){var k=C.indexOf(c);links.forEach(function(a,i){a.setAttribute('aria-current',String(i===k))});now.innerHTML='Now: <b></b>';now.querySelector('b').textContent=c.n+' · '+c.h}
+  function at(t){var r=C[0];C.forEach(function(c){if(t>=c.t-0.5)r=c});return r}
+  var last=null;v.addEventListener('timeupdate',function(){if(v.paused&&v.currentTime<0.5)return;var c=at(v.currentTime);if(c!==last){last=c;mark(c)}});
+  var h=(location.hash||'').slice(1),start=C.filter(function(c){return c.id===h})[0];
+  if(start)jump(start,false);else mark(C[0]);
 })();
 </script>
 </body>
