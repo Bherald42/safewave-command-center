@@ -20,7 +20,7 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;
   // Static pages outside the app (the training video) go straight to the network:
   // not cached as the app shell, and video range requests stay native.
-  if (url.pathname.startsWith('/explainer/')) return;
+  if (url.pathname.startsWith('/explainer/') || url.pathname.startsWith('/training/')) return;
   if (req.mode === 'navigate') {
     // cache:'no-store' bypasses the HTTP cache entirely — during the OTA-flasher
     // debugging, stale builds kept being served through cache layers even after
