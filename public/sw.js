@@ -18,9 +18,9 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   // Only handle same-origin; let Firebase/CDN/Shopify requests pass straight through.
   if (url.origin !== self.location.origin) return;
-  // Static pages outside the app (the training video) go straight to the network:
+  // Static pages outside the app (the training video, the dashboard demo) go straight to the network:
   // not cached as the app shell, and video range requests stay native.
-  if (url.pathname.startsWith('/explainer/') || url.pathname.startsWith('/training/')) return;
+  if (url.pathname.startsWith('/explainer/') || url.pathname.startsWith('/training/') || url.pathname.startsWith('/dashboard-demo/')) return;
   if (req.mode === 'navigate') {
     // cache:'no-store' bypasses the HTTP cache entirely — during the OTA-flasher
     // debugging, stale builds kept being served through cache layers even after
