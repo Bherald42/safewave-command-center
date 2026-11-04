@@ -29,6 +29,14 @@ service cloud.firestore {
         || request.auth.token.email == 'trevon@safewavetech.com');
     }
 
+    // Who watched the training video (/training/), how long, which chapters.
+    // Written only by the videoView Cloud Function; read by the super admin
+    // and oversight on the Users screen.
+    match /video_views/{id} {
+      allow read: if isSuper() || isOversightEmail();
+      allow write: if false;
+    }
+
     match /users/{uid} {
       // Any signed-in teammate can read the roster (needed for the manage-team screen).
       allow read: if signedIn();

@@ -1130,3 +1130,93 @@ exports.teamSignIns = onCall({ region: REGION }, async (request) => {
   } while (page.pageToken);
   return { users: out };
 });
+
+/* ------------------------------------------------------------------ *
+ * VIDEO VIEWS — who watched the training video, for how long, and which
+ * chapters. The /training/ page is public (no sign-in), so it reports
+ * here instead of writing Firestore itself:
+ *  - a teammate signed in to Command Center in the same browser sends
+ *    their ID token, and the view is tied to their account;
+ *  - anyone else is a guest, identified only by the name they typed.
+ * Each viewing session is one video_views/{id} doc. Counters only move
+ * forward and watched time is capped by real elapsed time, so a replayed
+ * or forged beacon cannot inflate a view. Read by super admin + oversight
+ * (Users screen); written only here.
+ * ------------------------------------------------------------------ */
+const VIDEO_CHAPTERS = {
+  training: ["overview", "setup", "people", "alerts", "phone", "aware", "messaging", "health", "wrap-up"],
+};
+const VIEW_ORIGINS = ["https://safewave-command-center.web.app", "https://safewave-command-center.firebaseapp.com"];
+function viewDevice(ua) {
+  ua = String(ua || "");
+  const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac OS X/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /CrOS/.test(ua) ? "Chromebook" : /Linux/.test(ua) ? "Linux" : "Other";
+  const br = /Edg\//.test(ua) ? "Edge" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /FxiOS|Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "";
+  return br ? os + " · " + br : os;
+}
+exports.videoView = onRequest({ region: REGION }, async (req, res) => {
+  const origin = req.get("Origin") || "";
+  if (VIEW_ORIGINS.includes(origin)) { res.set("Access-Control-Allow-Origin", origin); res.set("Vary", "Origin"); }
+  if (req.method === "OPTIONS") { res.set("Access-Control-Allow-Methods", "POST"); res.set("Access-Control-Allow-Headers", "Content-Type"); res.status(204).send(""); return; }
+  if (req.method !== "POST") { res.status(405).send("POST only"); return; }
+  if (origin && !VIEW_ORIGINS.includes(origin)) { res.status(403).send("origin"); return; }
+  let b = req.body;
+  try { if (typeof b === "string") b = JSON.parse(b); else if (Buffer.isBuffer(b)) b = JSON.parse(b.toString("utf8")); } catch (e) { res.status(400).send("json"); return; }
+  b = b || {};
+  const id = String(b.id || "");
+  const video = String(b.video || "");
+  const chapterIds = VIDEO_CHAPTERS[video];
+  if (!/^[a-z0-9]{16,40}$/.test(id) || !chapterIds) { res.status(400).send("bad view"); return; }
+  const duration = Math.max(0, Math.min(Number(b.duration) || 0, 4 * 3600));
+  const cap = (duration || 7200) * 3; // nobody watches one session more than three times over
+  const watched = Math.max(0, Math.min(Number(b.watched) || 0, cap));
+  const position = Math.max(0, Math.min(Number(b.position) || 0, duration || cap));
+  const chapters = {};
+  if (b.chapters && typeof b.chapters === "object") {
+    chapterIds.forEach((c) => { const v = Number(b.chapters[c]); if (v > 0) chapters[c] = Math.min(v, cap); });
+  }
+
+  let uid = null, email = "", name = "";
+  if (b.token) {
+    try {
+      const t = await admin.auth().verifyIdToken(String(b.token));
+      uid = t.uid; email = String(t.email || "");
+      const u = await db.collection("users").doc(uid).get();
+      name = (u.exists && (u.data().name || "")) || t.name || email.split("@")[0] || "";
+    } catch (e) { uid = null; }
+  }
+  if (!uid) name = String(b.guest || "").replace(/\s+/g, " ").trim().slice(0, 60);
+
+  const ref = db.collection("video_views").doc(id);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const now = Date.now();
+      const old = snap.exists ? snap.data() : null;
+      if (old && old.uid && uid && old.uid !== uid) throw new Error("owner");
+      if (old && old.uid && !uid) { uid = old.uid; email = old.email || ""; name = old.name || ""; } // a token that lapsed mid-view keeps the view's owner
+      const started = old && old.startedAt && old.startedAt.toMillis ? old.startedAt.toMillis() : now;
+      const elapsed = Math.max(0, (now - started) / 1000);
+      const allow = elapsed * 2.2 + 30; // playback at up to 2x, plus a little slack
+      const merged = Object.assign({}, (old && old.chapters) || {});
+      Object.keys(chapters).forEach((c) => { merged[c] = Math.max(merged[c] || 0, Math.min(chapters[c], allow)); });
+      const doc = {
+        video, uid: uid || null, email: uid ? email : "", name: name || (old && old.name) || "",
+        guest: !uid,
+        watchedSeconds: Math.max((old && old.watchedSeconds) || 0, Math.min(watched, allow)),
+        furthestSeconds: Math.max((old && old.furthestSeconds) || 0, position),
+        durationSeconds: duration || (old && old.durationSeconds) || 0,
+        chapters: merged,
+        completed: !!((old && old.completed) || b.ended === true || (duration && position >= duration - 20)),
+        device: viewDevice(req.get("User-Agent")),
+        lastAt: admin.firestore.FieldValue.serverTimestamp(),
+        beats: admin.firestore.FieldValue.increment(1),
+      };
+      if (!old) doc.startedAt = admin.firestore.FieldValue.serverTimestamp();
+      if (old && (old.beats || 0) > 2000) throw new Error("too many");
+      tx.set(ref, doc, { merge: true });
+    });
+  } catch (e) {
+    res.status(e && e.message === "owner" ? 403 : 429).send("rejected"); return;
+  }
+  res.status(204).send("");
+});

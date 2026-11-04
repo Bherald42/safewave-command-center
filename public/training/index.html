@@ -32,6 +32,7 @@ video{width:100%;aspect-ratio:16/9;background:#00151E;border-radius:12px;display
 .toc .s{display:block;font-size:13px;color:var(--muted);line-height:1.4;margin-top:2px}
 .toc a:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
 .note{font-size:14px;margin-top:16px}
+.who{margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px;color:var(--muted)}.who input{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0;flex:1 1 180px;max-width:280px}.who input:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
 a{color:var(--blue)}
 </style>
 </head>
@@ -46,14 +47,18 @@ a{color:var(--blue)}
         <source src="safewave-training.mp4?v=2" type="video/mp4">
       </video>
       <div class="now" id="now"></div>
+      <div class="who" id="who" hidden><label for="whoName">Who's watching?</label><input id="whoName" type="text" maxlength="60" autocomplete="name" placeholder="Your name (optional)"><span id="whoMe"></span></div>
     </div>
     <nav class="toc" aria-label="Contents">
       <h2>Contents</h2>
       <ol id="toc"></ol>
     </nav>
   </div>
-  <p class="note">No sound? Turn the volume up, and on an iPhone flip the ring/silent switch off. To send someone straight to one chapter, add its name to the link, for example <a href="#aware">/training/#aware</a>. To save or share the whole video, <a href="safewave-training.mp4?v=2" download="safewave-training.mp4">download the MP4</a> (48&nbsp;MB).</p>
+  <p class="note">No sound? Turn the volume up, and on an iPhone flip the ring/silent switch off. To send someone straight to one chapter, add its name to the link, for example <a href="#aware">/training/#aware</a>. Your viewing (how long, which chapters) is recorded for the Safewave team. To save or share the whole video, <a href="safewave-training.mp4?v=2" download="safewave-training.mp4">download the MP4</a> (48&nbsp;MB).</p>
 </div>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="/__/firebase/init.js?useEmulator=false" onerror="window.__noFirebase=true"></script>
 <script>
 (function(){
   var C=[
@@ -90,6 +95,42 @@ a{color:var(--blue)}
   var h=(location.hash||'').slice(1),start=C.filter(function(c){return c.id===h})[0];
   if(start)jump(start,false);else mark(C[0]);
   window.addEventListener('hashchange',function(){var id=(location.hash||'').slice(1),c=C.filter(function(x){return x.id===id})[0];if(c)jump(c,false)});
+
+  /* ---- Viewing report: who watched, how long, which chapters (shown on the Users screen in Command Center).
+     Teammates signed in to Command Center in this browser are recognized; anyone else may type a name. ---- */
+  var LS=function(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}};
+  var viewId=(function(){var a=new Uint8Array(12);(window.crypto||{getRandomValues:function(x){for(var i=0;i<x.length;i++)x[i]=Math.random()*256|0;return x}}).getRandomValues(a);return Array.prototype.map.call(a,function(x){return ('0'+x.toString(36)).slice(-2)}).join('')+Date.now().toString(36)})();
+  var watched=0,per={},lastT=null,ended=false,dirty=false,user=null,endpoint=null,who=document.getElementById('who'),whoName=document.getElementById('whoName'),whoMe=document.getElementById('whoMe');
+  whoName.value=LS('sw_training_name')||'';
+  whoName.addEventListener('change',function(){LS('sw_training_name',whoName.value.trim());dirty=true;send(false)});
+  try{
+    var app=firebase.app();endpoint='https://us-central1-'+app.options.projectId+'.cloudfunctions.net/videoView';
+    firebase.auth().onAuthStateChanged(function(u){user=u||null;who.hidden=false;
+      if(user){whoName.hidden=true;who.querySelector('label').textContent='Watching as';whoMe.textContent=user.displayName||user.email||'you';}
+      else{whoName.hidden=false;who.querySelector('label').textContent="Who's watching?";whoMe.textContent=''}});
+  }catch(e){endpoint=null}
+  v.addEventListener('timeupdate',function(){var t=v.currentTime;
+    if(lastT!==null&&!v.paused&&!v.seeking){var d=t-lastT;if(d>0&&d<1.5){watched+=d;var id=at(lastT).id;per[id]=(per[id]||0)+d;dirty=true}}
+    lastT=t});
+  v.addEventListener('seeking',function(){lastT=null});
+  var began=false;v.addEventListener('play',function(){if(began)return;began=true;dirty=true;send(false,true)});
+  v.addEventListener('pause',function(){send(false)});
+  v.addEventListener('ended',function(){ended=true;dirty=true;send(false)});
+  setInterval(function(){if(!v.paused)send(false)},20000);
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')send(true)});
+  window.addEventListener('pagehide',function(){send(true)});
+  function payload(token){var ch={};Object.keys(per).forEach(function(k){ch[k]=Math.round(per[k])});
+    return JSON.stringify({id:viewId,video:'training',watched:Math.round(watched),position:Math.round(v.currentTime||0),duration:Math.round(v.duration||0),chapters:ch,ended:ended,guest:user?'':(whoName.value||'').trim(),token:token||''})}
+  function post(body,leaving){var blob=new Blob([body],{type:'text/plain'});
+    if(leaving&&navigator.sendBeacon&&navigator.sendBeacon(endpoint,blob))return;
+    try{fetch(endpoint,{method:'POST',body:blob,keepalive:true,mode:'cors'}).catch(function(){})}catch(e){}}
+  var tokenCache=null,tokenAt=0;
+  function send(leaving,start){
+    if(!endpoint||!dirty||(watched<3&&!start))return;dirty=false;
+    if(!user){post(payload(''),leaving);return}
+    if(leaving&&tokenCache&&Date.now()-tokenAt<50*60e3){post(payload(tokenCache),true);return}
+    user.getIdToken().then(function(t){tokenCache=t;tokenAt=Date.now();post(payload(t),leaving)}).catch(function(){post(payload(''),leaving)});
+  }
 })();
 </script>
 </body>
