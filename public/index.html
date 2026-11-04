@@ -144,6 +144,8 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 @media(max-width:560px){.qa-ph span{display:none}}
 .qa-sev{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px}.qa-sev div{background:var(--surface-2);border-radius:8px;padding:8px 10px;font-size:11.5px}
 .qa-sev b{display:block;font-size:12px;margin-bottom:2px}.qa-sev span{color:var(--muted)}
+.vv-strip{display:flex;gap:2px;flex:1;min-width:140px;height:10px}.vv-strip span{background:var(--surface-2);border-radius:3px;overflow:hidden;position:relative}.vv-strip i,.vv-bar i{display:block;height:100%;background:var(--wave);border-radius:3px}
+.vv-ch{display:grid;grid-template-columns:minmax(0,160px) minmax(60px,1fr) auto;gap:6px 10px;align-items:center}.vv-bar{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden}
 .qa-tbl{border-collapse:collapse;width:100%;font-size:12px}.qa-tbl th{text-align:left;font-size:10.5px;color:var(--faint);font-weight:600;padding:4px 6px;white-space:nowrap}.qa-tbl td{padding:4px 6px;border-top:1px solid var(--line);vertical-align:top}
 .qs-grp{font-family:var(--font-m);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:14px 0 4px;border-top:1px solid var(--line)}
 .qs-nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:6px;margin:8px 0 6px}
@@ -5659,7 +5661,7 @@ function renderUsers(){
   body.innerHTML='<div class="d">Loading…</div>';
   firebase.firestore().collection('users').get().then(qs=>{
     USERS_ADMIN=qs.docs.map(d=>Object.assign({uid:d.id},d.data()));
-    renderUsersList();loadSignIns();
+    renderUsersList();loadSignIns();loadVideoViews();
   }).catch(e=>{body.innerHTML=fsSetupNote((e&&e.code)||'permission-denied')});
 }
 function renderUsersList(){
@@ -5668,7 +5670,7 @@ function renderUsersList(){
   const q=((document.getElementById('users-q')||{}).value||'').trim().toLowerCase();
   let list=USERS_ADMIN.slice().sort((a,b)=>((a.name||a.email||'')+'').localeCompare((b.name||b.email||'')));
   if(q)list=list.filter(u=>[u.name,u.email].some(v=>(v||'').toLowerCase().includes(q)));
-  body.innerHTML=signInTable(list)+(list.length?list.map(userAdminCard).join(''):'<div class="empty"><div class="d">No teammate matches.</div></div>');
+  body.innerHTML=signInTable(list)+videoViewsCard(list)+(list.length?list.map(userAdminCard).join(''):'<div class="empty"><div class="d">No teammate matches.</div></div>');
 }
 let SIGNINS=null,signInErr='',signInOpen={};
 function loadSignIns(){
@@ -5720,7 +5722,69 @@ function userAdminCard(u){
     h+='<div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><div class="d" style="font-weight:600;color:var(--text)">Financials access</div><span class="pill '+(fineOK?'good':'dim')+'">'+(fineOK?'On':'Off')+'</span></div>';
   }
   h+='<div class="note" style="margin:12px 0 0"><b>Sees:</b> '+esc(sees)+'</div>';
+  h+=userTrainingBlock(u);
   h+='</div>';
+  return h;
+}
+/* ---- Training video views: who opened /training/, how long, which chapters.
+   Written by the videoView function (the page is public, so guests are recorded by the name they type). ---- */
+const TRAINING_CH=[['overview','Overview',174],['setup','Getting set up',248],['people','People and bands',177],['alerts','Sending an alert',170],['phone','Alerts on the phone',71],['aware','Safewave Aware',220],['messaging','Messaging and support',113],['health','Keeping things healthy',146],['wrap-up','Wrap-up',31]];
+const TRAINING_LEN=TRAINING_CH.reduce((a,c)=>a+c[2],0);
+let VIDEO_VIEWS=null,videoViewsErr='',videoViewsOpen={};
+function loadVideoViews(){
+  if(VIDEO_VIEWS||!hasFirestore())return;
+  firebase.firestore().collection('video_views').orderBy('lastAt','desc').limit(1000).get()
+    .then(qs=>{VIDEO_VIEWS=qs.docs.map(d=>Object.assign({id:d.id},d.data())).filter(v=>v.video==='training');renderUsersList()})
+    .catch(e=>{videoViewsErr=(e&&e.code)||'unavailable';renderUsersList()});
+}
+function vvDur(sec){sec=Math.round(sec||0);const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return h?h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'):m+':'+String(s).padStart(2,'0')}
+/* Roll a viewer's sessions up: total time, per-chapter seconds, share of the video covered. */
+function vvSummary(views){
+  const ch={};let watched=0,last=null,done=false;const dev={};
+  views.forEach(v=>{watched+=v.watchedSeconds||0;done=done||!!v.completed;const d=siDate(v.lastAt);if(d&&(!last||d>last))last=d;if(v.device)dev[v.device]=1;
+    Object.keys(v.chapters||{}).forEach(k=>{ch[k]=(ch[k]||0)+(v.chapters[k]||0)})});
+  const covered=TRAINING_CH.reduce((a,c)=>a+Math.min(ch[c[0]]||0,c[2]),0);
+  return {views:views,sessions:views.length,watched:watched,ch:ch,pct:Math.round(covered/TRAINING_LEN*100),last:last,done:done,devices:Object.keys(dev)};
+}
+function vvChapterShare(sm,c){return Math.min(1,(sm.ch[c[0]]||0)/c[2])}
+/* A strip of nine segments, each as wide as its chapter and filled by how much of it was watched. */
+function vvStrip(sm){
+  return '<div class="vv-strip" role="img" aria-label="'+esc(TRAINING_CH.map(c=>c[1]+' '+Math.round(vvChapterShare(sm,c)*100)+'%').join(', '))+'">'
+    +TRAINING_CH.map(c=>{const p=vvChapterShare(sm,c);return '<span style="flex:'+c[2]+'" title="'+esc(c[1]+': '+Math.round(p*100)+'% · '+vvDur(sm.ch[c[0]]||0)+' watched')+'"><i style="width:'+Math.round(p*100)+'%"></i></span>'}).join('')+'</div>';
+}
+function vvSections(sm){
+  const seen=TRAINING_CH.filter(c=>vvChapterShare(sm,c)>=0.5).map(c=>c[1]);
+  return seen.length===TRAINING_CH.length?'All sections':seen.length?seen.join(' · '):'No section past halfway yet';
+}
+function vvViewers(){
+  const by={};
+  (VIDEO_VIEWS||[]).forEach(v=>{const nm=(v.name||'').trim();const k=v.uid?'u:'+v.uid:nm?'g:'+nm.toLowerCase():'s:'+v.id;
+    (by[k]=by[k]||{key:k,uid:v.uid||null,name:nm,email:v.email||'',guest:!v.uid,list:[]}).list.push(v)});
+  return Object.values(by).map(x=>Object.assign(x,{sm:vvSummary(x.list)})).sort((a,b)=>((b.sm.last||0)-(a.sm.last||0)));
+}
+function videoViewsCard(list){
+  let h='<div class="card"><div class="row" style="align-items:baseline;gap:10px;flex-wrap:wrap"><div class="grow"><div class="t" style="font-size:16px">Training video views</div><div class="d" style="margin:2px 0 8px">Who has opened <a href="/training/" target="_blank" rel="noopener" style="color:var(--wave)">the training video</a> ('+vvDur(TRAINING_LEN)+'), how long they watched and which sections. Teammates signed in to Command Center are recognized; anyone else shows by the name they typed, or as a guest. The bar is the video, one segment per section, filled by how much of it they watched.</div></div></div>';
+  if(!VIDEO_VIEWS){return h+'<div class="d qs-sub">'+(videoViewsErr?'Viewing history unavailable ('+esc(videoViewsErr)+').':'Loading viewing history…')+'</div></div>'}
+  const viewers=vvViewers();
+  if(!viewers.length)return h+'<div class="d">Nobody has watched it yet. Share <b>safewave-command-center.web.app/training/</b> to get started.</div></div>';
+  const team=viewers.filter(x=>!x.guest).length;
+  h+='<div class="d qs-sub" style="margin-bottom:6px">'+viewers.length+' viewer'+(viewers.length===1?'':'s')+' · '+team+' teammate'+(team===1?'':'s')+' of '+list.length+' · '+viewers.filter(x=>x.sm.done).length+' finished</div>';
+  h+='<div style="overflow-x:auto"><table class="qa-tbl" style="min-width:760px"><tr><th>Viewer</th><th>Last watched</th><th>Time watched</th><th style="min-width:220px">Covered</th><th>Sections watched past halfway</th><th>Sessions</th></tr>';
+  viewers.forEach(x=>{const sm=x.sm,open=!!videoViewsOpen[x.key];
+    h+='<tr><td><b>'+esc(x.name||'Guest')+'</b>'+(x.guest?' <span class="pill dim">'+(x.name?'guest':'no name given')+'</span>':'')+'<div class="d qs-sub">'+esc(x.email||sm.devices.join(', '))+'</div></td><td>'+siCell(sm.last)+'</td><td><b style="font-weight:700;font-size:15px">'+vvDur(sm.watched)+'</b>'+(sm.done?'<div class="d qs-sub">reached the end</div>':'')+'</td><td><div class="row" style="gap:8px;align-items:center;flex-wrap:nowrap"><b style="font-weight:600;min-width:36px">'+sm.pct+'%</b>'+vvStrip(sm)+'</div></td><td><div class="d" style="max-width:260px">'+esc(vvSections(sm))+'</div></td><td><button class="rg-link" style="padding:0" onclick="videoViewsOpen['+ocjson(x.key)+']=!videoViewsOpen['+ocjson(x.key)+'];renderUsersList()">'+sm.sessions+' · '+(open?'hide':'show')+'</button></td></tr>';
+    if(open)h+='<tr><td colspan="6"><div class="d" style="line-height:1.7">'+x.list.map(v=>esc(siWhen(siDate(v.startedAt)||siDate(v.lastAt)))+' · '+esc(vvDur(v.watchedSeconds))+' watched · reached '+esc(vvDur(v.furthestSeconds))+(v.completed?' · finished':'')+(v.device?' · '+esc(v.device):'')).join('<br>')+'</div></td></tr>';
+  });
+  return h+'</table></div></div>';
+}
+/* The same, for one teammate, on their card. */
+function userTrainingBlock(u){
+  let h='<div class="d" style="font-weight:600;color:var(--text);margin:12px 0 6px">Training video</div>';
+  if(!VIDEO_VIEWS)return h+'<div class="d qs-sub">'+(videoViewsErr?'Unavailable':'Loading…')+'</div>';
+  const mine=VIDEO_VIEWS.filter(v=>v.uid===u.uid);
+  if(!mine.length)return h+'<div class="d">Hasn’t watched it yet.</div>';
+  const sm=vvSummary(mine);
+  h+='<div class="d" style="margin-bottom:8px"><b style="color:var(--text)">'+vvDur(sm.watched)+'</b> watched · <b style="color:var(--text)">'+sm.pct+'%</b> of the video covered'+(sm.done?' · reached the end':'')+' · '+sm.sessions+' session'+(sm.sessions===1?'':'s')+' · last '+esc(siWhen(sm.last))+' ('+esc(siAgo(sm.last))+')'+(sm.devices.length?' · '+esc(sm.devices.join(', ')):'')+'</div>';
+  h+='<div class="vv-ch">'+TRAINING_CH.map(c=>{const p=vvChapterShare(sm,c);return '<div class="d">'+esc(c[1])+'</div><div class="vv-bar"><i style="width:'+Math.round(p*100)+'%"></i></div><div class="d qs-sub" style="text-align:right">'+(sm.ch[c[0]]?vvDur(sm.ch[c[0]])+' / '+vvDur(c[2]):'—')+'</div>'}).join('')+'</div>';
   return h;
 }
 function adminSetRole(uid,role){
