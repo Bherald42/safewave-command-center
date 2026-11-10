@@ -2276,19 +2276,44 @@ function qcNotifyLeads(title,body){if(typeof notifyAll==='function')notifyAll(ti
 function setQcTab(t){qcTab=t;qcRelView=null;renderQC();window.scrollTo(0,0)}
 function renderQC(){
   // Two tabs: the release (four gates → report) and an open simulator with the firmware flasher.
-  if(qcTab!=='sim'&&qcTab!=='learn')qcTab='release';
+  if(qcTab!=='sim'&&qcTab!=='learn'&&qcTab!=='watch')qcTab='release';
   const body=document.getElementById('qc-body');if(!body)return;
   // A teammate's check-off arriving while you type must not wipe what you're typing.
   const ae=document.activeElement;
   if(qcTab==='release'&&ae&&body.contains(ae)&&(ae.tagName==='TEXTAREA'||(ae.tagName==='INPUT'&&ae.type!=='date'))){
     if(!ae.__qcDefer){ae.__qcDefer=true;ae.addEventListener('blur',function(){setTimeout(renderQC,0)},{once:true})}return}
   const tb=document.getElementById('qc-tabs');
-  if(tb)tb.innerHTML=[['release','Release'],['sim','Simulator & flashing'],['learn','How it works']].map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
+  if(tb)tb.innerHTML=[['release','Release'],['sim','Simulator & flashing'],['watch','Watch'],['learn','How it works']].map(t=>'<button class="chip'+(qcTab===t[0]?' on':'')+'" onclick="setQcTab('+ocjson(t[0])+')">'+t[1]+'</button>').join('');
   const sub=document.getElementById('qc-sub');
-  if(sub)sub.textContent=qcTab==='learn'?'Six minutes on how a release gets tested, and what testers need to do.':qcTab==='release'?'One release, four gates. Check off what works, flag what doesn’t, and the report writes itself.':'Try the app on any phone and OS, run soak tests, and flash firmware to a band.';
+  if(sub)sub.textContent=qcTab==='watch'?'The Safewave Watch app on a Galaxy Watch6, in your browser — and how to put it on a real watch.':qcTab==='learn'?'Six minutes on how a release gets tested, and what testers need to do.':qcTab==='release'?'One release, four gates. Check off what works, flag what doesn’t, and the report writes itself.':'Try the app on any phone and OS, run soak tests, and flash firmware to a band.';
   if(qcTab==='release')body.innerHTML=relView();
   else if(qcTab==='learn')body.innerHTML=qcLearnView();
+  else if(qcTab==='watch')body.innerHTML=qcWatchView();
   else{body.innerHTML=qcSimView()+'<h2 class="rg-h2">Flash firmware to a band</h2>'+qcFlashView();simAfterRender();}
+}
+/* Release QC · Watch — the Safewave Watch app simulated in the browser (/watch-sim/, the
+   real watch screens with working keys, band button and floor conditions), plus the honest
+   routes onto a real Galaxy Watch6. A web page cannot install an app on the watch: it has no
+   USB data port and browsers cannot open its Wi-Fi debugging connection. */
+const WATCH_APK_FOLDER='https://drive.google.com/drive/folders/1LZw7rROFtJ4ApmmbPjHHmIMBmWtJRYqi';
+function qcWatchView(){
+  return '<div class="card" style="padding:0;overflow:hidden">'
+      +'<div class="row" style="justify-content:space-between;align-items:center;padding:12px 16px;gap:10px;flex-wrap:wrap"><div><div class="t">Watch simulator</div><div class="d">Safewave Watch 0.1 on a Galaxy Watch6. Press the watch keys and the band button, flip the floor conditions (band in reach, site Wi-Fi, kiosk lock), play a fire alarm for Aware, or run the guided walkthrough.</div></div>'
+      +'<a class="btn ghost" style="width:auto;padding:8px 14px;font-size:13px;text-decoration:none" href="/watch-sim/" target="_blank" rel="noopener">Open full screen</a></div>'
+      +'<iframe src="/watch-sim/" title="Safewave Watch simulator" loading="lazy" style="display:block;width:100%;height:1180px;border:0;border-top:1px solid var(--line);background:#06141B"></iframe>'
+    +'</div>'
+    +'<h2 class="rg-h2">Put the app on a real watch</h2>'
+    +'<div class="card"><div class="d" style="margin-bottom:10px">A browser can’t install apps on the watch: the Galaxy Watch6 has no USB data port, and web pages can’t open its Wi-Fi debugging connection. Two routes that need nothing installed on this computer:</div>'
+      +'<div class="t" style="font-size:14px">1 · From an Android phone on the same Wi-Fi</div>'
+      +'<ol class="d" style="margin:6px 0 12px;padding-left:18px;line-height:1.6">'
+        +'<li>On the phone, install <b>Wear Installer 2</b> from the Play Store, and download <b>Safewave-Watch</b> from the <a href="'+WATCH_APK_FOLDER+'" target="_blank" rel="noopener" style="color:var(--wave)">Android Test Builds</a> folder.</li>'
+        +'<li>On the watch: Settings → About watch → Software information → tap <b>Software version</b> 5 times. Then Developer options → <b>ADB debugging</b> and <b>Wireless debugging</b> on.</li>'
+        +'<li>Wireless debugging → <b>Pair new device</b>; enter its IP, port and code in the phone app, connect, pick the APK and install.</li>'
+        +'<li>Open Safewave on the watch; tap <b>@</b> on the keypad to sign in with email and password, then pick the band.</li>'
+      +'</ol>'
+      +'<div class="t" style="font-size:14px">2 · Google Play internal testing <span class="pill dim">needs a Play developer account</span></div>'
+      +'<div class="d" style="margin-top:6px">Testers install Safewave from the Play Store on the watch itself, and updates arrive automatically. Once the Play account exists, every watch build is uploaded for them.</div>'
+    +'</div>';
 }
 /* ================= RELEASE — one release, four gates =================
    Everything that ships together — band firmware, and Safewave and Safewave
