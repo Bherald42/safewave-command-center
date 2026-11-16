@@ -228,6 +228,24 @@ service cloud.firestore {
     // (super admin / admin / manager), same as the fundraise config. Members
     // can't read or write it. The UI hides the tab too, but this is the real
     // enforcement. Never store these in the repo — only here.
+    // Guides — shared how-to docs every signed-in teammate reads, edits and
+    // comments on. Each save copies the replaced text into versions/
+    // (append-only), so any edit can be undone from History.
+    match /guides/{id} {
+      allow read, create, update: if signedIn();
+      allow delete: if isSuper();
+      match /versions/{v} {
+        allow read, create: if signedIn();
+        allow update, delete: if false;
+      }
+      match /comments/{c} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.byUid == request.auth.uid;
+        allow update: if signedIn();
+        allow delete: if isSuper() || (signedIn() && resource.data.byUid == request.auth.uid);
+      }
+    }
+
     match /vault/{id} {
       allow read, write: if canRaise();
     }

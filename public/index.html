@@ -128,6 +128,42 @@ h1{font-family:var(--font-d);font-size:25px;font-weight:700;letter-spacing:-.02e
 .empty{border:1px dashed var(--line);border-radius:var(--r);padding:22px 18px;text-align:center;background:var(--hair)}
 .empty .ico{font-size:24px}
 .empty .t{margin-top:8px}
+/* Guides — shared, team-edited how-to docs */
+.guide-link{color:var(--wave);cursor:pointer;text-decoration:none;font-weight:600}
+.guide-actions{gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.guide-actions .btn{width:auto;padding:8px 14px;font-size:13px}
+.guide-sm{width:auto!important;padding:5px 11px!important;font-size:12px!important}
+.guide-md{font-size:14px;line-height:1.6;color:var(--text);overflow-wrap:anywhere}
+.guide-md .guide-h2{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:24px 0 8px;padding-top:18px;border-top:1px solid var(--line)}
+.guide-md .guide-h2:first-child{margin-top:0;padding-top:0;border-top:0}
+.guide-md h2{font-family:var(--font-d);font-size:17px;font-weight:600;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.guide-md h3{font-family:var(--font-d);font-size:14.5px;font-weight:600;margin:16px 0 6px}
+.guide-md p{margin:0 0 10px}
+.guide-md ul,.guide-md ol{margin:0 0 12px;padding-left:22px}
+.guide-md li{margin:4px 0}
+.guide-md ul.tasks{list-style:none;padding-left:0}
+.guide-md a{color:var(--wave)}
+.guide-md code{font-family:var(--font-m);font-size:12.5px;background:var(--surface-2);padding:1px 5px;border-radius:5px}
+.guide-md pre{font-family:var(--font-m);font-size:12.5px;background:var(--surface-2);padding:10px 12px;border-radius:9px;overflow:auto;white-space:pre-wrap;margin:0 0 12px}
+.guide-md blockquote{border-left:3px solid var(--wave);margin:0 0 12px;padding:4px 12px;color:var(--muted)}
+.guide-tbl{overflow-x:auto;margin:0 0 14px;border:1px solid var(--line);border-radius:10px}
+.guide-tbl table{border-collapse:collapse;width:100%;font-size:13px;line-height:1.45}
+.guide-tbl th,.guide-tbl td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line);min-width:110px}
+.guide-tbl th{background:var(--surface-2);font-weight:600;font-size:12px;color:var(--muted)}
+.guide-tbl tr:last-child td{border-bottom:0}
+.guide-task{display:flex;gap:9px;align-items:flex-start;cursor:pointer}
+.guide-task input{margin-top:4px;accent-color:var(--wave);width:16px;height:16px;flex-shrink:0}
+.guide-task.done span{color:var(--faint);text-decoration:line-through}
+.guide-cbtn{flex-shrink:0;background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font:600 12px var(--font-b);padding:5px 11px;border-radius:99px;cursor:pointer}
+.guide-cbtn:hover{border-color:var(--wave);color:var(--wave)}
+.guide-cbtn.has{background:var(--wave-dim);border-color:var(--wave);color:var(--wave)}
+.guide-ta{min-height:440px;font-family:var(--font-m)!important;font-size:13px;line-height:1.55;resize:vertical}
+.guide-help{margin-top:8px;color:var(--faint);font-size:11.5px;line-height:1.6}
+.guide-warn{margin:10px 0 0;border-color:var(--amber);background:var(--amber-dim);color:var(--text)}
+.guide-cmt.done{opacity:.72}
+.guide-cmt-text{margin-top:8px;font-size:13.5px;line-height:1.55;white-space:pre-wrap}
+.guide-av{width:24px;height:24px;border-radius:50%;background:var(--wave-dim);color:var(--wave);font:700 10px var(--font-b);display:inline-flex;align-items:center;justify-content:center}
+.guide-reply{margin:8px 0 0 12px;padding:6px 0 0 10px;border-left:2px solid var(--line);font-size:13px}
 .empty .d{margin:6px auto 0;max-width:360px}
 .empty .btn{max-width:280px;margin:14px auto 0}
 .searchbar{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px}
@@ -947,6 +983,14 @@ input[type=date]{color-scheme:dark}
       </div>
     </main>
 
+    <!-- GUIDES · shared how-to docs the whole team edits and comments on -->
+    <main class="screen" id="s-guides">
+      <p class="eyebrow" id="guides-eyebrow">Team</p>
+      <h1 id="guides-h">Guides</h1>
+      <p class="sub" id="guides-sub">How-tos the whole team reads, edits and comments on.</p>
+      <div id="guides-body"></div>
+    </main>
+
     <main class="screen" id="s-feedback">
       <p class="eyebrow">Super admin</p>
       <h1>Team feedback</h1>
@@ -1639,6 +1683,7 @@ const NAV_ITEMS = [
   {id:'s-comply',  label:'Comply',   roles:['admin'],                    svg:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'},
   {id:'s-vault',   label:'Vault',    roles:['admin','manager'],          svg:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>'},
   {id:'s-know',    label:'Knowledge',roles:['admin','manager','member'], svg:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/>'},
+  {id:'s-guides',  label:'Guides',   roles:['admin','manager','member'], svg:'<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 21.5A2.5 2.5 0 0 1 6.5 19H20"/><path d="M9 7h7M9 11h5"/>'},
 ];
 
 /* ================= STOCK · INVENTORY & FULFILLMENT ================= */
@@ -5366,6 +5411,482 @@ function viewShot(src){shotViewList=[src];shotViewIdx=0;showShotView();}
 function shotViewStep(d,ev){if(ev)ev.stopPropagation();if(!shotViewList.length)return;shotViewIdx=(shotViewIdx+d+shotViewList.length)%shotViewList.length;showShotView();}
 function showShotView(){const v=document.getElementById('shot-view');if(!v||!shotViewList.length)return;document.getElementById('shot-view-img').src=shotViewList[shotViewIdx];const nav=document.getElementById('shot-view-nav');if(nav)nav.style.display=shotViewList.length>1?'flex':'none';const ct=document.getElementById('shot-view-count');if(ct)ct.textContent=(shotViewIdx+1)+' / '+shotViewList.length;v.style.display='flex'}
 
+/* ================= GUIDES · shared how-to docs =================
+   Team-written guides (setup steps, playbooks, how-tos) kept in Firestore so
+   everyone reads the one current copy and nobody re-shares files. Anyone
+   signed in can edit. Every save copies the text it replaces into
+   guides/{id}/versions (append-only), so History can always bring it back.
+   Feedback is threaded per section under guides/{id}/comments.
+   GUIDE_SEEDS creates the starter guides once; after that Firestore owns them. */
+const GUIDE_SEEDS=[{id:'dashboard-admin-setup',title:'Safewave Dashboard: Admin Setup Guide',body:[
+'How to set up a customer site on the Safewave dashboard, from the first admin to the first alert. Checked against the dashboard and app code on Nov 16, 2026.',
+'',
+'## Before you start',
+'',
+'The Safewave dashboard is the website where a site\'s admins add workers, hand out bands, pair watches and send alerts. Workers never use it; they use the Safewave phone app or the Safewave Watch.',
+'',
+'**Where to sign in.** The live dashboard runs on Firebase project `safewave-371716`. Its address will be **https://safewave-371716.web.app/login**, but it is not live yet (see Open items at the end). Until then, show people the demo at [safewave-command-center.web.app/dashboard-demo](https://safewave-command-center.web.app/dashboard-demo/). It has the same screens with sample data and needs no sign-in.',
+'',
+'The dashboard uses the same accounts as the phone app. One email and password works in both places.',
+'',
+'**Roles.** Every account has one of three roles. The role decides what the account sees.',
+'',
+'| Role | Who it\'s for | Dashboard | Phone app and watch |',
+'| --- | --- | --- | --- |',
+'| Super Admin | Safewave staff (Brad, Jared, Trevon) | Everything, across every organization. Also sees Organizations, Apps and Devices. | Phone app yes. Cannot be signed in on a watch. |',
+'| Org Admin | A site\'s supervisor or safety lead | Their own organization only: Overview, Users, Bands, Activity Logs, Messages, Support, Profile | Yes, and can register new bands from the app |',
+'| User | A worker who wears the band | No access. They see "You do not have dashboard access. Please use the mobile app." | Yes |',
+'',
+'**What you need on hand:** a computer with Chrome, Edge or Safari; each worker\'s email address; the bands, charged; and the phones or Galaxy Watch6 units with the Safewave app installed.',
+'',
+'## Step 1: Get the first admin in',
+'',
+'A Super Admin has to exist before anyone else can be added, because only a Super Admin can create organizations and sign-up codes. Nobody can make themselves an admin from the website.',
+'',
+'**If you already have a Safewave app account with the Super Admin role,** skip to step 4 below.',
+'',
+'**Making the first Super Admin (one time only):**',
+'',
+'1. Create an account in the Safewave phone app, or ask a Safewave admin to create one for you.',
+'2. Open the [Firebase console](https://console.firebase.google.com/project/safewave-371716/firestore) for project `safewave-371716` and go to Firestore Database.',
+'3. Open `users`, find the document whose `email` is yours, and set its `role` field to `super_admin`.',
+'4. Go to the dashboard sign-in page and sign in with that email and password. You land on Overview, and the sidebar shows Organizations, Apps and Devices.',
+'',
+'**The site\'s own admin (Org Admin).** Don\'t create this account by hand. In Step 2 you generate an Org Admin sign-up code and send it to the site\'s lead. They create their own login with it.',
+'',
+'## Step 2: Set up the organization and sign-up codes',
+'',
+'Each customer site is one organization. Everyone at that site, their bands and their alerts belong to it, and its admins can\'t see any other organization. Only a Super Admin can do this step.',
+'',
+'**Create the organization**',
+'',
+'1. In the sidebar, click **Organizations**, then **New Organization**.',
+'2. Enter the site\'s name, for example "Amazon BNA5".',
+'3. Under Type, pick **Client** (an external customer). **Safewave** is only for our own internal team.',
+'4. Save. The dashboard shows the new **Organization ID**; copy it if you plan to create users by hand.',
+'',
+'**Generate sign-up codes**',
+'',
+'Open the organization, then go to the **Sign-up codes** tab and click **Generate code**.',
+'',
+'| Setting | What to choose |',
+'| --- | --- |',
+'| Role | **Org Admin** for the site\'s lead (gets dashboard access). **User** for workers (app access only). |',
+'| Max uses | **1** for an admin code. For a worker code, the headcount, or leave it empty for unlimited. |',
+'| Expires | A date about 2 weeks out, or leave it empty for no expiry. |',
+'',
+'Use the copy button next to the code and send it to the person by email or text. The table shows how many times each code has been used. **Deactivate** stops a code working at once, for example if it was shared too widely.',
+'',
+'The **Members** tab lists everyone in the organization. There, a Super Admin can change a person\'s role or use **Add Member** to create someone new or move an existing account in.',
+'',
+'## Step 3: Add users',
+'',
+'There are two ways to add people. For most sites, admins use a sign-up code and workers are created one by one.',
+'',
+'**Option A: Create them yourself (recommended for workers)**',
+'',
+'1. Click **Users** in the sidebar, then **Create User**.',
+'2. Enter their email and display name.',
+'3. Pick the role: **User** for a worker, **Org Admin** for a supervisor. A Super Admin also types the Organization ID and can pick **Super Admin**.',
+'4. Click Create. The worker gets an email from Safewave with a link to set their own password. No password is shared by you.',
+'5. Once they\'ve set it, they sign in to the phone app or the watch with that email and password.',
+'',
+'**Option B: Send a sign-up code (recommended for the site\'s admin)**',
+'',
+'1. Send them the code from Step 2 and the sign-up address, **https://safewave-371716.web.app/signup**.',
+'2. They enter the code first, then their name, email and password.',
+'3. The code puts them in the right organization with the right role. An Org Admin lands on Overview; a User is told to use the mobile app.',
+'',
+'Someone who already has an account but sees "Access Denied" can enter a code on that screen instead. A code cannot move an account that already belongs to another organization; a Super Admin moves it from the organization\'s Members tab.',
+'',
+'**Check your list.** The Users page shows everyone in your organization, with a green dot when their app is online. Use the search box and the Online / Offline filter to find people fast.',
+'',
+'## Step 4: Register bands, then check them out and in',
+'',
+'Bands are registered once, from the phone app, then handed out from the dashboard each shift.',
+'',
+'**Register each band (one time, from the phone app)**',
+'',
+'1. Sign in to the Safewave phone app as an Org Admin or Super Admin.',
+'2. On the Home screen, tap **Register New Band**. Hold the band next to the phone.',
+'3. Pick the band from the scan list and give it a unique name of 3 to 20 characters. A label you can write on the band works well, for example "BNA5-014".',
+'4. Choose the organization and save. The band now shows on the dashboard\'s **Bands** page as Unassigned.',
+'',
+'**Check a band out to a worker**',
+'',
+'1. Click **Bands** in the sidebar and find the band. The search box takes a band name or a person\'s name.',
+'2. Click **Assign** on that row, search for the worker by name or email, and confirm.',
+'3. The row now shows who has it, its battery, and when it last connected.',
+'',
+'**Check a band back in** at the end of a shift: click **Unassign** on its row. It goes back to Unassigned, ready for the next person.',
+'',
+'The cards across the top count Total, Assigned, Unassigned, Connected (seen in the last minute) and Low Battery (20% or less). Put Low Battery bands on the charger before handing them out.',
+'',
+'## Step 5: Set up workers\' phones and watches',
+'',
+'Each band connects to one device: either the worker\'s phone or a Galaxy Watch6. Never both at once.',
+'',
+'**Get the apps.** The current Android test builds are in the shared Drive folder [Android Test Builds]('+WATCH_APK_FOLDER+'). Use the files ending in `-fixed.apk`; the ones marked OLD crash on launch. The watch app goes on with a computer (adb) or Play internal testing; see Release QC → Watch.',
+'',
+'**On a phone**',
+'',
+'1. Open Safewave and sign in with the worker\'s email and the password they set in Step 3.',
+'2. Allow Bluetooth and notifications when asked.',
+'3. Hold the assigned band next to the phone and connect to it.',
+'',
+'**On a Galaxy Watch6 (pairing code, no typing a password)**',
+'',
+'1. Make sure the band is not connected to a phone.',
+'2. On the dashboard, go to **Users** and click **Watch** on the worker\'s row. A 6-digit code appears. It works once and lasts 10 minutes.',
+'3. On the watch, open Safewave and tap **Enter pairing code**, then type the 6 digits.',
+'4. Allow Bluetooth, hold the band next to the watch, and pick it from the list.',
+'5. Back in the dashboard window, the Watch status changes from "No watch yet" to the watch\'s details. Send a test alert (Step 6); the band should buzz.',
+'',
+'If you\'d rather use the email and password on the watch, tap **@** on the code keypad. A Super Admin account can\'t be signed in on a watch.',
+'',
+'## Step 6: Send an alert',
+'',
+'An alert buzzes the worker\'s band and shows on their watch or phone. The dashboard then shows whether they\'ve acknowledged it.',
+'',
+'1. Go to **Users** and click the bell on the worker\'s row.',
+'2. Type a short title ("Safety alert") and the message ("Please check in with your supervisor.").',
+'3. Leave **Life-safety alert** off for everyday messages. Those show in amber.',
+'4. Turn **Life-safety alert** on only for evacuation, fire or medical emergencies. It shows in red, and the band buzzes at full strength until the worker presses the button.',
+'5. Click Send. The window says "The band should vibrate. Awaiting acknowledgement."',
+'',
+'On the Users page, the worker\'s row shows **Awaiting** until they press the button, then **Acknowledged**. Treat a life-safety alert still on Awaiting as someone who needs a person sent to them.',
+'',
+'An Org Admin can only alert people in their own organization. A Super Admin can alert anyone.',
+'',
+'## Day to day',
+'',
+'Once a site is set up, admins mostly use these pages from the sidebar.',
+'',
+'| Page | What it\'s for |',
+'| --- | --- |',
+'| Overview | The start-of-shift check: Total Users, Users Online, Total Bands, Low Battery, and Recent Activity. |',
+'| Users | Find a person, see whether their app is online and when it was last seen, send an alert, pair a watch, add people. |',
+'| Bands | Check bands out and in, and catch low batteries before the shift starts. |',
+'| Activity Logs | A record of band connects and disconnects, app closes, low battery, logins and logouts, and unauthorized attempts. Filter by event or status, and mark events Reviewed once you\'ve looked at them. |',
+'| Messages | Team chat. Everyone in the organization is in the general channel; create a private channel (for example "night-shift") and only the people you pick can see it. |',
+'| Support | Send a message to Safewave and follow the conversation. Safewave staff see these under Contact and mark them Forwarded, Reviewed or Resolved. |',
+'| Profile | Your name, email, role, organization, and when your account was created and last online. |',
+'',
+'Super Admins also get **Organizations** (all sites and their codes), **Apps** and **Devices** (fleet-wide app and phone statistics).',
+'',
+'## Troubleshooting and open items',
+'',
+'| What you see | What to do |',
+'| --- | --- |',
+'| "You do not have dashboard access. Please use the mobile app." | The account\'s role is User. That\'s correct for workers. For an admin, a Super Admin changes the role on the organization\'s Members tab. |',
+'| "Access Denied" with an invite code box | The account isn\'t in an organization yet. Enter an Org Admin code from Step 2. |',
+'| "This invite code has reached its usage limit" / "has expired" / "has been deactivated" | Generate a new code in the organization\'s Sign-up codes tab. |',
+'| "This account already belongs to another organization" | A Super Admin moves the account from the new organization\'s Members tab with Add Member. |',
+'| "A user with this email already exists" when creating a user | They already have an app account. Use Add Member on the organization\'s Members tab to move them in instead. |',
+'| The worker never got the set-password email | Ask them to check spam, or to tap "Forgot Password?" on the app\'s sign-in screen with the same email. |',
+'| Watch code "has expired" or "has already been used" | Click Watch on their row again for a fresh code. Codes last 10 minutes and work once. |',
+'| The band doesn\'t buzz on a test alert | Check the Users row shows Online and the band shows Connected on Bands. Make sure the band isn\'t still connected to a phone. |',
+'',
+'**Open items before go-live**',
+'',
+'- [ ] Merge the dashboard\'s security-hardening and messaging work to `main`. The live site doesn\'t have them yet.',
+'- [ ] Add the `FIREBASE_SERVICE_ACCOUNT` secret to the dashboard repository so merging to `main` deploys the site.',
+'- [ ] Confirm the live address. https://safewave-371716.web.app is the expected one, but it may currently host a different site.',
+'- [ ] Delete the two Android builds marked OLD in the Drive folder.'
+].join('\n')}];
+
+let GUIDES={}, guidesUnsub=null, guidesLoaded=false, guidesSeeded=false, guideOpenId=null, guideMode='read',
+    guideEditRev=0, guideDirty=false, GUIDE_COMMENTS=[], guideCUnsub=null, guideCFor=null, guideCFilter='open',
+    guideVersions=[], guideVersionView=null, guideShowArchived=false, GUIDE_LOCAL_COMMENTS={};
+function guidesCol(){return firebase.firestore().collection('guides')}
+function guideTs(){return firebase.firestore.FieldValue.serverTimestamp()}
+function guideMs(t){if(!t)return 0;if(t.toMillis)return t.toMillis();const n=Date.parse(t);return isNaN(n)?0:n}
+function guideWhen(t){const ms=guideMs(t);if(!ms)return 'just now';const d=new Date(ms),now=Date.now();
+  if(now-ms<60e3)return 'just now';if(now-ms<3600e3)return Math.round((now-ms)/60e3)+' min ago';
+  return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}
+function guideMe(){return (CURRENT_USER&&(CURRENT_USER.name||(CURRENT_USER.email||'').split('@')[0]))||'Someone'}
+function guideSeedDoc(s){return {title:s.title,body:s.body,rev:1,openComments:0,createdBy:'Safewave',createdByUid:'',updatedByName:'Safewave',updatedByUid:''}}
+function subscribeGuides(){
+  if(!hasFirestore()){if(!guidesLoaded){GUIDE_SEEDS.forEach(s=>{GUIDES[s.id]=Object.assign({id:s.id},guideSeedDoc(s))});guidesLoaded=true}return}
+  if(guidesUnsub)return;
+  try{guidesUnsub=guidesCol().onSnapshot(qs=>{
+    GUIDES={};qs.forEach(d=>GUIDES[d.id]=Object.assign({id:d.id},d.data()));guidesLoaded=true;
+    if(!guidesSeeded){guidesSeeded=true;seedGuides()}
+    guidesRefresh();
+  },e=>{guidesLoaded=true;guidesRefresh()});}catch(e){}
+}
+function seedGuides(){
+  GUIDE_SEEDS.forEach(s=>{if(GUIDES[s.id])return;const ref=guidesCol().doc(s.id);
+    firebase.firestore().runTransaction(tx=>tx.get(ref).then(d=>{if(d.exists)return;
+      tx.set(ref,Object.assign(guideSeedDoc(s),{createdAt:guideTs(),updatedAt:guideTs()}))})).catch(()=>{})});
+}
+function guidesRefresh(){
+  const scr=document.getElementById('s-guides');if(!scr||!scr.classList.contains('on'))return;
+  if(guideMode==='edit'){guideCheckConflictBanner();return}
+  renderGuides();
+}
+/* ---------- markdown (a safe subset: escape first, then add tags) ---------- */
+function guideInline(s){
+  s=esc(s);const codes=[];
+  s=s.replace(/`([^`]+)`/g,(m,c)=>{codes.push(c);return '\u0000'+(codes.length-1)+'\u0000'});
+  s=s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(m,t,u)=>/^(https?:\/\/|\/|#)/i.test(u)?'<a href="'+u+'" target="_blank" rel="noopener">'+t+'</a>':t);
+  s=s.replace(/(^|[\s(*])(https?:\/\/[^\s<)*]*[^\s<)*.,;:!?])/g,'$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g,'$1<i>$2</i>');
+  return s.replace(/\u0000(\d+)\u0000/g,(m,i)=>'<code>'+codes[+i]+'</code>');
+}
+function guideCells(ln){ln=ln.trim().replace(/^\|/,'').replace(/\|$/,'');return ln.split('|').map(c=>c.trim())}
+function guideSections(body){const out=[];let fence=false;(body||'').split('\n').forEach(l=>{if(/^```/.test(l))fence=!fence;else if(!fence){const m=l.match(/^##\s+(.+)$/);if(m)out.push(m[1].trim())}});return out}
+function guideMd(src,opt){opt=opt||{};
+  const L=(src||'').replace(/\r/g,'').split('\n');let out='',i=0,task=0,sec=0;
+  const isBlock=l=>/^```/.test(l)||/^#{1,3}\s/.test(l)||/^\s*\|/.test(l)||/^\s*([-*]|\d+[.)])\s+/.test(l)||/^>\s?/.test(l);
+  while(i<L.length){const ln=L[i];let m;
+    if(!ln.trim()){i++;continue}
+    if(/^```/.test(ln)){const b=[];i++;while(i<L.length&&!/^```/.test(L[i]))b.push(L[i++]);i++;out+='<pre>'+esc(b.join('\n'))+'</pre>';continue}
+    if((m=ln.match(/^(#{1,3})\s+(.+)$/))){const lv=m[1].length,name=m[2].trim();
+      if(lv===2&&opt.sections){const n=(opt.counts&&opt.counts[name])||0;
+        out+='<div class="guide-h2"><h2>'+guideInline(name)+'</h2><button class="guide-cbtn'+(n?' has':'')+'" onclick="guideCommentOn('+sec+')" title="Give feedback on this section">💬 '+(n?n+' open':'Comment')+'</button></div>';}
+      else out+=lv===3?'<h3>'+guideInline(name)+'</h3>':'<div class="guide-h2"><h2>'+guideInline(name)+'</h2></div>';
+      if(lv===2)sec++;i++;continue}
+    if(/^\s*\|/.test(ln)){const rows=[];while(i<L.length&&/^\s*\|/.test(L[i]))rows.push(L[i++]);
+      let head=null;if(rows.length>1&&/^\s*\|?\s*:?-{2,}/.test(rows[1])){head=guideCells(rows[0]);rows.splice(0,2)}
+      out+='<div class="guide-tbl"><table>'+(head?'<thead><tr>'+head.map(c=>'<th>'+guideInline(c)+'</th>').join('')+'</tr></thead>':'')
+        +'<tbody>'+rows.map(r=>'<tr>'+guideCells(r).map(c=>'<td>'+guideInline(c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';continue}
+    if((m=ln.match(/^\s*([-*]|\d+[.)])\s+/))){const ordered=/\d/.test(m[1]);const items=[];
+      while(i<L.length){const mm=L[i].match(/^\s*([-*]|\d+[.)])\s+(.*)$/);if(!mm||/\d/.test(mm[1])!==ordered)break;items.push(mm[2]);i++;
+        while(i<L.length&&/^\s{2,}\S/.test(L[i])&&!/^\s*([-*]|\d+[.)])\s+/.test(L[i])){items[items.length-1]+=' '+L[i].trim();i++}}
+      const tasks=!ordered&&items.every(t=>/^\[( |x|X)\]\s/.test(t));
+      out+=(ordered?'<ol>':'<ul'+(tasks?' class="tasks"':'')+'>')+items.map(t=>{const tm=t.match(/^\[( |x|X)\]\s+(.*)$/);
+        if(tm){const k=task++,on=tm[1]!==' ';return '<li><label class="guide-task'+(on?' done':'')+'"><input type="checkbox"'+(on?' checked':'')+(opt.checkable?' onchange="guideToggleTask('+k+',this.checked)"':' disabled')+'><span>'+guideInline(tm[2])+'</span></label></li>'}
+        return '<li>'+guideInline(t)+'</li>'}).join('')+(ordered?'</ol>':'</ul>');continue}
+    if(/^>\s?/.test(ln)){const b=[];while(i<L.length&&/^>\s?/.test(L[i]))b.push(L[i++].replace(/^>\s?/,''));out+='<blockquote>'+guideInline(b.join(' '))+'</blockquote>';continue}
+    const p=[ln];i++;while(i<L.length&&L[i].trim()&&!isBlock(L[i]))p.push(L[i++]);
+    out+='<p>'+guideInline(p.join(' '))+'</p>';
+  }
+  return out;
+}
+function guideSummary(body){const l=(body||'').split('\n').find(x=>x.trim()&&!/^(#|\||\s*[-*]\s|\s*\d+[.)]\s|>|```)/.test(x))||'';
+  const t=l.replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/[*`]/g,'');return t.length>150?t.slice(0,147).trimEnd()+'…':t}
+/* ---------- list ---------- */
+function guideHeader(eyebrow,title,sub){
+  const e=document.getElementById('guides-eyebrow'),h=document.getElementById('guides-h'),s=document.getElementById('guides-sub');
+  if(e)e.innerHTML=eyebrow;if(h)h.textContent=title;if(s)s.innerHTML=sub;}
+function renderGuides(){
+  const body=document.getElementById('guides-body');if(!body)return;
+  subscribeGuides();
+  if(guideMode==='edit'){renderGuideEditor();return}
+  if(guideOpenId){renderGuide();return}
+  guideHeader('Team','Guides','How-tos the whole team reads, edits and comments on. Always the current copy — share the link once.');
+  body.innerHTML='<div class="row" style="gap:8px;margin-bottom:12px"><div class="searchbar" style="flex:1;margin:0"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input id="guides-q" type="search" placeholder="Search guides" oninput="renderGuideList()"></div>'
+    +'<button class="btn" style="width:auto;white-space:nowrap" onclick="newGuide()">＋ New guide</button></div><div id="guides-list"></div>';
+  renderGuideList();
+}
+function renderGuideList(){
+  const wrap=document.getElementById('guides-list');if(!wrap)return;
+  const q=((document.getElementById('guides-q')||{}).value||'').trim().toLowerCase();
+  const all=Object.values(GUIDES);const archived=all.filter(g=>g.archived);
+  let items=all.filter(g=>!!g.archived===guideShowArchived).sort((a,b)=>guideMs(b.updatedAt)-guideMs(a.updatedAt));
+  if(q)items=items.filter(g=>((g.title||'')+' '+(g.body||'')).toLowerCase().includes(q));
+  let h=!guidesLoaded?'<div class="empty"><div class="d">Loading guides…</div></div>'
+    :items.length?items.map(g=>{const oc=g.openComments||0;
+      return '<div class="card tap" tabindex="0" onclick="openGuide('+ocjson(g.id)+')" onkeydown="if(event.key===\'Enter\')openGuide('+ocjson(g.id)+')">'
+        +'<div class="row" style="gap:10px;align-items:flex-start"><div class="grow" style="min-width:0"><div class="t">'+esc(g.title||'Untitled guide')+'</div>'
+        +'<div class="d" style="margin-top:4px">'+esc(guideSummary(g.body))+'</div>'
+        +'<div class="d" style="margin-top:8px;color:var(--faint);font-size:11.5px">Edited by '+esc(g.updatedByName||'—')+' · '+guideWhen(g.updatedAt)+'</div></div>'
+        +(oc>0?'<span class="pill wave">💬 '+oc+' open</span>':'')+'</div></div>'}).join('')
+    :'<div class="empty"><div class="d">'+(q?'No guide matches that.':guideShowArchived?'Nothing archived.':'No guides yet — start the first one.')+'</div></div>';
+  if(archived.length||guideShowArchived)h+='<div style="text-align:center;margin-top:10px"><a class="guide-link" onclick="guideShowArchived=!guideShowArchived;renderGuideList()">'+(guideShowArchived?'‹ Back to guides':'Show archived ('+archived.length+')')+'</a></div>';
+  wrap.innerHTML=h;
+}
+function openGuide(id){guideOpenId=id;guideMode='read';guideVersionView=null;window.scrollTo(0,0);renderGuides()}
+function closeGuide(){if(!guideLeaveOk())return;guideOpenId=null;guideMode='read';guideVersionView=null;guideDirty=false;
+  try{if(/^#guide=/.test(location.hash))history.replaceState(null,'',location.pathname+location.search)}catch(e){}
+  window.scrollTo(0,0);renderGuides()}
+function guideLeaveOk(){return !(guideMode==='edit'&&guideDirty)||confirm('Discard your unsaved changes to this guide?')}
+/* ---------- read view ---------- */
+function guideOpenCounts(){const c={};GUIDE_COMMENTS.forEach(x=>{if(!x.resolved&&x.section)c[x.section]=(c[x.section]||0)+1});return c}
+function renderGuide(){
+  const body=document.getElementById('guides-body');const g=GUIDES[guideOpenId];
+  if(!g){guideHeader('<a class="guide-link" onclick="closeGuide()">‹ Guides</a>','Guide','');
+    body.innerHTML='<div class="empty"><div class="d">'+(guidesLoaded?'This guide doesn’t exist or was removed.':'Loading…')+'</div></div>';return}
+  subscribeGuideComments(g.id);
+  if(guideMode==='history'){renderGuideHistory();return}
+  guideHeader('<a class="guide-link" onclick="closeGuide()">‹ Guides</a>',g.title||'Untitled guide',
+    'Edited by <b>'+esc(g.updatedByName||'—')+'</b> · '+guideWhen(g.updatedAt)+(g.archived?' · <span class="pill dim">Archived</span>':''));
+  const canArchive=isSuperAdmin()||(CURRENT_USER&&g.createdByUid&&g.createdByUid===CURRENT_USER.uid);
+  body.innerHTML='<div class="row guide-actions">'
+    +'<button class="btn" onclick="editGuide()">✎ Edit</button>'
+    +'<button class="btn ghost" onclick="guideCopyLink()">Copy link</button>'
+    +'<button class="btn ghost" onclick="openGuideHistory()">History</button>'
+    +(canArchive?'<button class="btn ghost" onclick="guideArchive('+(g.archived?'false':'true')+')">'+(g.archived?'Restore':'Archive')+'</button>':'')+'</div>'
+    +'<div class="card guide-md" id="guide-md">'+guideMd(g.body,{sections:true,counts:guideOpenCounts(),checkable:true})+'</div>'
+    +'<div class="sec" id="guide-fb" style="margin-top:18px"></div>';
+  renderGuideFeedback();
+}
+function guideCopyLink(){const url=location.origin+location.pathname+'#guide='+encodeURIComponent(guideOpenId);
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(()=>toast('✓ Link copied — it always opens the latest version')).catch(()=>prompt('Copy this link',url));else prompt('Copy this link',url)}
+function guideArchive(on){const g=GUIDES[guideOpenId];if(!g)return;
+  if(on&&!confirm('Archive “'+(g.title||'this guide')+'”? It leaves the list but can be restored.'))return;
+  g.archived=on;if(hasFirestore())guidesCol().doc(g.id).set({archived:on},{merge:true}).catch(e=>toast('Update failed — '+((e&&e.code)||'')));
+  toast(on?'Archived':'Restored');if(on)closeGuide();else renderGuide()}
+/* Ticking a checkbox saves straight away (like ticking it on paper). */
+function guideToggleTask(k,on){const g=GUIDES[guideOpenId];if(!g)return;
+  const L=(g.body||'').split('\n');let n=0,fence=false,hit=-1;
+  for(let i=0;i<L.length;i++){if(/^```/.test(L[i])){fence=!fence;continue}if(fence)continue;if(/^\s*[-*]\s+\[( |x|X)\]\s/.test(L[i])){if(n===k){hit=i;break}n++}}
+  if(hit<0)return;L[hit]=L[hit].replace(/\[( |x|X)\]/,on?'[x]':'[ ]');const nb=L.join('\n');
+  if(!hasFirestore()){g.body=nb;g.rev=(g.rev||0)+1;renderGuide();return}
+  const ref=guidesCol().doc(g.id),rev=g.rev||0;
+  firebase.firestore().runTransaction(tx=>tx.get(ref).then(d=>{if(!d.exists||(d.data().rev||0)!==rev)throw new Error('stale');
+    tx.update(ref,{body:nb,rev:rev+1,updatedAt:guideTs(),updatedByName:guideMe(),updatedByUid:CURRENT_USER.uid})}))
+    .then(()=>toast(on?'✓ Ticked':'Unticked')).catch(e=>{toast(e&&e.message==='stale'?'Someone just edited this guide — try again':'Save failed');renderGuide()});
+}
+/* ---------- feedback ---------- */
+function subscribeGuideComments(id){
+  if(guideCFor===id)return;guideCFor=id;
+  if(guideCUnsub){try{guideCUnsub()}catch(e){}guideCUnsub=null}
+  if(!hasFirestore()){GUIDE_COMMENTS=GUIDE_LOCAL_COMMENTS[id]=GUIDE_LOCAL_COMMENTS[id]||[];return}
+  GUIDE_COMMENTS=[];
+  try{guideCUnsub=guidesCol().doc(id).collection('comments').orderBy('createdAt','asc').onSnapshot(qs=>{
+    GUIDE_COMMENTS=qs.docs.map(d=>Object.assign({id:d.id},d.data({serverTimestamps:'estimate'})));
+    if(guideOpenId===id&&guideMode==='read'){renderGuideFeedback();guideRefreshSectionCounts()}
+  },()=>{});}catch(e){}
+}
+function guideRefreshSectionCounts(){const g=GUIDES[guideOpenId],md=document.getElementById('guide-md');if(!g||!md)return;
+  const y=window.scrollY;md.innerHTML=guideMd(g.body,{sections:true,counts:guideOpenCounts(),checkable:true});window.scrollTo(0,y)}
+function renderGuideFeedback(){
+  const el=document.getElementById('guide-fb');const g=GUIDES[guideOpenId];if(!el||!g)return;
+  const keep=(document.getElementById('gc-text')||{}).value||'',keepSec=(document.getElementById('gc-sec')||{}).value;
+  const open=GUIDE_COMMENTS.filter(c=>!c.resolved),done=GUIDE_COMMENTS.filter(c=>c.resolved);
+  const list=(guideCFilter==='open'?open:guideCFilter==='resolved'?done:GUIDE_COMMENTS).slice().reverse();
+  const secs=guideSections(g.body);
+  el.innerHTML='<div class="sec-head"><h2>Feedback</h2><span class="d" style="color:var(--faint)">Everyone signed in can see this</span></div>'
+    +'<div class="card"><select class="field" id="gc-sec" style="margin-bottom:8px"><option value="">Whole guide</option>'+secs.map(s=>'<option value="'+esc(s)+'">'+esc(s)+'</option>').join('')+'</select>'
+    +'<textarea class="field" id="gc-text" placeholder="Suggest a change, flag something wrong, or ask a question…" style="min-height:70px;resize:vertical;font-family:var(--font-b)"></textarea>'
+    +'<button class="btn" style="margin-top:8px" onclick="postGuideComment()">Post feedback</button></div>'
+    +'<div class="chips" style="margin-top:6px">'+[['open','Open ('+open.length+')'],['resolved','Resolved ('+done.length+')'],['all','All']].map(a=>'<button class="chip'+(guideCFilter===a[0]?' on':'')+'" onclick="guideCFilter=\''+a[0]+'\';renderGuideFeedback()">'+a[1]+'</button>').join('')+'</div>'
+    +(list.length?list.map(guideCommentCard).join(''):'<div class="empty"><div class="d">'+(guideCFilter==='open'?'No open feedback. Use 💬 next to any section to leave some.':'Nothing here.')+'</div></div>');
+  const t=document.getElementById('gc-text');if(t)t.value=keep;const s=document.getElementById('gc-sec');if(s&&keepSec!=null&&secs.concat(['']).includes(keepSec))s.value=keepSec;
+}
+function guideCommentCard(c){
+  const mine=CURRENT_USER&&c.byUid===CURRENT_USER.uid;const reps=c.replies||[];
+  return '<div class="card guide-cmt'+(c.resolved?' done':'')+'">'
+    +'<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><span class="guide-av">'+esc(initials(c.byName,''))+'</span><b style="font-size:13px">'+esc(c.byName||'Someone')+'</b><span class="d" style="color:var(--faint);font-size:11.5px">'+guideWhen(c.createdAt)+'</span>'
+    +'<span class="grow"></span>'+(c.section?'<span class="pill dim">'+esc(c.section)+'</span>':'<span class="pill dim">Whole guide</span>')+(c.resolved?'<span class="pill good">Resolved</span>':'')+'</div>'
+    +'<div class="guide-cmt-text">'+guideInline(c.text||'')+'</div>'
+    +reps.map(r=>'<div class="guide-reply"><b>'+esc(r.byName||'Someone')+'</b> <span style="color:var(--faint);font-size:11px">'+guideWhen(r.at)+'</span><div>'+guideInline(r.text||'')+'</div></div>').join('')
+    +'<div id="gr-'+esc(c.id)+'" hidden><textarea class="field" placeholder="Reply…" style="min-height:52px;margin-top:8px;resize:vertical;font-family:var(--font-b)"></textarea><button class="btn" style="margin-top:6px" onclick="replyGuideComment('+ocjson(c.id)+')">Send reply</button></div>'
+    +'<div class="row" style="gap:6px;margin-top:10px"><button class="btn ghost guide-sm" onclick="const b=document.getElementById(\'gr-'+esc(c.id)+'\');b.hidden=!b.hidden;if(!b.hidden)b.querySelector(\'textarea\').focus()">Reply</button>'
+    +'<button class="btn ghost guide-sm" onclick="resolveGuideComment('+ocjson(c.id)+','+(c.resolved?'false':'true')+')">'+(c.resolved?'Reopen':'✓ Resolve')+'</button>'
+    +(c.section?'<button class="btn ghost guide-sm" onclick="guideJumpTo('+ocjson(c.section)+')">Go to section</button>':'')
+    +((mine||isSuperAdmin())?'<button class="btn ghost guide-sm" onclick="deleteGuideComment('+ocjson(c.id)+')">Delete</button>':'')+'</div></div>';
+}
+function guideCommentOn(k){const g=GUIDES[guideOpenId];if(!g)return;const s=guideSections(g.body)[k]||'';
+  const sel=document.getElementById('gc-sec');if(sel)sel.value=s;const t=document.getElementById('gc-text');
+  if(t){t.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>t.focus(),300)}}
+function guideJumpTo(section){const hs=[...document.querySelectorAll('#guide-md .guide-h2 h2')];const h=hs.find(x=>x.textContent.trim()===section);if(h)h.scrollIntoView({behavior:'smooth',block:'start'});else toast('That section was renamed or removed')}
+function guideBump(id,d){const g=GUIDES[id];if(g)g.openComments=Math.max(0,(g.openComments||0)+d);
+  if(hasFirestore())guidesCol().doc(id).set({openComments:firebase.firestore.FieldValue.increment(d)},{merge:true}).catch(()=>{})}
+function guideNotify(uids,title,body){const me=CURRENT_USER&&CURRENT_USER.uid;[...new Set(uids)].filter(u=>u&&u!==me).forEach(u=>notify(u,title,body,'s-guides:'+guideOpenId))}
+function postGuideComment(){const g=GUIDES[guideOpenId];const t=document.getElementById('gc-text');if(!g||!t)return;
+  const text=t.value.trim();if(!text){toast('Write your feedback first');return}
+  const section=(document.getElementById('gc-sec')||{}).value||'';
+  const c={text:text,section:section,byUid:CURRENT_USER.uid,byName:guideMe(),resolved:false,replies:[]};
+  t.value='';
+  if(!hasFirestore()){c.id='L'+Date.now();c.createdAt=new Date().toISOString();GUIDE_COMMENTS.push(c);guideBump(g.id,1);guideCFilter='open';renderGuide();toast('✓ Feedback posted');return}
+  c.createdAt=guideTs();
+  guidesCol().doc(g.id).collection('comments').add(c).then(()=>{guideBump(g.id,1);toast('✓ Feedback posted');
+    guideNotify([g.updatedByUid,g.createdByUid],'Feedback on '+(g.title||'a guide'),guideMe()+(section?' on “'+section+'”':'')+': '+text.slice(0,90))})
+    .catch(e=>{t.value=text;toast('Couldn’t post — '+((e&&e.code)||''))});
+  guideCFilter='open';
+}
+function replyGuideComment(cid){const box=document.getElementById('gr-'+cid);const ta=box&&box.querySelector('textarea');const g=GUIDES[guideOpenId];
+  const c=GUIDE_COMMENTS.find(x=>x.id===cid);if(!ta||!c||!g)return;const text=ta.value.trim();if(!text){toast('Write a reply first');return}
+  const r={text:text,byName:guideMe(),byUid:CURRENT_USER.uid,at:new Date().toISOString()};
+  if(!hasFirestore()){c.replies=(c.replies||[]).concat([r]);renderGuideFeedback();return}
+  guidesCol().doc(g.id).collection('comments').doc(cid).update({replies:firebase.firestore.FieldValue.arrayUnion(r)})
+    .then(()=>guideNotify([c.byUid].concat((c.replies||[]).map(x=>x.byUid)),'Reply on '+(g.title||'a guide'),guideMe()+': '+text.slice(0,90)))
+    .catch(e=>toast('Couldn’t reply — '+((e&&e.code)||'')));
+}
+function resolveGuideComment(cid,on){const c=GUIDE_COMMENTS.find(x=>x.id===cid);if(!c||!!c.resolved===on)return;
+  c.resolved=on;guideBump(guideOpenId,on?-1:1);
+  if(hasFirestore())guidesCol().doc(guideOpenId).collection('comments').doc(cid).update({resolved:on,resolvedBy:on?guideMe():'',resolvedAt:on?guideTs():null}).catch(e=>toast('Update failed — '+((e&&e.code)||'')));
+  renderGuideFeedback();guideRefreshSectionCounts();toast(on?'✓ Resolved':'Reopened')}
+function deleteGuideComment(cid){const c=GUIDE_COMMENTS.find(x=>x.id===cid);if(!c||!confirm('Delete this feedback?'))return;
+  if(!c.resolved)guideBump(guideOpenId,-1);
+  if(hasFirestore())guidesCol().doc(guideOpenId).collection('comments').doc(cid).delete().catch(e=>toast('Delete failed — '+((e&&e.code)||'')));
+  else{const i=GUIDE_COMMENTS.indexOf(c);if(i>=0)GUIDE_COMMENTS.splice(i,1);renderGuideFeedback()}}
+/* ---------- editing ---------- */
+function newGuide(){guideOpenId='new';guideMode='edit';guideEditRev=0;guideDirty=false;renderGuides();setTimeout(()=>{const t=document.getElementById('ge-title');if(t)t.focus()},50)}
+function editGuide(prefill){const g=GUIDES[guideOpenId];if(!g)return;guideMode='edit';guideEditRev=g.rev||0;guideDirty=!!prefill;renderGuideEditor(prefill);window.scrollTo(0,0)}
+function renderGuideEditor(prefill){
+  const body=document.getElementById('guides-body');const isNew=guideOpenId==='new';const g=isNew?{title:'',body:''}:GUIDES[guideOpenId];if(!g)return;
+  if(document.getElementById('ge-body')&&!prefill){guideCheckConflictBanner();return}
+  guideHeader('<a class="guide-link" onclick="guideCancelEdit()">‹ '+(isNew?'Guides':'Back to guide')+'</a>',isNew?'New guide':'Editing',isNew?'Give it a title, write it, and save. The team sees it right away.':'Saving updates everyone’s copy. The current text is kept in History.');
+  const src=prefill?prefill:g;
+  body.innerHTML='<div class="card">'
+    +'<input class="field" id="ge-title" placeholder="Guide title" value="'+esc(src.title||'')+'" oninput="guideDirty=true" style="font-weight:600">'
+    +'<div class="chips" style="margin:10px 0 8px"><button class="chip on" id="ge-tab-w" onclick="guideEdTab(\'w\')">Write</button><button class="chip" id="ge-tab-p" onclick="guideEdTab(\'p\')">Preview</button></div>'
+    +'<textarea class="field guide-ta" id="ge-body" oninput="guideDirty=true" placeholder="## First section&#10;&#10;Write the steps here…">'+esc(src.body||'')+'</textarea>'
+    +'<div id="ge-preview" class="guide-md" hidden></div>'
+    +'<div class="d guide-help">## Section heading · ### Sub-heading · **bold** · `code` · - bullet · 1. step · - [ ] checkbox · | Col | Col | table · [text](https://link)</div>'
+    +'<div id="ge-conflict"></div>'
+    +'<div class="row" style="gap:8px;margin-top:12px"><button class="btn ghost" style="flex:1" onclick="guideCancelEdit()">Cancel</button><button class="btn" style="flex:2" id="ge-save" onclick="saveGuide(false)">Save changes</button></div></div>';
+  guideCheckConflictBanner();
+}
+function guideEdTab(t){const ta=document.getElementById('ge-body'),pv=document.getElementById('ge-preview');if(!ta||!pv)return;
+  document.getElementById('ge-tab-w').classList.toggle('on',t==='w');document.getElementById('ge-tab-p').classList.toggle('on',t==='p');
+  if(t==='p'){pv.innerHTML=guideMd(ta.value,{})||'<p style="color:var(--faint)">Nothing to preview yet.</p>';pv.hidden=false;ta.hidden=true}else{pv.hidden=true;ta.hidden=false;ta.focus()}}
+function guideCheckConflictBanner(){const el=document.getElementById('ge-conflict');if(!el||guideOpenId==='new')return;const g=GUIDES[guideOpenId];
+  if(g&&(g.rev||0)!==guideEditRev)el.innerHTML='<div class="note guide-warn"><b>'+esc(g.updatedByName||'Someone')+'</b> saved a newer version while you were editing. Your text is still here. Saving now would replace their changes (theirs stay in History).</div>';
+  else el.innerHTML=''}
+function guideCancelEdit(){if(!guideLeaveOk())return;guideDirty=false;guideMode='read';if(guideOpenId==='new')guideOpenId=null;renderGuides()}
+function guideSlug(t){return (t||'guide').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,48)||'guide'}
+async function saveGuide(force){
+  const title=(document.getElementById('ge-title')||{}).value.trim(),text=(document.getElementById('ge-body')||{}).value;
+  if(!title){toast('Give the guide a title');return}
+  const isNew=guideOpenId==='new';const id=isNew?guideSlug(title)+'-'+Date.now().toString(36).slice(-4):guideOpenId;
+  const g=GUIDES[id];
+  if(!force&&g&&(g.rev||0)!==guideEditRev){if(!confirm((g.updatedByName||'Someone')+' saved a newer version while you were editing. Replace it with yours? Their version stays in History.'))return;force=true}
+  const btn=document.getElementById('ge-save');if(btn){btn.disabled=true;btn.textContent='Saving…'}
+  const me=guideMe(),uid=CURRENT_USER&&CURRENT_USER.uid;
+  if(!hasFirestore()){GUIDES[id]=Object.assign(g||{id:id,openComments:0,createdBy:me,createdByUid:uid},{title:title,body:text,rev:((g&&g.rev)||0)+1,updatedByName:me,updatedByUid:uid,updatedAt:new Date().toISOString()});
+    guideAfterSave(id,isNew);return}
+  const ref=guidesCol().doc(id);
+  try{await firebase.firestore().runTransaction(tx=>tx.get(ref).then(d=>{const cur=d.exists?d.data():null;
+      if(cur&&!force&&(cur.rev||0)!==guideEditRev){const e=new Error('conflict');e.conflict=true;throw e}
+      if(cur)tx.set(ref.collection('versions').doc(),{title:cur.title||'',body:cur.body||'',rev:cur.rev||0,editedBy:cur.updatedByName||'',editedAt:cur.updatedAt||null,replacedBy:me,savedAt:guideTs()});
+      const o={title:title,body:text,rev:((cur&&cur.rev)||0)+1,updatedAt:guideTs(),updatedByName:me,updatedByUid:uid};
+      if(!cur)Object.assign(o,{createdAt:guideTs(),createdBy:me,createdByUid:uid,openComments:0});
+      tx.set(ref,o,{merge:true});}));
+    guideAfterSave(id,isNew);
+  }catch(e){if(btn){btn.disabled=false;btn.textContent='Save changes'}
+    if(e&&e.conflict){guideCheckConflictBanner();toast('Someone saved first — check the note above, then save again')}
+    else toast('Save failed — '+((e&&e.code)||'try again'))}
+}
+function guideAfterSave(id,isNew){guideDirty=false;guideMode='read';guideOpenId=id;guideVersions=[];renderGuides();window.scrollTo(0,0);
+  toast(isNew?'✓ Guide created — use Copy link to share it':'✓ Saved — everyone sees this version now')}
+window.addEventListener('beforeunload',e=>{if(guideMode==='edit'&&guideDirty){e.preventDefault();e.returnValue=''}});
+/* ---------- history ---------- */
+function openGuideHistory(){guideMode='history';guideVersionView=null;guideVersions=null;renderGuides();window.scrollTo(0,0);
+  if(!hasFirestore()){guideVersions=[];renderGuideHistory();return}
+  guidesCol().doc(guideOpenId).collection('versions').orderBy('savedAt','desc').limit(50).get()
+    .then(qs=>{guideVersions=qs.docs.map(d=>Object.assign({id:d.id},d.data()));renderGuideHistory()})
+    .catch(()=>{guideVersions=[];renderGuideHistory()})}
+function renderGuideHistory(){
+  const body=document.getElementById('guides-body');const g=GUIDES[guideOpenId];if(!g||!body)return;
+  guideHeader('<a class="guide-link" onclick="guideMode=\'read\';renderGuides()">‹ Back to guide</a>','History',esc(g.title||'')+' · every save keeps the text it replaced');
+  if(guideVersionView){const v=guideVersionView;
+    body.innerHTML='<div class="note" style="margin:0 0 12px">Version '+esc(String(v.rev||'?'))+' · written by <b>'+esc(v.editedBy||'—')+'</b> · replaced '+guideWhen(v.savedAt)+' by '+esc(v.replacedBy||'—')+'</div>'
+      +'<div class="row" style="gap:8px;margin-bottom:12px"><button class="btn ghost" style="flex:1" onclick="guideVersionView=null;renderGuideHistory()">‹ All versions</button><button class="btn" style="flex:2" onclick="guideRestoreVersion()">Restore this version…</button></div>'
+      +'<div class="card guide-md">'+guideMd(v.body,{})+'</div>';return}
+  const vs=guideVersions;
+  body.innerHTML='<div class="card"><div class="row" style="align-items:center;gap:8px"><div class="grow"><div class="t">Current version · '+esc(String(g.rev||1))+'</div><div class="d">'+esc(g.updatedByName||'—')+' · '+guideWhen(g.updatedAt)+'</div></div><span class="pill good">Live</span></div></div>'
+    +(vs===null?'<div class="empty"><div class="d">Loading history…</div></div>'
+      :vs.length?vs.map((v,i)=>'<div class="card tap" tabindex="0" onclick="guideVersionView=guideVersions['+i+'];renderGuideHistory()"><div class="t">Version '+esc(String(v.rev||'?'))+'</div><div class="d">Written by '+esc(v.editedBy||'—')+' · replaced '+guideWhen(v.savedAt)+' by '+esc(v.replacedBy||'—')+'</div></div>').join('')
+      :'<div class="empty"><div class="d">No earlier versions yet. Each save adds one here.</div></div>');
+}
+function guideRestoreVersion(){const v=guideVersionView;if(!v)return;guideVersionView=null;editGuide({title:v.title,body:v.body});
+  toast('Older text loaded into the editor — review it, then Save to restore')}
+
 /* ================= NAV / ROUTER ================= */
 let CURRENT_USER=null;
 const FINANCE_NAV={id:'s-finance',label:'Financials',roles:[],svg:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>'};
@@ -5379,7 +5900,7 @@ function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;if(u.role==='sup
    and the super admin are unaffected and still see everything. Members with no
    dept (Google sign-ups, legacy accounts) keep the classic member nav. */
 const DEPTS=['ops','sales','tech'];
-const DEPT_COMMON=['s-pulse','s-chat','s-know']; // everyone gets these
+const DEPT_COMMON=['s-pulse','s-chat','s-know','s-guides']; // everyone gets these
 const DEPT_TABS={ops:['s-stock','s-support'], sales:['s-crm'], tech:['s-support','s-build','s-qc']};
 function deptLabel(d){return {ops:'Ops',sales:'Sales',tech:'Tech'}[d]||''}
 function navAllowedIds(user){
@@ -5411,6 +5932,9 @@ function buildNav(role){
   if(typeof updateChatBadge==='function')updateChatBadge();
 }
 function goto(id,btn){
+  // 's-guides:<id>' opens one guide (notification links and #guide= deep links).
+  if(typeof id==='string'&&id.indexOf('s-guides:')===0){if(!guideLeaveOk())return;guideOpenId=id.slice(9);guideMode='read';guideVersionView=null;guideDirty=false;id='s-guides'}
+  else if(id==='s-guides'&&btn&&guideMode!=='edit'){guideOpenId=null;guideMode='read'}
   const el=document.getElementById(id);if(!el)return;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));el.classList.add('on');
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===id));
@@ -5427,6 +5951,7 @@ function goto(id,btn){
   if(id==='s-field'){subscribeFieldMonitor();renderField();}
   if(id==='s-users')renderUsers();
   if(id==='s-know')renderAgent();
+  if(id==='s-guides')renderGuides();
 }
 
 /* ================= SESSION ================= */
@@ -5473,8 +5998,12 @@ function enterApp(user){
   if(canQC())subscribeQC();
   recordActivity();startSessionTracking();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
+  subscribeGuides();
   goto('s-pulse');
+  guideDeepLink();
 }
+function guideDeepLink(){const m=(location.hash||'').match(/^#guide=([\w-]+)/);if(m)goto('s-guides:'+decodeURIComponent(m[1]))}
+window.addEventListener('hashchange',()=>{if(CURRENT_USER)guideDeepLink()});
 function showLogin(){document.getElementById('app').style.display='none';document.getElementById('login').hidden=false}
 function openAccountPanel(){const m=CURRENT_USER&&CURRENT_USER.mail;const el=document.getElementById('acc-mail');if(el){el.textContent=m&&m.email?m.email:'Not connected';el.style.color=m&&m.email?'var(--good)':'var(--faint)'}
   const fb=document.getElementById('acc-feedback');if(fb){fb.style.display=isSuperAdmin()?'block':'none';renderFeedbackBadge()}
