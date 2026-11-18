@@ -395,7 +395,7 @@ input[type=date]{color-scheme:dark}
 .qc-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
 .qc-row:last-child{border-bottom:0}
 .qc-row input{width:18px;height:18px;accent-color:var(--wave);flex-shrink:0}
-#notif-badge,#fb-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--amber);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-b)}
+#notif-badge,#fb-badge,#chat-badge{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--amber);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-b)}
 #shot-editor{display:none;position:fixed;inset:0;z-index:200;background:#0b1420;flex-direction:column}
 #shot-editor.on{display:flex}
 #shot-bar{display:flex;gap:6px;padding:10px;align-items:center;flex-wrap:wrap;background:#0b1420;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -537,6 +537,13 @@ input[type=date]{color-scheme:dark}
 .screen{display:none;padding:20px 16px 30px}
 .screen.on{display:block}
 /* pulse home — hero + quick-action buttons */
+.pulse-more{margin-top:22px;border-top:1px solid var(--line);padding-top:6px}
+.pulse-more>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:12px 2px;font:700 16px var(--font-d);color:var(--text)}
+.pulse-more>summary::-webkit-details-marker{display:none}
+.pulse-more>summary::before{content:'▸';color:var(--wave);transition:transform .15s;display:inline-block}
+.pulse-more[open]>summary::before{transform:rotate(90deg)}
+.pulse-more .pm-sub{font:500 12.5px var(--font-b);color:var(--faint)}
+.pulse-more>summary:focus-visible{outline:2px solid var(--wave);outline-offset:2px;border-radius:8px}
 .pulse-hero{position:relative;overflow:hidden;background:var(--wave);background-image:linear-gradient(135deg,rgba(255,255,255,.15),rgba(0,0,0,.12));color:#fff;border-radius:20px;padding:22px 20px 20px;margin-bottom:16px}
 .pulse-hero h1{color:#fff;font-family:var(--font-d);font-size:25px;line-height:1.1;margin:9px 0 5px}
 .pulse-hero .ph-date{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;opacity:.85}
@@ -592,23 +599,55 @@ input[type=date]{color-scheme:dark}
 .cm-table td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
 .cm-table td:last-child,.cm-table th:last-child{text-align:right;font-variant-numeric:tabular-nums}
 
-/* nav — bottom tabs on mobile, top bar on desktop */
+/* nav — 4-item bar on mobile (Home · My work · Messages · Menu),
+   grouped left sidebar on desktop (Home · Customers · Operations · Product ·
+   Finance · Resources … Settings). Pages inside a group switch on .subnav. */
 .nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--bar-bg);backdrop-filter:blur(12px);
-  border-top:1px solid var(--line);display:flex;padding:6px 2px calc(9px + env(safe-area-inset-bottom));overflow-x:auto;scrollbar-width:none}
-.nav::-webkit-scrollbar{display:none}
-.tab{flex:1 0 auto;min-width:56px;background:none;border:0;color:var(--faint);font-family:var(--font-b);font-size:9.5px;font-weight:600;
-  display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;cursor:pointer}
-.tab svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  border-top:1px solid var(--line);display:flex;padding:6px 2px calc(9px + env(safe-area-inset-bottom))}
+.tab{flex:1 1 0;min-width:0;background:none;border:0;color:var(--faint);font-family:var(--font-b);font-size:10.5px;font-weight:600;
+  display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;cursor:pointer;position:relative;text-decoration:none}
+.tab svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .tab.on{color:var(--wave)}
 .tab:focus-visible{outline:2px solid var(--wave);outline-offset:-2px;border-radius:8px}
+.tab.dk,.nav .nav-sep,.nav .nav-fill{display:none}
+.tab .navdot{position:absolute;top:4px;left:calc(50% + 7px);min-width:8px;height:8px;border-radius:5px;background:var(--wave)}
+.subnav{display:none;gap:6px;padding:14px 16px 0;overflow-x:auto;scrollbar-width:none}
+.subnav::-webkit-scrollbar{display:none}
+.subnav.on{display:flex}
+.subtab{flex:0 0 auto;background:var(--surface);border:1px solid var(--line);color:var(--muted);font:600 13px var(--font-b);
+  padding:7px 14px;border-radius:99px;cursor:pointer}
+.subtab.on{background:var(--wave);border-color:var(--wave);color:var(--wave-ink)}
+.subtab:focus-visible{outline:2px solid var(--wave);outline-offset:2px}
+.navdrawer{display:none;position:fixed;inset:0;z-index:70;background:rgba(20,30,45,.38)}
+.navdrawer.on{display:block}
+.nd-body{position:absolute;top:0;right:0;bottom:0;width:min(320px,86vw);background:var(--surface);border-left:1px solid var(--line);
+  padding:calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;overflow-y:auto}
+.nd-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+#nd-list{display:flex;flex-direction:column;gap:4px;flex:1}
+#nd-list .tab{flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:14px;font-size:16px;color:var(--text);padding:12px 14px;border-radius:12px;width:100%}
+#nd-list .tab.on{background:var(--wave-dim);color:var(--wave)}
+#nd-list .tab .navdot{position:static;margin-left:auto}
+#nd-list .nd-fill{flex:1;min-height:16px}
+#nd-list .nd-sep{border-top:1px solid var(--line);margin:8px 4px}
 
 @media(min-width:860px){
   #app{padding-bottom:0}
-  .nav{position:sticky;top:57px;bottom:auto;justify-content:center;gap:4px;border-top:0;border-bottom:1px solid var(--line);padding:6px 12px;overflow:visible}
-  .tab{flex:0 0 auto;flex-direction:row;font-size:13px;gap:7px;padding:9px 14px;border-radius:10px}
-  .tab svg{width:17px;height:17px}
-  .tab.on{background:var(--wave-dim)}
+  .nav{top:0;bottom:0;right:auto;width:232px;z-index:30;flex-direction:column;gap:3px;border-top:0;border-right:1px solid var(--line);
+    padding:80px 12px 18px;overflow-y:auto;background:var(--surface)}
+  .tab.mb{display:none}
+  .tab.dk{display:flex}
+  .nav .nav-fill{display:block;flex:1}
+  .nav .nav-sep{display:block;border-top:1px solid var(--line);margin:8px 4px}
+  .tab{flex:0 0 auto;flex-direction:row;justify-content:flex-start;font-size:14.5px;gap:12px;padding:10px 14px;border-radius:12px;color:var(--text);width:100%}
+  .tab svg{width:20px;height:20px}
+  .tab.on{background:var(--wave-dim);color:var(--wave)}
+  .tab:hover:not(.on){background:var(--surface-2)}
+  .tab .navdot{position:static;margin-left:auto}
+  .wrap{margin-left:232px}
+  #pulse-quick{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .subnav{padding:22px 24px 0}
   .screen{padding:28px 24px 40px}
+  .subnav.on + .screen.on,.subnav.on ~ .screen.on{padding-top:18px}
   h1{font-size:28px}
 }
 
@@ -768,19 +807,28 @@ input[type=date]{color-scheme:dark}
       <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       <span id="notif-badge" style="display:none">0</span>
     </button>
-    <button class="iconbtn" style="position:relative" aria-label="Send feedback" onclick="openFeedback()">
-      <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      <span id="fb-badge" style="display:none">0</span>
+    <button class="iconbtn" style="position:relative" aria-label="Messages" title="Messages" onclick="goto('s-chat')">
+      <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.6A8.5 8.5 0 1 1 21 11.5z"/></svg>
+      <span id="chat-badge" style="display:none">0</span>
     </button>
-    <button class="who" onclick="openAccountPanel()" aria-label="Account">
+    <button class="who" style="position:relative" onclick="openAccountPanel()" aria-label="Account">
       <span class="av" id="who-av">–</span>
+      <span id="fb-badge" style="display:none">0</span>
       <span class="nm" id="who-nm">…<small id="who-role"></small></span>
     </button>
   </header>
 
   <nav class="nav" id="nav" aria-label="Sections"></nav>
+  <div class="navdrawer" id="navdrawer" onclick="if(event.target===this)closeNavDrawer()">
+    <div class="nd-body" role="dialog" aria-label="Menu">
+      <div class="nd-head"><span class="brand-logo" style="cursor:default"><img src="https://cdn.shopify.com/s/files/1/0630/9602/9423/files/logo3x.png?v=1646599241" alt="Safewave"></span>
+        <button class="iconbtn" aria-label="Close menu" onclick="closeNavDrawer()"><svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <div id="nd-list"></div>
+    </div>
+  </div>
 
   <div class="wrap">
+    <div class="subnav" id="subnav" aria-label="Pages in this section"></div>
 
     <!-- PULSE -->
     <main class="screen on" id="s-pulse">
@@ -792,25 +840,28 @@ input[type=date]{color-scheme:dark}
         <div id="pulse-attn"></div>
       </div>
 
+      <details class="pulse-more" id="pulse-more">
+        <summary><span>Team &amp; business overview</span><span class="pm-sub">insights · across the business · team pulse · past due</span></summary>
       <div class="sec" id="pulse-insights-sec">
         <div class="sec-head"><h2>Insights</h2><span class="pill dim">your view</span></div>
         <div class="chart-grid" id="pulse-insights"></div>
-      </div>
+        </div>
 
-      <div class="sec">
+        <div class="sec">
         <div class="sec-head"><h2>Across the business</h2></div>
         <div class="tiles" id="pulse-roll"></div>
-      </div>
+        </div>
 
-      <div class="sec">
+        <div class="sec">
         <div class="sec-head"><h2>Team pulse</h2><span class="pill dim">who's driving it</span></div>
         <div class="tiles" id="pulse-leaders"></div>
-      </div>
+        </div>
 
-      <div class="sec">
+        <div class="sec">
         <div class="sec-head"><h2>Team · past due</h2><span class="pill dim" id="pulse-team-count"></span></div>
         <div id="pulse-team"></div>
-      </div>
+        </div>
+      </details>
     </main>
 
     <!-- chart expand modal -->
@@ -1057,6 +1108,7 @@ input[type=date]{color-scheme:dark}
     <button class="btn ghost" style="margin-top:8px" onclick="openMail()">Connect / manage your email</button>
     <button class="btn" id="acc-manage" style="display:none;margin-top:8px" onclick="manageUsers()">Manage users &amp; access</button>
     <button class="btn ghost" id="acc-feedback" style="display:none;margin-top:8px" onclick="openFeedbackInbox()">Team feedback <span id="acc-fb-count"></span></button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets();openFeedback()">Send feedback</button>
     <button class="btn ghost" style="margin-top:8px" onclick="doSignOut()">Sign out</button>
   </div>
 </div>
@@ -4722,6 +4774,8 @@ const SAFEWAVE={totalUsers:null,online:null};
 function refreshPulse(){if(CURRENT_USER)renderPulse(CURRENT_USER)}
 function ptile(v,l,badge,to){const inner='<div class="n">'+(v==null?'—':esc(String(v)))+'</div><div class="l">'+esc(l)+(badge?' <span class="pill '+(badge==='LIVE'?'wave':'amber')+'" style="font-size:9px;padding:1px 6px">'+(badge==='LIVE'?'LIVE':'LINK')+'</span>':'')+'</div>';
   return to?'<div class="tile tap" tabindex="0" onclick="goto(\''+to+'\')">'+inner+'</div>':'<div class="tile">'+inner+'</div>'}
+document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='pulse-more'){try{localStorage.setItem('sw_pulse_more',e.target.open?'1':'0')}catch(x){}}},true);
+document.addEventListener('DOMContentLoaded',()=>{try{if(localStorage.getItem('sw_pulse_more')==='1'){const d=document.getElementById('pulse-more');if(d)d.open=true}}catch(x){}});
 function pulseJumpTasks(){const el=document.getElementById('pulse-attn');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}
 function renderPulseHero(user,first,needYou,ongoing,opsCount){
   const el=document.getElementById('pulse-hero');if(!el)return;
@@ -4757,8 +4811,8 @@ function renderPulseQuick(user,needYou){
   if(canSee('s-stock'))q+=qbtn(svgOf('s-stock'),unfulfilled,'To fulfill',"goto('s-stock')",unfulfilled>0);
   if(canSee('s-crm'))q+=qbtn(svgOf('s-crm'),crmFollow,'Follow-ups',"goto('s-crm')",crmFollow>0);
   if(canSee('s-support'))q+=qbtn(svgOf('s-support'),openTk,'Open tickets',"goto('s-support')",openTk>0);
-  if(canSee('s-build'))q+=qbtn(svgOf('s-build'),myBuild,'Build tasks',"goto('s-build')",false);
-  if(canSee('s-chat'))q+=qbtn(svgOf('s-chat'),chatUn,'Chat',"goto('s-chat')",chatUn>0);
+  // Four tiles, as in the concept. Build tasks and Messages are one tap away in the nav.
+  void myBuild;void chatUn;
   el.innerHTML=q;
 }
 /* ---- Insights charts (inline SVG, single-hue teal, theme-aware). Role-scoped:
@@ -5912,41 +5966,87 @@ function navAllowedIds(user){
   if(!DEPTS.includes(user.dept))return null;
   return DEPT_COMMON.concat(DEPT_TABS[user.dept]||[]);
 }
+/* Sections, as in the "Safewave Control Center" concept. A section shows when
+   the person may open at least one of its pages; inside it, .subnav switches
+   between the pages. Chat lives in the top bar (and the mobile bar) as Messages. */
+const ICON_HOME='<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>';
+const NAV_GROUPS=[
+  {id:'home',      label:'Home',       pages:['s-pulse'], svg:ICON_HOME},
+  {id:'customers', label:'Customers',  pages:['s-crm','s-support'], svg:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4a3.5 3.5 0 0 1 0 7M18 13.5a6 6 0 0 1 3.5 6.5"/>'},
+  {id:'operations',label:'Operations', pages:['s-stock'], svg:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5" opacity=".55"/>'},
+  {id:'product',   label:'Product',    pages:['s-build','s-qc','s-field','s-feedback'], svg:'<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>'},
+  {id:'finance',   label:'Finance',    pages:['s-finance'], svg:'<path d="M5 20v-6M10 20V9M15 20v-9M20 20V4"/>'},
+  {id:'resources', label:'Resources',  pages:['s-guides','s-know'], svg:'<path d="M2 5.5C4.5 4 8 4 11 5.5v14C8 18 4.5 18 2 19.5zM22 5.5C19.5 4 16 4 13 5.5v14c3-1.5 6.5-1.5 9 0z"/>'},
+  {id:'settings',  label:'Settings',   pages:['s-users','s-comply','s-vault'], svg:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'},
+];
+const PAGE_LABEL={'s-crm':'CRM','s-support':'Support','s-stock':'Stock & orders','s-build':'Build','s-qc':'Release QC','s-field':'Field','s-feedback':'Feedback',
+  's-finance':'Financials','s-guides':'Guides','s-know':'Knowledge','s-users':'Users','s-comply':'Compliance','s-vault':'Vault'};
+let NAV_ALLOWED=new Set(['s-pulse']), NAV_LAST={};
+function navGroupOf(id){return NAV_GROUPS.find(g=>g.pages.indexOf(id)>=0)||null}
+function navPages(g){return g.pages.filter(p=>NAV_ALLOWED.has(p))}
+function gotoGroup(gid){const g=NAV_GROUPS.find(x=>x.id===gid);if(!g)return;const pages=navPages(g);if(!pages.length)return;
+  const last=NAV_LAST[gid];goto(last&&pages.indexOf(last)>=0?last:pages[0]);closeNavDrawer()}
+function navTab(cls,attrs,svg,label){return '<button class="tab '+cls+'" '+attrs+'><svg viewBox="0 0 24 24">'+svg+'</svg><span>'+esc(label)+'</span></button>'}
+function canOpenCustomerDashboard(){return isOversight()||['admin','manager','superadmin'].includes((CURRENT_USER&&CURRENT_USER.role)||'')}
+const ICON_EXT='<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M14 8h3v3M17 8l-5 5"/>';
 function buildNav(role){
   const nav=document.getElementById('nav');nav.innerHTML='';
   const allowed=navAllowedIds(CURRENT_USER);
   let items;
-  if(isOversight())items=NAV_ITEMS.slice();                 // oversight sees every tab
+  if(isOversight())items=NAV_ITEMS.slice();                 // oversight sees every page
   else if(allowed){const set=new Set(allowed);items=NAV_ITEMS.filter(n=>set.has(n.id));}
   else items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(role)));
-  if(financeAllowed())items.splice(1,0,FINANCE_NAV);
+  if(financeAllowed())items.push(FINANCE_NAV);
   if(isSuperAdmin())items.push(FEEDBACK_NAV);
   if(isSuperAdmin())items.push(FIELD_NAV);
   if(isSuperAdmin()||isOversight())items.push(USERS_NAV);
-  const current=document.querySelector('.screen.on');const curId=current?current.id:'s-pulse';
-  items.forEach((n)=>{
-    const b=document.createElement('button');b.className='tab'+(n.id===curId?' on':'');b.dataset.s=n.id;
-    b.onclick=()=>goto(n.id,b);
-    b.innerHTML='<svg viewBox="0 0 24 24">'+n.svg+'</svg>'+n.label;
-    nav.appendChild(b);
-  });
-  // Customer dashboard (Firebase project safewave-371716): opens in a new tab.
-  if(isOversight()||['admin','manager','superadmin'].includes((CURRENT_USER&&CURRENT_USER.role)||'')){
-    const a=document.createElement('a');a.className='tab';a.href=CUSTOMER_DASHBOARD_URL;a.target='_blank';a.rel='noopener';
-    a.title='Open the Safewave customer dashboard (watches, bands, alerts) in a new tab';a.style.textDecoration='none';
-    a.innerHTML='<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M14 8h3v3M17 8l-5 5"/></svg>Dashboard ↗';
-    nav.appendChild(a);
-  }
+  NAV_ALLOWED=new Set(items.map(n=>n.id));NAV_ALLOWED.add('s-pulse');
+  const groups=NAV_GROUPS.filter(g=>navPages(g).length);
+  const main=groups.filter(g=>g.id!=='settings'),settings=groups.find(g=>g.id==='settings');
+  const dash=canOpenCustomerDashboard()
+    ?'<a class="tab dk" href="'+CUSTOMER_DASHBOARD_URL+'" target="_blank" rel="noopener" title="Open the Safewave customer dashboard (watches, bands, alerts) in a new tab"><svg viewBox="0 0 24 24">'+ICON_EXT+'</svg><span>Dashboard ↗</span></a>':'';
+  // Desktop sidebar
+  let h=main.map(g=>navTab('dk','data-g="'+g.id+'" onclick="gotoGroup(\''+g.id+'\')"',g.svg,g.label)).join('');
+  h+='<div class="nav-fill"></div>'+dash+'<div class="nav-sep"></div>';
+  if(settings)h+=navTab('dk','data-g="settings" onclick="gotoGroup(\'settings\')"',settings.svg,settings.label);
+  // Mobile bar
+  h+=navTab('mb','data-g="home" onclick="gotoGroup(\'home\')"',ICON_HOME,'Home');
+  h+=navTab('mb','data-m="work" onclick="goto(\'s-pulse\');setTimeout(pulseJumpTasks,60)"','<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/>','My Work');
+  if(NAV_ALLOWED.has('s-chat'))h+=navTab('mb','data-s="s-chat" onclick="goto(\'s-chat\')"',NAV_ITEMS.find(n=>n.id==='s-chat').svg,'Messages');
+  h+=navTab('mb','data-m="menu" onclick="openNavDrawer()"','<path d="M4 6h16M4 12h16M4 18h16"/>','Menu');
+  nav.innerHTML=h;
+  // Mobile menu drawer (same sections as the sidebar)
+  let d=main.map(g=>navTab('','data-g="'+g.id+'" onclick="gotoGroup(\''+g.id+'\')"',g.svg,g.label)).join('');
+  d+='<div class="nd-fill"></div>';
+  if(canOpenCustomerDashboard())d+='<a class="tab" href="'+CUSTOMER_DASHBOARD_URL+'" target="_blank" rel="noopener"><svg viewBox="0 0 24 24">'+ICON_EXT+'</svg><span>Customer dashboard ↗</span></a>';
+  d+='<div class="nd-sep"></div>';
+  if(settings)d+=navTab('','data-g="settings" onclick="gotoGroup(\'settings\')"',settings.svg,settings.label);
+  const nd=document.getElementById('nd-list');if(nd)nd.innerHTML=d;
+  const current=document.querySelector('.screen.on');syncNav(current?current.id:'s-pulse');
   if(typeof updateChatBadge==='function')updateChatBadge();
 }
+function syncNav(id){
+  const g=navGroupOf(id);if(g)NAV_LAST[g.id]=id;
+  document.querySelectorAll('#nav .tab,#nd-list .tab').forEach(t=>{
+    const on=t.dataset.g?(g&&t.dataset.g===g.id):t.dataset.s?t.dataset.s===id:false;
+    t.classList.toggle('on',!!on);if(on)t.setAttribute('aria-current','page');else t.removeAttribute('aria-current')});
+  const sub=document.getElementById('subnav');if(!sub)return;
+  const pages=g?navPages(g):[];
+  if(pages.length>1){
+    sub.innerHTML=pages.map(p=>'<button class="subtab'+(p===id?' on':'')+'" onclick="goto(\''+p+'\')"'+(p===id?' aria-current="page"':'')+'>'+esc(PAGE_LABEL[p]||p)+'</button>').join('');
+    sub.classList.add('on');
+  }else{sub.innerHTML='';sub.classList.remove('on')}
+}
+function openNavDrawer(){const d=document.getElementById('navdrawer');if(d)d.classList.add('on')}
+function closeNavDrawer(){const d=document.getElementById('navdrawer');if(d)d.classList.remove('on')}
 function goto(id,btn){
   // 's-guides:<id>' opens one guide (notification links and #guide= deep links).
   if(typeof id==='string'&&id.indexOf('s-guides:')===0){if(!guideLeaveOk())return;guideOpenId=id.slice(9);guideMode='read';guideVersionView=null;guideDirty=false;id='s-guides'}
   else if(id==='s-guides'&&btn&&guideMode!=='edit'){guideOpenId=null;guideMode='read'}
   const el=document.getElementById(id);if(!el)return;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));el.classList.add('on');
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===id));
-  window.scrollTo(0,0);closeSheets();
+  syncNav(id);
+  window.scrollTo(0,0);closeSheets();closeNavDrawer();
   if(id==='s-finance')renderFinance();
   if(id==='s-crm')renderCRM();
   if(id==='s-build')renderBuild();
@@ -7000,9 +7100,10 @@ function subscribeChatMeta(){if(!hasFirestore())return;
 function channelUnread(c){const m=chatMeta[c];if(!m||!m.at)return false;if(m.uid&&CURRENT_USER&&m.uid===CURRENT_USER.uid)return false;return m.at>(chatSeen[c]||0)}
 function chatUnreadCount(){return chatChannels.filter(channelUnread).length}
 function markChannelRead(c){chatSeen[c]=Date.now();chatSaveSeen();renderChatChannels();updateChatBadge()}
-function updateChatBadge(){const btn=document.querySelector('.tab[data-s="s-chat"]');if(!btn)return;
-  let dot=btn.querySelector('.navdot');const un=chatUnreadCount();
-  if(un){if(!dot){dot=document.createElement('span');dot.className='navdot';btn.appendChild(dot)}}else if(dot){dot.remove()}}
+function updateChatBadge(){const un=chatUnreadCount();
+  const b=document.getElementById('chat-badge');if(b){b.textContent=un>9?'9+':String(un);b.style.display=un?'flex':'none'}
+  document.querySelectorAll('.tab[data-s="s-chat"]').forEach(btn=>{let dot=btn.querySelector('.navdot');
+    if(un){if(!dot){dot=document.createElement('span');dot.className='navdot';btn.appendChild(dot)}}else if(dot){dot.remove()}})}
 
 function subscribeChat(){if(!hasFirestore()){document.getElementById('chat-stream').innerHTML='<div class="d" style="color:var(--faint);margin:auto">Chat runs on the live site.</div>';return}
   if(chatUnsub){try{chatUnsub()}catch(e){}chatUnsub=null}
@@ -8156,7 +8257,7 @@ function setTheme(t){document.documentElement.setAttribute('data-theme',t);try{l
 /* ================= UI HELPERS ================= */
 function openSheet(id){document.getElementById(id).classList.add('on')}
 function closeSheets(){document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('on'))}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheets()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeSheets();closeNavDrawer()}});
 document.addEventListener('click',e=>{const b=e.target.closest('.reason button');if(!b)return;const g=b.closest('.reason');g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
 document.addEventListener('click',e=>{const b=e.target.closest('.rolepick button');if(!b)return;const g=b.closest('.rolepick');g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
 let toastT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2600)}
