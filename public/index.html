@@ -5889,6 +5889,7 @@ function guideRestoreVersion(){const v=guideVersionView;if(!v)return;guideVersio
 
 /* ================= NAV / ROUTER ================= */
 let CURRENT_USER=null;
+const CUSTOMER_DASHBOARD_URL='https://safewave-371716.web.app/';
 const FINANCE_NAV={id:'s-finance',label:'Financials',roles:[],svg:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>'};
 const FEEDBACK_NAV={id:'s-feedback',label:'Feedback',roles:[],svg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'};
 const USERS_NAV={id:'s-users',label:'Users',roles:[],svg:'<circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 12 0"/><circle cx="17.5" cy="8.5" r="2.4"/><path d="M15.5 20a5 5 0 0 1 6.5-3.8"/>'};
@@ -5929,6 +5930,13 @@ function buildNav(role){
     b.innerHTML='<svg viewBox="0 0 24 24">'+n.svg+'</svg>'+n.label;
     nav.appendChild(b);
   });
+  // Customer dashboard (Firebase project safewave-371716): opens in a new tab.
+  if(isOversight()||['admin','manager','superadmin'].includes((CURRENT_USER&&CURRENT_USER.role)||'')){
+    const a=document.createElement('a');a.className='tab';a.href=CUSTOMER_DASHBOARD_URL;a.target='_blank';a.rel='noopener';
+    a.title='Open the Safewave customer dashboard (watches, bands, alerts) in a new tab';a.style.textDecoration='none';
+    a.innerHTML='<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M14 8h3v3M17 8l-5 5"/></svg>Dashboard ↗';
+    nav.appendChild(a);
+  }
   if(typeof updateChatBadge==='function')updateChatBadge();
 }
 function goto(id,btn){
