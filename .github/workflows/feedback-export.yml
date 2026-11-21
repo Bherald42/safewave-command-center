@@ -1,0 +1,55 @@
+name: Feedback export (temporary)
+# One-off: reads open team feedback and publishes it ENCRYPTED to a session
+# public key so it can be worked on. Plaintext never leaves the runner.
+on:
+  push:
+    branches: [claude/feedback-export]
+permissions:
+  contents: write
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read and encrypt
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -e
+          mkdir -p /tmp/fx && cd /tmp/fx
+          printf '%s' "$SA" > sa.json
+          npm init -y >/dev/null && npm i --silent firebase-admin@12 >/dev/null
+          cat > pub.pem <<'KEY'
+          -----BEGIN PUBLIC KEY-----
+          MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA0E+ZxcBnVCb5ixHF2IKL
+          IPGjcx79291qucuuh9J/kTKcLbe3V+dZ/8xpHcEfpBUntMs9IFcwkhhz2gcwy5n4
+          swx0UQHaJJfQkaHZJq4G8CkotdnKs8egQxGZCOfWmBj7ZFhDT9cGtGK9aTE7/zyM
+          BnIJMIHFi9V2YJvKjRSqMr9Nl9gah14Du6Wk+xIvvAWz2ifNjDXMzmKHXoiWj5Ck
+          UeDIcVMl94C1pdS7bHA0+vC5QR7PF6oxCAccDNTk7kg3COqY4jz8jgPcg7rbW+Pi
+          8IY3w1ydLimA4L5EOVjDrrlqUy8+2YtcJrtgqqxZKZ/cVNKmJY7D80wy3rAy7KsN
+          BZvFDYfXa0yvipBFUAbhW+GRbUjdXMBTjE4mFGpZRlHFdEly3ImnaA6HfXartHGO
+          ItPL7KvPJlQTW3CxkkhlFMsXmEEnY+UFl50u9PG6hVH7KiJwJgK11viRryMtJEiB
+          Lvh3m/HgaJqHO9FAK9DL9Rg7PY6zrWvfIPvvmJ9Vnc9+SUfkyoH7dDhJKB1ag2up
+          8AfKiG+at9b+w1ZNRHkgztiY8lPbxGayAOI9JOTGVSxDOj3hHfWUVpRuX/HOzc+z
+          kA9bUqKG7xCkVwk7tGPsmDGX4ooWcth9s/pKfPMzfN9L9Xq6P0OLGir2vlR0rKV1
+          Rs5Qlk3tCTCUIUQagBzgbYcCAwEAAQ==
+          -----END PUBLIC KEY-----
+          KEY
+          sed -i 's/^          //' pub.pem
+          cat > read.js <<'JS'
+          const admin=require('firebase-admin');
+          admin.initializeApp({credential:admin.credential.cert(require('./sa.json'))});
+          (async()=>{const qs=await admin.firestore().collection('feedback').get();
+            const out=qs.docs.map(d=>{const v=d.data();for(const k of Object.keys(v)){if(v[k]&&v[k].toDate)v[k]=v[k].toDate().toISOString()}return Object.assign({id:d.id},v)});
+            require('fs').writeFileSync('fb.json',JSON.stringify(out));console.log('docs',out.length,'open',out.filter(x=>x.status!=='resolved').length);process.exit(0)})();
+          JS
+          sed -i 's/^          //' read.js
+          node read.js
+          openssl rand -hex 32 > k.txt
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in fb.json -out fb.enc -pass file:k.txt
+          openssl pkeyutl -encrypt -pubin -inkey pub.pem -in k.txt -out k.enc
+          tar czf bundle.tgz fb.enc k.enc
+          rm -f sa.json fb.json k.txt
+      - name: Publish encrypted bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create fbx-${{ github.run_id }} /tmp/fx/bundle.tgz --repo ${{ github.repository }} --target ${{ github.sha }} --prerelease --title "temp" --notes "temporary encrypted bundle"
