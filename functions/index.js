@@ -1617,3 +1617,123 @@ exports.sendMyDigest = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
   return sendDigests(request.auth.uid);
 });
+
+/* ------------------------------------------------------------------ *
+ * WEEKLY RAISE ROLLOUT — Monday 7:30 am ET to the raise leadership (the
+ * finance group: super admins, Trey and the finance allow-list; never
+ * Jared, or whoever is set in settings/raise.rolloutTo). Summarises the
+ * round, the latest raise-sync minutes and decisions, every action item
+ * and raise task (overdue / open / done this week), data room progress and
+ * the next meeting.
+ * ------------------------------------------------------------------ */
+const NO_RAISE_EMAILS = ["jared@safewavetech.com"];
+async function raiseRolloutRecipients() {
+  const raise = (await db.collection("settings").doc("raise").get()).data() || {};
+  let list = Array.isArray(raise.rolloutTo) && raise.rolloutTo.length ? raise.rolloutTo : null;
+  if (!list) {
+    const fin = (await db.collection("settings").doc("finance").get()).data() || {};
+    const supers = await db.collection("users").where("role", "==", "superadmin").get();
+    list = [...(fin.emails || []), ...supers.docs.map((d) => (d.data() || {}).email).filter(Boolean), "trevon@safewavetech.com"];
+  }
+  return [...new Set(list.map((e) => String(e || "").toLowerCase().trim()).filter((e) => /@/.test(e) && !NO_RAISE_EMAILS.includes(e)))];
+}
+function nextRaiseMeeting(raise, fromMs) {
+  const day = Number.isInteger(raise.meetDay) ? raise.meetDay : null;
+  if (day == null) return null;
+  const anchor = raise.meetAnchor ? Date.parse(raise.meetAnchor + "T12:00:00Z") : null;
+  for (let i = 0; i < 21; i++) {
+    const d = new Date(fromMs + i * 864e5);
+    const ymd = ymdET(d.getTime());
+    const dow = new Date(ymd + "T12:00:00Z").getUTCDay();
+    if (dow !== day) continue;
+    if (raise.meetCadence === "biweekly" && anchor) {
+      const weeks = Math.round((Date.parse(ymd + "T12:00:00Z") - anchor) / (7 * 864e5));
+      if (((weeks % 2) + 2) % 2 !== 0) continue;
+    }
+    return ymd;
+  }
+  return null;
+}
+const fmtUSD = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
+const fmtDay = (ymd) => ymd ? new Date(ymd + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+async function raiseRolloutText() {
+  const now = Date.now(), today = ymdET(now), weekAgo = now - 7 * 864e5;
+  const [raiseDoc, invs, tasks, meetings, dr] = await Promise.all([
+    db.collection("settings").doc("raise").get(),
+    db.collection("investors").get(),
+    db.collection("raise_tasks").get(),
+    db.collection("raise_meetings").orderBy("date", "desc").limit(3).get(),
+    db.collection("dataroom").get(),
+  ]);
+  const raise = raiseDoc.data() || {};
+  let committed = 0, wired = 0, active = 0;
+  invs.forEach((d) => { const a = d.data(); const c = Number(a.commit) || 0;
+    if (a.commitStatus === "wired") { wired += c; committed += c; } else if (a.commitStatus === "hard") committed += c;
+    if (a.commitStatus !== "passed") active++; });
+  let t = `Weekly raise rollout — week of ${fmtDay(today)}\n\n`;
+  t += `ROUND\n${raise.round || "Round"}: ${fmtUSD(committed)} committed${raise.target ? " of " + fmtUSD(raise.target) : ""} (${fmtUSD(wired)} wired) · ${active} investor${active === 1 ? "" : "s"} in play\n\n`;
+  const all = tasks.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+  const byId = {}; all.forEach((x) => { byId[x.id] = x; });
+  const line = (x) => `• ${x.title}${x.investorName ? " — " + x.investorName : ""} (${x.ownerName || "unassigned"}${x.due ? ", due " + fmtDay(x.due) : ""})`;
+  const m = meetings.docs.length ? meetings.docs[0].data() : null;
+  if (m) {
+    t += `LAST RAISE SYNC — ${fmtDay(m.date)}${(m.attendees || []).length ? " (" + m.attendees.join(", ") + ")" : ""}\n`;
+    if (m.minutes) t += `Minutes:\n${String(m.minutes).slice(0, 2500)}\n`;
+    if (m.decisions) t += `Decisions:\n${String(m.decisions).slice(0, 1200)}\n`;
+    const acts = (m.actions || []).map((a) => Object.assign({}, a, byId[a.id] || {}));
+    if (acts.length) t += `Action items:\n${acts.map((a) => (a.status === "done" ? "✓ " : "") + line(a).slice(2)).map((x) => "• " + x).join("\n")}\n`;
+    t += "\n";
+  } else {
+    t += "LAST RAISE SYNC\nNo meeting logged yet.\n\n";
+  }
+  const open = all.filter((x) => x.status === "open");
+  const overdue = open.filter((x) => x.due && x.due < today);
+  const doneWk = all.filter((x) => x.status === "done" && x.doneAt && Date.parse(x.doneAt) >= weekAgo);
+  t += `RAISE TASKS\n`;
+  if (overdue.length) t += `Overdue (${overdue.length}):\n${overdue.map(line).join("\n")}\n`;
+  const rest = open.filter((x) => !(x.due && x.due < today)).sort((a, b) => (a.due || "9").localeCompare(b.due || "9"));
+  if (rest.length) t += `Open (${rest.length}):\n${rest.slice(0, 15).map(line).join("\n")}\n`;
+  if (doneWk.length) t += `Done this week (${doneWk.length}):\n${doneWk.map(line).join("\n")}\n`;
+  if (!open.length && !doneWk.length) t += "Nothing open.\n";
+  const items = dr.docs.map((d) => d.data());
+  const ready = items.filter((i) => (i.files || []).length).length;
+  const weekOut = ymdET(now + 7 * 864e5);
+  const dueSoon = items.filter((i) => !(i.files || []).length && i.due && i.due <= weekOut);
+  t += `\nDATA ROOM\n${ready} of ${items.length} ready.${dueSoon.length ? " Due by " + fmtDay(weekOut) + ":\n" + dueSoon.map((i) => `• ${i.title} (${i.who === "brad" ? "Brad" : i.who === "both" ? "Brad + Trey" : "Trey"}${i.due < today ? ", overdue" : ""})`).join("\n") : ""}\n`;
+  const next = nextRaiseMeeting(raise, now);
+  t += `\nNEXT RAISE SYNC\n${next ? fmtDay(next) + (raise.meetTime ? " at " + raise.meetTime : "") + (raise.meetCadence === "biweekly" ? " (every 2 weeks)" : " (weekly)") : "Not scheduled — set it on Fundraise → Meetings."}\n`;
+  return { subject: `Raise rollout: ${fmtUSD(committed)}${raise.target ? " of " + fmtUSD(raise.target) : ""} · ${overdue.length} overdue · ${open.length} open`, text: t };
+}
+async function sendRaiseRollout() {
+  const to = await raiseRolloutRecipients();
+  const { subject, text } = await raiseRolloutText();
+  const mail = await digestSender();
+  let sent = 0, notified = 0;
+  for (const em of to) {
+    if (mail) {
+      try { await deliver(mail.creds, mail.sender, { to: em, subject, text }); sent++; continue; }
+      catch (e) { logger.error("rollout send failed", em, e && e.message); }
+    }
+    const u = await db.collection("users").where("email", "==", em).limit(1).get();
+    if (!u.empty) { await db.collection("notifications").add({ to: u.docs[0].id, title: "Weekly raise rollout is ready", body: "Open Fundraise → Meetings", link: "s-raise", by: "Weekly email", at: admin.firestore.FieldValue.serverTimestamp() }); notified++; }
+  }
+  await db.collection("settings").doc("raise").set({ lastRolloutAt: new Date().toISOString() }, { merge: true });
+  logger.info(`raise rollout: ${sent} emailed, ${notified} in-app`);
+  return { sent, notified, recipients: to.length, mailbox: mail ? mail.creds.email : null };
+}
+exports.weeklyRaiseRollout = onSchedule({ schedule: "every monday 07:30", timeZone: "America/New_York", region: REGION }, async () => {
+  await sendRaiseRollout();
+});
+// Callable: preview (returns the text) or send now. Finance group only.
+exports.raiseRollout = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  const em = String((request.auth.token && request.auth.token.email) || "").toLowerCase();
+  const me = (await db.collection("users").doc(request.auth.uid).get()).data() || {};
+  const allowed = (await raiseRolloutRecipients()).includes(em) || me.role === "superadmin";
+  if (!allowed || NO_RAISE_EMAILS.includes(em)) throw new HttpsError("permission-denied", "The raise rollout is for the finance group.");
+  if (request.data && request.data.preview) {
+    const r = await raiseRolloutText();
+    return Object.assign(r, { recipients: await raiseRolloutRecipients() });
+  }
+  return sendRaiseRollout();
+});

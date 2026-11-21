@@ -255,6 +255,10 @@ service cloud.firestore {
     match /raise_tasks/{id} {
       allow read, write: if canRaise();
     }
+    // Raise sync meetings: agenda, minutes, decisions, action items.
+    match /raise_meetings/{id} {
+      allow read, write: if canRaise();
+    }
     match /dataroom/{id} {
       allow read, write: if canRaise();
     }
