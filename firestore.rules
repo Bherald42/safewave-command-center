@@ -199,10 +199,19 @@ service cloud.firestore {
     // Financials — visible ONLY to the super admin and the emails on the
     // finance allow-list (settings/finance). The UI hides the tab too, but
     // this is the real enforcement.
+    // Jared has stepped out of operations and has no finance decision rights:
+    // he is excluded from Financials, the raise, investors and the data room
+    // even if his email is on the allow-list. Trey (trevon@) keeps access.
+    function isJared() {
+      return signedIn() && request.auth.token.email == 'jared@safewavetech.com';
+    }
+    function isTrey() {
+      return signedIn() && request.auth.token.email == 'trevon@safewavetech.com';
+    }
     function financeOK() {
-      return isSuper() || isOversightEmail() || (signedIn()
+      return !isJared() && (isSuper() || isTrey() || (signedIn()
         && exists(/databases/$(database)/documents/settings/finance)
-        && request.auth.token.email in get(/databases/$(database)/documents/settings/finance).data.emails);
+        && request.auth.token.email in get(/databases/$(database)/documents/settings/finance).data.emails));
     }
     match /finance/{doc} {
       allow read, write: if financeOK();
@@ -217,11 +226,25 @@ service cloud.firestore {
     // Fundraise round config (target + round name). The investor pipeline itself
     // lives in crm_accounts (team-shared); this doc holds only the round total,
     // gated to leadership (admins/managers) who run the raise.
+    // The raise (round config, investors, data room, cap table) is limited to
+    // the finance group: Brad, Trey and the finance allow-list, never Jared.
     function canRaise() {
-      return signedIn() && (isOversightEmail() || myRole() == 'superadmin' || myRole() == 'admin' || myRole() == 'manager');
+      return financeOK();
     }
     match /settings/raise {
       allow read, write: if canRaise();
+    }
+    // Investor records (moved out of the team-shared crm_accounts).
+    match /investors/{id} {
+      allow read, write: if canRaise();
+    }
+    // Data room checklist items and their uploaded files' metadata.
+    match /dataroom/{id} {
+      allow read, write: if canRaise();
+    }
+    // Leadership tools (vault) keep their previous audience.
+    function canVault() {
+      return signedIn() && (isOversightEmail() || myRole() == 'superadmin' || myRole() == 'admin' || myRole() == 'manager');
     }
 
     // Tools & passwords vault — shared team logins, gated to leadership
@@ -247,7 +270,7 @@ service cloud.firestore {
     }
 
     match /vault/{id} {
-      allow read, write: if canRaise();
+      allow read, write: if canVault();
     }
 
     // Compliance / GRC — our own SOC 2 + HIPAA control tracker, PHI map, and the

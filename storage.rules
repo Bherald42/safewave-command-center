@@ -23,6 +23,16 @@ service firebase.storage {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.resource.size < 16 * 1024 * 1024;
     }
+    // Data room files. Each file sits at a random, unlisted path that is only
+    // recorded in the finance-gated `dataroom` collection, so teammates can't
+    // find them: no listing, only a direct get. Uploads up to 50 MB; never by
+    // Jared, who has no access to the raise.
+    match /dataroom/{allPaths=**} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null
+        && request.auth.token.email != 'jared@safewavetech.com'
+        && request.resource.size < 50 * 1024 * 1024;
+    }
     match /{allPaths=**} {
       allow read, write: if false;
     }
