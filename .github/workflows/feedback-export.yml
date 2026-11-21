@@ -1,15 +1,17 @@
-name: CRM snapshot (temporary)
-# One-off: exports CRM pipeline fields ENCRYPTED to a session public key.
+name: CRM archive cleanup (temporary)
+# One-off: archives open CRM accounts that have gone quiet (no activity past
+# their stage limit, no future next step), except anything Amazon. Reversible:
+# each keeps its stage in preArchiveStage and can be restored in the app.
 on:
   push:
     branches: [claude/feedback-export]
 permissions:
   contents: write
 jobs:
-  export:
+  archive:
     runs-on: ubuntu-latest
     steps:
-      - name: Read and encrypt
+      - name: Archive quiet opportunities
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
@@ -17,36 +19,34 @@ jobs:
           mkdir -p /tmp/fx && cd /tmp/fx
           printf '%s' "$SA" > sa.json
           npm init -y >/dev/null && npm i --silent firebase-admin@12 >/dev/null
-          cat > pub.pem <<'KEY'
-          -----BEGIN PUBLIC KEY-----
-          MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAq5raLeLcN7U3EMgox0Tw
-          ynxo9EEJgpHEIDZmkpgLgNwR9hgbuwuHGQBTynK0HghxCE9dFrEqRJqV7GCDE9Xn
-          cdQls2w2V+bIVu1AI6nLuwmzaP+bb0SSI/+vOBysQAWWhjNNLVxxdXB6pJ/GsSry
-          Czx1CiPGBBBF4IO/qU1JwuZGCqm4igLPHRq9D28YGnouhbfxf+AcZ7vYyJyWXI94
-          2Uzde3Z2LVQjDt3GRt85dbZbup9vVO0z43WGtqygWaH++6Ql1rJ3uIy2k3JHOmEN
-          2nc4vDPAqY065OfroqX2r2IlHDfRrfomMpF8FGmjtT4c8Dz5skTdjUDA1IZ4SgZT
-          foDXQ7GAA9SWyJSgpkzhTGU48JrL9GdPt6HXtRqwC9j+/rKdDwRyad+ZNZfZR0uS
-          2cW4pdmOV9lSnHUdo+eYDQdjHwPwq3hwEfYEF5V6VuvprwXkyHqegNdb10E0OLY2
-          p9vqVQU3BMv4lG12Y/tof4HkRUeM62XrpwdZmvx1anV4xb0ZaOJCwNmVXhxZYqM2
-          1YpS9QA8OI03YaBRVvSNjyK2WE9eIX9jQda9wGtnozldsTsowsPcC22aat6PqsQV
-          m3WXFA5bMgPep52ijmUte8B7EIAnJGQBqH3eSX7S7fE6kTzxX9CSWyUD+jGuh6G1
-          2ycssD5/7oAguyoKz7c/DpECAwEAAQ==
-          -----END PUBLIC KEY-----
-          KEY
-          cat > read.js <<'JS'
+          cat > run.js <<'JS'
           const admin=require('firebase-admin');
           admin.initializeApp({credential:admin.credential.cert(require('./sa.json'))});
-          (async()=>{const qs=await admin.firestore().collection('crm_accounts').get();
-            const out=qs.docs.map(d=>{const a=d.data();return {id:d.id,name:a.name||'',company:a.company||'',board:a.board||'',stage:a.stage||'',owner:a.owner||'',status:a.status||'',date:a.date||'',dueAt:a.dueAt||'',nextStep:a.nextStep||'',tags:a.tags||[],noteDates:(a.notes||[]).map(n=>n.at||''),notes:(a.notes||[]).length,metrics:a.metrics||null,campaign:a.campaign?{status:a.campaign.status||''}:null,archived:!!a.archived,location:a.location||'',keys:Object.keys(a)}});
-            require('fs').writeFileSync('crm.json',JSON.stringify(out));console.log('accounts',out.length);process.exit(0)})();
+          const db=admin.firestore();
+          const ROT={New:21,Contacted:21,Engaged:14,Meeting:14,Proposal:10};
+          const MON={january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11};
+          function pDate(s){if(!s)return null;s=(''+s).trim();const m=s.match(/^(\d{1,2})\/([A-Za-z]+)\/(\d{4})/);
+            if(m){const mo=MON[m[2].toLowerCase()];if(mo!=null)return new Date(+m[3],mo,+m[1]).getTime()}const d=Date.parse(s);return isNaN(d)?null:d}
+          function lastAct(a){const ds=[];(a.notes||[]).forEach(n=>{const d=pDate(n.at);if(d)ds.push(d)});const dd=pDate(a.date);if(dd)ds.push(dd);
+            ['stageChangedAt','createdAt','restoredAt'].forEach(k=>{const v=a[k]?Date.parse(a[k]):NaN;if(!isNaN(v))ds.push(v)});return ds.length?Math.max(...ds):null}
+          (async()=>{const now=Date.now(),today=new Date(new Date().toISOString().slice(0,10)).getTime();
+            const qs=await db.collection('crm_accounts').get();let n=0,kept=0,amazon=0,closed=0,already=0;let batch=db.batch(),inBatch=0;
+            for(const d of qs.docs){const a=d.data();const st=a.stage||'New';
+              if(a.archived){already++;continue}
+              if(!(st in ROT)){closed++;continue}
+              if(/amazon/i.test((a.name||'')+' '+(a.company||''))){amazon++;continue}
+              const due=a.dueAt?Date.parse(String(a.dueAt).slice(0,10)):NaN;
+              if(!isNaN(due)&&due>=today){kept++;continue}
+              const la=lastAct(a);if(la!=null&&(now-la)/864e5<=ROT[st]){kept++;continue}
+              const patch={archived:true,archivedAt:new Date().toISOString(),archivedBy:'Brad Herald (via Claude)',archiveReason:'Stale — no activity (pipeline cleanup)',preArchiveStage:st};
+              if(a.campaign&&a.campaign.status==='active')patch.campaign=Object.assign({},a.campaign,{status:'stopped'});
+              batch.set(d.ref,patch,{merge:true});n++;if(++inBatch>=400){await batch.commit();batch=db.batch();inBatch=0}}
+            if(inBatch)await batch.commit();
+            console.log('archived',n,'| amazon kept',amazon,'| active kept',kept,'| won/lost untouched',closed,'| already archived',already);process.exit(0)})().catch(e=>{console.error('failed',e.message);process.exit(1)});
           JS
-          node read.js
-          openssl rand -hex 32 > k.txt
-          openssl enc -aes-256-cbc -pbkdf2 -salt -in crm.json -out c.enc -pass file:k.txt
-          openssl pkeyutl -encrypt -pubin -inkey pub.pem -in k.txt -out k.enc
-          tar czf bundle.tgz c.enc k.enc
-          rm -f sa.json crm.json k.txt
-      - name: Publish encrypted bundle
+          node run.js
+          rm -f sa.json
+      - name: Remove temporary snapshot release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create crmx-${{ github.run_id }} /tmp/fx/bundle.tgz --repo ${{ github.repository }} --target ${{ github.sha }} --prerelease --title "temp" --notes "temporary encrypted bundle"
+        run: gh release delete crmx-44871307137 --repo ${{ github.repository }} --cleanup-tag -y || true
