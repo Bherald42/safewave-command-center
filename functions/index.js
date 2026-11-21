@@ -1620,22 +1620,24 @@ exports.sendMyDigest = onCall({ region: REGION }, async (request) => {
 
 /* ------------------------------------------------------------------ *
  * WEEKLY RAISE ROLLOUT — Monday 7:30 am ET to the raise leadership (the
- * finance group: super admins, Trey and the finance allow-list; never
- * Jared, or whoever is set in settings/raise.rolloutTo). Summarises the
+ * finance group: super admins, Trey and the finance allow-list) plus
+ * observers (Jared — informed, no decision rights), or whoever is set in
+ * settings/raise.rolloutTo. Summarises the
  * round, the latest raise-sync minutes and decisions, every action item
  * and raise task (overdue / open / done this week), data room progress and
  * the next meeting.
  * ------------------------------------------------------------------ */
-const NO_RAISE_EMAILS = ["jared@safewavetech.com"];
+// Observers get the rollout (they stay informed) but can't send it.
+const RAISE_OBSERVERS = ["jared@safewavetech.com"];
 async function raiseRolloutRecipients() {
   const raise = (await db.collection("settings").doc("raise").get()).data() || {};
   let list = Array.isArray(raise.rolloutTo) && raise.rolloutTo.length ? raise.rolloutTo : null;
   if (!list) {
     const fin = (await db.collection("settings").doc("finance").get()).data() || {};
     const supers = await db.collection("users").where("role", "==", "superadmin").get();
-    list = [...(fin.emails || []), ...supers.docs.map((d) => (d.data() || {}).email).filter(Boolean), "trevon@safewavetech.com"];
+    list = [...(fin.emails || []), ...supers.docs.map((d) => (d.data() || {}).email).filter(Boolean), "trevon@safewavetech.com", ...RAISE_OBSERVERS];
   }
-  return [...new Set(list.map((e) => String(e || "").toLowerCase().trim()).filter((e) => /@/.test(e) && !NO_RAISE_EMAILS.includes(e)))];
+  return [...new Set(list.map((e) => String(e || "").toLowerCase().trim()).filter((e) => /@/.test(e)))];
 }
 function nextRaiseMeeting(raise, fromMs) {
   const day = Number.isInteger(raise.meetDay) ? raise.meetDay : null;
@@ -1730,10 +1732,11 @@ exports.raiseRollout = onCall({ region: REGION, timeoutSeconds: 120 }, async (re
   const em = String((request.auth.token && request.auth.token.email) || "").toLowerCase();
   const me = (await db.collection("users").doc(request.auth.uid).get()).data() || {};
   const allowed = (await raiseRolloutRecipients()).includes(em) || me.role === "superadmin";
-  if (!allowed || NO_RAISE_EMAILS.includes(em)) throw new HttpsError("permission-denied", "The raise rollout is for the finance group.");
+  if (!allowed) throw new HttpsError("permission-denied", "The raise rollout is for the finance group.");
   if (request.data && request.data.preview) {
     const r = await raiseRolloutText();
     return Object.assign(r, { recipients: await raiseRolloutRecipients() });
   }
+  if (RAISE_OBSERVERS.includes(em)) throw new HttpsError("permission-denied", "View-only — Brad or Trey send the rollout.");
   return sendRaiseRollout();
 });

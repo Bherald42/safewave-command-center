@@ -84,8 +84,14 @@ the deploy runner. Never commit a key, never print one, never move one into
   (light default + `:root[data-theme="dark"]` override; theme toggle persisted in
   `localStorage`). New UI should read like the surrounding code — same tokens,
   naming, spacing, and idioms.
-- **Financials** are visible only to the super-admin-managed finance allow-list
-  (Brad / Jared / Trevon). **Feedback** is readable only by super admins.
+- **Financials and the raise** (Fundraise, investors, data room, raise tasks and
+  meetings) are editable only by the decision group: Brad, Trevon and the
+  super-admin-managed finance allow-list. **Jared is an observer**: informed,
+  not deciding. He can *see* everything (Financials and the raise included) and
+  gets the weekly raise rollout, but has no operational decision rights. He is
+  read-only on business records, enforced in `firestore.rules` (`canOperate()`,
+  `canSeeRaise()`) and mirrored in the UI (`isObserver()`). He has no Vault
+  (shared logins) access. **Feedback** is readable only by super admins.
 - **Never commit customer or investor PII** to this repo.
 - Write for a small internal team that is about to dogfood this. Prefer clear,
   low-friction UI over dense dashboards; the CRM went through several rounds toward
