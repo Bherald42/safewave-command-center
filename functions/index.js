@@ -1535,22 +1535,32 @@ function nameMatches(who, user) {
   return (me && w === me) || (first.length > 1 && w.indexOf(first) >= 0) || (user.email && w === String(user.email).toLowerCase());
 }
 async function digestData() {
-  const [acts, build, tix, crm] = await Promise.all([
+  const [acts, build, tix, crm, rtasks, investors, dataroom] = await Promise.all([
     db.collection("actions").where("status", "==", "open").get(),
     db.collection("build_tasks").get(),
     db.collection("tickets").where("status", "==", "open").get(),
     db.collection("crm_accounts").get(),
+    db.collection("raise_tasks").where("status", "==", "open").get(),
+    db.collection("investors").get(),
+    db.collection("dataroom").get(),
   ]);
   const items = [];
   acts.forEach((d) => { const a = d.data(); items.push({ who: a.ownerName || a.owner || "", whoUid: a.owner || "", title: a.title, due: a.due || "", kind: "Action" }); });
   build.forEach((d) => { const t = d.data(); if (t.status === "done") return; items.push({ who: t.assignee || "", title: t.title, due: t.due || "", kind: "Build" }); });
   tix.forEach((d) => { const t = d.data(); items.push({ who: t.assignee || "", title: `${t.sev === "safety" ? "SAFETY ticket" : "Ticket"}: ${t.title}`, due: t.due || "", kind: "Ticket" }); });
   crm.forEach((d) => { const a = d.data(); if (a.archived || !a.dueAt || a.stage === "Won" || a.stage === "Lost") return; items.push({ who: a.owner || "", title: (a.nextStep ? a.nextStep + " — " : "Follow up: ") + (a.name || "account"), due: String(a.dueAt).slice(0, 10), kind: "CRM" }); });
+  // The raise. Each person only receives their own items, and only the
+  // finance group is ever assigned these.
+  rtasks.forEach((d) => { const x = d.data(); items.push({ who: x.ownerName || "", whoUid: x.owner || "", title: "Raise: " + x.title + (x.investorName ? " — " + x.investorName : ""), due: x.due || "", kind: "Raise" }); });
+  investors.forEach((d) => { const a = d.data(); if (!a.dueAt || a.commitStatus === "wired" || a.commitStatus === "passed") return; items.push({ who: a.owner || "", title: "Raise: " + (a.nextStep ? a.nextStep + " — " : "Investor follow-up: ") + (a.name || "investor"), due: String(a.dueAt).slice(0, 10), kind: "Raise" }); });
+  const DR_EMAILS = { brad: ["brad.herald@safewavetech.com"], trey: ["trevon@safewavetech.com"], both: ["brad.herald@safewavetech.com", "trevon@safewavetech.com"] };
+  dataroom.forEach((d) => { const it = d.data(); if ((it.files || []).length || !it.due) return; (DR_EMAILS[it.who] || DR_EMAILS.trey).forEach((em) => items.push({ who: "", whoEmail: em, title: "Data room: " + (it.title || d.id), due: it.due, kind: "Raise" })); });
   return { items, openTickets: tix.size };
 }
 function digestFor(user, data, todayStr) {
   const weekStr = ymdET(Date.now() + 7 * 864e5);
-  const mine = data.items.filter((x) => (x.whoUid && x.whoUid === user.uid) || nameMatches(x.who, user));
+  const em = String(user.email || "").toLowerCase();
+  const mine = data.items.filter((x) => (x.whoUid && x.whoUid === user.uid) || (x.whoEmail && em && x.whoEmail === em) || nameMatches(x.who, user));
   const overdue = mine.filter((x) => x.due && x.due < todayStr).sort((a, b) => a.due.localeCompare(b.due));
   const today = mine.filter((x) => x.due === todayStr);
   const week = mine.filter((x) => x.due > todayStr && x.due <= weekStr).sort((a, b) => a.due.localeCompare(b.due));
