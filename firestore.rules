@@ -309,5 +309,11 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if canRaise();
     }
+    // Shopify sync status + the stock mirror (per-size "available" at the
+    // shipping location). Written only by Cloud Functions.
+    match /settings/shopify {
+      allow read: if signedIn();
+      allow write: if false;
+    }
   }
 }

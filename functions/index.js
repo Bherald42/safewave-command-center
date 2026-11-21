@@ -441,26 +441,53 @@ async function handleShopifyReturn(topic, body) {
  * backfill order history and self-heal past any missed delivery. Needs two
  * secrets (injected into functions/.env at deploy, never committed):
  *   SHOPIFY_STORE_DOMAIN   e.g. safewavetech.myshopify.com
- *   SHOPIFY_ADMIN_TOKEN    an Admin API access token with read_orders
+ *   SHOPIFY_ADMIN_TOKEN    an Admin API access token with read_orders, OR
+ *   SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET  from a Dev Dashboard app
  * Without them the callable returns a clear "connect Shopify" message and
  * the scheduled job no-ops, so nothing breaks before they're set.
  * ------------------------------------------------------------------ */
-const SHOPIFY_API_VERSION = "2024-10";
+const SHOPIFY_API_VERSION = "2026-10";
 
+// Two ways to authenticate, whichever the secrets provide:
+//  - SHOPIFY_ADMIN_TOKEN: a non-expiring token from an older admin-created
+//    custom app ("shpat_…").
+//  - SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET: an app made in Shopify's Dev
+//    Dashboard (the only kind Shopify lets you create now). We trade them for
+//    a 24-hour token with the client-credentials grant and cache it.
 function shopifyCreds() {
   const domain = (process.env.SHOPIFY_STORE_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
   const token = process.env.SHOPIFY_ADMIN_TOKEN || "";
-  return { domain: domain, token: token };
+  const clientId = process.env.SHOPIFY_CLIENT_ID || "";
+  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET || "";
+  return { domain: domain, token: token, clientId: clientId, clientSecret: clientSecret,
+    ok: !!(domain && (token || (clientId && clientSecret))) };
+}
+
+let shopifyTokenCache = { token: "", exp: 0 };
+async function shopifyToken() {
+  const c = shopifyCreds();
+  if (!c.ok) throw new Error("Shopify Admin API not configured");
+  if (c.token) return c.token;
+  if (shopifyTokenCache.token && Date.now() < shopifyTokenCache.exp) return shopifyTokenCache.token;
+  const r = await fetch("https://" + c.domain + "/admin/oauth/access_token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "client_credentials", client_id: c.clientId, client_secret: c.clientSecret }).toString(),
+  });
+  if (!r.ok) throw new Error("Shopify token exchange " + r.status + " — check the app is installed on the store");
+  const d = await r.json();
+  shopifyTokenCache = { token: d.access_token, exp: Date.now() + Math.max(60, (Number(d.expires_in) || 86399) - 300) * 1000 };
+  return shopifyTokenCache.token;
 }
 
 // Fetch one page of orders; returns { orders, next } where next is the
 // cursor URL from Shopify's Link header (null when there are no more pages).
 async function fetchShopifyOrdersPage(pageUrl) {
   const c = shopifyCreds();
-  if (!c.domain || !c.token) throw new Error("Shopify Admin API not configured");
+  const token = await shopifyToken();
   const url = pageUrl || ("https://" + c.domain + "/admin/api/" + SHOPIFY_API_VERSION +
     "/orders.json?status=any&limit=250");
-  const r = await fetch(url, { headers: { "X-Shopify-Access-Token": c.token, "content-type": "application/json" } });
+  const r = await fetch(url, { headers: { "X-Shopify-Access-Token": token, "content-type": "application/json" } });
   if (!r.ok) throw new Error("Shopify API " + r.status + " " + r.statusText);
   const data = await r.json();
   let next = null;
@@ -498,14 +525,14 @@ async function pullShopifyOrders(opts) {
 // Callable: "Sync now" / "Backfill history" from the Stock screen.
 exports.syncShopifyOrders = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to sync orders.");
-  const c = shopifyCreds();
-  if (!c.domain || !c.token) {
+  if (!shopifyCreds().ok) {
     throw new HttpsError("failed-precondition",
-      "Shopify isn't connected yet — add SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_TOKEN secrets to enable order sync.");
+      "Shopify isn't connected yet — add the SHOPIFY_STORE_DOMAIN and Shopify app secrets to enable order sync.");
   }
   try {
     const by = (request.auth.token && request.auth.token.email) || request.auth.uid;
     const synced = await pullShopifyOrders({ backfill: !!(request.data && request.data.backfill), by: by });
+    try { await pullShopifyStock(); } catch (e) { logger.warn("Shopify stock mirror skipped", e && e.message); }
     const s = await db.collection("settings").doc("shopify").get();
     return { synced: synced, lastSyncAt: (s.exists && s.data().lastSyncAt) || null };
   } catch (e) {
@@ -517,15 +544,195 @@ exports.syncShopifyOrders = onCall({ region: REGION, timeoutSeconds: 120 }, asyn
 // Scheduled reconcile: pulls the most-recent page every 15 minutes so new
 // orders and fulfilment/tracking changes land even if a webhook was missed.
 exports.scheduledShopifySync = onSchedule({ schedule: "every 15 minutes", region: REGION }, async () => {
-  const c = shopifyCreds();
-  if (!c.domain || !c.token) { logger.info("scheduledShopifySync skipped — Shopify not configured"); return; }
+  if (!shopifyCreds().ok) { logger.info("scheduledShopifySync skipped — Shopify not configured"); return; }
   try {
     const n = await pullShopifyOrders({ backfill: false, by: "schedule" });
     logger.info("scheduledShopifySync upserted " + n + " orders");
   } catch (e) {
     logger.error("scheduledShopifySync failed", e && e.message);
   }
+  // Stock mirror is separate so a token without inventory scopes can't
+  // break order sync.
+  try { await pullShopifyStock(); } catch (e) { logger.warn("Shopify stock mirror skipped", e && e.message); }
 });
+
+/* ------------------------------------------------------------------ *
+ * SHOPIFY WRITE-BACK — the Command Center is where bands actually get
+ * packed, so it tells Shopify when an order ships (tracking number +
+ * customer email from Shopify) and mirrors what Shopify thinks is in
+ * stock at the shipping location, so an oversold size surfaces on Today.
+ * Uses the GraphQL Admin API. App scopes needed on top of read_orders:
+ *   read/write_merchant_managed_fulfillment_orders  (mark shipped)
+ *   read_products, read_inventory, read_locations    (stock mirror)
+ * Optional SHOPIFY_LOCATION_ID pins the shipping location; otherwise the
+ * location named like "Office"/"Covington" (or the first active) is used.
+ * ------------------------------------------------------------------ */
+const SHOPIFY_GQL_VERSION = "2026-10";
+async function shopifyGql(query, variables) {
+  const c = shopifyCreds();
+  const token = await shopifyToken();
+  const r = await fetch("https://" + c.domain + "/admin/api/" + SHOPIFY_GQL_VERSION + "/graphql.json", {
+    method: "POST",
+    headers: { "X-Shopify-Access-Token": token, "content-type": "application/json" },
+    body: JSON.stringify({ query: query, variables: variables || {} }),
+  });
+  const text = await r.text();
+  let d = {};
+  try { d = text ? JSON.parse(text) : {}; } catch (e) { d = {}; }
+  if (!r.ok || (d.errors && d.errors.length)) {
+    const msg = d.errors ? (typeof d.errors === "string" ? d.errors : (d.errors[0] && d.errors[0].message) || JSON.stringify(d.errors)) : r.statusText;
+    const e = new Error("Shopify " + r.status + " " + msg);
+    e.status = r.status;
+    if (/access denied|scope/i.test(msg)) e.status = 403;
+    throw e;
+  }
+  return d.data || {};
+}
+function userErr(payload) {
+  const ue = payload && payload.userErrors;
+  return ue && ue.length ? ue.map((u) => u.message).join("; ") : "";
+}
+
+// USPS / DHL are what Safewave ships with; anything else is left for
+// Shopify to auto-detect from the number.
+function guessCarrier(num) {
+  const n = String(num || "").replace(/\s+/g, "").toUpperCase();
+  if (!n) return "";
+  if (/^\d{10}$/.test(n) || /^JD\d{18}$/.test(n)) return "DHL Express";
+  if (/^(94|93|92|95|91)\d{18,20}$/.test(n) || /^\d{20,22}$/.test(n) || /^[A-Z]{2}\d{9}US$/.test(n)) return "USPS";
+  if (/^1Z[0-9A-Z]{16}$/.test(n)) return "UPS";
+  return "";
+}
+
+async function shopifyShipLocationId() {
+  if (process.env.SHOPIFY_LOCATION_ID) {
+    const v = String(process.env.SHOPIFY_LOCATION_ID);
+    return v.indexOf("gid://") === 0 ? v : "gid://shopify/Location/" + v;
+  }
+  const d = await shopifyGql("{ locations(first: 25) { nodes { id name isActive } } }");
+  const locs = ((d.locations && d.locations.nodes) || []).filter((l) => l.isActive !== false);
+  const pick = locs.find((l) => /office|covington/i.test(l.name || "")) || locs[0];
+  return pick ? pick.id : null;
+}
+
+const ORDER_FULFIL_FIELDS = "id name displayFulfillmentStatus " +
+  "fulfillmentOrders(first: 10) { nodes { id status supportedActions { action } } } " +
+  "fulfillments(first: 10) { id status }";
+
+// Find the Shopify order for a Command Center order. orders/{id} uses the
+// numeric Shopify id as its doc id; otherwise search by order name.
+async function findShopifyOrder(orderName, orderId) {
+  let id = orderId && /^\d+$/.test(String(orderId)) ? String(orderId) : null;
+  if (!id && orderName) {
+    const q = await db.collection("orders").where("n", "==", orderName).limit(1).get();
+    if (!q.empty && /^\d+$/.test(q.docs[0].id)) id = q.docs[0].id;
+  }
+  if (id) {
+    const d = await shopifyGql("query($id: ID!) { order(id: $id) { " + ORDER_FULFIL_FIELDS + " } }", { id: "gid://shopify/Order/" + id });
+    if (d.order) return d.order;
+  }
+  const name = String(orderName || "").replace(/"/g, "");
+  if (!name) return null;
+  const d = await shopifyGql("query($q: String!) { orders(first: 1, query: $q) { nodes { " + ORDER_FULFIL_FIELDS + " } } }", { q: "name:" + name });
+  return (d.orders && d.orders.nodes && d.orders.nodes[0]) || null;
+}
+
+exports.shopifyFulfillOrder = onCall({ region: REGION, timeoutSeconds: 60 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to fulfil orders.");
+  if (!shopifyCreds().ok) {
+    throw new HttpsError("failed-precondition", "Shopify isn't connected yet — add the Shopify app secrets.");
+  }
+  const data = request.data || {};
+  const orderName = String(data.orderName || "").slice(0, 40);
+  const tracking = String(data.tracking || "").trim().slice(0, 60);
+  const carrier = String(data.carrier || "").trim().slice(0, 40) || guessCarrier(tracking);
+  const by = (request.auth.token && request.auth.token.email) || request.auth.uid;
+  if (!orderName || /^DEMO-/i.test(orderName)) throw new HttpsError("invalid-argument", "Not a Shopify order.");
+  const fdoc = db.collection("fulfillments").doc(orderName.replace(/\//g, "-"));
+  try {
+    const order = await findShopifyOrder(orderName, data.orderId);
+    if (!order) throw new HttpsError("not-found", "Couldn't find " + orderName + " in Shopify.");
+    const open = ((order.fulfillmentOrders && order.fulfillmentOrders.nodes) || []).filter((f) =>
+      ["OPEN", "IN_PROGRESS", "SCHEDULED"].indexOf(f.status) >= 0 &&
+      (f.supportedActions || []).some((a) => a.action === "CREATE_FULFILLMENT"));
+    const trackingInfo = tracking ? { number: tracking } : null;
+    if (trackingInfo && carrier) trackingInfo.company = carrier;
+    let result = "created", fulfillmentId = null;
+    if (open.length) {
+      const input = { lineItemsByFulfillmentOrder: open.map((f) => ({ fulfillmentOrderId: f.id })), notifyCustomer: true };
+      if (trackingInfo) input.trackingInfo = trackingInfo;
+      const d = await shopifyGql("mutation($f: FulfillmentInput!) { fulfillmentCreate(fulfillment: $f) { fulfillment { id status } userErrors { field message } } }", { f: input });
+      const err = userErr(d.fulfillmentCreate);
+      if (err) throw new Error(err);
+      fulfillmentId = d.fulfillmentCreate.fulfillment && d.fulfillmentCreate.fulfillment.id;
+    } else {
+      // Already fulfilled in Shopify (e.g. marked by hand) — just attach tracking.
+      const last = (order.fulfillments || []).filter((f) => f.status !== "CANCELLED").pop();
+      if (last && trackingInfo) {
+        const d = await shopifyGql("mutation($id: ID!, $t: FulfillmentTrackingInput!) { fulfillmentTrackingInfoUpdate(fulfillmentId: $id, trackingInfoInput: $t, notifyCustomer: true) { fulfillment { id } userErrors { field message } } }", { id: last.id, t: trackingInfo });
+        const err = userErr(d.fulfillmentTrackingInfoUpdate);
+        if (err) throw new Error(err);
+        result = "tracking_updated";
+      } else {
+        result = "already_fulfilled";
+      }
+      fulfillmentId = last ? last.id : null;
+    }
+    const at = new Date().toISOString();
+    const numericId = String(order.id).split("/").pop();
+    const ord = { ful: "FULFILLED" };
+    if (tracking) { ord.tracking = tracking; ord.carrier = carrier || ""; }
+    await db.collection("orders").doc(numericId).set(ord, { merge: true });
+    await fdoc.set({ shopify: { status: result, at: at, by: by, fulfillmentId: fulfillmentId || null, carrier: carrier || "" } }, { merge: true });
+    return { status: result, carrier: carrier || "" };
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    logger.error("shopifyFulfillOrder failed", orderName, e && e.message);
+    const scope = e && (e.status === 401 || e.status === 403);
+    await fdoc.set({ shopify: { status: "failed", at: new Date().toISOString(), by: by, error: String((e && e.message) || "").slice(0, 200) } }, { merge: true }).catch(() => {});
+    throw new HttpsError(scope ? "permission-denied" : "internal",
+      scope ? "The Shopify app can't mark orders shipped yet — add the fulfillment scopes." : "Shopify said: " + ((e && e.message) || "unknown error"));
+  }
+});
+
+// Mirror Shopify's "available" count per band size at the shipping
+// location into settings/shopify.stock. Notifies everyone the moment a
+// size goes oversold (negative), not on every 15-minute pass.
+async function pullShopifyStock() {
+  const loc = await shopifyShipLocationId();
+  if (!loc) return null;
+  const d = await shopifyGql("query($id: ID!) { location(id: $id) { name inventoryLevels(first: 250) { nodes { " +
+    "quantities(names: [\"available\"]) { name quantity } " +
+    "item { variant { title selectedOptions { name value } product { title status } } } } } } }", { id: loc });
+  const levels = (d.location && d.location.inventoryLevels && d.location.inventoryLevels.nodes) || [];
+  const stock = { S: 0, M: 0, L: 0 };
+  let matched = 0;
+  levels.forEach((lv) => {
+    const v = lv.item && lv.item.variant;
+    if (!v || !v.product || !/band/i.test(v.product.title || "") || v.product.status === "ARCHIVED") return;
+    const label = [v.title].concat((v.selectedOptions || []).map((o) => o.value)).join(" ");
+    const m = label.match(/\b(small|medium|large|s|m|l)\b/i);
+    if (!m) return;
+    const q = (lv.quantities || []).find((x) => x.name === "available");
+    stock[m[1][0].toUpperCase()] += Number((q && q.quantity) || 0);
+    matched++;
+  });
+  if (!matched) return null;
+  const ref = db.collection("settings").doc("shopify");
+  const prev = (await ref.get()).data() || {};
+  const prevStock = prev.stock || {};
+  const newlyOver = Object.keys(stock).filter((z) => stock[z] < 0 && !(Number(prevStock[z]) < 0));
+  await ref.set({ stock: stock, stockAt: new Date().toISOString(), stockLocation: (d.location && d.location.name) || "" }, { merge: true });
+  if (newlyOver.length) {
+    const names = { S: "Small", M: "Medium", L: "Large" };
+    await db.collection("notifications").add({
+      to: "all", title: "Shopify oversold: " + newlyOver.map((z) => names[z] + " (" + stock[z] + ")").join(", "),
+      body: "Customers bought more than the store shows in stock. Restock in Shopify or pause the size.",
+      link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+  return stock;
+}
 
 /* ------------------------------------------------------------------ *
  * COMPLIANCE STANDARD-WATCH — monthly (and on-demand) web check for

@@ -33,6 +33,8 @@ jobs:
           SHOPIFY_WEBHOOK_SECRET: ${{ secrets.SHOPIFY_WEBHOOK_SECRET }}
           SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
           SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           FW_REPO_TOKEN: ${{ secrets.FW_REPO_TOKEN }}
           FW_REPO: ${{ vars.FW_REPO }}
@@ -48,6 +50,8 @@ jobs:
           if [ -n "$SHOPIFY_WEBHOOK_SECRET" ]; then echo "SHOPIFY_WEBHOOK_SECRET=$SHOPIFY_WEBHOOK_SECRET" >> functions/.env; fi
           if [ -n "$SHOPIFY_STORE_DOMAIN" ]; then echo "SHOPIFY_STORE_DOMAIN=$SHOPIFY_STORE_DOMAIN" >> functions/.env; fi
           if [ -n "$SHOPIFY_ADMIN_TOKEN" ]; then echo "SHOPIFY_ADMIN_TOKEN=$SHOPIFY_ADMIN_TOKEN" >> functions/.env; fi
+          if [ -n "$SHOPIFY_CLIENT_ID" ]; then echo "SHOPIFY_CLIENT_ID=$SHOPIFY_CLIENT_ID" >> functions/.env; fi
+          if [ -n "$SHOPIFY_CLIENT_SECRET" ]; then echo "SHOPIFY_CLIENT_SECRET=$SHOPIFY_CLIENT_SECRET" >> functions/.env; fi
           if [ -n "$ANTHROPIC_API_KEY" ]; then echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" >> functions/.env; fi
           # GitHub read token for auto-drafting firmware release notes. Named
           # FW_REPO_TOKEN as a repo secret — GitHub forbids secret names starting

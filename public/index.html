@@ -1619,7 +1619,7 @@ input[type=date]{color-scheme:dark}
     </div>
     <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">Tracking number <span style="color:var(--faint);font-weight:400">(from the Shopify shipping label)</span></p>
     <input class="field" id="ff-tracking" placeholder="e.g. 9400 1000 0000 0000 0000 00" style="margin:0">
-    <div class="note" style="margin:12px 0">Completing signs off as <b id="ff-signer">you</b>, assigns the band's serial to this customer, decrements Covington, and prints the band's QR label for the box.</div>
+    <div class="note" style="margin:12px 0">Completing signs off as <b id="ff-signer">you</b>, assigns the band's serial to this customer, decrements Covington, and prints the band's QR label for the box. It also marks the order shipped in Shopify, which emails the customer the tracking number.</div>
     <button class="btn" onclick="completeFulfillment()">✓ Complete &amp; print band label</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
   </div>
@@ -1805,9 +1805,48 @@ function ordersList(){
 function subscribeOrders(){if(!hasFirestore()){return}
   if(ordersUnsub){try{ordersUnsub()}catch(e){}}
   try{ordersUnsub=firebase.firestore().collection('orders').orderBy('at','desc').limit(150).onSnapshot(qs=>{
-    LIVEORDERS=qs.docs.map(d=>{const o=d.data();return {n:o.n,name:o.name||'',total:o.total||0,date:o.date||'',at:o.at||'',ful:o.ful||'UNFULFILLED',email:o.email||'',tracking:o.tracking||'',trackingUrl:o.trackingUrl||'',carrier:o.carrier||''}});
+    LIVEORDERS=qs.docs.map(d=>{const o=d.data();return {id:d.id,n:o.n,name:o.name||'',total:o.total||0,date:o.date||'',at:o.at||'',ful:o.ful||'UNFULFILLED',email:o.email||'',tracking:o.tracking||'',trackingUrl:o.trackingUrl||'',carrier:o.carrier||''}});
+    const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
+  },e=>{})}catch(e){}
+  subscribeShopStock();}
+/* Shopify's own "available" count per size at the shipping location,
+   mirrored every 15 min by the backend. Shopify keeps selling while this is
+   above zero, so it — not just our Covington count — decides overselling. */
+let SHOPSTOCK=null, shopStockUnsub=null;
+function subscribeShopStock(){if(!hasFirestore())return;
+  if(shopStockUnsub){try{shopStockUnsub()}catch(e){}}
+  try{shopStockUnsub=firebase.firestore().collection('settings').doc('shopify').onSnapshot(d=>{
+    const v=d.exists?d.data():{};SHOPSTOCK=v.stock?{S:Number(v.stock.S)||0,M:Number(v.stock.M)||0,L:Number(v.stock.L)||0,at:v.stockAt||'',loc:v.stockLocation||''}:null;
     const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
   },e=>{})}catch(e){}}
+function shopOversold(){return SHOPSTOCK?SIZES.filter(z=>SHOPSTOCK[z]<0):[]}
+// Sizes where Shopify thinks it has more to sell than Covington can ship.
+function shopAhead(){return SHOPSTOCK?SIZES.filter(z=>SHOPSTOCK[z]>=0&&SHOPSTOCK[z]>cov(z)):[]}
+function oversoldCard(){const o=shopOversold();if(!o.length)return '';
+  return '<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>OVERSOLD IN SHOPIFY</span><div class="t" style="margin-top:7px">'+o.map(z=>SIZELABEL[z]+' '+SHOPSTOCK[z]).join(', ')+'</div><div class="d">Customers bought more than Shopify shows in stock. Restock it in Shopify (Products → Inventory) or pause the size so it stops selling.</div></div>'}
+/* Tell Shopify an order shipped: creates the fulfilment with tracking and
+   lets Shopify email the customer. Safe to retry. */
+async function pushShopifyFulfill(n,quiet){
+  const f=FULF[n];if(!f||isDemoOrder(n)||!hasFirestore())return;
+  const o=ordersList().find(x=>x.n===n)||{};
+  f.shopify={status:'sending'};if(!quiet)renderStock();
+  try{
+    const r=await firebase.functions().httpsCallable('shopifyFulfillOrder')({orderName:n,orderId:o.id||'',tracking:f.tracking||''});
+    const st=(r&&r.data&&r.data.status)||'created';
+    f.shopify={status:st,at:new Date().toISOString(),carrier:(r&&r.data&&r.data.carrier)||''};
+    if(!quiet)toast(st==='already_fulfilled'?'Shopify already had '+n+' as shipped':'✓ Shopify updated — customer emailed'+(f.tracking?' the tracking number':''));
+  }catch(e){
+    const m=(e&&e.message)||'';const off=/connected yet|precondition/i.test(m)||(e&&e.code==='functions/failed-precondition');
+    f.shopify={status:off?'not_connected':'failed',error:m};
+    if(!quiet)toast(off?'Saved here. Shopify isn’t connected yet, so mark it shipped in Shopify for now':'Saved here, but Shopify didn’t update — tap Retry on the order');
+  }
+  renderStock();
+}
+function shopifyLine(f){const s=(f&&f.shopify)||null;if(!s)return '';
+  if(s.status==='created'||s.status==='tracking_updated'||s.status==='already_fulfilled')return '<span class="pill good" style="margin-left:6px">SHOPIFY ✓</span>';
+  if(s.status==='sending')return '<span class="pill dim" style="margin-left:6px">SENDING…</span>';
+  if(s.status==='not_connected')return '<span class="pill dim" style="margin-left:6px">MARK IN SHOPIFY</span>';
+  return '<span class="pill amber" style="margin-left:6px">SHOPIFY NOT UPDATED</span>'}
 async function loadInventory(){if(!hasFirestore())return;try{const d=await firebase.firestore().collection('inventory').doc('main').get();if(d.exists&&d.data().locations){SIZES.forEach(z=>0);INV=Object.assign({covington:{},pace:{},china:{}},d.data().locations)}}catch(e){}
   const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();}
 function saveInventory(){if(hasFirestore())firebase.firestore().collection('inventory').doc('main').set({locations:INV,updatedAt:new Date().toISOString()},{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
@@ -1927,6 +1966,7 @@ function renderFulfillTab(body){
     +'<button class="btn ghost" style="flex:1;min-width:132px" onclick="demoSync()">▶ Demo walkthrough</button>'
     +'</div>';
   if(DEMO.length)html+='<div class="card" style="border-color:var(--wave)"><div class="row"><div class="grow"><div class="t">Demo mode</div><div class="d">These orders are a walkthrough — nothing is sent to Shopify or saved to the database.</div></div><button class="btn ghost" onclick="clearDemo()">Clear demo</button></div></div>';
+  html+=oversoldCard();
   const blocks=stockBlocks();
   if(blocks.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>CAN’T SHIP</span><div class="t" style="margin-top:7px">'+blocks.map(z=>SIZELABEL[z]).join(', ')+' — 0 in Covington</div><div class="d">Transfer from Pace before these ship. Pace has '+blocks.map(z=>SIZELABEL[z]+' '+(INV.pace[z]||0)).join(', ')+'.</div></div>';
   html+='<div class="sec-head"><h2>To fulfill</h2><span class="pill '+(unf.length?'amber':'good')+'">'+unf.length+'</span></div>';
@@ -1935,7 +1975,7 @@ function renderFulfillTab(body){
   body.innerHTML=html;
 }
 function fulfillCard(o){return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · paid</div></div><span class="pill amber">TO SHIP</span></div><button class="btn" style="margin-top:10px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill this order</button></div>'}
-function fulfilledCard(o){const f=FULF[o.n]||{};const track=f.tracking||o.tracking||'';const tr=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(track)+'</a>':esc(track)):'';return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+(SIZELABEL[f.size]||'—')+' · '+esc(f.serial||'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+tr+'</div></div><span class="pill good">SHIPPED</span></div><div class="row" style="gap:8px;margin-top:9px"><button class="btn ghost" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Reprint label</button><button class="btn ghost" style="flex:1" onclick="startReturn(\''+esc(o.n)+'\')">Start return</button></div></div>'}
+function fulfilledCard(o){const f=FULF[o.n]||{};const track=f.tracking||o.tracking||'';const tr=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(track)+'</a>':esc(track)):'';return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+(SIZELABEL[f.size]||'—')+' · '+esc(f.serial||'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+tr+'</div></div><span class="pill good">SHIPPED</span>'+shopifyLine(f)+'</div><div class="row" style="gap:8px;margin-top:9px">'+(f.shopify&&f.shopify.status==='failed'?'<button class="btn ghost" style="flex:1" onclick="pushShopifyFulfill(\''+esc(o.n)+'\')">Retry Shopify</button>':'')+'<button class="btn ghost" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Reprint label</button><button class="btn ghost" style="flex:1" onclick="startReturn(\''+esc(o.n)+'\')">Start return</button></div></div>'}
 function openFulfill(n){const o=ordersList().find(x=>x.n===n);if(!o)return;ffOrder=n;
   document.getElementById('ff-order').textContent=o.n+' · '+o.name;
   document.getElementById('ff-cust').textContent=o.date+' · $'+o.total+' · paid';
@@ -1971,6 +2011,7 @@ function completeFulfillment(){const o=ordersList().find(x=>x.n===ffOrder);if(!o
   if(!demo)saveInventory();
   closeSheets();renderStock();refreshPulse();printLabel(ffOrder);
   toast('✓ '+ffOrder+' shipped · '+serial+(reuse?' (reissued)':'')+' · '+SIZELABEL[size]+' -1'+(demo?' · demo':''));
+  if(!demo){const n=ffOrder;setTimeout(()=>pushShopifyFulfill(n),1600)}
 }
 /* ---- returns lifecycle: request → issue label → inspect → back to inventory ---- */
 function startReturn(n){const f=FULF[n];if(!f)return;
@@ -2051,6 +2092,15 @@ function renderInventoryTab(body){
   html+='<div class="inv-table"><div class="inv-row inv-head"><span>Location</span><span>S</span><span>M</span><span>L</span><span>Total</span></div>';
   LOCS.forEach(l=>{const k=l[0];html+='<div class="inv-row tap" tabindex="0" onclick="openInvEdit(\''+k+'\')"><span><b>'+esc(l[1])+'</b><br><span class="d" style="font-size:11px">'+esc(l[2])+'</span></span><span>'+(INV[k].S||0)+'</span><span>'+(INV[k].M||0)+'</span><span>'+(INV[k].L||0)+'</span><span><b>'+SIZES.reduce((a,z)=>a+(INV[k][z]||0),0)+'</b></span></div>'});
   html+='<div class="inv-row inv-tot"><span><b>Network total</b></span><span>'+net('S')+'</span><span>'+net('M')+'</span><span>'+net('L')+'</span><span><b>'+totalNetwork()+'</b></span></div></div>';
+  html+=oversoldCard();
+  if(SHOPSTOCK){const cell=z=>{const v=SHOPSTOCK[z];const off=v<0||v!==cov(z);return '<span'+(off?' style="color:var(--amber);font-weight:700"':'')+'>'+v+'</span>'};
+    const ahead=shopAhead();
+    html+='<div class="sec-head" style="margin-top:18px"><h2>What Shopify is selling</h2><span class="pill dim">'+(SHOPSTOCK.at?esc(ageStr(SHOPSTOCK.at)):'synced')+'</span></div>';
+    html+='<div class="inv-table"><div class="inv-row inv-head"><span>Online store</span><span>S</span><span>M</span><span>L</span><span>Total</span></div>';
+    html+='<div class="inv-row"><span><b>Shopify available</b><br><span class="d" style="font-size:11px">'+esc(SHOPSTOCK.loc||'Shipping location')+'</span></span>'+cell('S')+cell('M')+cell('L')+'<span><b>'+SIZES.reduce((a,z)=>a+SHOPSTOCK[z],0)+'</b></span></div>';
+    html+='<div class="inv-row"><span><b>Covington here</b></span><span>'+cov('S')+'</span><span>'+cov('M')+'</span><span>'+cov('L')+'</span><span><b>'+totalAvail()+'</b></span></div></div>';
+    html+='<div class="note" style="margin-top:12px">'+(ahead.length?'<b style="color:var(--amber)">Shopify can sell more '+ahead.map(z=>SIZELABEL[z]).join(', ')+' than Covington can ship.</b> Lower the count in Shopify or transfer from Pace. ':'')+'Amber means the two counts don’t match. Shopify’s number refreshes every 15 minutes; change it in Shopify (Products → Inventory).</div>';
+  }
   html+='<div class="note" style="margin-top:12px">Covington ships to customers and clears QC. Pace NY is upstream (2-wk transfer). China is production ('+CHINA_LEAD_MONTHS+'-mo lead). Fulfilling an order or logging a return adjusts Covington automatically.</div>';
   body.innerHTML=html;
 }
@@ -5006,6 +5056,8 @@ function renderPulse(user){
   // ops signals everyone should see
   const ops=[];
   const blocks=(typeof stockBlocks==='function')?stockBlocks():[];
+  const over=(typeof shopOversold==='function')?shopOversold():[];
+  if(over.length)ops.push(opsCard('s-stock','amber','OVERSOLD','Shopify oversold: '+over.map(z=>SIZELABEL[z]+' '+SHOPSTOCK[z]).join(', '),'Restock in Shopify or pause the size so it stops selling'));
   blocks.forEach(z=>ops.push(opsCard('s-stock','amber','TRANSFER',SIZELABEL[z]+' bands: 0 in Covington','Can’t ship — transfer from Pace ('+(INV.pace[z]||0)+' available)')));
   const unfilled=(typeof unfulfilledOrders==='function')?unfulfilledOrders():[];
   if(unfilled.length)ops.push(opsCard('s-stock','wave','TO SHIP',unfilled.length+' order'+(unfilled.length>1?'s':'')+' to fulfill',unfilled.slice(0,5).map(o=>o.n).join(', ')));
