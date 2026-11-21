@@ -90,8 +90,8 @@ the deploy runner. Never commit a key, never print one, never move one into
   not deciding. He can *see* everything (Financials and the raise included) and
   gets the weekly raise rollout, but has no operational decision rights. He is
   read-only on business records, enforced in `firestore.rules` (`canOperate()`,
-  `canSeeRaise()`) and mirrored in the UI (`isObserver()`). He has no Vault
-  (shared logins) access. **Feedback** is readable only by super admins.
+  `canSeeRaise()`) and mirrored in the UI (`isObserver()`). He can open the Vault
+  (shared logins) to view and copy, but can't add, edit or delete entries. **Feedback** is readable only by super admins.
 - **Never commit customer or investor PII** to this repo.
 - Write for a small internal team that is about to dogfood this. Prefer clear,
   low-friction UI over dense dashboards; the CRM went through several rounds toward

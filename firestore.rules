@@ -292,10 +292,10 @@ service cloud.firestore {
       allow read: if canSeeRaise();
       allow write: if canRaise();
     }
-    // Leadership tools (vault) keep their previous audience.
-    // Shared logins are operational access, so Jared isn't included.
+    // Leadership tools (vault) keep their previous audience. Jared can read
+    // and use the shared logins; only the decision group changes them.
     function canVault() {
-      return signedIn() && !isJared() && (isOversightEmail() || myRole() == 'superadmin' || myRole() == 'admin' || myRole() == 'manager');
+      return signedIn() && (isOversightEmail() || myRole() == 'superadmin' || myRole() == 'admin' || myRole() == 'manager');
     }
 
     // Tools & passwords vault — shared team logins, gated to leadership
@@ -321,7 +321,8 @@ service cloud.firestore {
     }
 
     match /vault/{id} {
-      allow read, write: if canVault();
+      allow read: if canVault();
+      allow write: if canVault() && !isJared();
     }
 
     // Compliance / GRC — our own SOC 2 + HIPAA control tracker, PHI map, and the
