@@ -738,7 +738,8 @@ exports.runCampaigns = onSchedule({ schedule: "every day 15:00", region: REGION 
     return senderCache[uid];
   }
 
-  const accs = await db.collection("crm_accounts").get();
+  // Sales accounts and investors (investors live in their own finance-gated collection).
+  const accs = { docs: [...(await db.collection("crm_accounts").get()).docs, ...(await db.collection("investors").get()).docs] };
   let sent = 0;
   for (const doc of accs.docs) {
     if (sent >= CAMPAIGN_SENDS_PER_RUN) break;
@@ -857,7 +858,8 @@ async function deliver(creds, sender, { to, subject, text }) {
   });
 }
 async function logNote(accountId, note) {
-  const acc = await db.collection("crm_accounts").doc(accountId).get();
+  let acc = await db.collection("crm_accounts").doc(accountId).get();
+  if (!acc.exists) acc = await db.collection("investors").doc(accountId).get();
   if (!acc.exists) return;
   const notes = (acc.data().notes || []).slice();
   notes.unshift(note);
@@ -1219,4 +1221,87 @@ exports.videoView = onRequest({ region: REGION }, async (req, res) => {
     res.status(e && e.message === "owner" ? 403 : 429).send("rejected"); return;
   }
   res.status(204).send("");
+});
+
+/* ------------------------------------------------------------------ *
+ * TICKET INTAKE  →  tickets/{id}
+ * Support messages from the Safewave phone app and the customer dashboard
+ * (Firebase project safewave-371716, collection contact_submissions) are
+ * forwarded here by that project's forwardSupportToCommandCenter function,
+ * so every complaint lands on one Support board.
+ *
+ * No shared secret: the caller sends a Google-signed ID token for its own
+ * service account. We check it with Google (signature, expiry, audience) and
+ * only accept the app project's service accounts.
+ * ------------------------------------------------------------------ */
+const INTAKE_AUDIENCE = "https://us-central1-safewave-command-center.cloudfunctions.net/ticketIntake";
+const INTAKE_CALLERS = [
+  "393568702648-compute@developer.gserviceaccount.com", // safewave-371716 default compute SA (Cloud Functions v2)
+  "safewave-371716@appspot.gserviceaccount.com",
+];
+const SAFETY_WORDS = /\b(fire|smoke|alarm (didn'?t|did not|never)|missed (an )?alert|didn'?t (buzz|vibrate|alert)|no (buzz|vibration)|overheat|hot|burn|swell|battery (swell|bulg)|injur|emergency)\b/i;
+
+async function verifyCaller(req) {
+  const h = req.get("authorization") || "";
+  const tok = h.startsWith("Bearer ") ? h.slice(7) : "";
+  if (!tok) return null;
+  const r = await fetch("https://oauth2.googleapis.com/tokeninfo?id_token=" + encodeURIComponent(tok));
+  if (!r.ok) return null;
+  const c = await r.json();
+  if (c.aud !== INTAKE_AUDIENCE) return null;
+  if (String(c.email_verified) !== "true") return null;
+  if (!INTAKE_CALLERS.includes(c.email)) return null;
+  if (Number(c.exp) * 1000 < Date.now()) return null;
+  return c.email;
+}
+
+exports.ticketIntake = onRequest({ region: REGION }, async (req, res) => {
+  if (req.method !== "POST") { res.status(405).send("POST only"); return; }
+  let caller;
+  try { caller = await verifyCaller(req); } catch (e) { caller = null; }
+  if (!caller) { res.status(403).send("Forbidden"); return; }
+
+  const b = req.body || {};
+  const srcId = String(b.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+  if (!srcId) { res.status(400).send("Missing id"); return; }
+  const message = String(b.message || "").slice(0, 5000);
+  const name = String(b.name || "").slice(0, 120);
+  const email = String(b.email || "").slice(0, 200);
+  const site = String(b.organizationName || b.organizationId || "").slice(0, 120);
+  const fromDashboard = !!b.organizationId;
+  const firstLine = (message.split(/\n/)[0] || "Support request").trim();
+  const title = (firstLine.length > 80 ? firstLine.slice(0, 77) + "…" : firstLine) || "Support request";
+  const safety = SAFETY_WORDS.test(message);
+
+  const id = "APP-" + srcId.slice(-10).toUpperCase();
+  const ref = db.collection("tickets").doc(id);
+  const existing = await ref.get();
+  if (existing.exists) { res.json({ ok: true, id, duplicate: true }); return; }
+
+  const t = {
+    id, title,
+    customer: [name, site].filter(Boolean).join(" · ") || email || "App user",
+    email,
+    channel: fromDashboard ? "Dashboard" : "In-app",
+    product: fromDashboard ? "Dashboard" : "App",
+    sev: safety ? "safety" : "medium",
+    desc: message,
+    assignee: "",
+    due: "",
+    status: "open",
+    created: new Date().toISOString(),
+    by: fromDashboard ? (site || "Customer dashboard") : "Phone app",
+    source: { project: "safewave-371716", collection: "contact_submissions", id: srcId, organizationId: b.organizationId || null },
+  };
+  await ref.set(t);
+  await db.collection("notifications").add({
+    to: "all",
+    title: (safety ? "⚠ Safety ticket: " : "New ticket: ") + title,
+    body: t.customer,
+    link: "s-support",
+    by: t.by,
+    at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  logger.info(`ticketIntake: ${id} from ${caller} (${t.channel}${safety ? ", safety" : ""})`);
+  res.json({ ok: true, id });
 });

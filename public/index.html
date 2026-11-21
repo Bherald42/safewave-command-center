@@ -537,6 +537,26 @@ input[type=date]{color-scheme:dark}
 .screen{display:none;padding:20px 16px 30px}
 .screen.on{display:block}
 /* pulse home — hero + quick-action buttons */
+.dr-folder{border-top:1px solid var(--line)}
+.dr-folder>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:11px 2px}
+.dr-folder>summary::-webkit-details-marker{display:none}
+.dr-folder>summary::before{content:'▸';color:var(--wave);transition:transform .15s;display:inline-block}
+.dr-folder[open]>summary::before{transform:rotate(90deg)}
+.dr-fname{font:700 14.5px var(--font-d);flex:1}
+.dr-fcount{font-size:12px;font-weight:700;color:var(--faint)}
+.dr-fcount.ok{color:var(--good)}
+.dr-item{display:flex;align-items:flex-start;gap:11px;padding:10px 2px 12px 22px;border-top:1px dashed var(--line)}
+.dr-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;margin-top:1px}
+.dr-dot.ok{background:var(--good);border-color:var(--good)}
+.dr-main{flex:1;min-width:0}
+.dr-t{font-weight:700;font-size:14px}
+.dr-h{font-size:12.5px;color:var(--muted);margin-top:2px}
+.dr-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.dr-files{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.dr-file{display:block;color:var(--wave);font-weight:600;font-size:13px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr-file small{display:block;color:var(--faint);font-weight:500;font-size:11px}
+.dr-up{flex-shrink:0;cursor:pointer;margin:0;padding:7px 13px;font-size:13px;width:auto}
+.dr-add{background:none;border:0;color:var(--wave);font:600 13px var(--font-b);cursor:pointer;padding:8px 2px 12px 22px}
 .pulse-more{margin-top:22px;border-top:1px solid var(--line);padding-top:6px}
 .pulse-more>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:12px 2px;font:700 16px var(--font-d);color:var(--text)}
 .pulse-more>summary::-webkit-details-marker{display:none}
@@ -1119,7 +1139,7 @@ input[type=date]{color-scheme:dark}
     <span class="pill wave">NEW TICKET</span>
     <h1 style="font-size:20px;margin:11px 0 12px">Add a ticket</h1>
     <input class="field" id="tk-title" placeholder="What's the issue? (short title)">
-    <input class="field" id="tk-customer" placeholder="Customer name or email (optional)">
+    <input class="field" id="tk-customer" placeholder="Customer name and email (email lets you reply)">
     <p class="d" style="font-weight:600;color:var(--text);margin:2px 0 6px">Channel</p>
     <div class="reason" id="tk-channel" data-def="In-app">
       <button data-v="In-app" class="on">In-app report</button>
@@ -5949,7 +5969,11 @@ const FEEDBACK_NAV={id:'s-feedback',label:'Feedback',roles:[],svg:'<path d="M21 
 const USERS_NAV={id:'s-users',label:'Users',roles:[],svg:'<circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 12 0"/><circle cx="17.5" cy="8.5" r="2.4"/><path d="M15.5 20a5 5 0 0 1 6.5-3.8"/>'};
 const FIELD_NAV={id:'s-field',label:'Field',roles:[],svg:'<path d="M4 20V10M10 20V4M16 20v-7M20 20H2"/><circle cx="10" cy="4" r="0"/>'};
 let FINANCE_EMAILS=[];
-function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;if(u.role==='superadmin')return true;if(isOversight(u))return true;return FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase())}
+/* Finance + raise group: the super admin, Trey, and the finance allow-list.
+   Jared has stepped out of operations and has no finance decision rights, so he
+   is excluded even if his email is on the list (the rules enforce the same). */
+const NO_FINANCE_EMAILS=['jared@safewavetech.com'], TREY_EMAIL='trevon@safewavetech.com';
+function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;const em=(u.email||'').toLowerCase();if(NO_FINANCE_EMAILS.includes(em))return false;if(u.role==='superadmin')return true;if(em===TREY_EMAIL)return true;return FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes(em)}
 /* Department layer: a sign-up role (Ops/Sales/Tech) that scopes which work
    tabs a member sees. It sits ON TOP of the role hierarchy — admins, managers
    and the super admin are unaffected and still see everything. Members with no
@@ -6105,7 +6129,7 @@ function enterApp(user){
   if(canComply())subscribeCompliance();
   if(canQC())subscribeQC();
   recordActivity();startSessionTracking();
-  loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed())loadFinance();});
+  loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeAllowed()){loadFinance();if(!CRMA.some(a=>a.board==='Fundraise'))loadCRM();loadDataroom();}});
   subscribeGuides();
   goto('s-pulse');
   guideDeepLink();
@@ -6220,7 +6244,8 @@ function openAddTicket(){document.getElementById('tk-title').value='';document.g
 function saveTicket(){
   const title=document.getElementById('tk-title').value.trim();
   if(!title){toast('Give the ticket a short title');return}
-  const t={id:'TK-'+Date.now().toString(36).toUpperCase().slice(-5),title:title,customer:document.getElementById('tk-customer').value.trim(),channel:pickVal('tk-channel'),product:pickVal('tk-product'),sev:pickVal('tk-sev')||'medium',desc:document.getElementById('tk-desc').value.trim(),assignee:document.getElementById('tk-assignee').value,due:document.getElementById('tk-due').value||'',status:'open',created:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'you'};
+  const cust=document.getElementById('tk-customer').value.trim();const em=(cust.match(/[^\s<>()"',;]+@[^\s<>()"',;]+\.[A-Za-z]{2,}/)||[''])[0];
+  const t={id:'TK-'+Date.now().toString(36).toUpperCase().slice(-5),title:title,customer:cust,email:em,channel:pickVal('tk-channel'),product:pickVal('tk-product'),sev:pickVal('tk-sev')||'medium',desc:document.getElementById('tk-desc').value.trim(),assignee:document.getElementById('tk-assignee').value,due:document.getElementById('tk-due').value||'',status:'open',created:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||'you'};
   TKTS.unshift(t);persistTicket(t);closeSheets();renderSupport();refreshPulse();
   if(t.assignee)notifyAssignee(t.assignee,'Ticket assigned to you',t.title,'s-support');
   toast('✓ Ticket '+t.id+' created — '+SEV[t.sev].label+' · '+t.channel)
@@ -6232,7 +6257,7 @@ function renderSupport(){
   const open=all.filter(t=>t.status==='open').sort((a,b)=>SEV[a.sev].rank-SEV[b.sev].rank||new Date(a.created)-new Date(b.created));
   const resolved=all.filter(t=>t.status==='closed');
   document.getElementById('ticket-count').textContent=open.length+' open';
-  document.getElementById('ticket-list').innerHTML=open.length?open.map(ticketCard).join(''):'<div class="empty"><div class="ico">✓</div><div class="t">No open tickets</div><div class="d">Tap “＋ Add ticket” to log one. Automatic capture from the app &amp; sales@ inbox connects next.</div></div>';
+  document.getElementById('ticket-list').innerHTML=open.length?open.map(ticketCard).join(''):'<div class="empty"><div class="ico">✓</div><div class="t">No open tickets</div><div class="d">Messages sent from the Safewave app and the customer dashboard land here automatically. Tap “＋ Add ticket” to log anything else (put the customer\u2019s email in the customer field so you can reply).</div></div>';
   const rsec=document.getElementById('ticket-resolved-sec');
   if(resolved.length){rsec.style.display='block';document.getElementById('ticket-resolved').innerHTML=resolved.map(ticketCard).join('')}else rsec.style.display='none';
   document.getElementById('support-orders').innerHTML=ordersList().slice(0,3).map(o=>'<div class="card"><div class="row"><div class="grow"><div class="t">'+o.n+' · '+o.name+'</div><div class="d">'+o.date+' · '+o.ful.toLowerCase()+'</div></div><span class="pill '+(o.ful==='FULFILLED'?'good':'amber')+'">'+o.ful+'</span></div></div>').join('')
@@ -7286,8 +7311,10 @@ function saveNewAccount(){const name=document.getElementById('na-name').value.tr
   const rec={id:'c'+Date.now().toString(36),board:board,name:name,contact:document.getElementById('na-contact').value.trim(),owner:document.getElementById('na-owner').value.trim()||'Unassigned',email:document.getElementById('na-email').value.trim(),phone:document.getElementById('na-phone').value.trim(),location:document.getElementById('na-location').value.trim(),stage:sb?sb.dataset.v:'New',status:'',tags:[],notes:[],contacts:[],extra:{}};
   if(investor){rec.commit=0;rec.commitStatus='';}
   addAccount(rec);addAcctBoard='Added';closeSheets();crmSeg='all';crmQ='';renderCRM();toast('✓ '+(investor?'Investor':'Account')+' added — '+name)}
+/* Investors live in their own finance-gated collection; everything else in the team CRM. */
+function acctCol(a){return (a&&a.board==='Fundraise')?'investors':'crm_accounts'}
 function addAccount(rec){CRMA.unshift(rec);
-  if(crmSource==='firestore'&&hasFirestore()){firebase.firestore().collection('crm_accounts').doc(rec.id).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+  if(crmSource==='firestore'&&hasFirestore()){firebase.firestore().collection(acctCol(rec)).doc(rec.id).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
   else{try{const nw=JSON.parse(localStorage.getItem('sw_crm_new')||'[]');nw.unshift(rec);localStorage.setItem('sw_crm_new',JSON.stringify(nw))}catch(e){}}}
 function renderMetrics(a){const m=a.metrics||{};
   const tiles=[['Bands online',m.bandsOnline],['Active users',m.activeUsers],['MRR',(m.mrr!=null&&m.mrr!=='')?('$'+m.mrr):''],['Billing',m.billingStatus],['Open invoices',m.openInvoices]];
@@ -7320,6 +7347,18 @@ async function loadCRM(){
         await batch.commit();snap=await col.get();
       }
       CRMA=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
+      // Investors: only the finance group can read them. Any still sitting in the
+      // shared CRM are moved into the locked collection the first time someone
+      // in that group opens the app; everyone else never loads them.
+      const strays=CRMA.filter(a=>a.board==='Fundraise');
+      CRMA=CRMA.filter(a=>a.board!=='Fundraise');
+      if(canFundraise()){
+        const inv=firebase.firestore().collection('investors');
+        if(strays.length){try{let b=firebase.firestore().batch(),n=0;
+          for(const a of strays){b.set(inv.doc(String(a.id)),a,{merge:true});b.delete(col.doc(String(a.id)));if(++n%200===0){await b.commit();b=firebase.firestore().batch()}}
+          await b.commit();toast('Moved '+strays.length+' investor record'+(strays.length>1?'s':'')+' into the locked fundraise list')}catch(e){console.warn('investor move failed',e)}}
+        try{const is=await inv.get();CRMA=CRMA.concat(is.docs.map(d=>Object.assign({id:d.id},d.data(),{board:'Fundraise'})))}catch(e){console.warn('investors load failed',e)}
+      }
       if(!CRMA.length && window.CRM_SEED)CRMA=localSeed();
       crmSource=CRMA.length && !snap.empty ?'firestore':'local';
     }catch(e){CRMA=localSeed();crmSource='local'}
@@ -7329,7 +7368,7 @@ async function loadCRM(){
 function loadSeedFile(input){const f=input.files&&input.files[0];if(!f)return;const rd=new FileReader();rd.onload=e=>{try{const data=JSON.parse(e.target.result);window.CRM_SEED=Array.isArray(data)?data:(data.segments?[].concat.apply([],data.segments.map(s=>s.records||[])):[]);if(!window.CRM_SEED.length){toast('No accounts found in that file');return}toast('Loaded '+window.CRM_SEED.length+' accounts — saving to the shared workspace…');loadCRM();}catch(err){toast('That doesn\'t look like the accounts file (.json)')}};rd.readAsText(f);input.value='';}
 function updateAccount(id,patch){
   const a=CRMA.find(x=>x.id===id);if(!a)return;Object.assign(a,patch);
-  if(crmSource==='firestore'&&hasFirestore()){firebase.firestore().collection('crm_accounts').doc(id).set(patch,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+  if(crmSource==='firestore'&&hasFirestore()){firebase.firestore().collection(acctCol(a)).doc(id).set(patch,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
   else{try{const ov=JSON.parse(localStorage.getItem('sw_crm_edits')||'{}');ov[id]=Object.assign(ov[id]||{},patch);localStorage.setItem('sw_crm_edits',JSON.stringify(ov))}catch(e){}}
 }
 function crmFiltered(){return CRMA.filter(a=>{
@@ -7352,7 +7391,7 @@ let crmTab='pipeline';
 let addAcctBoard='Added';
 function crmGoTab(t){crmTab=t;if(t!=='account')acctId=null;campMode='list';renderCRM()}
 function backToPipeline(){crmTab='pipeline';acctId=null;renderCRM()}
-function canFundraise(){const r=CURRENT_USER&&CURRENT_USER.role;return r==='admin'||r==='manager'||r==='superadmin'||isOversight()}
+function canFundraise(){return financeAllowed()}
 function crmTabsHTML(){
   const tab=(id,l,ic)=>'<button class="chip'+(crmTab===id?' on':'')+'" onclick="crmGoTab(\''+id+'\')">'+ic+' '+l+'</button>';
   return '<div class="chips" style="margin-bottom:16px">'+tab('pipeline','Pipeline','▦')+tab('campaigns','Campaigns','🚀')+tab('prospect','Prospect','🔎')+(canFundraise()?tab('fundraise','Fundraise','💰'):'')+'</div>';
@@ -7428,11 +7467,95 @@ function capTableCard(){const s=raiseStats();const pre=Number(RAISE.preMoney)||0
 function editCapInputs(){const p=prompt('Pre-money valuation ($):',RAISE.preMoney||'');if(p===null)return;RAISE.preMoney=Number((''+p).replace(/[^0-9.]/g,''))||0;
   const sh=prompt('Existing shares outstanding (optional — enables price per share):',RAISE.shares||'');if(sh!==null)RAISE.shares=Number((''+sh).replace(/[^0-9.]/g,''))||0;
   saveRaise();renderCRM()}
-function dataRoomCard(){const docs=RAISE.docs||[];
-  return '<div class="card"><div class="sec-head"><h2>Data room</h2><a onclick="addRaiseDoc()">＋ Add link</a></div>'
-    +(docs.length?docs.map((d,i)=>'<div class="kv"><span><a href="'+esc(d.url)+'" target="_blank" rel="noopener" style="color:var(--wave);font-weight:600">'+esc(d.label||d.url)+' ↗</a></span><a onclick="rmRaiseDoc('+i+')" style="color:var(--faint);cursor:pointer">✕</a></div>').join('')
-      :'<div class="d" style="color:var(--faint)">No documents yet. Add your deck, financial model, cap table or one-pager — one shared link every investor and teammate can reach.</div>')
-    +'</div>';}
+/* ================= DATA ROOM =================
+   One checklist of everything investors expect, by folder. Each item has a
+   plain-language note, who provides it, a due date and its uploaded files
+   (every version kept; newest is current). Items live in `dataroom/{id}`
+   (finance group only); files at random unlisted Storage paths. */
+const DR_FOLDERS=[['overview','1. Overview'],['legal','2. Company & legal'],['financials','3. Financials'],['product','4. Product & IP'],['traction','5. Traction'],['operations','6. Operations'],['team','7. Team'],['round','8. Round & investors']];
+const DR_SEED=[
+ ['overview','deck-send','Pitch deck (send version)','12–15 slides an investor reads on their own. Start from the "Investor deck" doc in the shared Drive.','trey','2026-12-05'],
+ ['overview','deck-present','Pitch deck (presenting version)','Fewer words, for live meetings.','trey','2026-12-05'],
+ ['overview','one-pager','One-pager','The company on one page: problem, product, traction (Amazon), team, the ask.','trey','2026-12-05'],
+ ['overview','exec-summary','Executive summary','A 2-page memo version of the deck.','trey','2026-12-08'],
+ ['legal','formation','Formation documents and bylaws','Certificate of incorporation (or organization) and bylaws or operating agreement.','brad','2026-12-19'],
+ ['legal','cap-table','Cap table, today and after the $1.5M','Who owns what now and after the round.','brad','2026-12-12'],
+ ['legal','prior-financing','Earlier investment agreements','Any SAFEs, notes or side letters signed so far.','brad','2026-12-19'],
+ ['legal','ip-assignments','IP assignment agreements','Signed by everyone who built the product, including contractors.','brad','2026-12-19'],
+ ['financials','statements','P&L, balance sheet and cash flow (2025 and 2026 to date)','Exported from Financials.','brad','2026-12-12'],
+ ['financials','model','24-month financial model and use of funds','How the $1.5M is spent and how long it lasts.','both','2026-12-12'],
+ ['financials','unit-economics','Unit economics','What one band costs to make and ship vs. what it sells for.','brad','2026-12-12'],
+ ['product','product-overview','Product overview','Band, watch kit, phone app, customer dashboard and Aware, with photos.','trey','2026-12-12'],
+ ['product','patent','Patent summary','What the utility patent covers and where it stands.','brad','2026-12-15'],
+ ['product','certifications','Certifications','FCC grant and the battery test summary (UN 38.3).','brad','2026-12-15'],
+ ['product','roadmap','2027 roadmap','What gets built with the money.','trey','2026-12-12'],
+ ['traction','sales','Sales by month','From Shopify; exported from the Command Center.','trey','2026-12-12'],
+ ['traction','amazon','Amazon pilot summary','What was deployed, results so far, and the purchase orders.','trey','2026-12-12'],
+ ['traction','pipeline','Pipeline','Other companies in talks, from the CRM.','trey','2026-12-12'],
+ ['traction','quotes','Customer quotes','3–5 short quotes, with permission.','trey','2026-12-15'],
+ ['operations','supply-chain','Supply chain summary','China factory, Pace, Covington, lead times.','brad','2026-12-15'],
+ ['operations','supplier-agreements','Key supplier agreements','Factory and Pace agreements.','brad','2026-12-19'],
+ ['team','bios','Team bios and org chart','One paragraph each.','trey','2026-12-08'],
+ ['team','hiring','Hiring plan','The roles the $1.5M pays for.','both','2026-12-12'],
+ ['team','advisors','Advisors','Names and what they help with.','trey','2026-12-12'],
+ ['round','faq','Investor FAQ','Answers to what every investor asks: why now, competition, risks, use of funds.','trey','2026-12-15'],
+ ['round','targets','Target investor list','The first 30 names, with who can introduce you. Start from the Target Investor Profile in Drive.','trey','2026-12-15'],
+ ['round','terms','Term sheet or SAFE draft','Once the terms are decided.','brad','2026-12-19'],
+];
+let DR=[], drLoaded=false, drOpen={};
+async function loadDataroom(force){
+  if(!canFundraise())return;
+  if(!hasFirestore()){DR=DR_SEED.map((r,i)=>({id:r[1],folder:r[0],title:r[2],help:r[3],who:r[4],due:r[5],order:i,files:[]}));drLoaded=true;return}
+  if(drLoaded&&!force)return;
+  try{
+    const col=firebase.firestore().collection('dataroom');
+    let snap=await col.get();
+    if(snap.empty){let b=firebase.firestore().batch();DR_SEED.forEach((r,i)=>b.set(col.doc(r[1]),{folder:r[0],title:r[2],help:r[3],who:r[4],due:r[5],order:i,files:[],createdAt:new Date().toISOString()}));await b.commit();snap=await col.get()}
+    DR=snap.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>(a.order||0)-(b.order||0));drLoaded=true;
+  }catch(e){console.warn('dataroom load failed',e)}
+  if(document.getElementById('s-crm')&&document.getElementById('s-crm').classList.contains('on')&&crmTab==='fundraise')renderCRM();
+}
+function drReady(it){return (it.files||[]).length>0}
+function drWho(w){return w==='brad'?'Brad provides':w==='both'?'Brad + Trey':'Trey'}
+function drFileSize(n){return n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
+function dataRoomCard(){
+  if(!drLoaded){loadDataroom();return '<div class="card"><div class="sec-head"><h2>Data room</h2></div><div class="d" style="color:var(--faint)">Loading the checklist…</div></div>'}
+  const done=DR.filter(drReady).length,total=DR.length,pct=total?Math.round(done/total*100):0;const today=new Date().toISOString().slice(0,10);
+  let h='<div class="card"><div class="sec-head"><h2>Data room</h2><span class="pill dim">'+done+' of '+total+' ready</span></div>'
+    +'<div class="progress" style="height:10px;margin:2px 0 10px"><i style="width:'+pct+'%;background:var(--good)"></i></div>'
+    +'<div class="d" style="margin-bottom:10px">Everything investors expect, folder by folder. Tap <b>Upload</b> on an item to add its file; tap a file to open it. Uploading a newer version keeps the old one.</div>';
+  DR_FOLDERS.forEach(f=>{const items=DR.filter(i=>i.folder===f[0]);if(!items.length)return;const fd=items.filter(drReady).length;
+    h+='<details class="dr-folder"'+(drOpen[f[0]]?' open':'')+' ontoggle="drOpen[\''+f[0]+'\']=this.open"><summary><span class="dr-fname">'+esc(f[1])+'</span><span class="dr-fcount'+(fd===items.length?' ok':'')+'">'+fd+'/'+items.length+'</span></summary>';
+    items.forEach(it=>{const ok=drReady(it);const late=!ok&&it.due&&it.due<today;const files=(it.files||[]).slice().sort((a,b)=>(b.at||'').localeCompare(a.at||''));
+      h+='<div class="dr-item"><div class="dr-dot'+(ok?' ok':'')+'">'+(ok?'✓':'')+'</div><div class="dr-main"><div class="dr-t">'+esc(it.title)+'</div>'
+        +'<div class="dr-h">'+esc(it.help||'')+'</div>'
+        +'<div class="dr-meta"><span class="pill '+(it.who==='brad'?'wave':'dim')+'">'+esc(drWho(it.who))+'</span>'+(it.due?'<span class="pill '+(late?'amber':'dim')+'">'+(late?'Overdue · ':'Due ')+esc(new Date(it.due+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}))+'</span>':'')+'</div>'
+        +(files.length?'<div class="dr-files">'+files.map((fl,i)=>'<a href="'+esc(fl.url)+'" target="_blank" rel="noopener" class="dr-file">'+esc(fl.name)+'<small>'+(i===0?'current · ':'')+esc(drFileSize(fl.size||0))+' · '+esc(fl.by||'')+'</small></a>').join('')+'</div>':'')
+        +'</div><label class="btn ghost dr-up">Upload<input type="file" hidden onchange="uploadDataroomFile(\''+it.id+'\',this)"></label></div>';});
+    h+='<button class="dr-add" onclick="addDataroomItem(\''+f[0]+'\')">＋ Add a document to this folder</button></details>';});
+  const links=RAISE.docs||[];
+  if(links.length)h+='<div class="pulse-sub-h" style="margin-top:12px">Saved links</div>'+links.map((d,i)=>'<div class="kv"><span><a href="'+esc(d.url)+'" target="_blank" rel="noopener" style="color:var(--wave);font-weight:600">'+esc(d.label||d.url)+' ↗</a></span><a onclick="rmRaiseDoc('+i+')" style="color:var(--faint);cursor:pointer">✕</a></div>').join('');
+  h+='<div class="row" style="justify-content:flex-end;margin-top:8px"><a onclick="addRaiseDoc()" style="font-size:13px">＋ Save a link instead</a></div></div>';
+  return h;}
+async function uploadDataroomFile(id,input){const f=input.files&&input.files[0];input.value='';if(!f)return;
+  const it=DR.find(x=>x.id===id);if(!it)return;
+  if(f.size>50*1024*1024){toast('That file is over 50 MB — compress it or save a link instead');return}
+  if(!hasFirestore()){toast('Uploads work on the live site');return}
+  const rand=(crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2));
+  const safe=f.name.replace(/[^A-Za-z0-9._-]+/g,'_').slice(-80);
+  const path='dataroom/'+rand+'/'+safe;
+  toast('Uploading '+f.name+'…');
+  try{const ref=firebase.storage().ref(path);await ref.put(f,{contentType:f.type||'application/octet-stream'});const url=await ref.getDownloadURL();
+    const rec={name:f.name,path:path,url:url,size:f.size,type:f.type||'',by:(CURRENT_USER&&CURRENT_USER.name)||'',at:new Date().toISOString()};
+    it.files=(it.files||[]).concat([rec]);
+    await firebase.firestore().collection('dataroom').doc(id).set({files:firebase.firestore.FieldValue.arrayUnion(rec),updatedAt:rec.at},{merge:true});
+    toast('✓ '+it.title+' uploaded');renderCRM();
+  }catch(e){toast('Upload failed — '+((e&&e.code)||'try again'))}}
+function addDataroomItem(folder){const t=prompt('Document name (for example: Letter of intent from Acme):','');if(!t||!t.trim())return;const help=prompt('One line on what it is (optional):','')||'';
+  const id='x'+Date.now().toString(36);const rec={folder:folder,title:t.trim(),help:help.trim(),who:'trey',due:'',order:1000+DR.length,files:[],createdAt:new Date().toISOString()};
+  DR.push(Object.assign({id:id},rec));drOpen[folder]=true;
+  if(hasFirestore())firebase.firestore().collection('dataroom').doc(id).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
+  renderCRM();}
 function addRaiseDoc(){const label=prompt('Document name (e.g. Pitch deck, Financial model, Cap table):','');if(label===null)return;const url=prompt('Link (Google Drive / Notion / DocSend URL):','');if(!url)return;RAISE.docs=(RAISE.docs||[]).concat([{label:label.trim()||url.trim(),url:url.trim()}]);saveRaise();renderCRM()}
 function rmRaiseDoc(i){if(!confirm('Remove this document link?'))return;RAISE.docs=(RAISE.docs||[]).slice();RAISE.docs.splice(i,1);saveRaise();renderCRM()}
 /* ---- Investor update broadcast ---- */
