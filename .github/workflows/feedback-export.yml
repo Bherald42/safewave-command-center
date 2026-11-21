@@ -1,55 +1,56 @@
-name: Feedback export (temporary)
-# One-off: reads open team feedback and publishes it ENCRYPTED to a session
-# public key so it can be worked on. Plaintext never leaves the runner.
+name: Feedback close-out (temporary)
+# One-off: posts a reply on each worked feedback item, marks it resolved,
+# turns firmware/hardware items into Build board tasks, alerts submitters,
+# and removes the earlier temporary encrypted export release.
 on:
   push:
     branches: [claude/feedback-export]
 permissions:
   contents: write
 jobs:
-  export:
+  close:
     runs-on: ubuntu-latest
     steps:
-      - name: Read and encrypt
+      - uses: actions/checkout@v4
+      - name: Close feedback
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           set -e
-          mkdir -p /tmp/fx && cd /tmp/fx
+          mkdir -p /tmp/fx && cp .github/feedback-close.json /tmp/fx/plan.json && cd /tmp/fx
           printf '%s' "$SA" > sa.json
           npm init -y >/dev/null && npm i --silent firebase-admin@12 >/dev/null
-          cat > pub.pem <<'KEY'
-          -----BEGIN PUBLIC KEY-----
-          MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA0E+ZxcBnVCb5ixHF2IKL
-          IPGjcx79291qucuuh9J/kTKcLbe3V+dZ/8xpHcEfpBUntMs9IFcwkhhz2gcwy5n4
-          swx0UQHaJJfQkaHZJq4G8CkotdnKs8egQxGZCOfWmBj7ZFhDT9cGtGK9aTE7/zyM
-          BnIJMIHFi9V2YJvKjRSqMr9Nl9gah14Du6Wk+xIvvAWz2ifNjDXMzmKHXoiWj5Ck
-          UeDIcVMl94C1pdS7bHA0+vC5QR7PF6oxCAccDNTk7kg3COqY4jz8jgPcg7rbW+Pi
-          8IY3w1ydLimA4L5EOVjDrrlqUy8+2YtcJrtgqqxZKZ/cVNKmJY7D80wy3rAy7KsN
-          BZvFDYfXa0yvipBFUAbhW+GRbUjdXMBTjE4mFGpZRlHFdEly3ImnaA6HfXartHGO
-          ItPL7KvPJlQTW3CxkkhlFMsXmEEnY+UFl50u9PG6hVH7KiJwJgK11viRryMtJEiB
-          Lvh3m/HgaJqHO9FAK9DL9Rg7PY6zrWvfIPvvmJ9Vnc9+SUfkyoH7dDhJKB1ag2up
-          8AfKiG+at9b+w1ZNRHkgztiY8lPbxGayAOI9JOTGVSxDOj3hHfWUVpRuX/HOzc+z
-          kA9bUqKG7xCkVwk7tGPsmDGX4ooWcth9s/pKfPMzfN9L9Xq6P0OLGir2vlR0rKV1
-          Rs5Qlk3tCTCUIUQagBzgbYcCAwEAAQ==
-          -----END PUBLIC KEY-----
-          KEY
-          sed -i 's/^          //' pub.pem
-          cat > read.js <<'JS'
+          cat > close.js <<'JS'
           const admin=require('firebase-admin');
           admin.initializeApp({credential:admin.credential.cert(require('./sa.json'))});
-          (async()=>{const qs=await admin.firestore().collection('feedback').get();
-            const out=qs.docs.map(d=>{const v=d.data();for(const k of Object.keys(v)){if(v[k]&&v[k].toDate)v[k]=v[k].toDate().toISOString()}return Object.assign({id:d.id},v)});
-            require('fs').writeFileSync('fb.json',JSON.stringify(out));console.log('docs',out.length,'open',out.filter(x=>x.status!=='resolved').length);process.exit(0)})();
+          const db=admin.firestore(),FV=admin.firestore.FieldValue;
+          const plan=require('./plan.json');
+          (async()=>{
+            const su=await db.collection('users').where('email','==','brad.herald@safewavetech.com').limit(1).get();
+            const sup=su.empty?{uid:'admin',name:'Brad Herald'}:{uid:su.docs[0].id,name:su.docs[0].data().name||'Brad Herald'};
+            const tasks={};let resolved=0,skipped=0,alerts=0;
+            for(const it of plan){
+              const ref=db.collection('feedback').doc(it.id);const snap=await ref.get();
+              if(!snap.exists){skipped++;continue}
+              const f=snap.data();
+              if(it.task){const t=tasks[it.task.key]||(tasks[it.task.key]=Object.assign({},it.task,{notes:[]}));
+                const when=f.createdAt&&f.createdAt.toDate?f.createdAt.toDate().toISOString().slice(0,10):'';
+                t.notes.push('From feedback · '+(f.fromName||'teammate')+(when?' · '+when:'')+'\n'+(f.text||''));}
+              if(f.status==='resolved'){skipped++;continue}
+              const msg={by:sup.name+' (via Claude)',uid:sup.uid,text:it.reply,at:Date.now()};
+              await ref.update({thread:FV.arrayUnion(msg),lastReplyAt:FV.serverTimestamp(),status:'resolved',resolvedAt:FV.serverTimestamp()});
+              resolved++;
+              if(f.fromUid&&f.fromUid!==sup.uid){await db.collection('notifications').add({to:f.fromUid,title:'Reply to your feedback',body:it.reply.slice(0,140),link:'s-feedback',by:sup.name,at:FV.serverTimestamp()});alerts++}
+            }
+            let made=0;
+            for(const k of Object.keys(tasks)){const t=tasks[k];const ref=db.collection('build_tasks').doc(k);const ex=await ref.get();
+              if(ex.exists)continue;
+              await ref.set({id:k,title:t.title,projectId:'',assignee:'',start:'',due:'',status:'todo',priority:t.priority||'medium',watchers:[],deps:[],cost:0,spent:0,costCat:'none',notes:t.notes.join('\n\n'),source:'feedback',createdAt:new Date().toISOString()});made++}
+            console.log('resolved',resolved,'skipped',skipped,'alerts',alerts,'build tasks',made);process.exit(0)})().catch(e=>{console.error('failed',e.message);process.exit(1)});
           JS
-          sed -i 's/^          //' read.js
-          node read.js
-          openssl rand -hex 32 > k.txt
-          openssl enc -aes-256-cbc -pbkdf2 -salt -in fb.json -out fb.enc -pass file:k.txt
-          openssl pkeyutl -encrypt -pubin -inkey pub.pem -in k.txt -out k.enc
-          tar czf bundle.tgz fb.enc k.enc
-          rm -f sa.json fb.json k.txt
-      - name: Publish encrypted bundle
+          node close.js
+          rm -f sa.json
+      - name: Remove temporary export release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create fbx-${{ github.run_id }} /tmp/fx/bundle.tgz --repo ${{ github.repository }} --target ${{ github.sha }} --prerelease --title "temp" --notes "temporary encrypted bundle"
+        run: gh release delete fbx-44867719742 --repo ${{ github.repository }} --cleanup-tag -y || true
