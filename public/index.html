@@ -1160,6 +1160,17 @@ input[type=date]{color-scheme:dark}
   </div>
 </div>
 
+<div class="sheet" id="sh-rollout" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">WEEKLY ROLLOUT · PREVIEW</span>
+    <h1 style="font-size:18px;margin:11px 0 4px" id="rp-subject"></h1>
+    <p class="sub" id="rp-to"></p>
+    <pre id="rp-body" style="white-space:pre-wrap;font-family:var(--font-b);font-size:13px;line-height:1.55;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 12px;max-height:55vh;overflow:auto"></pre>
+    <button class="btn ghost" onclick="closeSheets()">Close</button>
+  </div>
+</div>
+
 <div class="sheet" id="sh-raisetask" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
@@ -6359,7 +6370,7 @@ function enterApp(user){
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
   buildNav(user.role);subscribeActions();renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
   loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();loadPOs();subscribeReturns();subscribeNotifications();subscribeOrders();
-  if(canFundraise()){subscribeRaiseTasks();loadRaise().then(()=>{refreshPulse();raiseRerender();});}
+  if(canFundraise()){subscribeRaiseTasks();subscribeRaiseMeetings();loadRaise().then(()=>{refreshPulse();raiseRerender();});}
   subscribeFeedback();
   if(canVault())subscribeVault();
   if(canComply())subscribeCompliance();
@@ -7173,6 +7184,7 @@ function collectTasks(){const out=[];const t=todayMs();
   (CRMA||[]).filter(a=>a.dueAt&&a.stage!=='Won'&&a.stage!=='Lost'&&a.board!=='Fundraise').forEach(a=>{const dm=dayMs(a.dueAt);out.push({who:a.owner||'',title:(a.nextStep?a.nextStep+' — ':'Follow up: ')+displayName(a),dueMs:dm,screen:'s-crm',kind:'CRM',overdue:dm!=null&&dm<t})});
   // The raise — only loaded for the finance group, so only they ever see these.
   if(typeof canFundraise==='function'&&canFundraise()){
+    if(typeof nextRaiseSync==='function'&&nextRaiseSync()===ymdLocal(new Date())&&CURRENT_USER)out.push({who:CURRENT_USER.name||'',title:'Raise sync today'+(RAISE.meetTime?' at '+RAISE.meetTime:'')+' — open Fundraise → Meetings',dueMs:t,screen:'s-raise',kind:'Raise',overdue:false});
     (RAISE_TASKS||[]).forEach(x=>{const dm=dayMs(x.due);out.push({who:x.ownerName||'',title:x.title+(x.investorName?' — '+x.investorName:''),dueMs:dm,screen:'s-raise',kind:'Raise',raiseTaskId:x.id,overdue:dm!=null&&dm<t})});
     (CRMA||[]).filter(a=>a.board==='Fundraise'&&a.dueAt&&!['Wired','Passed'].includes(raiseStageOf(a))).forEach(a=>{const dm=dayMs(a.dueAt);out.push({who:a.owner||'',title:(a.nextStep?a.nextStep+' — ':'Investor follow-up: ')+displayName(a),dueMs:dm,screen:'s-raise',kind:'Raise',overdue:dm!=null&&dm<t})});
     const soon=t+14*864e5;(DR||[]).filter(it=>!drReady(it)&&it.due).forEach(it=>{const dm=dayMs(it.due);if(dm==null||dm>soon)return;
@@ -7814,13 +7826,98 @@ function renderRaise(){const body=document.getElementById('raise-body');if(!body
   renderFundraise(body);}
 function openInvestor(id){raiseAcctId=id;acctId=id;if(!raiseOn())goto('s-raise');else renderRaise();window.scrollTo(0,0)}
 function backToRaise(){raiseAcctId=null;acctId=null;renderRaise();window.scrollTo(0,0)}
+/* ================= RAISE SYNC MEETINGS =================
+   A standing weekly / every-2-weeks raise meeting: auto agenda, minutes,
+   decisions and action items. Action items are raise tasks, so they land on
+   the owner's Today list and 7am email; the Monday rollout email sends the
+   latest minutes + every action item to the raise leadership. */
+let RAISE_MEETINGS=[],raiseMeetUnsub=null,meetOpenId=null;
+function subscribeRaiseMeetings(){if(!hasFirestore()||!canFundraise())return;try{if(raiseMeetUnsub)raiseMeetUnsub();
+  raiseMeetUnsub=firebase.firestore().collection('raise_meetings').orderBy('date','desc').limit(40).onSnapshot(qs=>{const local=RAISE_MEETINGS.filter(m=>m._dirty);RAISE_MEETINGS=qs.docs.map(d=>Object.assign({id:d.id},d.data()));local.forEach(l=>{const i=RAISE_MEETINGS.findIndex(m=>m.id===l.id);if(i>=0)RAISE_MEETINGS[i]=l;else RAISE_MEETINGS.unshift(l)});refreshPulse();if(!meetOpenId)raiseRerender()},()=>{})}catch(e){}}
+const DOW=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function ymdLocal(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function nextRaiseSync(){const day=Number.isInteger(RAISE.meetDay)?RAISE.meetDay:null;if(day==null)return null;const anchor=RAISE.meetAnchor?new Date(RAISE.meetAnchor+'T12:00:00'):null;
+  for(let i=0;i<21;i++){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+i);if(d.getDay()!==day)continue;
+    if(RAISE.meetCadence==='biweekly'&&anchor){const w=Math.round((d-anchor)/(7*864e5));if(((w%2)+2)%2!==0)continue}return ymdLocal(d)}return null}
+function niceDay(ymd){return ymd?new Date(ymd+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):''}
+function setMeet(k,v){RAISE[k]=v;
+  // Re-anchor every-2-weeks parity on the first upcoming slot whenever the day or cadence changes.
+  if((k==='meetDay'||k==='meetCadence')&&Number.isInteger(RAISE.meetDay)){const d=new Date();d.setHours(12,0,0,0);for(let i=0;i<7;i++){if(d.getDay()===RAISE.meetDay){RAISE.meetAnchor=ymdLocal(d);break}d.setDate(d.getDate()+1)}}
+  saveRaise();renderRaise()}
+function meetById(id){return RAISE_MEETINGS.find(m=>m.id===id)}
+function actionStatus(a){if((RAISE_TASKS||[]).some(t=>t.id===a.id))return 'open';return a.status==='open'&&!hasFirestore()?'open':'done'}
+function persistMeeting(m){m._dirty=true;const rec=Object.assign({},m);delete rec.id;delete rec._dirty;rec.updatedAt=new Date().toISOString();
+  if(hasFirestore())firebase.firestore().collection('raise_meetings').doc(m.id).set(rec,{merge:true}).then(()=>{m._dirty=false}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+function meetAgendaHTML(m){const prev=RAISE_MEETINGS.filter(x=>x.date<m.date).sort((a,b)=>b.date.localeCompare(a.date))[0];const items=[];
+  const s=raiseStats();items.push('Round check: '+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target):'')+' committed · '+s.investors+' investor'+(s.investors===1?'':'s'));
+  if(prev&&(prev.actions||[]).length){const carry=(prev.actions||[]).filter(a=>actionStatus(a)==='open');items.push('Last meeting’s action items: '+((prev.actions||[]).length-carry.length)+' done, '+carry.length+' still open'+(carry.length?' — '+carry.map(a=>a.title+' ('+(a.ownerName||'?')+')').join('; '):''))}
+  const today=ymdLocal(new Date());const od=(RAISE_TASKS||[]).filter(t=>t.due&&t.due<today);if(od.length)items.push('Overdue raise tasks: '+od.map(t=>t.title+' ('+(t.ownerName||'?')+')').join('; '));
+  const hot=raiseAccounts().filter(a=>['Diligence','Committed'].includes(raiseStageOf(a)));if(hot.length)items.push('Hot investors: '+hot.map(a=>displayName(a)+' ('+raiseStageOf(a)+')').join(', '));
+  const dr=(DR||[]);if(dr.length){const soon=dr.filter(i=>!drReady(i)&&i.due&&i.due<=ymdLocal(new Date(Date.now()+7*864e5)));items.push('Data room: '+dr.filter(drReady).length+' of '+dr.length+' ready'+(soon.length?' · due this week: '+soon.map(i=>i.title).join(', '):''))}
+  items.push('New asks, blockers, intros needed');
+  return '<ol style="margin:4px 0 0 18px;padding:0;line-height:1.6">'+items.map(i=>'<li class="d" style="color:var(--text)">'+esc(i)+'</li>').join('')+'</ol>'}
+function startRaiseMeeting(){const today=ymdLocal(new Date());let m=RAISE_MEETINGS.find(x=>x.date===today);
+  if(!m){m={id:'m'+today.replace(/-/g,''),date:today,attendees:raisePeople().map(p=>p.name),minutes:'',decisions:'',actions:[],createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()};RAISE_MEETINGS.unshift(m);persistMeeting(m)}
+  meetOpenId=m.id;renderRaise();window.scrollTo(0,0)}
+function openRaiseMeeting(id){meetOpenId=id;renderRaise();window.scrollTo(0,0)}
+function closeRaiseMeeting(){meetOpenId=null;renderRaise()}
+function meetField(k,v){const m=meetById(meetOpenId);if(!m)return;m[k]=v;persistMeeting(m)}
+function meetToggleAttendee(name){const m=meetById(meetOpenId);if(!m)return;const a=m.attendees||[];m.attendees=a.includes(name)?a.filter(x=>x!==name):a.concat([name]);persistMeeting(m);renderRaise()}
+function meetAddAction(){const m=meetById(meetOpenId);if(!m)return;const title=(document.getElementById('ma-title').value||'').trim();if(!title){toast('What’s the action item?');return}
+  const ownerName=document.getElementById('ma-owner').value;const due=document.getElementById('ma-due').value||'';const uid=uidForName(ownerName)||'';
+  const id='rt'+Date.now().toString(36);const rec={title:title,ownerName:ownerName,owner:uid,due:due,status:'open',meetingId:m.id,meetingDate:m.date,investorId:'',investorName:'',createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdByUid:(CURRENT_USER&&CURRENT_USER.uid)||'',createdAt:new Date().toISOString()};
+  RAISE_TASKS.push(Object.assign({id:id},rec));if(hasFirestore())firebase.firestore().collection('raise_tasks').doc(id).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
+  if(uid&&uid!==(CURRENT_USER&&CURRENT_USER.uid))notify(uid,'New action item from the raise sync','Open Fundraise → Meetings'+(due?' · due '+niceDay(due):''),'s-raise');
+  m.actions=(m.actions||[]).concat([{id:id,title:title,ownerName:ownerName,due:due,status:'open'}]);persistMeeting(m);refreshPulse();renderRaise();toast('✓ Action item → '+ownerName)}
+function meetDoneAction(id){const m=meetById(meetOpenId);if(m){(m.actions||[]).forEach(a=>{if(a.id===id)a.status='done'});persistMeeting(m)}doneRaiseTask(id)}
+function raiseMeetingsHTML(){
+  if(meetOpenId&&meetById(meetOpenId))return meetingEditorHTML(meetById(meetOpenId));
+  const next=nextRaiseSync();const cad=RAISE.meetCadence||'';
+  let h='<div class="card"><div class="sec-head"><h2>Raise sync</h2>'+(next?'<span class="pill wave">Next · '+esc(niceDay(next))+(RAISE.meetTime?' · '+esc(RAISE.meetTime):'')+'</span>':'<span class="pill dim">not scheduled</span>')+'</div>'
+    +'<div class="d" style="margin-bottom:10px">A standing meeting to work the raise: the agenda builds itself from open tasks, hot investors and the data room; action items become raise tasks with an owner and due date.</div>'
+    +'<div class="rolepick" style="margin-bottom:10px"><button class="'+(cad==='weekly'?'on':'')+'" onclick="setMeet(\'meetCadence\',\'weekly\')">Every week</button><button class="'+(cad==='biweekly'?'on':'')+'" onclick="setMeet(\'meetCadence\',\'biweekly\')">Every 2 weeks</button></div>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:150px"><label class="flabel" for="meet-day">Day</label><select class="field" id="meet-day" style="margin:0" onchange="setMeet(\'meetDay\',Number(this.value))"><option value="">Pick a day</option>'+DOW.map((d,i)=>'<option value="'+i+'"'+(RAISE.meetDay===i?' selected':'')+'>'+d+'</option>').join('')+'</select></div>'
+    +'<div style="flex:1;min-width:150px"><label class="flabel" for="meet-time">Time</label><input class="field" id="meet-time" placeholder="e.g. 10:00 AM" value="'+esc(RAISE.meetTime||'')+'" style="margin:0" onchange="setMeet(\'meetTime\',this.value.trim())"></div></div>'
+    +'<button class="btn" style="margin-top:12px" onclick="startRaiseMeeting()">▶ Start today’s meeting</button></div>';
+  const recips=(RAISE.rolloutTo&&RAISE.rolloutTo.length)?RAISE.rolloutTo.join(', '):'the finance group (you, Trey and the finance list)';
+  h+='<div class="card"><div class="sec-head"><h2>Weekly rollout email</h2><span class="pill dim">Mondays 7:30 am</span></div>'
+    +'<div class="d" style="margin-bottom:8px">Every Monday the raise leadership gets one email: the round, the latest minutes and decisions, every action item and raise task (overdue / open / done this week), the data room and the next meeting.</div>'
+    +'<label class="flabel" for="ro-to">Goes to</label><input class="field" id="ro-to" placeholder="'+esc(recips)+'" value="'+esc((RAISE.rolloutTo||[]).join(', '))+'" onchange="setRolloutTo(this.value)" autocomplete="off">'
+    +'<div class="d" style="color:var(--faint);margin:-4px 0 10px">Leave blank to send to the finance group. Separate emails with commas.'+(RAISE.lastRolloutAt?' Last sent '+esc(new Date(RAISE.lastRolloutAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}))+'.':'')+'</div>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost" style="flex:1;min-width:140px" onclick="previewRollout()">Preview</button><button class="btn ghost" style="flex:1;min-width:140px" onclick="sendRolloutNow(this)">Send now</button></div></div>';
+  h+='<div class="sec-head" style="margin-top:6px"><h2>Meetings</h2><span class="pill dim">'+RAISE_MEETINGS.length+'</span></div>';
+  h+=RAISE_MEETINGS.length?RAISE_MEETINGS.map(m=>{const acts=m.actions||[];const open=acts.filter(a=>actionStatus(a)==='open').length;const first=(m.minutes||'').split('\n').find(x=>x.trim())||'No minutes yet';
+    return '<div class="card tap" tabindex="0" onclick="openRaiseMeeting(\''+m.id+'\')"><div class="row"><div class="grow" style="min-width:0"><div class="t">'+esc(niceDay(m.date))+'</div><div class="d" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(first)+'</div></div><span class="pill '+(open?'amber':acts.length?'good':'dim')+'">'+(acts.length?(open?open+' open':'all done'):'no actions')+'</span></div></div>'}).join(''):'<div class="empty"><div class="d">No meetings yet. Set the day above, then Start today’s meeting.</div></div>';
+  return h}
+function meetingEditorHTML(m){const ppl=raisePeople().map(p=>p.name);const acts=m.actions||[];
+  let h='<button class="btn ghost" style="margin:0 0 12px;width:auto" onclick="closeRaiseMeeting()">← All meetings</button>'
+    +'<div class="card"><div class="sec-head"><h2>Raise sync · '+esc(niceDay(m.date))+'</h2><input class="field" type="date" value="'+esc(m.date)+'" style="margin:0;max-width:170px" onchange="meetField(\'date\',this.value);renderRaise()"></div>'
+    +'<label class="flabel">Attendees</label><div class="rolepick" style="flex-wrap:wrap;margin-bottom:6px">'+Array.from(new Set(ppl.concat(m.attendees||[]))).map(n=>'<button class="'+((m.attendees||[]).includes(n)?'on':'')+'" onclick="meetToggleAttendee(decodeURIComponent(\''+encodeURIComponent(n)+'\'))">'+esc(n)+'</button>').join('')+'</div></div>';
+  h+='<div class="card"><div class="sec-head"><h2>Agenda</h2><span class="pill dim">auto</span></div>'+meetAgendaHTML(m)+'</div>';
+  h+='<div class="card"><div class="sec-head"><h2>Minutes</h2></div><textarea class="field" style="min-height:150px;resize:vertical;font-family:var(--font-b)" placeholder="What was discussed — investor updates, feedback heard, what changed…" onchange="meetField(\'minutes\',this.value)">'+esc(m.minutes||'')+'</textarea>'
+    +'<label class="flabel">Decisions</label><textarea class="field" style="min-height:70px;resize:vertical;font-family:var(--font-b)" placeholder="e.g. Go with a post-money SAFE; target 30 investor meetings by Jan 15" onchange="meetField(\'decisions\',this.value)">'+esc(m.decisions||'')+'</textarea></div>';
+  h+='<div class="card"><div class="sec-head"><h2>Action items</h2><span class="pill '+(acts.some(a=>actionStatus(a)==='open')?'amber':'dim')+'">'+acts.filter(a=>actionStatus(a)==='open').length+' open</span></div>'
+    +(acts.length?acts.map(a=>{const st=actionStatus(a);return '<div class="row" style="gap:10px;padding:8px 0;border-top:1px solid var(--line);align-items:center"><div class="grow" style="min-width:0"><div class="t" style="font-size:14px'+(st==='done'?';text-decoration:line-through;color:var(--faint)':'')+'">'+esc(a.title)+'</div><div class="d">'+esc(a.ownerName||'')+(a.due?' · due '+esc(niceDay(a.due)):'')+'</div></div>'+(st==='open'?'<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:13px;margin:0" onclick="meetDoneAction(\''+a.id+'\')">✓ Done</button>':'<span class="pill good">done</span>')+'</div>'}).join(''):'<div class="d" style="color:var(--faint);margin-bottom:6px">Every action item gets one owner and a due date — it goes straight to their Today list and 7 am email.</div>')
+    +'<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><input class="field" id="ma-title" placeholder="Action item" style="margin:0;flex:2;min-width:180px" autocomplete="off" onkeydown="if(event.key===\'Enter\')meetAddAction()">'
+    +'<select class="field" id="ma-owner" style="margin:0;flex:1;min-width:130px">'+ppl.map(n=>'<option'+((raisePeople().find(p=>(p.email||'').toLowerCase()===TREY_EMAIL)||{}).name===n?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select>'
+    +'<input class="field" id="ma-due" type="date" value="'+ymdLocal(new Date(Date.now()+7*864e5))+'" style="margin:0;flex:1;min-width:140px"><button class="btn" style="width:auto" onclick="meetAddAction()">Add</button></div></div>';
+  return h}
+function setRolloutTo(v){RAISE.rolloutTo=String(v||'').split(/[,;\s]+/).map(x=>x.trim().toLowerCase()).filter(x=>/@/.test(x));saveRaise();renderRaise()}
+async function previewRollout(){if(!backendReady()){toast('Preview needs the live backend');return}
+  try{const r=await firebase.functions().httpsCallable('raiseRollout')({preview:true});const d=r.data||{};
+    document.getElementById('rp-subject').textContent=d.subject||'';document.getElementById('rp-to').textContent='To: '+((d.recipients||[]).join(', ')||'—');document.getElementById('rp-body').textContent=d.text||'';closeSheets();openSheet('sh-rollout')}
+  catch(e){toast('Preview failed — '+((e&&e.message)||''))}}
+async function sendRolloutNow(btn){if(!btn.dataset.armed){btn.dataset.armed='1';btn.textContent='Tap again to send';setTimeout(()=>{if(btn.isConnected){delete btn.dataset.armed;btn.textContent='Send now'}},4000);return}
+  if(!backendReady()){toast('Sending needs the live backend');return}btn.disabled=true;btn.textContent='Sending…';
+  try{const r=await firebase.functions().httpsCallable('raiseRollout')({});const d=r.data||{};toast(d.sent?'✓ Rollout emailed to '+d.sent:(d.notified?'No connected mailbox — sent as in-app alerts ('+d.notified+')':'Sent'))}
+  catch(e){toast('Send failed — '+((e&&e.message)||''))}btn.disabled=false;delete btn.dataset.armed;btn.textContent='Send now'}
 /* Fundraise sections — one place that tells the company's story to an
    investor, built from live data elsewhere in the Command Center:
    Shopify orders (traction), CRM (B2B customers + pipeline), Stock (bands
    shipped, returns), Financials (cash, burn, P&L, overhead) and the round
    plan (use of funds, runway after the raise, milestones). */
 let raiseSec='overview';
-const RAISE_SECS=[['overview','Overview'],['traction','Traction'],['financials','Financials'],['plan','Plan'],['investors','Investors'],['dataroom','Data room']];
+const RAISE_SECS=[['overview','Overview'],['meetings','Meetings'],['traction','Traction'],['financials','Financials'],['plan','Plan'],['investors','Investors'],['dataroom','Data room']];
 function raiseSecChips(){return '<div class="chips" style="margin-bottom:14px">'+RAISE_SECS.map(s=>'<button class="chip'+(raiseSec===s[0]?' on':'')+'" onclick="raiseSec=\''+s[0]+'\';renderRaise()">'+s[1]+'</button>').join('')+'</div>'}
 /* Full Shopify order history for traction (the live feed only keeps ~150). */
 let RAISE_ORDERS=null,raiseOrdersLoading=false;
@@ -7917,6 +8014,7 @@ function renderFundraise(v){
   if(raiseSec==='financials'){v.innerHTML=html+raiseFinancialsHTML();return}
   if(raiseSec==='plan'){if(!financeData)loadFinance().then(raiseRerender);v.innerHTML=html+raisePlanHTML();return}
   if(raiseSec==='dataroom'){v.innerHTML=html+dataRoomCard();return}
+  if(raiseSec==='meetings'){v.innerHTML=html+raiseMeetingsHTML();return}
   const btns='<div class="row" style="gap:8px;margin:14px 0;flex-wrap:wrap"><button class="btn" style="flex:1;min-width:150px" onclick="openAddInvestor()">＋ Add investor</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="newInvestorCampaign()">✉️ Investor outreach</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="openInvestorUpdate()">📣 Send update</button></div>';
   if(raiseSec==='overview'){
     if(!RAISE_ORDERS)loadRaiseOrders();if(!financeData)loadFinance().then(raiseRerender);
@@ -7929,6 +8027,8 @@ function renderFundraise(v){
       +'<div class="tile tap" tabindex="0" '+go('traction')+'><div class="n">'+fmtMoney(sn.pipe.weighted)+'</div><div class="l">Weighted B2B pipeline →</div></div>'
       +'<div class="tile tap" tabindex="0" '+go('financials')+'><div class="n">'+(sn.fin?(sn.fin.runway===null?'∞':sn.fin.runway.toFixed(1)+' mo'):'…')+'</div><div class="l">Runway today →</div></div>'
       +'<div class="tile tap" tabindex="0" '+go('dataroom')+'><div class="n">'+sn.drDone+'/'+sn.drTotal+'</div><div class="l">Data room ready →</div></div></div>';
+    const nx=nextRaiseSync();
+    html+='<div class="card tap" tabindex="0" onclick="raiseSec=\'meetings\';renderRaise()" style="margin-bottom:12px"><div class="row"><div class="grow"><div class="t">Raise sync</div><div class="d">'+(nx?'Next: '+esc(niceDay(nx))+(RAISE.meetTime?' · '+esc(RAISE.meetTime):'')+' · '+(RAISE.meetCadence==='biweekly'?'every 2 weeks':'weekly'):'Not scheduled yet — set a day and start logging minutes')+(RAISE_MEETINGS[0]?' · last: '+esc(niceDay(RAISE_MEETINGS[0].date)):'')+'</div></div><span class="pill wave">Meetings →</span></div></div>';
     html+=raiseTasksCard()+btns;v.innerHTML=html;return}
   // Investors
   html+=btns;
