@@ -28,6 +28,17 @@ service cloud.firestore {
       return signedIn() && (request.auth.token.email == 'jared@safewavetech.com'
         || request.auth.token.email == 'trevon@safewavetech.com');
     }
+    // Jared: informed, not deciding. He keeps read access across the company
+    // (including Financials and the raise) so he knows what's going on, but has
+    // no operational decision rights, so he can't create or change business
+    // records. Chat, feedback, guides, his own profile and his own action items
+    // stay open to him.
+    function isJared() {
+      return signedIn() && request.auth.token.email == 'jared@safewavetech.com';
+    }
+    function canOperate() {
+      return signedIn() && !isJared();
+    }
 
     // Who watched the training video (/training/), how long, which chapters.
     // Written only by the videoView Cloud Function; read by the super admin
@@ -59,23 +70,30 @@ service cloud.firestore {
     // Shared CRM — every signed-in teammate can read and edit accounts
     // (the whole team sees who is reaching out to whom).
     match /crm_accounts/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
 
     // Support tickets — shared queue (email-ingested + manually added).
     match /tickets/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
 
     // Action items — one-off to-dos with an owner and a due date (Home →
     // Today, the daily email). Shared like tickets.
     match /actions/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow create, delete: if canOperate();
+      // Jared can still tick off action items assigned to him.
+      allow update: if canOperate() || (signedIn() && resource.data.owner == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'doneAt', 'doneBy']));
     }
 
     // Outreach campaigns — shared so the whole team sees active sequences.
     match /campaigns/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
 
     // Build tasks + projects — shared project board (assignee, dates, status).
@@ -97,10 +115,12 @@ service cloud.firestore {
 
     // Inventory (locations) + order fulfillment records — shared ops.
     match /inventory/{doc} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
     match /fulfillments/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
 
     // Live orders — written only by the Shopify webhook (Admin SDK); the app
@@ -112,15 +132,18 @@ service cloud.firestore {
 
     // Purchase orders (Pace transfers / China production) — shared ops.
     match /purchase_orders/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
 
     // Per-band identity (serial + lifecycle history) and the returns queue.
     match /bands/{serial} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
     match /returns/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
 
     // Team chat — channels can be public (private:false, whole team) or private
@@ -212,11 +235,8 @@ service cloud.firestore {
     // finance allow-list (settings/finance). The UI hides the tab too, but
     // this is the real enforcement.
     // Jared has stepped out of operations and has no finance decision rights:
-    // he is excluded from Financials, the raise, investors and the data room
-    // even if his email is on the allow-list. Trey (trevon@) keeps access.
-    function isJared() {
-      return signedIn() && request.auth.token.email == 'jared@safewavetech.com';
-    }
+    // he can READ Financials and the raise (see canSeeRaise) but never write,
+    // even if his email is on the allow-list. Trey (trevon@) keeps full access.
     function isTrey() {
       return signedIn() && request.auth.token.email == 'trevon@safewavetech.com';
     }
@@ -226,7 +246,8 @@ service cloud.firestore {
         && request.auth.token.email in get(/databases/$(database)/documents/settings/finance).data.emails));
     }
     match /finance/{doc} {
-      allow read, write: if financeOK();
+      allow read: if financeOK() || isJared();
+      allow write: if financeOK();
     }
     // The allow-list itself: only the super admin can edit who has access;
     // a teammate can read it only if they are on it (or are the super admin).
@@ -239,32 +260,42 @@ service cloud.firestore {
     // lives in crm_accounts (team-shared); this doc holds only the round total,
     // gated to leadership (admins/managers) who run the raise.
     // The raise (round config, investors, data room, cap table) is limited to
-    // the finance group: Brad, Trey and the finance allow-list, never Jared.
+    // the finance group: Brad, Trey and the finance allow-list. Jared reads only.
     function canRaise() {
       return financeOK();
     }
+    // Jared can read the raise (view-only) but never change it.
+    function canSeeRaise() {
+      return canRaise() || isJared();
+    }
     match /settings/raise {
-      allow read, write: if canRaise();
+      allow read: if canSeeRaise();
+      allow write: if canRaise();
     }
     // Investor records (moved out of the team-shared crm_accounts).
     match /investors/{id} {
-      allow read, write: if canRaise();
+      allow read: if canSeeRaise();
+      allow write: if canRaise();
     }
     // Data room checklist items and their uploaded files' metadata.
     // Raise tasks Brad assigns to Trey: finance group only (titles can name investors).
     match /raise_tasks/{id} {
-      allow read, write: if canRaise();
+      allow read: if canSeeRaise();
+      allow write: if canRaise();
     }
     // Raise sync meetings: agenda, minutes, decisions, action items.
     match /raise_meetings/{id} {
-      allow read, write: if canRaise();
+      allow read: if canSeeRaise();
+      allow write: if canRaise();
     }
     match /dataroom/{id} {
-      allow read, write: if canRaise();
+      allow read: if canSeeRaise();
+      allow write: if canRaise();
     }
     // Leadership tools (vault) keep their previous audience.
+    // Shared logins are operational access, so Jared isn't included.
     function canVault() {
-      return signedIn() && (isOversightEmail() || myRole() == 'superadmin' || myRole() == 'admin' || myRole() == 'manager');
+      return signedIn() && !isJared() && (isOversightEmail() || myRole() == 'superadmin' || myRole() == 'admin' || myRole() == 'manager');
     }
 
     // Tools & passwords vault — shared team logins, gated to leadership
@@ -301,7 +332,8 @@ service cloud.firestore {
       return signedIn() && (isOversightEmail() || myRole() == 'superadmin' || myRole() == 'admin');
     }
     match /compliance/{id} {
-      allow read, write: if canComply();
+      allow read: if canComply();
+      allow write: if canComply() && !isJared();
     }
 
     // Release QC — firmware & app release records (with release notes) and the
@@ -309,15 +341,18 @@ service cloud.firestore {
     // build board; the UI scopes the tab to tech + leadership. QC config
     // (BLE / serial UUIDs, default thresholds) is leadership-writable.
     match /releases/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
     // Launches — the ship-decision records that tie one release per product
     // lane to QC evidence, sign-offs and a frozen readiness snapshot.
     match /launches/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
     match /qc_runs/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canOperate();
     }
     match /settings/qc {
       allow read: if signedIn();
