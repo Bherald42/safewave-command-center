@@ -1656,7 +1656,7 @@ function nextRaiseMeeting(raise, fromMs) {
   }
   return null;
 }
-const fmtUSD = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
+const fmtUSD = (n) => { const v = Math.round(Number(n) || 0); return (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString("en-US"); };
 const fmtDay = (ymd) => ymd ? new Date(ymd + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
 async function raiseRolloutText() {
   const now = Date.now(), today = ymdET(now), weekAgo = now - 7 * 864e5;
@@ -1667,6 +1667,7 @@ async function raiseRolloutText() {
     db.collection("raise_meetings").orderBy("date", "desc").limit(3).get(),
     db.collection("dataroom").get(),
   ]);
+  const finDoc = await db.collection("finance").doc("main").get().catch(() => null);
   const raise = raiseDoc.data() || {};
   let committed = 0, wired = 0, active = 0;
   invs.forEach((d) => { const a = d.data(); const c = Number(a.commit) || 0;
@@ -1674,6 +1675,18 @@ async function raiseRolloutText() {
     if (a.commitStatus !== "passed") active++; });
   let t = `Weekly raise rollout — week of ${fmtDay(today)}\n\n`;
   t += `ROUND\n${raise.round || "Round"}: ${fmtUSD(committed)} committed${raise.target ? " of " + fmtUSD(raise.target) : ""} (${fmtUSD(wired)} wired) · ${active} investor${active === 1 ? "" : "s"} in play\n\n`;
+  // 13-week cash headline, as last saved from Financials → 13-week cash.
+  const c13 = finDoc && finDoc.exists ? ((finDoc.data() || {}).cash13 || {}).summary : null;
+  if (c13 && c13.at) {
+    t += `CASH — NEXT 13 WEEKS
+${fmtUSD(c13.cash)} today${c13.asOf ? " (bank balance " + fmtDay(c13.asOf) + ")" : ""} · lowest ${fmtUSD(c13.low)} week of ${fmtDay(c13.lowWeek)} · ${fmtUSD(c13.end)} in 13 weeks
+`;
+    t += c13.below ? `Below the ${fmtUSD(c13.buffer)} buffer for ${c13.below} week${c13.below === 1 ? "" : "s"}, starting the week of ${fmtDay(c13.firstBelowWeek)}.
+
+` : `Stays above the ${fmtUSD(c13.buffer)} buffer all 13 weeks.
+
+`;
+  }
   const all = tasks.docs.map((d) => Object.assign({ id: d.id }, d.data()));
   const byId = {}; all.forEach((x) => { byId[x.id] = x; });
   const line = (x) => `• ${x.title}${x.investorName ? " — " + x.investorName : ""} (${x.ownerName || "unassigned"}${x.due ? ", due " + fmtDay(x.due) : ""})`;

@@ -601,6 +601,29 @@ input[type=date]{color-scheme:dark}
 .chart-svg .cline{stroke:var(--wave);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .chart-svg .cdot{fill:var(--wave)}
 .chart-svg .cref{stroke:var(--faint);stroke-width:1.4;stroke-dasharray:4 4}
+.chart-svg .cbar.warn{fill:var(--amber)}
+/* 13-week cash grid */
+.c13-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -2px}
+.c13-tbl{border-collapse:separate;border-spacing:0;font-size:12px;font-variant-numeric:tabular-nums;min-width:100%}
+.c13-tbl th,.c13-tbl td{padding:6px 7px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line);color:var(--text)}
+.c13-tbl thead th{font-size:11px;color:var(--muted);font-weight:600;vertical-align:bottom}
+.c13-wk{display:block;font-size:9.5px;color:var(--faint);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.c13-tbl th[scope=row],.c13-tbl thead th:first-child{position:sticky;left:0;z-index:1;background:var(--surface);text-align:left;font-weight:500;min-width:150px;box-shadow:1px 0 0 var(--line)}
+.c13-tbl .c13-sec th{background:var(--surface-2);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:700;padding-top:9px}
+.c13-tbl .c13-sub th,.c13-tbl .c13-sub td{font-weight:700}
+.c13-tbl .c13-open th,.c13-tbl .c13-open td{color:var(--muted)}
+.c13-tbl .c13-end th,.c13-tbl .c13-end td{font-weight:800;border-top:2px solid var(--line);border-bottom:0}
+.c13-tbl .c13-tot{box-shadow:inset 1px 0 0 var(--line);font-weight:600}
+.c13-z{color:var(--faint)}.c13-low{color:var(--amber)}
+.c13-warn{border-style:solid;border-color:var(--amber);color:var(--text);background:var(--amber-dim)}
+.c13-item{gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.c13-add{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.c13-rep{display:flex;gap:8px;align-items:center;margin:10px 0}
+.c13-f{display:grid;gap:4px;margin:0 0 10px;font-size:12px;font-weight:600;color:var(--muted)}.c13-f .field{margin:0}
+.c13-f2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}@media(max-width:420px){.c13-f2{grid-template-columns:1fr}}
+.c13-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px;font-size:11.5px;color:var(--muted)}.c13-legend span{display:inline-flex;align-items:center;gap:6px}
+.c13-sw{width:10px;height:10px;border-radius:3px;background:var(--wave);display:inline-block}.c13-sw.warn{background:var(--amber)}
+.c13-dash{width:16px;border-top:1.5px dashed var(--faint);display:inline-block}
 .chart-svg .clabel{fill:var(--muted)}
 .cc-hr{display:flex;align-items:center;gap:8px}
 .cc-exp{background:none;border:1px solid var(--line);border-radius:8px;width:26px;height:26px;cursor:pointer;color:var(--muted);font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -7992,6 +8015,7 @@ function raiseFinancialsHTML(){if(!financeData){loadFinance().then(raiseRerender
   h+='<div class="card"><div class="sec-head"><h2>Overhead</h2><span class="pill dim">'+fmtMoney(lines.reduce((s,l)=>s+l[1],0))+'</span></div>'
     +(lines.length?lines.slice(0,10).map(l=>'<div style="margin:7px 0"><div class="row" style="justify-content:space-between"><span class="d" style="color:var(--text)">'+esc(l[0])+'</span><b class="mono">'+fmtMoney(l[1])+'</b></div><div class="progress" style="height:6px;margin-top:4px"><i style="width:'+Math.max(2,Math.round(l[1]/top*100))+'%"></i></div></div>').join(''):'<div class="d" style="color:var(--faint)">Add payroll and operating costs in Financials (or import the QuickBooks P&amp;L) and they show here.</div>')+'</div></div>';
   if(typeof finTrajectoryCard==='function')h+='<div class="raise-grid">'+finTrajectoryCard()+'</div>';
+  h+=c13OverviewCard();
   return h}
 const UOF_DEFAULT=[['Inventory & manufacturing',0],['Certifications (FCC, UN 38.3)',0],['Sales & pilots',0],['Product & firmware',0],['Team',0],['Reserve',0]];
 function raisePlanHTML(){const s=raiseStats();const target=Number(RAISE.target)||0;const uof=(RAISE.useOfFunds&&RAISE.useOfFunds.length?RAISE.useOfFunds:UOF_DEFAULT.map(x=>({label:x[0],amount:x[1]})));
@@ -8839,6 +8863,196 @@ function finTrajectoryCard(){const s=finSeries();const net=financeMRR()-financeB
     +'<div class="row" style="justify-content:space-between;margin-top:8px"><span class="d">Now '+fmtMoney(s.cash[0])+'</span><span class="d" style="color:var(--text);font-weight:600">'+(s.runOut>=0?'Runs out ~month '+s.runOut:'Month '+s.h+' · '+fmtMoney(s.cash[s.cash.length-1]))+'</span></div>'
     +'<div class="note" style="margin-top:9px">Projected from current cash, monthly burn, and the MRR growth below. Edit the inputs to model scenarios.</div></div>';
 }
+/* ================= 13-WEEK CASH (rolling weekly cash forecast) =================
+   The standard treasury view for a seed-stage hardware company: every week for
+   the next 13, opening cash + receipts − disbursements = ending cash, checked
+   against a minimum buffer. Rolls forward on its own (week 1 is always this
+   week). Built from what the Command Center already knows — bank balance,
+   Shopify run-rate, subscriptions, payroll, opex, build commitments, dated CRM
+   deals — plus scheduled one-offs (inventory deposits, rent, invoices, the raise
+   close). A weekly check-in records the real bank balance and scores last
+   week's forecast so the model gets more honest over time. Amber, never red. */
+const C13_WEEKS=13, C13_WK=7*864e5;
+const C13_PAY=[['semimonthly','15th & last day'],['biweekly','Every 2 weeks'],['monthly','Last day of month']];
+function c13(){if(!financeData)return {};if(!financeData.cash13||typeof financeData.cash13!=='object')financeData.cash13={};return financeData.cash13}
+function c13Monday(ms){const d=new Date(ms);d.setHours(0,0,0,0);const dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow);return d.getTime()}
+function c13Label(ms){return new Date(ms).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+function c13Day(ms){const d=new Date(ms);d.setHours(0,0,0,0);return d.getTime()}
+function c13AddMonths(ms,n,day){const d=new Date(ms);const y=d.getFullYear(),m=d.getMonth()+n;const last=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(day,last)).getTime()}
+/* Weekly Shopify sales: trailing 8 full weeks of real orders when they're
+   loaded, otherwise last week's figure from the Shopify snapshot. */
+function c13ShopAuto(){
+  const os=(typeof RAISE_ORDERS!=='undefined'&&RAISE_ORDERS)?RAISE_ORDERS.filter(o=>!/^(DEMO|#TEST)/i.test(o.n||'')):null;
+  if(os&&os.length){const end=c13Monday(Date.now()),start=end-8*C13_WK;let sum=0,n=0;
+    os.forEach(o=>{const ms=orderMs(o);if(ms!=null&&ms>=start&&ms<end){sum+=Number(o.total)||0;n++}});
+    if(n)return {v:sum/8,src:'8-week average of Shopify orders'}}
+  return {v:parseMoney(SHOP.lastWeekRev),src:'last week on Shopify'}}
+function c13Buffer(){const c=c13();return (c.buffer!=null&&c.buffer!=='')?parseMoney(c.buffer):Math.round(financeBurn().total)}
+function c13Raise(){if(typeof raiseAccounts!=='function')return 0;return raiseAccounts().filter(a=>a.commitStatus==='hard').reduce((s,a)=>s+(Number(a.commit)||0),0)}
+const C13_LINES={
+  rec:[['shop','Shopify sales (after fees)'],['subs','Subscriptions'],['deals','CRM deals (weighted)'],['in','Scheduled receipts']],
+  dis:[['payroll','Payroll'],['opex','Operating costs'],['build','Build commitments'],['out','Scheduled payments']]};
+function cashForecast(){
+  const c=c13();const w0=c13Monday(Date.now());const weeks=[];
+  for(let i=0;i<C13_WEEKS;i++){const r={};C13_LINES.rec.concat(C13_LINES.dis).forEach(l=>r[l[0]]=0);weeks.push({start:w0+i*C13_WK,v:r})}
+  const end=w0+C13_WEEKS*C13_WK;
+  const asOf=dayMs(c.asOf)||null;const from=asOf&&asOf>w0?asOf:w0;   // balance already reflects anything before it
+  const idx=ms=>ms<from||ms>=end?-1:Math.min(C13_WEEKS-1,Math.floor((ms-w0)/C13_WK));
+  const put=(ms,k,amt,clampPast)=>{if(!amt)return;if(clampPast&&ms<from)ms=from;const i=idx(ms);if(i>=0)weeks[i].v[k]+=amt};
+  const frac0=Math.max(0,Math.min(1,(w0+C13_WK-from)/C13_WK)); // share of week 1 still ahead
+  // Spread flows (weekly run-rate)
+  const auto=c13ShopAuto();const shopWk=(c.shopWeekly!=null&&c.shopWeekly!=='')?parseMoney(c.shopWeekly):auto.v;
+  const fee=(c.shopFeePct!=null&&c.shopFeePct!=='')?parseMoney(c.shopFeePct):3;
+  const opexWk=financeBurn().opex*12/52;
+  weeks.forEach((w,i)=>{const f=i===0?frac0:1;w.v.shop+=shopWk*(1-fee/100)*f;w.v.opex+=opexWk*f});
+  // Subscriptions: billed on the 1st, growing at the projected monthly rate
+  const p=financeData.projections||{};const mrr=financeMRR(),g=parseMoney(p.growthPct)/100;
+  for(let m=0;m<5;m++){const ms=c13AddMonths(w0,m,1);if(ms>=w0)put(ms,'subs',mrr*Math.pow(1+g,m))}
+  // Payroll runs
+  const payM=financeBurn().payroll;const cad=c.payCadence||'semimonthly';
+  if(payM){
+    if(cad==='biweekly'){const per=payM*12/26;let a=dayMs(c.payAnchor)||(w0+4*864e5);while(a>=w0)a-=14*864e5;for(let t=a;t<end;t+=14*864e5)if(t>=w0)put(t,'payroll',per)}
+    else for(let m=-1;m<5;m++){
+      if(cad==='semimonthly')put(c13AddMonths(w0,m,15),'payroll',payM/2);
+      put(c13AddMonths(w0,m,31),'payroll',cad==='monthly'?payM:payM/2)}}
+  // Build commitments: what's budgeted but not yet spent, on the task's due date
+  (typeof BUILDT!=='undefined'?BUILDT:[]).forEach(t=>{const left=parseMoney(t.cost)-parseMoney(t.spent);if(left<=0||t.status==='done')return;
+    const d=dayMs(t.due);if(d){put(d,'build',left,true)}else weeks.forEach((w,i)=>{w.v.build+=left/C13_WEEKS})});
+  // CRM deals with a close date, paid on terms (upside — off by default)
+  if(c.deals){const terms=(c.dealTerms!=null&&c.dealTerms!=='')?parseMoney(c.dealTerms):30;
+    salesAccts().filter(a=>DEAL_STAGES.includes(a.stage)&&a.closeDate).forEach(a=>put(dayMs(a.closeDate)+terms*864e5,'deals',weightedValue(a)))}
+  // Scheduled one-offs and monthly repeats
+  (c.items||[]).forEach(it=>{const d=dayMs(it.date);const amt=parseMoney(it.amount);if(!d||!amt)return;const k=it.dir==='in'?'in':'out';
+    if(it.repeat==='monthly'){const day=new Date(d).getDate();for(let m=0;m<48;m++){const ms=c13AddMonths(d,m,day);if(ms>=end)break;put(ms,k,amt)}}
+    else put(d,k,amt)});
+  // Roll the balance forward
+  let bal=parseMoney(financeData.cashOnHand);const buf=c13Buffer();
+  weeks.forEach(w=>{w.open=bal;w.rec=C13_LINES.rec.reduce((s,l)=>s+w.v[l[0]],0);w.dis=C13_LINES.dis.reduce((s,l)=>s+w.v[l[0]],0);w.net=w.rec-w.dis;bal+=w.net;w.end=bal;w.low=w.end<buf});
+  let lo=0;weeks.forEach((w,i)=>{if(w.end<weeks[lo].end)lo=i});
+  const stale=asOf?Math.floor((todayMs()-asOf)/864e5):null;
+  return {weeks:weeks,buffer:buf,low:weeks[lo],lowIdx:lo,last:weeks[C13_WEEKS-1],below:weeks.filter(w=>w.low).length,
+    firstBelow:weeks.findIndex(w=>w.low),shopAuto:auto,shopWk:shopWk,fee:fee,stale:stale,start:weeks[0].open}}
+function c13Summary(f){f=f||cashForecast();return {at:new Date().toISOString(),cash:f.start,asOf:c13().asOf||'',low:Math.round(f.low.end),lowWeek:ymd(new Date(f.low.start)),
+  end:Math.round(f.last.end),buffer:Math.round(f.buffer),below:f.below,firstBelowWeek:f.firstBelow>=0?ymd(new Date(f.weeks[f.firstBelow].start)):''}}
+function c13Save(patch,msg){const c=Object.assign(c13(),patch||{});financeData.cash13=c;c.summary=c13Summary();saveFinance({cash13:c},msg);renderFinance()}
+/* ---- chart: ending cash by week, buffer as a dashed line ---- */
+function c13Chart(f){const sm=window.innerWidth<700;const W=sm?360:900,H=sm?190:230,padL=4,padR=4,padT=20,padB=20,n=C13_WEEKS;
+  const vals=f.weeks.map(w=>w.end);let hi=Math.max(f.buffer,...vals,0),lo=Math.min(0,...vals);if(hi===lo)hi=lo+1;
+  const plotW=W-padL-padR,plotH=H-padT-padB,gap=sm?3:8,bw=(plotW-gap*(n-1))/n;const Y=v=>padT+plotH*(hi-v)/(hi-lo);const zy=Y(0);
+  let s='<svg class="chart-svg c13-chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ending cash by week for the next 13 weeks">';
+  s+='<line class="cgrid" x1="'+padL+'" y1="'+zy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+zy.toFixed(1)+'"/>';
+  f.weeks.forEach((w,i)=>{const x=padL+i*(bw+gap),y=Math.min(Y(w.end),zy),h=Math.max(1.5,Math.abs(Y(w.end)-zy));
+    s+='<rect class="cbar'+(w.low?' warn':'')+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3"><title>Week of '+esc(c13Label(w.start))+': ends at '+fmtMoney(w.end)+' (in '+fmtMoney(w.rec)+', out '+fmtMoney(w.dis)+')'+(w.low?' — below buffer':'')+'</title></rect>';
+    const lab=i===0||i===n-1||i===f.lowIdx;
+    if(lab)s+='<text class="clabel" x="'+(x+bw/2).toFixed(1)+'" y="'+(w.end>=0?Y(w.end)-5:Y(w.end)+12).toFixed(1)+'" text-anchor="middle">'+esc(c13k(w.end))+'</text>';
+    if(sm?i%3===0:i%2===0)s+='<text class="caxis" x="'+(x+bw/2).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle">'+esc(c13Label(w.start))+'</text>'});
+  if(f.buffer>0){const by=Y(f.buffer).toFixed(1);s+='<line class="cref" x1="'+padL+'" y1="'+by+'" x2="'+(W-padR)+'" y2="'+by+'"><title>Minimum buffer '+fmtMoney(f.buffer)+'</title></line>'}
+  return s+'</svg>'}
+function c13k(v){const a=Math.abs(v),sg=v<0?'-':'';if(a>=1e6)return sg+'$'+(a/1e6).toFixed(a>=1e7?0:1)+'M';if(a>=1e3)return sg+'$'+(a/1e3).toFixed(a>=1e5?0:1).replace(/\.0$/,'')+'k';return sg+'$'+Math.round(a)}
+/* ---- the grid ---- */
+function c13Table(f){const W=f.weeks;const cell=v=>v?fmtMoney(v):'<span class="c13-z">—</span>';
+  const sum=k=>W.reduce((s,w)=>s+w.v[k],0);
+  const row=(label,vals,tot,cls)=>'<tr'+(cls?' class="'+cls+'"':'')+'><th scope="row">'+label+'</th>'+vals.map(v=>'<td>'+v+'</td>').join('')+'<td class="c13-tot">'+(tot==null?'':tot)+'</td></tr>';
+  let h='<div class="c13-scroll"><table class="c13-tbl"><thead><tr><th scope="col">Week of</th>'+W.map((w,i)=>'<th scope="col"><span class="c13-wk">Wk '+(i+1)+'</span>'+esc(c13Label(w.start))+'</th>').join('')+'<th scope="col" class="c13-tot">13 wks</th></tr></thead><tbody>';
+  h+=row('Opening cash',W.map(w=>fmtMoney(w.open)),'','c13-open');
+  h+='<tr class="c13-sec"><th scope="row" colspan="'+(C13_WEEKS+2)+'">Cash in</th></tr>';
+  C13_LINES.rec.forEach(l=>{if(l[0]==='deals'&&!c13().deals)return;h+=row(l[1],W.map(w=>cell(w.v[l[0]])),cell(sum(l[0])))});
+  h+=row('Total cash in',W.map(w=>fmtMoney(w.rec)),fmtMoney(W.reduce((s,w)=>s+w.rec,0)),'c13-sub');
+  h+='<tr class="c13-sec"><th scope="row" colspan="'+(C13_WEEKS+2)+'">Cash out</th></tr>';
+  C13_LINES.dis.forEach(l=>{h+=row(l[1],W.map(w=>cell(w.v[l[0]])),cell(sum(l[0])))});
+  h+=row('Total cash out',W.map(w=>fmtMoney(w.dis)),fmtMoney(W.reduce((s,w)=>s+w.dis,0)),'c13-sub');
+  h+=row('Net cash flow',W.map(w=>'<span style="color:'+(w.net>=0?'var(--good)':'var(--text)')+'">'+(w.net>0?'+':'')+fmtMoney(w.net)+'</span>'),fmtMoney(W.reduce((s,w)=>s+w.net,0)),'c13-sub');
+  h+=row('Ending cash',W.map(w=>'<span'+(w.low?' class="c13-low"':'')+'>'+fmtMoney(w.end)+'</span>'),'','c13-end');
+  return h+'</tbody></table></div>'}
+function cash13HTML(){
+  const c=c13();const f=cashForecast();const buf=f.buffer;
+  const lowWk=c13Label(f.low.start);
+  let h='';
+  // Freshness: the forecast is only as good as the bank balance it starts from
+  if(!c.asOf)h+='<div class="note c13-warn" style="margin:0 0 12px">Start with today’s bank balance in <b>Weekly check-in</b> below — every week of the forecast rolls forward from it.</div>';
+  else if(f.stale>7)h+='<div class="note c13-warn" style="margin:0 0 12px">The bank balance is '+f.stale+' days old (from '+esc(fmtDate(new Date(dayMs(c.asOf))))+'). Update it below so week 1 starts from real cash.</div>';
+  h+='<div class="tiles" style="margin-bottom:12px">'
+    +'<div class="tile"><div class="n">'+fmtMoney(f.start)+'</div><div class="l">Cash today'+(c.asOf?' · '+esc(c13Label(dayMs(c.asOf))):'')+'</div></div>'
+    +'<div class="tile"><div class="n"'+(f.low.low?' style="color:var(--amber)"':'')+'>'+fmtMoney(f.low.end)+'</div><div class="l">Lowest point · wk of '+esc(lowWk)+'</div></div>'
+    +'<div class="tile"><div class="n">'+fmtMoney(f.last.end)+'</div><div class="l">In 13 weeks</div></div>'
+    +'<div class="tile"><div class="n"'+(f.below?' style="color:var(--amber)"':'')+'>'+f.below+'</div><div class="l">Weeks below '+esc(c13k(buf))+' buffer</div></div></div>';
+  const head=f.firstBelow>=0
+    ?'Cash drops below the '+fmtMoney(buf)+' buffer the week of '+esc(c13Label(f.weeks[f.firstBelow].start))+(f.low.end<0?' and runs out by the week of '+esc(c13Label(f.weeks[f.weeks.findIndex(w=>w.end<0)].start)):'')+'. Pull a receipt forward, push a payment back, or schedule the raise close before then.'
+    :'Cash stays above the '+fmtMoney(buf)+' buffer for all 13 weeks.';
+  h+='<div class="chart-card" style="margin-bottom:12px"><div class="cc-h"><span class="cc-t">Ending cash by week</span><span class="cc-hr"><span class="cc-big">'+esc(c13k(f.last.end))+'</span></span></div>'
+    +'<div class="cc-sub">'+head+'</div>'+c13Chart(f)
+    +'<div class="c13-legend"><span><i class="c13-sw"></i>Ending cash</span><span><i class="c13-sw warn"></i>Below buffer</span><span><i class="c13-dash"></i>Minimum buffer '+fmtMoney(buf)+'</span></div></div>';
+  h+='<div class="card"><div class="sec-head"><h2>Week by week</h2><span class="pill dim">rolls forward every Monday</span></div>'+c13Table(f)
+    +'<div class="note" style="margin-top:10px">Shopify sales use the '+esc(f.shopAuto.src)+' ('+fmtMoney(f.shopWk)+'/wk) less '+f.fee+'% fees. Subscriptions bill on the 1st from the projections tab. Payroll and operating costs come from the Payroll and P&amp;L tabs; build commitments are unspent task budgets on the Build board, on each task’s due date.</div></div>';
+  // Scheduled receipts & payments
+  const items=(c.items||[]).slice().sort((a,b)=>(dayMs(a.date)||0)-(dayMs(b.date)||0));
+  const raiseHard=c13Raise();
+  h+='<div class="raise-grid"><div class="card"><div class="sec-head"><h2>Scheduled in &amp; out</h2><span class="pill dim">'+items.length+'</span></div>'
+    +'<p class="d" style="margin:0 0 10px">Anything with a date that the run-rates miss: inventory deposits and balances, rent, insurance, invoices you expect to be paid, loan payments, the raise close.</p>'
+    +(items.length?items.map(it=>'<div class="row c13-item"><span class="pill '+(it.dir==='in'?'good':'dim')+'">'+(it.dir==='in'?'IN':'OUT')+'</span><div class="grow" style="min-width:0"><div class="t" style="font-size:14px">'+esc(it.label||'Untitled')+'</div><div class="d">'+esc(fmtDate(new Date(dayMs(it.date)||Date.now())))+(it.repeat==='monthly'?' · every month':'')+'</div></div><b class="mono">'+fmtMoney(parseMoney(it.amount))+'</b><a class="fr-x" onclick="c13DelItem(\''+esc(it.id)+'\')" aria-label="Remove">✕</a></div>').join(''):'<div class="d" style="color:var(--faint);margin-bottom:8px">Nothing scheduled yet.</div>')
+    +'<div class="c13-add">'
+      +'<div class="rolepick" id="c13-dir" style="margin-bottom:8px"><button class="on" data-v="out" onclick="c13Dir(this)">Payment out</button><button data-v="in" onclick="c13Dir(this)">Receipt in</button></div>'
+      +'<input class="field" id="c13-label" placeholder="What is it? e.g. China PO deposit (30%)" style="margin:0 0 8px">'
+      +'<div class="row" style="gap:8px;flex-wrap:wrap"><input class="field" id="c13-date" type="date" value="'+ymd(new Date())+'" style="margin:0;flex:1;min-width:140px" aria-label="Date"><input class="field" id="c13-amt" type="number" inputmode="decimal" placeholder="Amount $" style="margin:0;flex:1;min-width:120px" aria-label="Amount"></div>'
+      +'<label class="d c13-rep"><input type="checkbox" id="c13-rep"> Repeats every month</label>'
+      +'<button class="btn" onclick="c13AddItem()">Add to forecast</button>'
+    +'</div>'
+    +(raiseHard?'<div class="note" style="margin-top:10px">'+fmtMoney(raiseHard)+' is hard-committed in Fundraise but not wired yet. It isn’t counted until you add it here with an expected close date. <a class="ro-hide" onclick="c13PrefillRaise('+Math.round(raiseHard)+')">Add as a receipt</a></div>':'')
+  +'</div>';
+  // Assumptions + weekly check-in
+  const hist=(c.history||[]).slice(-6).reverse();
+  h+='<div><div class="card"><div class="sec-head"><h2>Weekly check-in</h2></div>'
+    +'<p class="d" style="margin:0 0 10px">Every Monday, enter the real bank balance. The forecast restarts from it, and last week’s forecast gets scored against it.</p>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap"><input class="field" id="c13-bal" type="number" inputmode="decimal" placeholder="Bank balance $" value="'+(parseMoney(financeData.cashOnHand)||'')+'" style="margin:0;flex:1;min-width:140px" aria-label="Bank balance"><input class="field" id="c13-asof" type="date" value="'+ymd(new Date())+'" style="margin:0;flex:1;min-width:140px" aria-label="As of"><button class="btn" style="width:auto" onclick="c13CheckIn()">Update balance</button></div>'
+    +(hist.length?'<div class="sec-head" style="margin-top:14px"><h2 style="font-size:14px">Forecast accuracy</h2></div>'+hist.map(x=>{const v=x.actual-x.forecast;const pct=x.forecast?Math.abs(v)/Math.abs(x.forecast)*100:0;return '<div class="kv"><span>'+esc(c13Label(dayMs(x.at)))+' · forecast '+fmtMoney(x.forecast)+'</span><b style="color:'+(pct>10?'var(--amber)':'var(--text)')+'">'+fmtMoney(x.actual)+' ('+(v>=0?'+':'')+fmtMoney(v)+')</b></div>'}).join('')
+      +'<div class="note" style="margin-top:8px">Misses over 10% are amber. A forecast that keeps landing high usually means receipts are arriving later than planned.</div>':'')
+  +'</div>'
+  +'<div class="card"><div class="sec-head"><h2>Assumptions</h2></div>'
+    +'<label class="c13-f"><span>Minimum cash buffer</span><input class="field" id="c13-buf" type="number" value="'+(c.buffer!=null&&c.buffer!==''?parseMoney(c.buffer):'')+'" placeholder="'+Math.round(financeBurn().total)+' (1 month of burn)"></label>'
+    +'<label class="c13-f"><span>Shopify sales per week</span><input class="field" id="c13-shop" type="number" value="'+(c.shopWeekly!=null&&c.shopWeekly!==''?parseMoney(c.shopWeekly):'')+'" placeholder="auto: '+Math.round(f.shopAuto.v)+'"></label>'
+    +'<label class="c13-f"><span>Shopify fees %</span><input class="field" id="c13-fee" type="number" value="'+f.fee+'"></label>'
+    +'<label class="c13-f"><span>Payroll runs</span><select class="field" id="c13-pay" onchange="document.getElementById(\'c13-anchor-row\').style.display=this.value===\'biweekly\'?\'\':\'none\'">'+C13_PAY.map(x=>'<option value="'+x[0]+'"'+((c.payCadence||'semimonthly')===x[0]?' selected':'')+'>'+x[1]+'</option>').join('')+'</select></label>'
+    +'<label class="c13-f" id="c13-anchor-row"'+((c.payCadence||'semimonthly')==='biweekly'?'':' style="display:none"')+'><span>A recent payday</span><input class="field" id="c13-anchor" type="date" value="'+esc(c.payAnchor||'')+'"></label>'
+    +'<label class="c13-f"><span>Count CRM deals</span><select class="field" id="c13-deals"><option value="0"'+(c.deals?'':' selected')+'>No — committed cash only</option><option value="1"'+(c.deals?' selected':'')+'>Yes — weighted, by close date</option></select></label>'
+    +'<label class="c13-f"><span>Deal payment terms (days)</span><input class="field" id="c13-terms" type="number" value="'+((c.dealTerms!=null&&c.dealTerms!=='')?parseMoney(c.dealTerms):30)+'"></label>'
+    +'<button class="btn ghost" onclick="c13SaveAssumptions()" style="margin-top:6px">Save assumptions</button>'
+    +'<div class="note" style="margin-top:10px">Keep CRM deals off for the base case — lenders and investors read a 13-week view as committed cash. Turn them on to see the upside.</div>'
+  +'</div></div></div>';
+  return h}
+function c13Dir(b){b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b))}
+function c13AddItem(){if(!financeAllowed()){toast('View-only — changes are made by Brad and Trey');return}
+  const label=document.getElementById('c13-label').value.trim(),date=document.getElementById('c13-date').value,amt=parseMoney(document.getElementById('c13-amt').value);
+  const dirB=document.querySelector('#c13-dir button.on');const dir=dirB?dirB.dataset.v:'out';
+  if(!label){toast('Say what it is');return}if(!date){toast('Pick a date');return}if(!(amt>0)){toast('Enter an amount');return}
+  const it={id:'c'+Date.now().toString(36),label:label,date:date,amount:amt,dir:dir,repeat:document.getElementById('c13-rep').checked?'monthly':'',by:(CURRENT_USER&&CURRENT_USER.name)||''};
+  c13Save({items:(c13().items||[]).concat([it])},'✓ Added to the 13-week forecast')}
+function c13DelItem(id){if(!financeAllowed())return;c13Save({items:(c13().items||[]).filter(x=>x.id!==id)},'Removed')}
+function c13PrefillRaise(amt){const l=document.getElementById('c13-label'),a=document.getElementById('c13-amt');if(!l||!a)return;
+  c13Dir(document.querySelector('#c13-dir button[data-v="in"]'));l.value=(RAISE&&RAISE.round?RAISE.round:'Seed')+' close — hard commitments';a.value=amt;
+  const d=document.getElementById('c13-date');d.value=ymd(new Date(Date.now()+30*864e5));d.focus();toast('Set the expected close date, then Add to forecast')}
+function c13SaveAssumptions(){if(!financeAllowed()){toast('View-only — changes are made by Brad and Trey');return}
+  const v=id=>document.getElementById(id).value.trim();const num=id=>v(id)===''?null:parseMoney(v(id));
+  c13Save({buffer:num('c13-buf'),shopWeekly:num('c13-shop'),shopFeePct:num('c13-fee'),payCadence:v('c13-pay'),payAnchor:v('c13-anchor'),deals:v('c13-deals')==='1',dealTerms:num('c13-terms')},'✓ Assumptions saved')}
+/* Check-in: score the last saved forecast against the real balance, then
+   restart the forecast from it and keep a snapshot for next week's score. */
+function c13CheckIn(){if(!financeAllowed()){toast('View-only — changes are made by Brad and Trey');return}
+  const raw=v=>document.getElementById(v).value;const bal=raw('c13-bal');const at=raw('c13-asof')||ymd(new Date());
+  if(bal===''){toast('Enter the bank balance');return}const actual=parseMoney(bal);
+  const c=c13();const hist=(c.history||[]).slice();
+  const snap=c.snap;const atMs=dayMs(at);
+  if(snap&&snap.weeks&&atMs){const s0=dayMs(snap.start);const i=Math.floor((atMs-s0)/C13_WK);
+    // compare with the forecast opening balance of the week the check-in falls in (not the week it was made)
+    if(i>=1&&i<snap.weeks.length)hist.push({at:at,actual:Math.round(actual),forecast:Math.round(snap.weeks[i])})}
+  financeData.cashOnHand=actual;c.asOf=at;
+  const f=cashForecast();
+  c13Save({asOf:at,history:hist.slice(-26),snap:{start:ymd(new Date(f.weeks[0].start)),at:new Date().toISOString(),weeks:f.weeks.map(w=>Math.round(w.open))}},'✓ Balance updated — forecast restarted from '+fmtMoney(actual))}
+/* Overview card: the 13-week headline */
+function c13OverviewCard(){const f=cashForecast();
+  return '<div class="card"><div class="sec-head"><h2>Next 13 weeks</h2><a class="ro-ok" onclick="finTab=\'cash13\';goto(\'s-finance\')">Open →</a></div>'
+    +'<div class="tiles"><div class="tile"><div class="n"'+(f.low.low?' style="color:var(--amber)"':'')+'>'+fmtMoney(f.low.end)+'</div><div class="l">Lowest · wk of '+esc(c13Label(f.low.start))+'</div></div>'
+    +'<div class="tile"><div class="n">'+fmtMoney(f.last.end)+'</div><div class="l">In 13 weeks</div></div>'
+    +'<div class="tile"><div class="n"'+(f.below?' style="color:var(--amber)"':'')+'>'+f.below+'</div><div class="l">Weeks below buffer</div></div></div>'
+    +(f.stale==null||f.stale>7?'<div class="note" style="margin-top:10px">'+(f.stale==null?'No bank balance check-in yet.':'Bank balance is '+f.stale+' days old.')+' Update it on the 13-week tab.</div>':'')+'</div>'}
 let finTab='overview';
 function finGoTab(t){finTab=t;renderFinance()}
 function renderFinance(){
@@ -8870,6 +9084,7 @@ function renderFinance(){
       +'<div class="row" style="gap:8px;margin-top:12px;align-items:center"><span class="d" style="font-weight:600;color:var(--text)">Cash on hand</span><input class="field" id="fp-cash" type="number" value="'+(parseMoney(financeData.cashOnHand)||0)+'" style="margin:0;max-width:180px"><button class="btn ghost" onclick="saveCash()">Save</button></div>'
       +'<div class="note" style="margin-top:10px">'+(net>=0?'Net-positive at the current run-rate — runway is effectively unlimited while this holds.':'At '+fmtMoney(-net)+'/mo net burn, cash lasts ~'+(runway?runway.toFixed(1):'—')+' months. Grow enterprise MRR or trim opex to extend.')+'</div>'
     +'</div>'
+    +c13OverviewCard()
     +fundraiseFinCard(cash,net)
     +finTrajectoryCard();
   SEC.pnl=
@@ -8914,13 +9129,14 @@ function renderFinance(){
       +'<div class="note" style="margin-top:10px">Manual entry today — feeds the burn model. Live Gusto / ADP payroll sync connects here next.</div>'
     +'</div>';
   SEC.access=financeAccessHTML();
-  const tabs=[['overview','Overview'],['pnl','P&L'],['projections','Projections'],['budget','Budget'],['payroll','Payroll'],['build','Build spend'],['access','Access']];
+  SEC.cash13=cash13HTML();
+  const tabs=[['overview','Overview'],['cash13','13-week cash'],['pnl','P&L'],['projections','Projections'],['budget','Budget'],['payroll','Payroll'],['build','Build spend'],['access','Access']];
   if(!SEC[finTab])finTab='overview';
   const strip='<div class="chips" style="margin-bottom:16px">'+tabs.map(t=>'<button class="chip'+(finTab===t[0]?' on':'')+'" onclick="finGoTab(\''+t[0]+'\')">'+t[1]+'</button>').join('')+'</div>';
   body.innerHTML=strip+SEC[finTab];
 }
 function ftile(v,l,badge){return '<div class="tile"><div class="n">'+esc(String(v==null?'—':v))+'</div><div class="l">'+esc(l)+(badge?' <span class="pill wave" style="font-size:9px;padding:1px 6px">'+badge+'</span>':'')+'</div></div>'}
-function saveCash(){saveFinance({cashOnHand:Number(document.getElementById('fp-cash').value)||0},'✓ Saved');renderFinance()}
+function saveCash(){saveFinance({cashOnHand:Number(document.getElementById('fp-cash').value)||0,cash13:Object.assign(c13(),{asOf:ymd(new Date())})},'✓ Saved');renderFinance()}
 function saveProjections(){const pr={customers:Number(document.getElementById('fp-customers').value)||0,avgMrr:Number(document.getElementById('fp-mrr').value)||0,growthPct:Number(document.getElementById('fp-growth').value)||0,horizon:Number(document.getElementById('fp-horizon').value)||12};saveFinance({projections:pr},'✓ Projections saved');renderFinance()}
 function gatherPnl(){return Array.from(document.querySelectorAll('.pnl-row')).map(r=>({label:r.querySelector('.fr-label').value,type:r.querySelector('.fr-type').value,amount:Number(r.querySelector('.fr-amt').value)||0}))}
 /* ---- QuickBooks Profit & Loss (CSV) import → P&L builder ---- */
