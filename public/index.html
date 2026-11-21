@@ -715,7 +715,11 @@ input[type=date]{color-scheme:dark}
   #s-chat .chat-tools .ic-btn[title^="Screenshot"]{display:none}
   .sec-head{flex-wrap:wrap}
 }
-.notif-seen{opacity:.55}.notif-seen:hover{opacity:.8}
+.notif-seen{opacity:.55}
+/* Fundraise: pair cards side by side on wide screens so charts stay a sane height */
+.raise-grid{display:grid;gap:12px;margin-bottom:12px}
+.raise-grid>.card,.raise-grid>.chart-card{margin:0}
+@media(min-width:1000px){.raise-grid{grid-template-columns:1fr 1fr;align-items:start}}.notif-seen:hover{opacity:.8}
 .grab::before{content:"";position:absolute;left:-40px;right:-40px;top:-14px;bottom:-12px}
 .flabel{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:2px 0 5px}
 
@@ -7810,16 +7814,124 @@ function renderRaise(){const body=document.getElementById('raise-body');if(!body
   renderFundraise(body);}
 function openInvestor(id){raiseAcctId=id;acctId=id;if(!raiseOn())goto('s-raise');else renderRaise();window.scrollTo(0,0)}
 function backToRaise(){raiseAcctId=null;acctId=null;renderRaise();window.scrollTo(0,0)}
+/* Fundraise sections — one place that tells the company's story to an
+   investor, built from live data elsewhere in the Command Center:
+   Shopify orders (traction), CRM (B2B customers + pipeline), Stock (bands
+   shipped, returns), Financials (cash, burn, P&L, overhead) and the round
+   plan (use of funds, runway after the raise, milestones). */
+let raiseSec='overview';
+const RAISE_SECS=[['overview','Overview'],['traction','Traction'],['financials','Financials'],['plan','Plan'],['investors','Investors'],['dataroom','Data room']];
+function raiseSecChips(){return '<div class="chips" style="margin-bottom:14px">'+RAISE_SECS.map(s=>'<button class="chip'+(raiseSec===s[0]?' on':'')+'" onclick="raiseSec=\''+s[0]+'\';renderRaise()">'+s[1]+'</button>').join('')+'</div>'}
+/* Full Shopify order history for traction (the live feed only keeps ~150). */
+let RAISE_ORDERS=null,raiseOrdersLoading=false;
+async function loadRaiseOrders(){if(raiseOrdersLoading||RAISE_ORDERS)return;raiseOrdersLoading=true;
+  try{if(hasFirestore()){const qs=await firebase.firestore().collection('orders').orderBy('at','desc').limit(2500).get();RAISE_ORDERS=qs.docs.map(d=>d.data())}
+    else RAISE_ORDERS=(typeof ordersList==='function'?ordersList():[]).filter(o=>!isDemoOrder(o.n))}
+  catch(e){RAISE_ORDERS=(typeof ordersList==='function'?ordersList():[])}
+  raiseOrdersLoading=false;raiseRerender()}
+function orderMs(o){const t=o.at?Date.parse(o.at):NaN;if(!isNaN(t))return t;return (typeof recMs==='function')?recMs(o):null}
+function tractionStats(){const os=(RAISE_ORDERS||[]).filter(o=>!/^(DEMO|#TEST)/i.test(o.n||''));const now=new Date();const months=[];
+  for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({key:d.getFullYear()+'-'+d.getMonth(),label:d.toLocaleDateString('en-US',{month:'short'}),rev:0,n:0})}
+  let ttm=0,n90=0,r90=0,cnt=0;const t90=Date.now()-90*864e5,t365=Date.now()-365*864e5;
+  os.forEach(o=>{const ms=orderMs(o);if(ms==null)return;const d=new Date(ms);const m=months.find(x=>x.key===d.getFullYear()+'-'+d.getMonth());const v=Number(o.total)||0;
+    if(m){m.rev+=v;m.n++}if(ms>=t365){ttm+=v;cnt++}if(ms>=t90){r90+=v;n90++}});
+  const last=months[10],prev=months[9];const mom=prev&&prev.rev?Math.round((last.rev-prev.rev)/prev.rev*100):null;
+  const S=salesAccts();const won=S.filter(a=>a.stage==='Won');const arr=won.reduce((s,a)=>s+(Number((a.metrics||{}).mrr)||0)*12,0);const whole=won.reduce((s,a)=>s+acctRevenue(a).wholesale,0);
+  const bands=Object.values(typeof BANDS!=='undefined'?BANDS:{});const shipped=bands.filter(b=>b&&(b.shippedAt||b.status==='shipped')).length;
+  const rets=Object.keys(typeof RETURNS!=='undefined'?RETURNS:{}).filter(k=>!/TEST/i.test(k)).length;
+  return {months:months,ttm:ttm,orders:cnt,r90:r90,n90:n90,aov:cnt?ttm/cnt:0,mom:mom,customers:won.length,arr:arr,wholesale:whole,pipe:pipeStats(),shipped:shipped,returns:rets}}
+function tractionHTML(){if(!RAISE_ORDERS){loadRaiseOrders();return '<div class="card"><div class="d">Loading Shopify history…</div></div>'}
+  const t=tractionStats();const bars=t.months.map(m=>({label:m.label,v:Math.round(m.rev),title:m.label+': '+fmtMoney(m.rev)+' · '+m.n+' orders'}));
+  let h='<div class="tiles" style="margin-bottom:12px">'
+    +'<div class="tile"><div class="n">'+fmtMoney(t.ttm)+'</div><div class="l">Shopify revenue · 12 mo</div></div>'
+    +'<div class="tile"><div class="n">'+t.orders+'</div><div class="l">Orders · 12 mo</div></div>'
+    +'<div class="tile"><div class="n">'+fmtMoney(t.aov)+'</div><div class="l">Avg order</div></div>'
+    +'<div class="tile"><div class="n" style="color:'+(t.mom==null?'var(--text)':t.mom>=0?'var(--good)':'var(--amber)')+'">'+(t.mom==null?'—':(t.mom>=0?'+':'')+t.mom+'%')+'</div><div class="l">Last month vs prior</div></div></div>';
+  h+='<div class="raise-grid">'+chartCard('DTC revenue by month',fmtMoney(t.r90),'Last 90 days · '+t.n90+' orders',svgBars(bars,{aria:'Monthly Shopify revenue',everyOther:true}),'From the Shopify orders the Command Center syncs. Test and demo orders are excluded.');
+  h+='<div class="card"><div class="sec-head"><h2>B2B</h2><a onclick="goto(\'s-crm\')">CRM →</a></div><div class="tiles">'
+    +'<div class="tile"><div class="n">'+t.customers+'</div><div class="l">Customers won</div></div>'
+    +'<div class="tile"><div class="n">'+fmtMoney(t.arr)+'</div><div class="l">Software ARR</div></div>'
+    +'<div class="tile"><div class="n">'+fmtMoney(t.wholesale)+'</div><div class="l">Wholesale bands sold</div></div>'
+    +'<div class="tile"><div class="n">'+fmtMoney(t.pipe.weighted)+'</div><div class="l">Weighted pipeline · '+t.pipe.deals+' deal'+(t.pipe.deals===1?'':'s')+'</div></div></div>'
+    +'<div class="note" style="margin-top:10px">Investors weigh the Amazon pilot most: add its pilot dates, success criteria and results on the account’s Deal card so they flow here.</div></div></div>';
+  h+='<div class="card"><div class="sec-head"><h2>Product in the field</h2><a onclick="goto(\'s-stock\')">Stock →</a></div><div class="tiles">'
+    +'<div class="tile"><div class="n">'+t.shipped+'</div><div class="l">Bands shipped (tracked)</div></div>'
+    +'<div class="tile"><div class="n">'+t.returns+'</div><div class="l">Returns logged</div></div>'
+    +'<div class="tile"><div class="n">'+(t.shipped?Math.round(t.returns/t.shipped*100)+'%':'—')+'</div><div class="l">Return rate</div></div></div></div>';
+  return h}
+function raiseFinancialsHTML(){if(!financeData){loadFinance().then(raiseRerender);return '<div class="card"><div class="d">Loading financials…</div></div>'}
+  const burn=financeBurn(),mrr=financeMRR(),net=mrr-burn.total,cash=parseMoney(financeData.cashOnHand);const runway=net>=0?null:cash/(-net);
+  const pnl=financeData.pnl||[];const sum=t=>pnl.filter(l=>l.type===t).reduce((s,l)=>s+parseMoney(l.amount),0);
+  const bs=(typeof buildSpend==='function')?buildSpend():{totalSpent:0};const rev=sum('rev'),cogs=sum('cogs'),opex=sum('opex')+bs.totalSpent;const gross=rev-cogs,netP=gross-opex;const gm=rev?Math.round(gross/rev*100):null;
+  let h='<div class="tiles" style="margin-bottom:12px">'
+    +'<div class="tile"><div class="n">'+fmtMoney(cash)+'</div><div class="l">Cash on hand</div></div>'
+    +'<div class="tile"><div class="n">'+fmtMoney(burn.total)+'</div><div class="l">Monthly burn</div></div>'
+    +'<div class="tile"><div class="n" style="color:'+(net>=0?'var(--good)':'var(--amber)')+'">'+fmtMoney(net)+'</div><div class="l">Net / month</div></div>'
+    +'<div class="tile"><div class="n">'+(runway===null?'∞':runway.toFixed(1))+'</div><div class="l">Months of runway</div></div></div>';
+  h+='<div class="raise-grid"><div class="card"><div class="sec-head"><h2>Profit &amp; loss</h2><a onclick="goto(\'s-finance\')">Financials →</a></div>'
+    +[['Revenue',fmtMoney(rev)],['Cost of goods',fmtMoney(cogs)],['Gross profit',fmtMoney(gross)+(gm!=null?' · '+gm+'% margin':'')],['Operating costs (incl. build spend)',fmtMoney(opex)],['Net',fmtMoney(netP)]].map(r=>'<div class="kv"><span>'+r[0]+'</span><b'+(r[0]==='Net'?' style="color:'+(netP>=0?'var(--good)':'var(--amber)')+'"':'')+'>'+r[1]+'</b></div>').join('')
+    +(gm!=null&&gm<40?'<div class="note" style="margin-top:9px">Hardware investors look for 40%+ gross margin, or a clear path to it with volume pricing.</div>':'')+'</div>';
+  const lines=pnl.filter(l=>l.type==='opex'&&parseMoney(l.amount)).map(l=>[l.label,parseMoney(l.amount)]);if(burn.payroll)lines.unshift(['Payroll',burn.payroll]);if(bs.totalSpent)lines.push(['Build spend (hardware + consulting)',bs.totalSpent]);
+  lines.sort((a,b)=>b[1]-a[1]);const top=lines[0]?lines[0][1]:1;
+  h+='<div class="card"><div class="sec-head"><h2>Overhead</h2><span class="pill dim">'+fmtMoney(lines.reduce((s,l)=>s+l[1],0))+'</span></div>'
+    +(lines.length?lines.slice(0,10).map(l=>'<div style="margin:7px 0"><div class="row" style="justify-content:space-between"><span class="d" style="color:var(--text)">'+esc(l[0])+'</span><b class="mono">'+fmtMoney(l[1])+'</b></div><div class="progress" style="height:6px;margin-top:4px"><i style="width:'+Math.max(2,Math.round(l[1]/top*100))+'%"></i></div></div>').join(''):'<div class="d" style="color:var(--faint)">Add payroll and operating costs in Financials (or import the QuickBooks P&amp;L) and they show here.</div>')+'</div></div>';
+  if(typeof finTrajectoryCard==='function')h+='<div class="raise-grid">'+finTrajectoryCard()+'</div>';
+  return h}
+const UOF_DEFAULT=[['Inventory & manufacturing',0],['Certifications (FCC, UN 38.3)',0],['Sales & pilots',0],['Product & firmware',0],['Team',0],['Reserve',0]];
+function raisePlanHTML(){const s=raiseStats();const target=Number(RAISE.target)||0;const uof=(RAISE.useOfFunds&&RAISE.useOfFunds.length?RAISE.useOfFunds:UOF_DEFAULT.map(x=>({label:x[0],amount:x[1]})));
+  const total=uof.reduce((a,x)=>a+(Number(x.amount)||0),0);
+  let h='<div class="card"><div class="sec-head"><h2>Use of funds</h2><span class="pill '+(target&&Math.abs(total-target)<1?'good':'dim')+'">'+fmtMoney(total)+(target?' of '+fmtMoney(target):'')+'</span></div>'
+    +uof.map((x,i)=>{const pct=target?Math.round((Number(x.amount)||0)/target*100):0;return '<div class="row" style="gap:8px;margin:6px 0;align-items:center"><input class="field" value="'+esc(x.label)+'" style="margin:0;flex:2" onchange="uofSet('+i+',\'label\',this.value)" aria-label="Category"><input class="field" type="number" inputmode="decimal" value="'+(Number(x.amount)||'')+'" placeholder="$" style="margin:0;flex:1;max-width:150px" onchange="uofSet('+i+',\'amount\',this.value)" aria-label="Amount"><span class="d" style="width:40px;text-align:right">'+pct+'%</span><a onclick="uofDel('+i+')" style="color:var(--faint);cursor:pointer;padding:0 4px" aria-label="Remove">✕</a></div>'}).join('')
+    +'<a onclick="uofAdd()" style="color:var(--wave);cursor:pointer;font-weight:600;font-size:13px">＋ Add a line</a>'
+    +(target&&total!==target?'<div class="note" style="margin-top:10px">'+(total<target?fmtMoney(target-total)+' not allocated yet.':fmtMoney(total-target)+' over the round target.')+'</div>':'')+'</div>';
+  const cash=financeData?parseMoney(financeData.cashOnHand):0;const curBurn=financeData?financeBurn().total:0;const mrr=financeData?financeMRR():0;
+  const post=Number(RAISE.postBurn)||curBurn;const netPost=Math.max(0,post-mrr);const months=netPost?(cash+target)/netPost:null;
+  h+='<div class="card"><div class="sec-head"><h2>Runway after the raise</h2></div>'
+    +'<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><span class="d" style="color:var(--text);font-weight:600">Planned monthly burn after the round</span><input class="field" type="number" inputmode="decimal" value="'+(Number(RAISE.postBurn)||'')+'" placeholder="'+(curBurn?Math.round(curBurn):'e.g. 55000')+'" style="margin:0;max-width:170px" onchange="RAISE.postBurn=Number(this.value)||0;saveRaise();renderRaise()"></div>'
+    +'<div class="tiles" style="margin-top:12px"><div class="tile"><div class="n">'+fmtMoney(cash+target)+'</div><div class="l">Cash after the round</div></div><div class="tile"><div class="n">'+fmtMoney(netPost)+'</div><div class="l">Net burn / month</div></div><div class="tile"><div class="n" style="color:'+(months==null?'var(--good)':months>=24?'var(--good)':'var(--amber)')+'">'+(months==null?'∞':months.toFixed(1))+'</div><div class="l">Months of runway</div></div></div>'
+    +'<div class="note" style="margin-top:10px">Plan the seed to last 24–36 months: in 2024–25 the median gap from seed to Series A was about 2 years, and many took 3+ (Carta). '+(target?'At '+fmtMoney(target)+', 24 months means net burn at or under '+fmtMoney((cash+target)/24)+'/mo.':'Set the round target to see the burn ceiling.')+'</div></div>';
+  const ms=RAISE.milestones||[];
+  h+='<div class="card"><div class="sec-head"><h2>What this round achieves</h2></div>'
+    +(ms.length?ms.map((m,i)=>'<div class="row" style="gap:8px;padding:7px 0;border-top:1px solid var(--line);align-items:center"><span class="grow" style="min-width:0">'+esc(m.text)+'</span>'+(m.by?'<span class="pill dim">by '+esc(m.by)+'</span>':'')+'<a onclick="msDel('+i+')" style="color:var(--faint);cursor:pointer;padding:0 4px" aria-label="Remove">✕</a></div>').join(''):'<div class="d" style="color:var(--faint);margin-bottom:6px">The milestones that set up the next round — e.g. "Amazon rollout to 5 sites", "FCC + UN 38.3 done", "$40k MRR".</div>')
+    +'<div class="row" style="gap:8px;margin-top:8px"><input class="field" id="ms-text" placeholder="Milestone" style="margin:0;flex:2" onkeydown="if(event.key===\'Enter\')msAdd()"><input class="field" id="ms-by" type="month" style="margin:0;flex:1;max-width:170px"><button class="btn ghost" style="width:auto" onclick="msAdd()">Add</button></div></div>';
+  const plans=(DR||[]).filter(it=>['model','exec-summary','roadmap','hiring','unit-economics'].includes(it.id));
+  if(plans.length)h+='<div class="card"><div class="sec-head"><h2>Business plan documents</h2><a onclick="raiseSec=\'dataroom\';renderRaise()">Data room →</a></div>'
+    +plans.map(it=>{const f=(it.files||[]).slice().sort((a,b)=>(b.at||'').localeCompare(a.at||''))[0];return '<div class="kv"><span>'+esc(it.title)+'</span><b>'+(f?'<a href="'+esc(f.url)+'" target="_blank" rel="noopener" style="color:var(--wave)">Open ↗</a>':'<span style="color:var(--amber)">Not uploaded</span>')+'</b></div>'}).join('')+'</div>';
+  h+=capTableCard();
+  return h}
+function uofList(){if(!RAISE.useOfFunds||!RAISE.useOfFunds.length)RAISE.useOfFunds=UOF_DEFAULT.map(x=>({label:x[0],amount:x[1]}));return RAISE.useOfFunds}
+function uofSet(i,k,v){const l=uofList();if(!l[i])return;l[i][k]=k==='amount'?(Number(v)||0):String(v).trim();saveRaise();renderRaise()}
+function uofAdd(){uofList().push({label:'New line',amount:0});saveRaise();renderRaise()}
+function uofDel(i){uofList().splice(i,1);saveRaise();renderRaise()}
+function msAdd(){const t=(document.getElementById('ms-text').value||'').trim();if(!t)return;const by=document.getElementById('ms-by').value||'';
+  RAISE.milestones=(RAISE.milestones||[]).concat([{text:t,by:by?new Date(by+'-15').toLocaleDateString('en-US',{month:'short',year:'numeric'}):''}]);saveRaise();renderRaise()}
+function msDel(i){(RAISE.milestones||[]).splice(i,1);saveRaise();renderRaise()}
+/* Snapshot for the Overview and the monthly investor update. */
+function raiseSnapshot(){const t=RAISE_ORDERS?tractionStats():null;const fin=financeData?(()=>{const b=financeBurn().total,m=financeMRR(),n=m-b,c=parseMoney(financeData.cashOnHand);return {cash:c,burn:b,net:n,runway:n>=0?null:c/(-n)}})():null;
+  const dr=(DR||[]);return {t:t,fin:fin,drDone:dr.filter(drReady).length,drTotal:dr.length,pipe:pipeStats()}}
 function renderFundraise(v){
   const s=raiseStats();const pct=s.target?Math.min(100,Math.round(s.committed/s.target*100)):0;
   document.getElementById('raise-sub').innerHTML=(RAISE.round?esc(RAISE.round)+' · ':'')+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target):'')+' committed';
-  let html='<div class="card"><div class="row"><div class="grow"><div class="t">'+(RAISE.round?esc(RAISE.round)+' round':'Round')+'</div><div class="d">'+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target)+' target':' committed')+' · '+s.investors+' investor'+(s.investors!==1?'s':'')+'</div></div><a onclick="editRaiseTarget()">Set target</a></div>'
-    +'<div class="progress" style="margin-top:11px;height:10px"><i style="width:'+pct+'%;background:var(--good)"></i></div>'
-    +'<div class="tiles" style="margin-top:12px"><div class="tile"><div class="n" style="color:var(--good)">'+fmtMoney(s.wired)+'</div><div class="l">Wired</div></div><div class="tile"><div class="n">'+fmtMoney(s.hard)+'</div><div class="l">Committed</div></div><div class="tile"><div class="n" style="color:var(--muted)">'+fmtMoney(s.soft)+'</div><div class="l">Soft</div></div></div></div>';
-  html+=raiseTasksCard();
-  html+=capTableCard();
-  html+=dataRoomCard();
-  html+='<div class="row" style="gap:8px;margin:14px 0;flex-wrap:wrap"><button class="btn" style="flex:1;min-width:150px" onclick="openAddInvestor()">＋ Add investor</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="newInvestorCampaign()">✉️ Investor outreach</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="openInvestorUpdate()">📣 Send update</button></div>';
+  let html=raiseSecChips();
+  if(raiseSec==='traction'){v.innerHTML=html+tractionHTML();return}
+  if(raiseSec==='financials'){v.innerHTML=html+raiseFinancialsHTML();return}
+  if(raiseSec==='plan'){if(!financeData)loadFinance().then(raiseRerender);v.innerHTML=html+raisePlanHTML();return}
+  if(raiseSec==='dataroom'){v.innerHTML=html+dataRoomCard();return}
+  const btns='<div class="row" style="gap:8px;margin:14px 0;flex-wrap:wrap"><button class="btn" style="flex:1;min-width:150px" onclick="openAddInvestor()">＋ Add investor</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="newInvestorCampaign()">✉️ Investor outreach</button><button class="btn ghost" style="flex:1;min-width:150px" onclick="openInvestorUpdate()">📣 Send update</button></div>';
+  if(raiseSec==='overview'){
+    if(!RAISE_ORDERS)loadRaiseOrders();if(!financeData)loadFinance().then(raiseRerender);
+    const sn=raiseSnapshot();const go=k=>'onclick="raiseSec=\''+k+'\';renderRaise()"';
+    html+='<div class="card"><div class="row"><div class="grow"><div class="t">'+(RAISE.round?esc(RAISE.round)+' round':'Round')+'</div><div class="d">'+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target)+' target':' committed')+' · '+s.investors+' investor'+(s.investors!==1?'s':'')+'</div></div><a onclick="editRaiseTarget()">Set target</a></div>'
+      +'<div class="progress" style="margin-top:11px;height:10px"><i style="width:'+pct+'%;background:var(--good)"></i></div>'
+      +'<div class="tiles" style="margin-top:12px"><div class="tile"><div class="n" style="color:var(--good)">'+fmtMoney(s.wired)+'</div><div class="l">Wired</div></div><div class="tile"><div class="n">'+fmtMoney(s.hard)+'</div><div class="l">Committed</div></div><div class="tile"><div class="n" style="color:var(--muted)">'+fmtMoney(s.soft)+'</div><div class="l">Soft</div></div></div></div>';
+    html+='<div class="sec-head" style="margin-top:6px"><h2>The story in numbers</h2><span class="pill dim">live</span></div><div class="tiles" style="margin-bottom:12px">'
+      +'<div class="tile tap" tabindex="0" '+go('traction')+'><div class="n">'+(sn.t?fmtMoney(sn.t.ttm):'…')+'</div><div class="l">Shopify revenue · 12 mo →</div></div>'
+      +'<div class="tile tap" tabindex="0" '+go('traction')+'><div class="n">'+fmtMoney(sn.pipe.weighted)+'</div><div class="l">Weighted B2B pipeline →</div></div>'
+      +'<div class="tile tap" tabindex="0" '+go('financials')+'><div class="n">'+(sn.fin?(sn.fin.runway===null?'∞':sn.fin.runway.toFixed(1)+' mo'):'…')+'</div><div class="l">Runway today →</div></div>'
+      +'<div class="tile tap" tabindex="0" '+go('dataroom')+'><div class="n">'+sn.drDone+'/'+sn.drTotal+'</div><div class="l">Data room ready →</div></div></div>';
+    html+=raiseTasksCard()+btns;v.innerHTML=html;return}
+  // Investors
+  html+=btns;
   const all=raiseAccounts();
   if(!all.length){html+='<div class="empty"><div class="ico">💰</div><div class="t">No investors yet</div><div class="d">Add investors and track outreach, commitments and next steps — email, sequences and call notes all work like the sales pipeline.</div></div>';v.innerHTML=html;return}
   html+='<div class="chips" style="margin-bottom:12px">'+raiseViewBtn('pipeline','Pipeline')+raiseViewBtn('list','List')+'</div>';
@@ -7954,7 +8066,14 @@ function iuAudienceMode(){const b=document.querySelector('#iu-audience button.on
 function iuUpdateCount(){const el=document.getElementById('iu-count');if(!el)return;const n=investorRecipients(iuAudienceMode()).length;el.textContent=n+' investor'+(n!==1?'s':'')+' with an email will receive this.'}
 function openInvestorUpdate(){if(!raiseAccounts().length){toast('Add investors first');return}
   document.getElementById('iu-subject').value=(RAISE.round?RAISE.round+' — ':'Safewave — ')+'investor update';
-  document.getElementById('iu-body').value='Hi {{firstName}},\n\nQuick update on Safewave:\n\n• \n• \n• \n\nAs always, happy to jump on a call. Thank you for your support.\n\nBest,';
+  // Research-backed format: lead with cash/burn/runway, then the same few
+  // metrics every month, wins, lowlights and asks.
+  const sn=raiseSnapshot();const L=[];
+  if(sn.fin)L.push('Cash '+fmtMoney(sn.fin.cash)+' · burn '+fmtMoney(sn.fin.burn)+'/mo · runway '+(sn.fin.runway===null?'cash-flow positive':sn.fin.runway.toFixed(1)+' months'));
+  if(sn.t)L.push('Shopify: '+fmtMoney(sn.t.r90)+' in the last 90 days ('+sn.t.n90+' orders)'+(sn.t.mom!=null?', '+(sn.t.mom>=0?'+':'')+sn.t.mom+'% last month vs prior':''));
+  if(sn.t)L.push('B2B: '+sn.t.customers+' customer'+(sn.t.customers===1?'':'s')+', '+fmtMoney(sn.t.arr)+' software ARR, '+fmtMoney(sn.pipe.weighted)+' weighted pipeline');
+  const rs=raiseStats();if(rs.target)L.push('Round: '+fmtMoney(rs.committed)+' of '+fmtMoney(rs.target)+' committed');
+  document.getElementById('iu-body').value='Hi {{firstName}},\n\nQuick update on Safewave:\n\nTHE NUMBERS\n'+L.map(x=>'• '+x).join('\n')+'\n\nWINS\n• \n\nCHALLENGES\n• \n\nASKS\n• \n\nAs always, happy to jump on a call. Thank you for your support.\n\nBest,';
   document.querySelectorAll('#iu-audience button').forEach((b,i)=>{b.classList.toggle('on',i===0);b.onclick=function(){document.querySelectorAll('#iu-audience button').forEach(x=>x.classList.remove('on'));this.classList.add('on');iuUpdateCount()}});
   const mail=(CURRENT_USER.mail&&CURRENT_USER.mail.email);
   document.getElementById('iu-hint').textContent=mail?('Sends from your address: '+mail):'Connect your email first (Account → Connect email) to send in-app.';
