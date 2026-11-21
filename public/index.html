@@ -677,7 +677,10 @@ input[type=date]{color-scheme:dark}
 .sheet-body{width:100%;max-width:460px;max-height:88vh;overflow-y:auto;background:var(--surface);border:1px solid var(--line);
   border-radius:20px 20px 0 0;padding:12px 18px calc(26px + env(safe-area-inset-bottom))}
 @media(min-width:560px){.sheet{align-items:center}.sheet-body{border-radius:18px}}
-.grab{width:38px;height:4px;background:var(--line);border-radius:2px;margin:4px auto 16px}
+.grab{width:38px;height:4px;background:var(--line);border-radius:2px;margin:4px auto 16px;position:relative;touch-action:none;cursor:grab}
+.notif-seen{opacity:.55}.notif-seen:hover{opacity:.8}
+.grab::before{content:"";position:absolute;left:-40px;right:-40px;top:-14px;bottom:-12px}
+.flabel{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:2px 0 5px}
 
 /* stepper */
 .stepper{display:flex;align-items:center;gap:16px;justify-content:center;margin:16px 0 6px}
@@ -1063,8 +1066,9 @@ input[type=date]{color-scheme:dark}
     </main>
 
     <main class="screen" id="s-feedback">
-      <p class="eyebrow">Super admin</p>
-      <h1>Team feedback</h1>
+      <p class="eyebrow" id="fbx-eyebrow">Super admin</p>
+      <h1 id="fbx-h1">Team feedback</h1>
+      <div class="row" style="gap:8px;margin:0 0 6px;flex-wrap:wrap"><button class="btn" style="width:auto;padding:9px 16px" onclick="openFeedback()">＋ Send feedback</button></div>
       <p class="sub" id="fbx-sub">Ideas, issues and questions from the team — each tagged with the screen and any annotated screenshot.</p>
       <div class="chips" id="fbx-filter" style="margin:4px 0 14px"></div>
       <div id="fbx-list"></div>
@@ -1411,12 +1415,18 @@ input[type=date]{color-scheme:dark}
     <div class="grab"></div>
     <span class="pill wave">NEW ACCOUNT</span>
     <h1 style="font-size:20px;margin:11px 0 12px">Add an account</h1>
-    <input class="field" id="na-name" placeholder="Account / company name">
-    <input class="field" id="na-contact" placeholder="Primary contact name">
-    <input class="field" id="na-email" type="email" placeholder="Email">
-    <input class="field" id="na-phone" placeholder="Phone">
-    <input class="field" id="na-location" placeholder="Location / state">
-    <input class="field" id="na-owner" placeholder="Owner (rep)">
+    <label class="flabel" for="na-name">Account / company</label>
+    <input class="field" id="na-name" placeholder="e.g. Amazon Site (QZZ7)" autocomplete="organization">
+    <label class="flabel" for="na-contact">Contact name</label>
+    <input class="field" id="na-contact" placeholder="Name" autocomplete="off" data-lpignore="true">
+    <label class="flabel" for="na-email">Email</label>
+    <input class="field" id="na-email" type="email" placeholder="Email" autocomplete="off">
+    <label class="flabel" for="na-phone">Phone</label>
+    <input class="field" id="na-phone" type="tel" placeholder="Phone" autocomplete="off">
+    <label class="flabel" for="na-location">Location</label>
+    <input class="field" id="na-location" placeholder="City / state" autocomplete="off">
+    <label class="flabel" for="na-owner">Owner (rep)</label>
+    <input class="field" id="na-owner" placeholder="Who owns this account" autocomplete="off">
     <p class="d" style="font-weight:600;color:var(--text);margin-bottom:6px">Stage</p>
     <div class="rolepick" id="na-stage"></div>
     <button class="btn" style="margin-top:14px" onclick="saveNewAccount()">Create account</button>
@@ -1430,14 +1440,22 @@ input[type=date]{color-scheme:dark}
     <span class="pill wave">COMPANY METRICS</span>
     <h1 style="font-size:20px;margin:11px 0 4px">Edit metrics</h1>
     <p class="sub">Enter manually for now — these auto-fill from the live Safewave dashboard once this company is linked.</p>
-    <input class="field" id="m-bands" type="number" inputmode="numeric" placeholder="Bands online">
-    <input class="field" id="m-users" type="number" inputmode="numeric" placeholder="Active users">
-    <input class="field" id="m-mrr" type="number" inputmode="numeric" placeholder="MRR ($ / month)">
+    <label class="flabel" for="m-bands">Bands online</label>
+    <input class="field" id="m-bands" type="number" inputmode="numeric" placeholder="0" autocomplete="off">
+    <label class="flabel" for="m-users">Active users</label>
+    <input class="field" id="m-users" type="number" inputmode="numeric" placeholder="0" autocomplete="off">
+    <label class="flabel" for="m-mrr">Software MRR ($ / month)</label>
+    <input class="field" id="m-mrr" type="number" inputmode="decimal" placeholder="e.g. 2000" autocomplete="off" oninput="metricsHint()">
+    <p class="d" style="font-weight:600;color:var(--text);margin:4px 0 6px">Wholesale bands</p>
+    <div class="row" style="gap:8px"><div style="flex:1"><label class="flabel" for="m-wunits">Bands sold</label><input class="field" id="m-wunits" type="number" inputmode="numeric" placeholder="e.g. 30" autocomplete="off" oninput="metricsHint()"></div>
+      <div style="flex:1"><label class="flabel" for="m-wprice">Price per band ($)</label><input class="field" id="m-wprice" type="number" inputmode="decimal" placeholder="e.g. 275" autocomplete="off" oninput="metricsHint()"></div></div>
+    <div class="note" id="m-hint" style="margin:0 0 12px"></div>
     <p class="d" style="font-weight:600;color:var(--text);margin-bottom:6px">Billing status</p>
     <div class="rolepick" id="m-billing">
       <button data-v="Active">Active</button><button data-v="Trial">Trial</button><button data-v="Past due">Past due</button><button data-v="Churned">Churned</button>
     </div>
-    <input class="field" id="m-invoices" type="number" inputmode="numeric" placeholder="Open invoices" style="margin-top:10px">
+    <label class="flabel" for="m-invoices" style="margin-top:10px">Open invoices</label>
+    <input class="field" id="m-invoices" type="number" inputmode="numeric" placeholder="0" autocomplete="off">
     <button class="btn" onclick="saveMetrics()">Save</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
   </div>
@@ -1528,7 +1546,7 @@ input[type=date]{color-scheme:dark}
     <div class="rolepick" id="fb-type"><button data-v="Idea" class="on">💡 Idea</button><button data-v="Issue">🐞 Issue</button><button data-v="Question">❓ Question</button></div>
     <textarea class="field" id="fb-text" placeholder="What's working, what's not, what would help…" style="min-height:130px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
     <div id="fb-shot-tiles" style="display:none;gap:8px;flex-wrap:wrap;margin:2px 0 8px"></div>
-    <div class="row" style="gap:8px;margin-bottom:10px"><button class="btn ghost" id="fb-shot-btn" style="flex:1" onclick="captureScreenshot('feedback')">📷 Screenshot</button><button class="btn ghost" style="flex:1" onclick="document.getElementById('fb-photo-file').click()">🖼 Add photos</button></div>
+    <div class="row" style="gap:8px;margin-bottom:10px"><button class="btn ghost" id="fb-shot-btn" style="flex:1" onclick="captureScreenshot('feedback')">📷 Screenshot</button><button class="btn ghost" style="flex:1" onclick="document.getElementById('fb-photo-file').click()">🖼 Add photos (up to 10)</button></div>
     <input type="file" id="fb-shot-file" accept="image/*" style="display:none" onchange="shotFilePicked(this)">
     <input type="file" id="fb-photo-file" accept="image/*" multiple style="display:none" onchange="photosPicked(this)">
     <button class="btn" onclick="sendFeedback()">Send to Brad</button>
@@ -2449,6 +2467,17 @@ function qcThresholds(){return {minDurationMin:SETTINGS_QC.minDurationMin||30,al
 function fmtDur(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;if(h)return h+'h '+m+'m';if(m)return m+'m '+(s<10?'0':'')+s+'s';return s+'s'}
 function qcTime(iso){try{return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}catch(e){return iso||''}}
 function qcVerdictChip(v){const m=({pass:['good','PASS'],fail:['amber','FAIL'],running:['wave','RUNNING'],aborted:['dim','ABORTED']})[v]||['dim',(v||'—').toUpperCase()];return '<span class="pill '+m[0]+'" style="font-size:10px">'+m[1]+'</span>'}
+/* Where a QC run happened: test location + phone-to-band distance, so runs at
+   the bench, a customer site or the field can be told apart. */
+function qcLastWhere(){try{return JSON.parse(localStorage.getItem('sw_qc_where')||'{}')}catch(e){return {}}}
+function qcWhereFields(pfx,cls){const w=qcLastWhere();cls=cls||'field';
+  return '<div class="'+(cls==='sim-in'?'sim-btnrow':'row')+'" style="gap:8px;margin-top:10px"><div class="'+(cls==='sim-in'?'sim-field':'')+'" style="flex:2;margin:0"><label'+(cls==='sim-in'?'':' class="flabel"')+'>Test location</label><input class="'+cls+'" id="'+pfx+'-loc" list="qc-loc-list" placeholder="e.g. Covington lab, Amazon BNA5" value="'+esc(w.location||'')+'" style="margin:0"></div>'
+    +'<div class="'+(cls==='sim-in'?'sim-field':'')+'" style="flex:1;margin:0"><label'+(cls==='sim-in'?'':' class="flabel"')+'>Distance (ft)</label><input class="'+cls+'" id="'+pfx+'-dist" type="number" min="0" inputmode="numeric" placeholder="phone ↔ band" value="'+esc(w.distanceFt!=null?String(w.distanceFt):'')+'" style="margin:0"></div></div>'
+    +'<datalist id="qc-loc-list">'+qcKnownLocations().map(l=>'<option value="'+esc(l)+'">').join('')+'</datalist>'}
+function qcReadWhere(pfx){const loc=((document.getElementById(pfx+'-loc')||{}).value||'').trim().slice(0,80);const dv=(document.getElementById(pfx+'-dist')||{}).value;const dist=dv===''||dv==null?null:Math.max(0,Number(dv)||0);
+  try{localStorage.setItem('sw_qc_where',JSON.stringify({location:loc,distanceFt:dist}))}catch(e){}return {location:loc,distanceFt:dist}}
+function qcKnownLocations(){const set={};Object.values(QCRUNS).forEach(r=>{if(r.location)set[r.location]=1});return Object.keys(set).sort()}
+function qcWhere(r){if(!r)return '';const p=[];if(r.location)p.push('📍 '+r.location);if(r.distanceFt!=null&&r.distanceFt!=='')p.push(r.distanceFt+' ft');return p.join(' · ')}
 function releaseRuns(id){return Object.values(QCRUNS).filter(x=>x.releaseId===id).sort((a,b)=>(b.startedAt||'').localeCompare(a.startedAt||''))}
 function releasePassed(r){return Object.values(QCRUNS).some(x=>x.releaseId===r.id&&x.version===r.version&&x.verdict==='pass')}
 function qcNotifyLeads(title,body){if(typeof notifyAll==='function')notifyAll(title,body,'s-qc')}
@@ -2621,7 +2650,7 @@ function relAuto(l,t){
   if(t.auto==='fwimage'){const im=fw&&fw.image;return {done:!!im,detail:im?esc(im.name)+' · '+qcFwKB(im.size)+' · SHA-256 '+esc((im.sha256||'').slice(0,12))+'…':'Not uploaded yet.',
     act:fw?'<button class="btn ghost qs-act"'+(qcFwUploading?' disabled':'')+' onclick="qcPickFirmware('+idq+')">'+(im?'Replace':(qcFwUploading?'Uploading…':'⤒ Upload .bin'))+'</button>':''}}
   if(t.auto==='soak'){const runs=fw?releaseRuns(fw.id).filter(function(x){return x.kind!=='custom'}):[],last=runs[0],ok=!!fw&&releasePassed(fw);
-    return {done:ok,detail:last?(qcVerdictChip(last.verdict)+' '+esc(fmtDur(last.durationSec||0))+' · '+(last.alertsAcked||0)+'/'+(last.alertsSent||0)+' alerts · '+(last.disconnects||0)+' disconnects · '+esc(last.device||'')):'No soak run yet — runs in the Simulator tab.',
+    return {done:ok,detail:last?(qcVerdictChip(last.verdict)+' '+esc(fmtDur(last.durationSec||0))+' · '+(last.alertsAcked||0)+'/'+(last.alertsSent||0)+' alerts · '+(last.disconnects||0)+' disconnects · '+esc(last.device||'')+(qcWhere(last)?' · '+esc(qcWhere(last)):'')):'No soak run yet — runs in the Simulator tab.',
       act:fw?'<button class="btn ghost qs-act" onclick="qcStartFromRelease('+idq+')">'+(ok?'Re-run':'▶ Run')+'</button>':''}}
   if(t.auto==='clear'){const gs=relGates(l).slice(0,3),st=gs.map(function(g){return relGateStats(l,g)}),left=st.reduce(function(a,s){return a+(s.total-s.done)},0),fl=st.reduce(function(a,s){return a+s.flags},0);
     return {done:left===0,detail:left===0?'All clear.':(fl?fl+' open flag'+(fl===1?'':'s')+' · ':'')+(left-fl)+' not done yet'}}
@@ -3917,6 +3946,7 @@ function simRenderSoak(){
       +'<div class="sim-field" style="margin:0"><label>Speed</label><select id="sim-soak-speed"><option value="60">Accelerated ×60</option><option value="1">Realtime</option></select></div></div>'
     +'<div class="sim-btnrow" style="margin-top:9px"><div class="sim-field" style="margin:0"><label>Band</label><select id="sim-soak-band"><option value="virtual">Virtual</option><option value="ble">Real (Bluetooth)</option></select></div>'
       +'<div class="sim-field" style="margin:0"><label>Chaos</label><select id="sim-soak-chaos"><option value="1">On — drops, Doze, ANCS</option><option value="0">Off</option></select></div></div>'
+    +qcWhereFields('sim-where','sim-in')
     +'<button class="sim-ib block pri" style="margin-top:10px" onclick="simStartSoak()">▶ Run soak on '+esc(simDev().name)+' · '+esc(qcSim.osVersion)+'</button>'
     +'<div class="sim-note" style="margin-top:8px">Auto-injects a realistic alert mix on the selected phone/OS while injecting chaos, then scores delivery, uptime, disconnects, and <b>life-safety misses</b> into a pass/fail QC run. Real-band mode drives an actual buzz over Web Bluetooth (realtime only).</div>';
 }
@@ -3938,6 +3968,7 @@ async function simStartSoak(){
     device:simDev().name+' · '+qcSim.osVersion+(band==='ble'?' · real band':' · sim'),mode:band==='ble'?'ble':'sim',startedAt:now.toISOString(),
     durationTargetSec:durMin*60,thresholds:{minDurationSec:durMin*60,maxDisconnects:qcThresholds().maxDisconnects,minDeliveryPct:qcThresholds().minDeliveryPct},
     profile:{device:simDev().name,os:qcSim.osVersion},alertsSent:0,alertsAcked:0,disconnects:0,maxGapMs:0,by:(CURRENT_USER&&CURRENT_USER.name)||'',verdict:'running',events:[]};
+  {const wh=qcReadWhere('sim-where');run.location=wh.location;run.distanceFt=wh.distanceFt;}
   simSoak={running:true,run:run,dev:dev,band:band,speed:speed,chaos:chaos,t0:Date.now(),lastTickAt:Date.now(),connectedMs:0,downSince:0,
     ev:0,expected:0,delivered:0,disconnects:0,safetyMiss:0,evTimer:null,chaosTimer:null,tickTimer:null,durSec:durMin*60};
   if(dev){dev.onDisconnect=function(){if(!simSoak.running)return;qcSim.band.connected=false;simSoak.disconnects++;simRenderSummary();};dev.onReconnect=function(){if(!simSoak.running)return;qcSim.band.connected=true;simRenderSummary();};}
@@ -4072,6 +4103,7 @@ function qcBenchView(){
    +'<div class="row" style="gap:8px;margin-top:12px"><div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Duration (min)</p><input class="field" id="qc-dur" type="number" min="1" value="'+th.minDurationMin+'" style="margin:0"></div><div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Alert every (sec)</p><input class="field" id="qc-int" type="number" min="1" value="'+th.alertSec+'" style="margin:0"></div></div>'
    +'<div class="row" style="gap:8px;margin-top:10px"><div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Max disconnects</p><input class="field" id="qc-maxdc" type="number" min="0" value="'+th.maxDisconnects+'" style="margin:0"></div><div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Min delivery %</p><input class="field" id="qc-mindel" type="number" min="1" max="100" value="'+th.minDeliveryPct+'" style="margin:0"></div></div>'
    +'<div style="margin-top:10px"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Device label</p><input class="field" id="qc-devlabel" placeholder="e.g. Band SN SW-0421" style="margin:0"></div>'
+   +qcWhereFields('qc-where','field')
    +'<button class="btn" style="margin-top:14px"'+(opts?'':' disabled')+' onclick="qcStartFromForm()">▶ Start soak test</button>'
    +'</div>';
 }
@@ -4084,7 +4116,8 @@ function qcStartFromForm(){
   const maxdc=Math.max(0,parseInt((document.getElementById('qc-maxdc')||{}).value||'0',10)||0);
   const mindel=Math.min(100,Math.max(1,parseInt((document.getElementById('qc-mindel')||{}).value||'99',10)||99));
   const devlabel=((document.getElementById('qc-devlabel')||{}).value||'').trim();
-  qcStartRun({releaseId:relId,mode:mode,flaky:flaky,durationSec:durMin*60,alertMs:intSec*1000,maxDisconnects:maxdc,minDeliveryPct:mindel,device:devlabel});
+  const wh=qcReadWhere('qc-where');
+  qcStartRun({releaseId:relId,mode:mode,flaky:flaky,durationSec:durMin*60,alertMs:intSec*1000,maxDisconnects:maxdc,minDeliveryPct:mindel,device:devlabel,location:wh.location,distanceFt:wh.distanceFt});
 }
 function qcSimDevice(opts){opts=opts||{};const dev={label:'Simulated band',connected:true,onDisconnect:null,onReconnect:null,_timers:[]};
   dev.sendAlert=function(){return new Promise(res=>{const lat=40+Math.random()*160;const tm=setTimeout(()=>res(!!dev.connected),lat);dev._timers.push(tm);});};
@@ -4144,7 +4177,7 @@ async function qcStartRun(cfg){
     device:cfg.device||dev.label||(cfg.mode==='ble'?'Bluetooth band':'Simulated band'),mode:cfg.mode,startedAt:now.toISOString(),
     durationTargetSec:Math.round(cfg.durationSec),alertMs:cfg.alertMs,
     thresholds:{minDurationSec:Math.round(cfg.durationSec),maxDisconnects:cfg.maxDisconnects,minDeliveryPct:cfg.minDeliveryPct},
-    alertsSent:0,alertsAcked:0,disconnects:0,maxGapMs:0,by:(CURRENT_USER&&CURRENT_USER.name)||'',verdict:'running',events:[]};
+    alertsSent:0,alertsAcked:0,disconnects:0,maxGapMs:0,by:(CURRENT_USER&&CURRENT_USER.name)||'',verdict:'running',events:[],location:cfg.location||'',distanceFt:cfg.distanceFt!=null?cfg.distanceFt:null};
   qcBench={running:true,run:run,dev:dev,selRel:rel.id,connected:true,connectedMs:0,downSince:0,lastTickAt:Date.now(),t0:Date.now(),tickTimer:null,alertTimer:null};
   qcLog(run,'connect',run.device+' connected');
   if(rel.status!=='released'){rel.status='testing';rel.testingSince=rel.testingSince||now.toISOString();RELEASES[rel.id]=rel;persistRelease(rel);}
@@ -4829,7 +4862,7 @@ function deleteRelease(){const id=document.getElementById('rel-id').value;const 
 function openQcRun(id){const run=QCRUNS[id];if(!run)return;
   document.getElementById('qcrun-tag').textContent=(run.verdict||'run').toUpperCase();
   document.getElementById('qcrun-h').textContent=(QC_PRODUCTS[qcProd(run.product)]||run.product)+' '+run.version+' soak';
-  document.getElementById('qcrun-meta').textContent=(run.device||'device')+' · '+qcTime(run.startedAt)+' · by '+(run.by||'');
+  document.getElementById('qcrun-meta').textContent=(run.device||'device')+(qcWhere(run)?' · '+qcWhere(run):'')+' · '+qcTime(run.startedAt)+' · by '+(run.by||'');
   const deliv=run.deliveryPct!=null?run.deliveryPct:(run.alertsSent?Math.round(run.alertsAcked/run.alertsSent*100):0);
   document.getElementById('qcrun-summary').innerHTML='<div class="row" style="gap:8px;flex-wrap:wrap">'
     +'<div class="qc-stat"><div class="n">'+qcVerdictChip(run.verdict)+'</div><div class="l">verdict</div></div>'
@@ -5277,7 +5310,15 @@ function openFeedback(){if(!CURRENT_USER)return;document.getElementById('fb-scre
   fbShots=[];renderShotTiles();
   document.querySelectorAll('#fb-type button').forEach((b,i)=>{b.classList.toggle('on',i===0);b.onclick=function(){document.querySelectorAll('#fb-type button').forEach(x=>x.classList.remove('on'));this.classList.add('on')}});
   closeSheets();openSheet('sh-feedback')}
-function sendFeedback(){const text=document.getElementById('fb-text').value.trim();if(!text){toast('Write your feedback first');return}
+/* A feedback doc must stay under Firestore's 1 MB cap, so all photos share
+   one budget: re-encode smaller as more are attached (up to 10). */
+const FB_MAX_SHOTS=10;
+function fbDocSize(f){if(!f)return 0;let n=(f.text||'').length+2000;(f.shots||[]).forEach(x=>n+=(x||'').length);if(f.shot)n+=f.shot.length;(f.thread||[]).forEach(m=>{n+=(m.text||'').length+200;(m.shots||[]).forEach(x=>n+=(x||'').length)});return n}
+function reencodeShot(src,limit){return new Promise(res=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=img.width;c.height=img.height;c.getContext('2d').drawImage(img,0,0);res(encodeShot(c,limit))};img.onerror=()=>res(src);img.src=src})}
+async function fitShotsToBudget(list,budget){if(!list.length)return list;const total=list.reduce((a,x)=>a+x.length,0);if(total<=budget)return list;
+  const per=Math.floor(budget/list.length);const out=[];for(const x of list)out.push(x.length>per?await reencodeShot(x,per):x);return out}
+async function sendFeedback(){const text=document.getElementById('fb-text').value.trim();if(!text){toast('Write your feedback first');return}
+  if(fbShots.length)fbShots=await fitShotsToBudget(fbShots,880000);
   const type=((document.querySelector('#fb-type button.on')||{}).dataset||{}).v||'Idea';
   const rec={fromUid:CURRENT_USER.uid,fromName:CURRENT_USER.name||'',fromEmail:CURRENT_USER.email||'',screen:currentScreenId(),screenLabel:currentScreenLabel(),type:type,text:text,status:'open'};
   if(fbShots.length)rec.shots=fbShots.slice();
@@ -5289,10 +5330,14 @@ function sendFeedback(){const text=document.getElementById('fb-text').value.trim
       CURRENT_USER.feedbackCount=(CURRENT_USER.feedbackCount||0)+1;const me=(TEAM||[]).find(t=>t.uid===CURRENT_USER.uid);if(me)me.feedbackCount=(me.feedbackCount||0)+1;refreshPulse();})
     .catch(e=>toast('Send failed — '+((e&&e.code)||'check rules')));
   fbShots=[];closeSheets();toast('✓ Sent to Brad — thank you')}
-function subscribeFeedback(){if(!hasFirestore()||!isSuperAdmin())return;
+function fbMs(f){return (f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMillis():0}
+function subscribeFeedback(){if(!hasFirestore()||!CURRENT_USER)return;
   if(fbUnsub){try{fbUnsub()}catch(e){}}
-  try{fbUnsub=firebase.firestore().collection('feedback').orderBy('createdAt','desc').limit(200).onSnapshot(qs=>{
-    FEEDBACK=qs.docs.map(d=>Object.assign({id:d.id},d.data()));renderFeedbackBadge();
+  // Super admins read everything; everyone else reads only their own (rules enforce it).
+  const q=isSuperAdmin()?firebase.firestore().collection('feedback').orderBy('createdAt','desc').limit(200)
+    :firebase.firestore().collection('feedback').where('fromUid','==',CURRENT_USER.uid).limit(100);
+  try{fbUnsub=q.onSnapshot(qs=>{
+    FEEDBACK=qs.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>fbMs(b)-fbMs(a));renderFeedbackBadge();
     const scr=document.getElementById('s-feedback');if(scr&&scr.classList.contains('on'))renderFeedbackInbox();
   },e=>{})}catch(e){}}
 function fbOpenCount(){return FEEDBACK.filter(f=>f.status!=='resolved').length}
@@ -5415,8 +5460,9 @@ function renderFeedbackBadge(){const b=document.getElementById('fb-badge');if(b)
   const ac=document.getElementById('acc-fb-count');if(ac){const c=fbOpenCount();ac.textContent=c?'· '+c+' open':''}}
 function openFeedbackInbox(){fbxFilter='open';closeSheets();goto('s-feedback')}
 function fbxTab(v,l,n){return '<button class="chip'+(fbxFilter===v?' on':'')+'" onclick="fbxFilter=\''+v+'\';renderFeedbackInbox()">'+l+(n!=null?' · '+n:'')+'</button>'}
-function renderFeedbackInbox(){const open=fbOpenCount();
-  document.getElementById('fbx-sub').textContent=FEEDBACK.length?(open+' open · '+FEEDBACK.length+' total'):'No feedback yet — it lands here when the team taps 💬 on any screen.';
+function renderFeedbackInbox(){const open=fbOpenCount();const sup=isSuperAdmin();
+  const eb=document.getElementById('fbx-eyebrow'),h1=document.getElementById('fbx-h1');if(eb)eb.textContent=sup?'Super admin':'Your feedback';if(h1)h1.textContent=sup?'Team feedback':'My feedback';
+  document.getElementById('fbx-sub').textContent=FEEDBACK.length?(open+' open · '+FEEDBACK.length+' total'+(sup?'':' — replies from Brad show here and alert you')):(sup?'No feedback yet — it lands here when the team taps 💬 on any screen.':'Ideas, issues and questions you send land here, with Brad’s replies. Only you and Brad can see them.');
   document.getElementById('fbx-filter').innerHTML=fbxTab('open','Open',open)+fbxTab('all','All',FEEDBACK.length)+fbxTab('resolved','Resolved',FEEDBACK.length-open);
   const list=FEEDBACK.filter(f=>fbxFilter==='all'?true:(fbxFilter==='resolved'?f.status==='resolved':f.status!=='resolved'));
   document.getElementById('fbx-list').innerHTML=list.length?list.map(fbxCard).join(''):'<div class="empty"><div class="ico">💬</div><div class="t">Nothing here</div><div class="d">When the team taps the 💬 button on any screen, it shows up here.</div></div>'}
@@ -5431,9 +5477,10 @@ function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMi
   if(shots.length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+shots.map(function(src,i){return '<img src="'+src+'" alt="attachment" style="width:78px;height:78px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="viewShotFb(\''+f.id+'\','+i+')">'}).join('')+'</div>';
   if(thread.length)h+='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px">'+thread.map(function(m,mi){const mine=m.uid===f.fromUid;const ms=m.shots||[];return '<div style="align-self:'+(mine?'flex-start':'flex-end')+';max-width:85%"><div style="font-size:11px;color:var(--faint);margin-bottom:2px">'+esc(m.by||(mine?'Submitter':'You'))+(m.at?' · '+fbShort(m.at):'')+'</div>'+(m.text?'<div style="background:'+(mine?'var(--surface-2)':'rgba(29,170,225,.14)')+';color:var(--text);border-radius:12px;padding:8px 11px;font-size:13px;line-height:18px;white-space:pre-wrap">'+esc(m.text)+'</div>':'')+(ms.length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;justify-content:'+(mine?'flex-start':'flex-end')+'">'+ms.map(function(src,pi){return '<img src="'+src+'" alt="attachment" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="viewReplyShot(\''+f.id+'\','+mi+','+pi+')">'}).join('')+'</div>':'')+'</div>'}).join('')+'</div>';
   if(replyOpen){var rShots=fbReplyShots[f.id]||[];
-    h+='<div style="margin-top:10px"><textarea class="field" id="fb-reply-'+f.id+'" placeholder="Write a reply — the submitter gets an alert with your message…" oninput="fbReplyText[\''+f.id+'\']=this.value" style="min-height:70px;resize:vertical;font-family:var(--font-b);width:100%">'+esc(fbReplyText[f.id]||'')+'</textarea>'
+    h+='<div style="margin-top:10px"><textarea class="field" id="fb-reply-'+f.id+'" placeholder="'+(isSuperAdmin()?'Write a reply — the submitter gets an alert with your message…':'Add more detail — Brad gets an alert…')+'" oninput="fbReplyText[\''+f.id+'\']=this.value" style="min-height:70px;resize:vertical;font-family:var(--font-b);width:100%">'+esc(fbReplyText[f.id]||'')+'</textarea>'
       +(rShots.length?'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px">'+rShots.map(function(src,i){return '<div style="position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1px solid var(--line)"><img src="'+src+'" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in" onclick="viewReplyDraft(\''+f.id+'\','+i+')"><button onclick="removeReplyShot(\''+f.id+'\','+i+')" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:9px;border:none;background:rgba(6,12,20,.8);color:#fff;font-size:11px;line-height:1;cursor:pointer;padding:0">✕</button></div>'}).join('')+'</div>':'')
-      +'<div class="row" style="gap:8px;margin-top:6px"><button class="btn" style="flex:1" onclick="sendFeedbackReply(\''+f.id+'\')">Send reply &amp; alert submitter</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="addReplyPhotos(\''+f.id+'\')">🖼 Photos</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="toggleFbReply(\''+f.id+'\')">Close</button></div></div>';}
+      +'<div class="row" style="gap:8px;margin-top:6px"><button class="btn" style="flex:1" onclick="sendFeedbackReply(\''+f.id+'\')">'+(isSuperAdmin()?'Send reply &amp; alert submitter':'Send to Brad')+'</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="addReplyPhotos(\''+f.id+'\')">🖼 Photos</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="toggleFbReply(\''+f.id+'\')">Close</button></div></div>';}
+  if(!isSuperAdmin()){h+='<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'+(resolved?'':'<button class="btn '+(replyOpen?'ghost':'')+'" style="flex:1 1 90px" onclick="toggleFbReply(\''+f.id+'\')">'+(replyOpen?'Close':'Add a reply')+'</button>')+'</div></div>';return h}
   h+='<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
       +(resolved?'<button class="btn ghost" style="flex:1 1 120px" onclick="setFeedbackStatus(\''+f.id+'\',\'open\')">Reopen</button>':'<button class="btn ghost" style="flex:1 1 120px" onclick="setFeedbackStatus(\''+f.id+'\',\'resolved\')">Mark resolved</button>')
       +(f.screen?'<button class="btn ghost" style="flex:1 1 120px" onclick="goto(\''+esc(f.screen)+'\')">Go to '+esc(f.screenLabel||'screen')+'</button>':'')
@@ -5446,12 +5493,13 @@ function viewReplyShot(fid,mi,pi){const f=FEEDBACK.find(x=>x.id===fid);if(!f||!f
 function viewReplyDraft(id,i){viewShotList(fbReplyShots[id]||[],i)}
 /* Attach photos to a reply draft. */
 function addReplyPhotos(id){fbReplyTargetId=id;const inp=document.getElementById('fb-reply-file');if(inp)inp.click();}
-function replyPhotosPicked(input){const files=Array.prototype.slice.call(input.files||[]);input.value='';const id=fbReplyTargetId;if(!id||!files.length)return;
+function replyPhotosPicked(input){let files=Array.prototype.slice.call(input.files||[]);input.value='';const id=fbReplyTargetId;if(!id||!files.length)return;
+  const room=FB_MAX_SHOTS-(fbReplyShots[id]||[]).length;if(room<=0){toast('Up to '+FB_MAX_SHOTS+' photos per reply');return}if(files.length>room)files=files.slice(0,room);
   fbReplyShots[id]=fbReplyShots[id]||[];let done=0;
   files.forEach(function(f){photoToData(f).then(function(d){fbReplyShots[id].push(d);}).catch(function(){}).then(function(){if(++done===files.length)renderFeedbackInbox();});});}
 function removeReplyShot(id,i){(fbReplyShots[id]||[]).splice(i,1);renderFeedbackInbox();}
 /* Post a reply into the feedback thread and alert the submitter with it. */
-function sendFeedbackReply(id){const el=document.getElementById('fb-reply-'+id);const text=(el&&el.value||fbReplyText[id]||'').trim();const rShots=(fbReplyShots[id]||[]).slice();
+async function sendFeedbackReply(id){const el=document.getElementById('fb-reply-'+id);const text=(el&&el.value||fbReplyText[id]||'').trim();const rShots=await fitShotsToBudget((fbReplyShots[id]||[]).slice(),Math.max(120000,880000-fbDocSize(FEEDBACK.find(x=>x.id===id))));
   if(!text&&!rShots.length){toast('Write a reply or add a photo first');return}
   const f=FEEDBACK.find(x=>x.id===id);if(!f){toast('Feedback not found');return}
   const msg={by:(CURRENT_USER&&CURRENT_USER.name)||'Safewave team',uid:(CURRENT_USER&&CURRENT_USER.uid)||'admin',text:text,at:Date.now()};
@@ -5460,7 +5508,9 @@ function sendFeedbackReply(id){const el=document.getElementById('fb-reply-'+id);
   f.thread=(f.thread||[]).concat([msg]);fbReplyText[id]='';fbReplyShots[id]=[];renderFeedbackInbox();
   if(hasFirestore()){
     firebase.firestore().collection('feedback').doc(id).update({thread:firebase.firestore.FieldValue.arrayUnion(msg),lastReplyAt:firebase.firestore.FieldValue.serverTimestamp()})
-      .then(()=>{if(f.fromUid&&f.fromUid!==(CURRENT_USER&&CURRENT_USER.uid))notify(f.fromUid,'Reply to your feedback',(text||'📷 Photo').slice(0,140),'');toast('✓ Reply sent — submitter alerted')})
+      .then(()=>{const me=CURRENT_USER&&CURRENT_USER.uid;
+        if(f.fromUid&&f.fromUid!==me){notify(f.fromUid,'Reply to your feedback',(text||'📷 Photo').slice(0,140),'s-feedback');toast('✓ Reply sent — submitter alerted')}
+        else{notifySuper('Feedback reply · '+(f.screenLabel||''),((CURRENT_USER&&CURRENT_USER.name)||'Teammate')+': '+(text||'📷 Photo').slice(0,120),'s-feedback');toast('✓ Sent — Brad was alerted')}})
       .catch(e=>toast('Reply failed — '+((e&&e.code)||'check rules')));
   }else{toast('Reply saved — connect the cloud to alert the submitter')}}
 function setFeedbackStatus(id,st){if(hasFirestore())firebase.firestore().collection('feedback').doc(id).set({status:st},{merge:true}).catch(e=>toast('Update failed — '+((e&&e.code)||'')));const f=FEEDBACK.find(x=>x.id===id);if(f)f.status=st;renderFeedbackInbox();renderFeedbackBadge()}
@@ -5529,10 +5579,10 @@ function shotDone(){if(!shotBase){closeShotEditor();return}
   const data=encodeShot(out);document.getElementById('shot-editor').classList.remove('on');
   if(shotTarget==='chat'){shotTarget='feedback';chatAddImageAttachment(data);return}
   fbShots.push(data);renderShotTiles();reopenFeedback()}
-function encodeShot(cv){const LIMIT=680000;
-  for(const s of [1,0.8,0.66,0.5]){let c=cv;if(s<1){c=document.createElement('canvas');c.width=Math.max(1,Math.round(cv.width*s));c.height=Math.max(1,Math.round(cv.height*s));c.getContext('2d').drawImage(cv,0,0,c.width,c.height)}
+function encodeShot(cv,limit){const LIMIT=limit||680000;
+  for(const s of [1,0.8,0.66,0.5,0.36,0.25]){let c=cv;if(s<1){c=document.createElement('canvas');c.width=Math.max(1,Math.round(cv.width*s));c.height=Math.max(1,Math.round(cv.height*s));c.getContext('2d').drawImage(cv,0,0,c.width,c.height)}
     for(const q of [0.72,0.6,0.45]){const d=c.toDataURL('image/jpeg',q);if(d.length<=LIMIT)return d}}
-  return cv.toDataURL('image/jpeg',0.4)}
+  const c=document.createElement('canvas');c.width=Math.max(1,Math.round(cv.width*0.2));c.height=Math.max(1,Math.round(cv.height*0.2));c.getContext('2d').drawImage(cv,0,0,c.width,c.height);return c.toDataURL('image/jpeg',0.4)}
 /* Photo attachments as expandable thumbnail tiles (feedback composer). */
 function renderShotTiles(){const w=document.getElementById('fb-shot-tiles');if(!w)return;
   if(!fbShots.length){w.style.display='none';w.innerHTML='';return;}
@@ -5541,7 +5591,9 @@ function renderShotTiles(){const w=document.getElementById('fb-shot-tiles');if(!
 function removeShot(i){fbShots.splice(i,1);renderShotTiles()}
 /* Downscale a picked photo to a data URI within the Firestore-doc size budget. */
 function photoToData(file){return new Promise(function(res,rej){const url=URL.createObjectURL(file);const img=new Image();img.onload=function(){URL.revokeObjectURL(url);const max=1400;let w=img.width,h=img.height;if(Math.max(w,h)>max){const s=max/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s);}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(encodeShot(c));};img.onerror=function(){URL.revokeObjectURL(url);rej()};img.src=url;});}
-function photosPicked(input){const files=Array.prototype.slice.call(input.files||[]);input.value='';if(!files.length)return;
+function photosPicked(input){let files=Array.prototype.slice.call(input.files||[]);input.value='';if(!files.length)return;
+  const room=FB_MAX_SHOTS-fbShots.length;if(room<=0){toast('Up to '+FB_MAX_SHOTS+' photos per message');return}
+  if(files.length>room){toast('Added the first '+room+' — up to '+FB_MAX_SHOTS+' photos per message');files=files.slice(0,room)}
   let done=0;files.forEach(function(f){photoToData(f).then(function(d){fbShots.push(d);renderShotTiles();}).catch(function(){}).then(function(){if(++done===files.length&&!document.getElementById('sh-feedback').classList.contains('on'))openSheet('sh-feedback');});});}
 /* Expandable lightbox with next/prev when several photos are attached. */
 let shotViewList=[],shotViewIdx=0;
@@ -6045,8 +6097,8 @@ function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;const em=(u.emai
    and the super admin are unaffected and still see everything. Members with no
    dept (Google sign-ups, legacy accounts) keep the classic member nav. */
 const DEPTS=['ops','sales','tech'];
-const DEPT_COMMON=['s-pulse','s-chat','s-know','s-guides']; // everyone gets these
-const DEPT_TABS={ops:['s-stock','s-support'], sales:['s-crm'], tech:['s-support','s-build','s-qc']};
+const DEPT_COMMON=['s-pulse','s-chat','s-know','s-guides','s-feedback']; // everyone gets these
+const DEPT_TABS={ops:['s-stock','s-support'], sales:['s-crm','s-stock'], tech:['s-support','s-build','s-qc']};
 function deptLabel(d){return {ops:'Ops',sales:'Sales',tech:'Tech'}[d]||''}
 function navAllowedIds(user){
   user=user||CURRENT_USER; if(!user)return null;
@@ -6087,7 +6139,7 @@ function buildNav(role){
   else if(allowed){const set=new Set(allowed);items=NAV_ITEMS.filter(n=>set.has(n.id));}
   else items=NAV_ITEMS.filter(n=>n.roles.includes(navRole(role)));
   if(financeAllowed())items.push(FINANCE_NAV);
-  if(isSuperAdmin())items.push(FEEDBACK_NAV);
+  items.push(FEEDBACK_NAV);
   if(isSuperAdmin())items.push(FIELD_NAV);
   if(isSuperAdmin()||isOversight())items.push(USERS_NAV);
   NAV_ALLOWED=new Set(items.map(n=>n.id));NAV_ALLOWED.add('s-pulse');
@@ -6190,7 +6242,7 @@ function enterApp(user){
   buildNav(user.role);subscribeActions();renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
   loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();loadPOs();subscribeReturns();subscribeNotifications();subscribeOrders();
   if(canFundraise())loadRaise().then(()=>{refreshPulse();if(crmTab==='fundraise')renderCRM();});
-  if(isSuperAdmin())subscribeFeedback();
+  subscribeFeedback();
   if(canVault())subscribeVault();
   if(canComply())subscribeCompliance();
   if(canQC())subscribeQC();
@@ -6586,9 +6638,19 @@ function subscribeNotifications(){if(!hasFirestore()||!CURRENT_USER)return;
     NOTIF=[];qs.forEach(d=>{const n=d.data();if(n.to===me||n.to==='all')NOTIF.push(Object.assign({id:d.id},n))});
     notifPrimed=true;renderNotifBadge();
   },e=>{})}catch(e){}}
+/* Alerts you've already seen go grey; anything older than a week drops off.
+   "Seen" = it was in the list the last time you opened Alerts, or you tapped it. */
+function notifSeenSet(){try{return new Set(JSON.parse(localStorage.getItem('sw_notif_seen_'+((CURRENT_USER&&CURRENT_USER.uid)||''))||'[]'))}catch(e){return new Set()}}
+function notifMarkSeen(ids){try{const s=notifSeenSet();ids.forEach(i=>s.add(i));localStorage.setItem('sw_notif_seen_'+((CURRENT_USER&&CURRENT_USER.uid)||''),JSON.stringify(Array.from(s).slice(-300)))}catch(e){}}
 function openNotifs(){
   const body=document.getElementById('notif-list');if(!body)return;
-  body.innerHTML=NOTIF.length?NOTIF.map(n=>{const t=notifAtMs(n);const time=t?new Date(t).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';return '<div class="card tap" tabindex="0" onclick="notifOpen(\''+esc(n.link||'')+'\')"><div class="t">'+esc(n.title)+'</div><div class="d">'+esc(n.body||'')+(time?' · '+time:'')+'</div></div>'}).join(''):'<div class="empty"><div class="d">No notifications yet. New orders and tasks assigned to you show up here.</div></div>';
+  const prevRead=notifLastRead,seen=notifSeenSet(),weekAgo=Date.now()-7*864e5;
+  const list=NOTIF.filter(n=>{const t=notifAtMs(n);return !t||t>=weekAgo});
+  const isSeen=n=>seen.has(n.id)||(notifAtMs(n)&&notifAtMs(n)<=prevRead);
+  const fresh=list.filter(n=>!isSeen(n)),old=list.filter(isSeen);
+  const card=(n,dim)=>{const t=notifAtMs(n);const time=t?new Date(t).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';return '<div class="card tap'+(dim?' notif-seen':'')+'" tabindex="0" onclick="notifMarkSeen([\''+esc(n.id)+'\']);notifOpen(\''+esc(n.link||'')+'\')"><div class="row"><div class="grow"><div class="t">'+esc(n.title)+'</div><div class="d">'+esc(n.body||'')+(time?' · '+time:'')+'</div></div>'+(dim?'':'<span class="pill wave">NEW</span>')+'</div></div>'};
+  body.innerHTML=list.length?(fresh.map(n=>card(n,false)).join('')+(old.length?'<div class="pulse-sub-h" style="margin-top:12px">Seen</div>'+old.map(n=>card(n,true)).join(''):'')+'<div class="d" style="color:var(--faint);margin-top:10px;text-align:center">Alerts clear after 7 days.</div>'):'<div class="empty"><div class="d">No alerts this week.</div></div>';
+  notifMarkSeen(list.map(n=>n.id));
   notifLastRead=Date.now();try{localStorage.setItem('sw_notif_read_'+CURRENT_USER.uid,String(notifLastRead))}catch(e){}renderNotifBadge();
   const en=document.getElementById('notif-enable');if(en)en.style.display=(window.Notification&&Notification.permission==='default')?'':'none';
   const tt=document.getElementById('notif-test');
@@ -7400,17 +7462,26 @@ function acctCol(a){return (a&&a.board==='Fundraise')?'investors':'crm_accounts'
 function addAccount(rec){CRMA.unshift(rec);
   if(crmSource==='firestore'&&hasFirestore()){firebase.firestore().collection(acctCol(rec)).doc(rec.id).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
   else{try{const nw=JSON.parse(localStorage.getItem('sw_crm_new')||'[]');nw.unshift(rec);localStorage.setItem('sw_crm_new',JSON.stringify(nw))}catch(e){}}}
-function renderMetrics(a){const m=a.metrics||{};
-  const tiles=[['Bands online',m.bandsOnline],['Active users',m.activeUsers],['MRR',(m.mrr!=null&&m.mrr!=='')?('$'+m.mrr):''],['Billing',m.billingStatus],['Open invoices',m.openInvoices]];
+/* Account revenue = recurring software (ARR = MRR x 12) + one-time wholesale
+   band sales (units x price). Spend comes from $ logged on activity notes. */
+function acctRevenue(a){const m=a.metrics||{};const arr=(Number(m.mrr)||0)*12;const whole=(Number(m.wholesaleUnits)||0)*(Number(m.wholesalePrice)||0);return {arr:arr,wholesale:whole,total:arr+whole}}
+function acctSpend(a){return (a.notes||[]).reduce((s,n)=>s+(Number(n.spend)||0),0)}
+function money0(n){return '$'+Math.round(Number(n)||0).toLocaleString('en-US')}
+function metricsHint(){const el=document.getElementById('m-hint');if(!el)return;const mrr=Number(document.getElementById('m-mrr').value)||0,u=Number(document.getElementById('m-wunits').value)||0,pr=Number(document.getElementById('m-wprice').value)||0;
+  el.innerHTML=(mrr||u)?('ARR '+money0(mrr*12)+' + wholesale '+money0(u*pr)+' = <b style="color:var(--text)">'+money0(mrr*12+u*pr)+'</b> a year'):'ARR is MRR × 12. Wholesale is bands sold × price — e.g. 30 bands at $275.'}
+function renderMetrics(a){const m=a.metrics||{};const rv=acctRevenue(a),sp=acctSpend(a);
+  const tiles=[['Bands online',m.bandsOnline],['Active users',m.activeUsers],['MRR',(m.mrr!=null&&m.mrr!=='')?money0(m.mrr):''],['ARR',rv.arr?money0(rv.arr):''],['Wholesale',rv.wholesale?(money0(rv.wholesale)+(m.wholesaleUnits?' · '+m.wholesaleUnits+' bands':'')):''],['Billing',m.billingStatus],['Open invoices',m.openInvoices]];
+  if(sp)tiles.push(['Spent on account',money0(sp)],['Return',rv.total?(Math.round(rv.total/sp*10)/10+'× ('+money0(rv.total-sp)+')'):'—']);
   document.getElementById('ac-metrics').innerHTML=tiles.map(t=>'<div class="tile"><div class="n">'+((t[1]!=null&&t[1]!=='')?esc(String(t[1])):'—')+'</div><div class="l">'+t[0]+'</div></div>').join('')}
 function openMetrics(id){const a=CRMA.find(x=>x.id===id);if(!a)return;const m=a.metrics||{};
   document.getElementById('m-bands').value=m.bandsOnline!=null?m.bandsOnline:'';document.getElementById('m-users').value=m.activeUsers!=null?m.activeUsers:'';
   document.getElementById('m-mrr').value=m.mrr!=null?m.mrr:'';document.getElementById('m-invoices').value=m.openInvoices!=null?m.openInvoices:'';
+  document.getElementById('m-wunits').value=m.wholesaleUnits!=null?m.wholesaleUnits:'';document.getElementById('m-wprice').value=m.wholesalePrice!=null?m.wholesalePrice:'';metricsHint();
   document.querySelectorAll('#m-billing button').forEach(b=>b.classList.toggle('on',b.dataset.v===(m.billingStatus||'')));
   openSheet('sh-metrics')}
 function num(id){const v=document.getElementById(id).value.trim();return v===''?null:Number(v)}
 function saveMetrics(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;const bb=document.querySelector('#m-billing button.on');
-  const metrics={bandsOnline:num('m-bands'),activeUsers:num('m-users'),mrr:num('m-mrr'),openInvoices:num('m-invoices'),billingStatus:bb?bb.dataset.v:''};
+  const metrics=Object.assign({},a.metrics||{},{bandsOnline:num('m-bands'),activeUsers:num('m-users'),mrr:num('m-mrr'),wholesaleUnits:num('m-wunits'),wholesalePrice:num('m-wprice'),openInvoices:num('m-invoices'),billingStatus:bb?bb.dataset.v:''});
   updateAccount(acctId,{metrics:metrics});renderMetrics(a);document.getElementById('sh-metrics').classList.remove('on');toast('✓ Metrics saved')}
 function renderContacts(a){const cs=a.contacts||[];
   document.getElementById('ac-contacts').innerHTML=cs.length?cs.map((c,i)=>'<div class="card" style="padding:10px"><div class="row"><div class="grow"><div class="t">'+esc(c.name||'—')+(c.title?' · '+esc(c.title):'')+'</div><div class="d">'+[esc(c.email),esc(c.phone)].filter(Boolean).join(' · ')+'</div></div><a onclick="rmContact(\''+a.id+'\','+i+')" style="color:var(--faint);cursor:pointer;padding:0 4px">✕</a></div></div>').join(''):'<div class="d" style="color:var(--faint)">No extra contacts yet.</div>'}
@@ -7835,6 +7906,7 @@ function cardHTML(a,showStage){
   const stale=isStale(a),nm=displayName(a),col=acctColor(nm),la=lastAct(a),m=a.metrics||{};
   const chips=[];
   if(m.mrr)chips.push('<span class="mchip good">$'+m.mrr+'/mo</span>');
+  if(m.wholesaleUnits&&m.wholesalePrice)chips.push('<span class="mchip good">'+money0(m.wholesaleUnits*m.wholesalePrice)+' wholesale</span>');
   if(m.billingStatus)chips.push('<span class="mchip'+(m.billingStatus==='Past due'||m.billingStatus==='Churned'?' bad':'')+'">'+esc(m.billingStatus)+'</span>');
   (a.tags||[]).slice(0,2).forEach(t=>chips.push('<span class="mchip">'+esc(t)+'</span>'));
   if(a.dueAt){const dm=dueMeta(dayMs(a.dueAt));if(dm.label)chips.push('<span class="mchip'+(dm.overdue||dm.soon?' warn':'')+'">'+esc(dm.label)+'</span>')}
@@ -7878,7 +7950,7 @@ function renderAccountView(host){
         +'</div>'
         +(a.board==='Fundraise'?fundraiseEditorCard():'')
         +'<div class="card"><div class="sec-head"><h2>Next step</h2></div><input class="field" id="ac-nextstep" placeholder="e.g. Send proposal, book a demo" style="margin:0 0 8px"><div class="row" style="gap:8px"><input class="field" id="ac-due" type="date" style="margin:0;flex:1"><button class="btn ghost" onclick="saveNextStep()">Save</button></div><div class="note" style="margin-top:9px">Owner + due date show on your Pulse and the team past-due list.</div></div>'
-        +'<div class="card"><div class="sec-head"><h2>Company dashboard</h2><a onclick="openMetrics(acctId)">Edit</a></div><div class="tiles" id="ac-metrics"></div><div class="note" style="margin-top:11px">Live bands online, active users, recurring billing &amp; invoices light up when this company\'s Safewave dashboard is linked.</div></div>'
+        +'<div class="card"><div class="sec-head"><h2>Company dashboard</h2><a onclick="openMetrics(acctId)">Edit</a></div><div class="tiles" id="ac-metrics"></div><div class="note" style="margin-top:11px">Revenue counts software (ARR = MRR × 12) plus wholesale band sales. Money logged on activity notes shows here as spend and return. Live bands and users light up when this company\'s Safewave dashboard is linked.</div></div>'
         +'<div class="card"><div class="sec-head"><h2>Details</h2></div><div id="ac-body"></div></div>'
       +'</div>'
       +'<div class="acct-col">'
@@ -7887,6 +7959,7 @@ function renderAccountView(host){
           +'<button class="btn ghost" style="margin-top:9px" onclick="addContact(acctId)">＋ Add contact</button></div>'
         +'<div class="card"><div class="sec-head"><h2>Activity</h2><span id="ac-campaign-badge"></span></div><div id="ac-notes"></div>'
           +'<textarea class="field" id="note-input" placeholder="Add a call note…" style="min-height:76px;resize:vertical;font-family:var(--font-b);margin-top:11px"></textarea>'
+          +'<div class="row" style="gap:8px;align-items:center;margin-bottom:8px"><label class="flabel" for="note-spend" style="margin:0;white-space:nowrap">Money spent ($)</label><input class="field" id="note-spend" type="number" inputmode="decimal" min="0" placeholder="optional — travel, samples, demo kits" style="margin:0;flex:1" autocomplete="off"></div>'
           +'<div class="row" style="gap:8px"><button class="btn" style="flex:1" onclick="addNote(acctId)">Save note</button><button class="btn ghost" id="rec-btn" style="flex:1" onclick="toggleRecord(acctId)">● Record call</button></div>'
           +'<div class="note" style="margin-top:10px">Recording transcribes the call live in your browser into the note above — review, then Save.</div></div>'
       +'</div>'
@@ -7925,8 +7998,8 @@ function saveOwner(id){const v=document.getElementById('ac-owner').value.trim()|
 function renderTags(a){document.getElementById('ac-tags').innerHTML=(a.tags||[]).length?(a.tags||[]).map(t=>'<span class="pill wave" style="cursor:pointer" onclick="rmTag(\''+a.id+'\',decodeURIComponent(\''+encodeURIComponent(t)+'\'))">'+esc(t)+' ✕</span>').join(' '):'<span class="d" style="color:var(--faint)">No tags yet</span>'}
 function addTag(id){const inp=document.getElementById('ac-tag-input');const t=inp.value.trim();if(!t)return;const a=CRMA.find(x=>x.id===id);const tags=(a.tags||[]).slice();if(!tags.includes(t))tags.push(t);updateAccount(id,{tags:tags});inp.value='';renderTags(a);renderCrmMain()}
 function rmTag(id,t){const a=CRMA.find(x=>x.id===id);const tags=(a.tags||[]).filter(x=>x!==t);updateAccount(id,{tags:tags});renderTags(a);renderCrmMain()}
-function renderNotes(a){const notes=(a.notes||[]);document.getElementById('ac-notes').innerHTML=notes.length?notes.map(n=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([n.user,n.at].filter(Boolean).join(' · '))+'</div>'+esc(n.text||'')+'</div>').join(''):'<div class="d" style="color:var(--faint)">No activity yet — add a note or record a call.</div>'}
-function addNote(id){const inp=document.getElementById('note-input');const t=inp.value.trim();if(!t)return;const a=CRMA.find(x=>x.id===id);const notes=(a.notes||[]).slice();notes.unshift({user:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'}),text:t});updateAccount(id,{notes:notes});inp.value='';renderNotes(a);renderCrmMain();toast('✓ Note logged')}
+function renderNotes(a){const notes=(a.notes||[]);document.getElementById('ac-notes').innerHTML=notes.length?notes.map(n=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([n.user,n.at].filter(Boolean).join(' · '))+(Number(n.spend)?' · <b style="color:var(--amber)">'+money0(n.spend)+' spent</b>':'')+'</div>'+esc(n.text||'')+'</div>').join(''):'<div class="d" style="color:var(--faint)">No activity yet — add a note or record a call.</div>'}
+function addNote(id){const inp=document.getElementById('note-input');const sEl=document.getElementById('note-spend');const spend=Math.max(0,Number(sEl&&sEl.value)||0);let t=inp.value.trim();if(!t&&!spend)return;if(!t)t='Spend logged';const a=CRMA.find(x=>x.id===id);const notes=(a.notes||[]).slice();const n={user:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'}),text:t};if(spend)n.spend=spend;notes.unshift(n);updateAccount(id,{notes:notes});inp.value='';if(sEl)sEl.value='';renderNotes(a);renderMetrics(a);renderCrmMain();toast(spend?'✓ Note + '+money0(spend)+' spend logged':'✓ Note logged')}
 let crmRec=null;
 function toggleRecord(id){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;const btn=document.getElementById('rec-btn');
   if(!SR){toast('Voice capture isn\'t supported in this browser — type your note instead');return}
@@ -8462,7 +8535,24 @@ function setTheme(t){document.documentElement.setAttribute('data-theme',t);try{l
 (function(){try{const t=localStorage.getItem('sw_theme');setTheme(t==='dark'?'dark':'light')}catch(e){setTheme('light')}})();
 
 /* ================= UI HELPERS ================= */
-function openSheet(id){document.getElementById(id).classList.add('on')}
+function openSheet(id){const el=document.getElementById(id);el.classList.add('on');const b=el.querySelector('.sheet-body');if(b){b.style.transform='';b.style.transition=''}}
+/* Swipe down to dismiss a sheet: drag the handle, or drag the body when it's
+   scrolled to the top. Upward drags and inner scrolling are left alone. */
+(function(){let st=null;
+  function reset(b){b.style.transition='transform .18s ease';b.style.transform='';setTimeout(()=>{b.style.transition=''},200)}
+  document.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;const b=e.target.closest&&e.target.closest('.sheet.on .sheet-body');if(!b){st=null;return}
+    const grab=!!e.target.closest('.grab');
+    if(!grab&&(b.scrollTop>0||e.target.closest('input,textarea,select,[contenteditable="true"],.qc-log,.sim-phone')))
+      {st=null;return}
+    st={b:b,y:e.touches[0].clientY,t:Date.now(),dy:0,grab:grab}},{passive:true});
+  document.addEventListener('touchmove',e=>{if(!st)return;const dy=e.touches[0].clientY-st.y;
+    if(dy<=0){if(st.dy>0){st.b.style.transform=''}st.dy=0;if(!st.grab)st=null;return}
+    st.dy=dy;st.b.style.transition='none';st.b.style.transform='translateY('+dy+'px)';if(e.cancelable)e.preventDefault()},{passive:false});
+  function end(){if(!st)return;const s=st;st=null;const fast=s.dy>45&&(Date.now()-s.t)<260;
+    if(s.dy>110||fast){s.b.style.transition='transform .18s ease';s.b.style.transform='translateY(110%)';setTimeout(()=>{closeSheets();s.b.style.transform='';s.b.style.transition=''},170)}
+    else if(s.dy>0)reset(s.b)}
+  document.addEventListener('touchend',end);document.addEventListener('touchcancel',end);
+})();
 function closeSheets(){document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('on'))}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeSheets();closeNavDrawer()}});
 document.addEventListener('click',e=>{const b=e.target.closest('.reason button');if(!b)return;const g=b.closest('.reason');g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});

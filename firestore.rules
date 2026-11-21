@@ -163,12 +163,18 @@ service cloud.firestore {
     // Team feedback — any teammate can submit; only the super admin can read
     // it or change its status. A submitter may create their own entry with the
     // "open" status and cannot edit or delete it afterward.
+    // Feedback: super admins read and manage all of it. Everyone else reads
+    // ONLY their own submissions and may add to their own thread — never
+    // anyone else's, and they can't change status or content.
     match /feedback/{id} {
-      allow read: if isSuper();
+      allow read: if isSuper() || (signedIn() && resource.data.fromUid == request.auth.uid);
       allow create: if signedIn()
         && request.resource.data.fromUid == request.auth.uid
         && request.resource.data.status == 'open';
-      allow update, delete: if isSuper();
+      allow update: if isSuper()
+        || (signedIn() && resource.data.fromUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['thread', 'lastReplyAt']));
+      allow delete: if isSuper();
     }
 
     // Notifications — new orders (to:'all') + task assignments (to: a uid).
