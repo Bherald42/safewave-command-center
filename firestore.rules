@@ -251,6 +251,10 @@ service cloud.firestore {
       allow read, write: if canRaise();
     }
     // Data room checklist items and their uploaded files' metadata.
+    // Raise tasks Brad assigns to Trey: finance group only (titles can name investors).
+    match /raise_tasks/{id} {
+      allow read, write: if canRaise();
+    }
     match /dataroom/{id} {
       allow read, write: if canRaise();
     }
