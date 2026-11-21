@@ -856,7 +856,7 @@ input[type=date]{color-scheme:dark}
       <div class="quick-grid" id="pulse-quick"></div>
 
       <div class="sec">
-        <div class="sec-head"><h2>Top priorities</h2><span class="pill dim" id="pulse-actcount"></span></div>
+        <div class="sec-head"><h2>Today</h2><span class="pill dim" id="pulse-actcount"></span><span class="spacer"></span><a onclick="openAddAction()" style="font-size:13px;font-weight:600;cursor:pointer">＋ Add item</a><a onclick="emailMyToday()" style="font-size:13px;margin-left:14px;cursor:pointer;color:var(--muted)">Email me this</a></div>
         <div id="pulse-attn"></div>
       </div>
 
@@ -1108,6 +1108,18 @@ input[type=date]{color-scheme:dark}
   </div>
 </div>
 
+<div class="sheet" id="sh-action" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <h1 style="font-size:20px;margin:6px 0 12px">Add an action item</h1>
+    <input class="field" id="ax-title" placeholder="What needs doing? (e.g. Send Amazon the W-9)" onkeydown="if(event.key==='Enter')saveAction()">
+    <div class="row" style="gap:10px">
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Owner</p><select class="field" id="ax-owner" style="margin:0"></select></div>
+      <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Due</p><input class="field" id="ax-due" type="date" style="margin:0"></div>
+    </div>
+    <p class="d" style="margin:10px 0 0">It shows on the owner's Today list and in their 7 am email until it's done.</p>
+    <button class="btn" style="margin-top:14px" onclick="saveAction()">Add item</button>
+  </div>
+</div>
 <div class="sheet" id="sh-account" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
@@ -5055,7 +5067,9 @@ function fundraiseFinCard(cash,net){const s=raiseStats();if(!s.investors&&!s.tar
     +'<div class="note" style="margin-top:10px">'+(extend?'Closing the '+fmtMoney(s.committed)+' committed adds ~'+extend.toFixed(1)+' months of runway at the current burn.':'Wired capital is included in cash on hand; committed &amp; soft are pipeline.')+'</div>'
   +'</div>';}
 function taskGroup(label,arr){if(!arr.length)return '';return '<div class="pulse-sub-h">'+label+' · '+arr.length+'</div>'+arr.map(taskCard).join('')}
-function taskCard(x){const dm=dueMeta(x.dueMs);return '<div class="card tap" tabindex="0" onclick="goto(\''+x.screen+'\')"><div class="row"><div class="grow"><div class="t">'+esc(x.title)+'</div><div class="d">'+esc(x.kind)+(x.who?' · '+esc(x.who):'')+'</div></div>'+(dm.label?'<span class="pill '+dm.cls+'">'+esc(dm.label)+'</span>':'<span class="pill dim">'+esc(x.kind)+'</span>')+'</div></div>'}
+function taskCard(x){const dm=dueMeta(x.dueMs);const act=x.kind==='Action'&&x.actionId;
+  return '<div class="card'+(act?'':' tap')+'" tabindex="0"'+(act?'':' onclick="goto(\''+x.screen+'\')"')+'><div class="row"><div class="grow"><div class="t">'+esc(x.title)+'</div><div class="d">'+esc(act?'Action item':x.kind)+(x.who?' · '+esc(x.who):'')+'</div></div>'+(dm.label?'<span class="pill '+dm.cls+'">'+esc(dm.label)+'</span>':'<span class="pill dim">'+esc(x.kind)+'</span>')
+    +(act?'<button class="btn ghost" style="width:auto;margin:0 0 0 8px;padding:6px 12px;font-size:13px" onclick="doneAction(\''+x.actionId+'\',event)">✓ Done</button>':'')+'</div></div>'}
 function opsCard(to,pill,tag,title,sub){return '<div class="card tap" tabindex="0" onclick="'+(to==='__mail'?'openAccountPanel()':'goto(\''+to+'\')')+'"><div class="row"><div class="grow"><div class="t">'+esc(title)+'</div><div class="d">'+esc(sub)+'</div></div><span class="pill '+pill+'">'+esc(tag)+'</span></div></div>'}
 function renderDecisions(){
   document.getElementById('decision-log').innerHTML=DECISIONS.map(d=>'<div class="note" style="margin-top:8px"><div class="meta">'+d[0].toUpperCase()+'</div>'+d[1]+'</div>').join('')+'<div class="d" style="margin-top:10px">Real calls made during the build — searchable forever, so context never leaves when a person does.</div>';
@@ -6121,7 +6135,7 @@ function enterApp(user){
   document.getElementById('acc-email').textContent=user.email;
   document.getElementById('acc-role').textContent=userRoleText(user)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
-  buildNav(user.role);renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
+  buildNav(user.role);subscribeActions();renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
   loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();loadPOs();subscribeReturns();subscribeNotifications();subscribeOrders();
   if(canFundraise())loadRaise().then(()=>{refreshPulse();if(crmTab==='fundraise')renderCRM();});
   if(isSuperAdmin())subscribeFeedback();
@@ -6903,7 +6917,25 @@ function markBuildDone(id){const t=BUILDT.find(x=>x.id===id);if(!t)return;t.stat
 function deleteBuildTask(){if(buildReadOnly()){toast('Read-only — oversight access');return}if(!btEditId)return;const id=btEditId;BUILDT=BUILDT.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('build_tasks').doc(id).delete().catch(()=>{});closeSheets();renderBuild();refreshPulse();toast('Task deleted')}
 
 /* unified task feed for Pulse (build + tickets + CRM follow-ups) */
+/* Action items: one-off to-dos with an owner and a due date (Today list + daily email). */
+let ACTIONS=[], actionsUnsub=null;
+function subscribeActions(){if(!hasFirestore())return;try{if(actionsUnsub)actionsUnsub();
+  actionsUnsub=firebase.firestore().collection('actions').where('status','==','open').onSnapshot(qs=>{ACTIONS=qs.docs.map(d=>Object.assign({id:d.id},d.data()));if(typeof refreshPulse==='function')refreshPulse()},()=>{})}catch(e){}}
+function openAddAction(){document.getElementById('ax-title').value='';document.getElementById('ax-owner').innerHTML=assigneeOptions((CURRENT_USER&&CURRENT_USER.name)||'');document.getElementById('ax-due').value=new Date().toISOString().slice(0,10);openSheet('sh-action');setTimeout(()=>{const t=document.getElementById('ax-title');if(t)t.focus()},60)}
+function saveAction(){const title=document.getElementById('ax-title').value.trim();if(!title){toast('What needs doing?');return}
+  const ownerName=document.getElementById('ax-owner').value||((CURRENT_USER&&CURRENT_USER.name)||'');const uid=(typeof uidForName==='function'&&uidForName(ownerName))||'';
+  const rec={title:title,ownerName:ownerName,owner:uid||'',due:document.getElementById('ax-due').value||'',status:'open',createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()};
+  const id='a'+Date.now().toString(36);ACTIONS.push(Object.assign({id:id},rec));
+  if(hasFirestore())firebase.firestore().collection('actions').doc(id).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
+  if(ownerName&&!isMine(ownerName))notifyAssignee(ownerName,'New action item for you',title,'s-pulse');
+  closeSheets();refreshPulse();toast('✓ Added to '+(isMine(ownerName)?'your':ownerName.split(' ')[0]+'’s')+' Today list')}
+function doneAction(id,ev){if(ev)ev.stopPropagation();ACTIONS=ACTIONS.filter(a=>a.id!==id);
+  if(hasFirestore())firebase.firestore().collection('actions').doc(id).set({status:'done',doneAt:new Date().toISOString(),doneBy:(CURRENT_USER&&CURRENT_USER.name)||''},{merge:true}).catch(()=>{});
+  refreshPulse();toast('✓ Done')}
+async function emailMyToday(){if(!hasFirestore()||!firebase.functions){toast('Email runs on the live site');return}
+  toast('Sending your Today list…');try{const r=await firebase.functions().httpsCallable('sendMyDigest')({});const d=r.data||{};toast(d.sent?'✓ Sent to your inbox':(d.mailbox?'Sent as an in-app notification':'No connected sender mailbox yet — Brad: Account → Connect email'))}catch(e){toast('Couldn’t send — '+((e&&e.message)||'try again'))}}
 function collectTasks(){const out=[];const t=todayMs();
+  (ACTIONS||[]).filter(a=>a.status==='open').forEach(a=>{const dm=dayMs(a.due);out.push({who:a.ownerName||'',title:a.title,dueMs:dm,screen:'s-pulse',kind:'Action',actionId:a.id,overdue:dm!=null&&dm<t})});
   BUILDT.filter(x=>x.status!=='done').forEach(x=>{const dm=dayMs(x.due);out.push({who:x.assignee||'',title:x.title,dueMs:dm,screen:'s-build',kind:'Build',overdue:dm!=null&&dm<t})});
   (typeof TKTS!=='undefined'?TKTS:[]).filter(x=>x.status==='open').forEach(x=>{const dm=dayMs(x.due);const sla=(SEV[x.sev].sla-(Date.now()-new Date(x.created).getTime())/3.6e6)<0;out.push({who:x.assignee||'',title:x.title,dueMs:dm,screen:'s-support',kind:'Ticket',overdue:(dm!=null&&dm<t)||sla})});
   (CRMA||[]).filter(a=>a.dueAt&&a.stage!=='Won'&&a.stage!=='Lost').forEach(a=>{const dm=dayMs(a.dueAt);out.push({who:a.owner||'',title:(a.nextStep?a.nextStep+' — ':'Follow up: ')+displayName(a),dueMs:dm,screen:'s-crm',kind:'CRM',overdue:dm!=null&&dm<t})});
