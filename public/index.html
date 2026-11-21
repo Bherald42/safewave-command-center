@@ -678,6 +678,43 @@ input[type=date]{color-scheme:dark}
   border-radius:20px 20px 0 0;padding:12px 18px calc(26px + env(safe-area-inset-bottom))}
 @media(min-width:560px){.sheet{align-items:center}.sheet-body{border-radius:18px}}
 .grab{width:38px;height:4px;background:var(--line);border-radius:2px;margin:4px auto 16px;position:relative;touch-action:none;cursor:grab}
+/* ================= MOBILE-FIRST POLISH (adapts up to tablet + desktop) =================
+   Phones are where most of the team works, so touch screens get comfortable
+   tap targets and 16px fields (iOS zooms the page into anything smaller);
+   narrow screens drop duplicate chrome; wide screens are untouched. */
+.sheet-body{max-height:88vh;max-height:88dvh}
+@media (pointer:coarse){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea,.field,.sim-in{font-size:16px!important}
+  .row.tap{min-height:36px;padding-top:4px;padding-bottom:4px}
+  .iconbtn{width:40px;height:40px}
+  .chip{min-height:36px}
+  .sec-head a{display:inline-flex;align-items:center;min-height:36px;padding:0 4px}
+  .screen button:not(.ic-btn):not(.iconbtn):not([aria-label="Remove"]),.sheet button:not([aria-label="Remove"]){min-height:36px}
+  .screen .btn,.sheet .btn{min-height:44px}
+}
+@media (max-width:859px){
+  .pill{font-size:11px!important}
+  .eyebrow{font-size:11px}
+  .hide-sm{display:none}
+  /* Messages is already in the bottom bar */
+  .appbar .iconbtn[aria-label="Messages"]{display:none}
+  .appbar{gap:8px}
+  .pulse-today-acts{display:flex;gap:6px;flex-wrap:wrap}
+  .pulse-today-acts a{display:inline-flex;align-items:center;min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:99px;background:var(--surface);margin:0!important}
+  .qc-relhead{flex-wrap:wrap}
+  .qc-relhead>.grow{flex:1 1 100%}
+  .qc-relhead>div:last-child{text-align:left!important;display:flex;align-items:baseline;gap:8px}
+  .qc-relhead>div:last-child .t{font-size:20px!important}
+  .btnrow-sm{flex-wrap:nowrap!important}
+  .btnrow-sm .btn{min-width:0!important;padding-left:8px;padding-right:8px;font-size:13.5px}
+}
+@media (max-width:560px){
+  /* avatar-only account chip keeps the top bar on one line */
+  .who .nm{display:none}
+  .who{padding:4px}
+  #s-chat .chat-tools .ic-btn[title^="Screenshot"]{display:none}
+  .sec-head{flex-wrap:wrap}
+}
 .notif-seen{opacity:.55}.notif-seen:hover{opacity:.8}
 .grab::before{content:"";position:absolute;left:-40px;right:-40px;top:-14px;bottom:-12px}
 .flabel{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:2px 0 5px}
@@ -859,7 +896,7 @@ input[type=date]{color-scheme:dark}
       <div class="quick-grid" id="pulse-quick"></div>
 
       <div class="sec">
-        <div class="sec-head"><h2>Today</h2><span class="pill dim" id="pulse-actcount"></span><span class="spacer"></span><a onclick="openAddAction()" style="font-size:13px;font-weight:600;cursor:pointer">＋ Add item</a><a onclick="emailMyToday()" style="font-size:13px;margin-left:14px;cursor:pointer;color:var(--muted)">Email me this</a></div>
+        <div class="sec-head"><h2>Today</h2><span class="pill dim" id="pulse-actcount"></span><span class="spacer"></span><span class="pulse-today-acts"><a onclick="openAddAction()" style="font-size:13px;font-weight:600;cursor:pointer">＋ Add item</a><a onclick="emailMyToday()" style="font-size:13px;margin-left:14px;cursor:pointer;color:var(--muted)">Email me this</a></span></div>
         <div id="pulse-attn"></div>
       </div>
 
@@ -1978,10 +2015,10 @@ function renderFulfillTab(body){
   const unf=unfulfilledOrders();
   const done=ordersList().filter(o=>FULF[o.n]&&FULF[o.n].status==='fulfilled');
   let html='';
-  html+='<div class="row" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">'
-    +'<button class="btn ghost" style="flex:1;min-width:132px"'+(syncing?' disabled':'')+' onclick="syncShopify(false)">'+(syncing?'Syncing…':'⟳ Sync now')+'</button>'
-    +'<button class="btn ghost" style="flex:1;min-width:132px"'+(syncing?' disabled':'')+' onclick="syncShopify(true)">⤓ Backfill history</button>'
-    +'<button class="btn ghost" style="flex:1;min-width:132px" onclick="demoSync()">▶ Demo walkthrough</button>'
+  html+='<div class="row btnrow-sm" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+    +'<button class="btn ghost" style="flex:1;min-width:132px"'+(syncing?' disabled':'')+' onclick="syncShopify(false)">'+(syncing?'Syncing…':'<span>⟳ Sync<span class="hide-sm"> now</span></span>')+'</button>'
+    +'<button class="btn ghost" style="flex:1;min-width:132px"'+(syncing?' disabled':'')+' onclick="syncShopify(true)"><span>⤓ Backfill<span class="hide-sm"> history</span></span></button>'
+    +'<button class="btn ghost" style="flex:1;min-width:132px" onclick="demoSync()"><span>▶ Demo<span class="hide-sm"> walkthrough</span></span></button>'
     +'</div>';
   if(DEMO.length)html+='<div class="card" style="border-color:var(--wave)"><div class="row"><div class="grow"><div class="t">Demo mode</div><div class="d">These orders are a walkthrough — nothing is sent to Shopify or saved to the database.</div></div><button class="btn ghost" onclick="clearDemo()">Clear demo</button></div></div>';
   html+=oversoldCard();
@@ -2889,7 +2926,7 @@ function relView(){
   let total=0,done=0,flags=0;gates.forEach(function(x){const s=relGateStats(l,x);total+=s.total;done+=s.done;flags+=s.flags});
   const pct=total?Math.round(done/total*100):0;
   const comps=REL_COMPS.map(function(c){return '<span class="rg-comp"><b>'+esc(relVer(l,c.k))+'</b>'+esc(c.name)+'</span>'}).join('');
-  return '<div class="card"><div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><input class="field" style="margin:0;font-size:18px;font-weight:700" value="'+esc(l.name)+'" onchange="relUpd(\'name\',this.value.trim()||'+ocjson(REL_SEED.name)+')" aria-label="Release name"'+(relAdmin()?'':' readonly')+'>'
+  return '<div class="card"><div class="row qc-relhead" style="align-items:flex-start;gap:8px"><div class="grow"><input class="field" style="margin:0;font-size:18px;font-weight:700" value="'+esc(l.name)+'" onchange="relUpd(\'name\',this.value.trim()||'+ocjson(REL_SEED.name)+')" aria-label="Release name"'+(relAdmin()?'':' readonly')+'>'
     +'<div class="d" style="margin-top:6px">'+(l.status==='shipped'?'<span style="color:var(--good)">Shipped '+qcTime(l.shippedAt)+'</span>':'Sign off by '+esc(l.targetDate||'—'))+(flags?' · <span style="color:var(--amber)">⚑ '+flags+' open flag'+(flags===1?'':'s')+'</span>':'')+'</div></div>'
     +'<div style="text-align:right;flex:0 0 auto"><div class="t" style="font-size:24px">'+pct+'%</div><div class="d" style="color:var(--faint)">'+done+' of '+total+' checks</div></div></div>'
     +'<div class="qs-bar" style="margin-top:10px"><i style="width:'+pct+'%"></i></div><div class="rg-comps">'+comps+'</div></div>'
