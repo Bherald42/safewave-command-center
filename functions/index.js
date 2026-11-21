@@ -1305,3 +1305,95 @@ exports.ticketIntake = onRequest({ region: REGION }, async (req, res) => {
   logger.info(`ticketIntake: ${id} from ${caller} (${t.channel}${safety ? ", safety" : ""})`);
   res.json({ ok: true, id });
 });
+
+/* ------------------------------------------------------------------ *
+ * DAILY ACTION EMAIL  (7:00 am Eastern, every day)
+ * Each teammate gets ONLY their own items: overdue, due today, due this
+ * week — from action items, build tasks, tickets and CRM next steps — plus a
+ * one-line company context. Nobody with nothing due gets an email. Sent from
+ * the super admin's connected mailbox; without one it falls back to an
+ * in-app notification. sendMyDigest lets anyone send theirs now (preview).
+ * ------------------------------------------------------------------ */
+const APP_URL = "https://safewave-command-center.web.app";
+function ymdET(ms) { return new Date(ms).toLocaleDateString("en-CA", { timeZone: "America/New_York" }); }
+function nameMatches(who, user) {
+  if (!who || !user) return false;
+  const w = String(who).toLowerCase().trim();
+  const me = String(user.name || "").toLowerCase().trim();
+  const first = me.split(" ")[0];
+  if (user.uid && w === String(user.uid).toLowerCase()) return true;
+  return (me && w === me) || (first.length > 1 && w.indexOf(first) >= 0) || (user.email && w === String(user.email).toLowerCase());
+}
+async function digestData() {
+  const [acts, build, tix, crm] = await Promise.all([
+    db.collection("actions").where("status", "==", "open").get(),
+    db.collection("build_tasks").get(),
+    db.collection("tickets").where("status", "==", "open").get(),
+    db.collection("crm_accounts").get(),
+  ]);
+  const items = [];
+  acts.forEach((d) => { const a = d.data(); items.push({ who: a.ownerName || a.owner || "", whoUid: a.owner || "", title: a.title, due: a.due || "", kind: "Action" }); });
+  build.forEach((d) => { const t = d.data(); if (t.status === "done") return; items.push({ who: t.assignee || "", title: t.title, due: t.due || "", kind: "Build" }); });
+  tix.forEach((d) => { const t = d.data(); items.push({ who: t.assignee || "", title: `${t.sev === "safety" ? "SAFETY ticket" : "Ticket"}: ${t.title}`, due: t.due || "", kind: "Ticket" }); });
+  crm.forEach((d) => { const a = d.data(); if (!a.dueAt || a.stage === "Won" || a.stage === "Lost") return; items.push({ who: a.owner || "", title: (a.nextStep ? a.nextStep + " — " : "Follow up: ") + (a.name || "account"), due: String(a.dueAt).slice(0, 10), kind: "CRM" }); });
+  return { items, openTickets: tix.size };
+}
+function digestFor(user, data, todayStr) {
+  const weekStr = ymdET(Date.now() + 7 * 864e5);
+  const mine = data.items.filter((x) => (x.whoUid && x.whoUid === user.uid) || nameMatches(x.who, user));
+  const overdue = mine.filter((x) => x.due && x.due < todayStr).sort((a, b) => a.due.localeCompare(b.due));
+  const today = mine.filter((x) => x.due === todayStr);
+  const week = mine.filter((x) => x.due > todayStr && x.due <= weekStr).sort((a, b) => a.due.localeCompare(b.due));
+  return { overdue, today, week, count: overdue.length + today.length + week.length };
+}
+function digestText(user, g, data) {
+  const fmt = (x) => `• ${x.title}${x.due ? " (" + new Date(x.due + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) + ")" : ""}`;
+  const first = String(user.name || "there").split(" ")[0];
+  let t = `Good morning ${first}, here's what's yours today.\n\n`;
+  if (g.overdue.length) t += `OVERDUE (${g.overdue.length})\n${g.overdue.map(fmt).join("\n")}\n\n`;
+  if (g.today.length) t += `DUE TODAY (${g.today.length})\n${g.today.map(fmt).join("\n")}\n\n`;
+  if (g.week.length) t += `THIS WEEK (${g.week.length})\n${g.week.map(fmt).join("\n")}\n\n`;
+  t += `Company: ${data.openTickets} open support ticket${data.openTickets === 1 ? "" : "s"}.\n\nOpen the Command Center: ${APP_URL}`;
+  return t;
+}
+async function digestSender() {
+  const supers = await db.collection("users").where("role", "==", "superadmin").get();
+  for (const s of supers.docs) {
+    const creds = await getCreds(s.id);
+    if (creds) return { creds, sender: senderFrom(creds, s.data() || {}) };
+  }
+  return null;
+}
+async function sendDigests(onlyUid) {
+  const todayStr = ymdET(Date.now());
+  const data = await digestData();
+  const users = await db.collection("users").get();
+  const mail = await digestSender();
+  let sent = 0, notified = 0;
+  for (const u of users.docs) {
+    if (onlyUid && u.id !== onlyUid) continue;
+    const user = Object.assign({ uid: u.id }, u.data() || {});
+    if (!user.email || user.digestOff) continue;
+    const g = digestFor(user, data, todayStr);
+    if (!g.count && !onlyUid) continue;
+    const subject = g.count
+      ? `Today: ${g.overdue.length ? g.overdue.length + " overdue, " : ""}${g.today.length} due today, ${g.week.length} this week`
+      : "Today: nothing due — you're clear";
+    const text = digestText(user, g, data);
+    if (mail) {
+      try { await deliver(mail.creds, mail.sender, { to: user.email, subject, text }); sent++; continue; }
+      catch (e) { logger.error("digest send failed", user.email, e && e.message); }
+    }
+    await db.collection("notifications").add({ to: u.id, title: subject, body: "Open Home for your Today list", link: "s-pulse", by: "Daily email", at: admin.firestore.FieldValue.serverTimestamp() });
+    notified++;
+  }
+  logger.info(`dailyDigest: ${sent} emailed, ${notified} in-app${mail ? "" : " (no connected super-admin mailbox)"}`);
+  return { sent, notified, mailbox: mail ? mail.creds.email : null };
+}
+exports.dailyDigest = onSchedule({ schedule: "every day 07:00", timeZone: "America/New_York", region: REGION }, async () => {
+  await sendDigests(null);
+});
+exports.sendMyDigest = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  return sendDigests(request.auth.uid);
+});

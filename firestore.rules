@@ -67,6 +67,12 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    // Action items — one-off to-dos with an owner and a due date (Home →
+    // Today, the daily email). Shared like tickets.
+    match /actions/{id} {
+      allow read, write: if signedIn();
+    }
+
     // Outreach campaigns — shared so the whole team sees active sequences.
     match /campaigns/{id} {
       allow read, write: if signedIn();
