@@ -951,6 +951,7 @@ exports.runCampaigns = onSchedule({ schedule: "every day 15:00", region: REGION 
   for (const doc of accs.docs) {
     if (sent >= CAMPAIGN_SENDS_PER_RUN) break;
     const a = doc.data();
+    if (a.archived) continue; // archived accounts never get campaign mail
     const en = a.campaign;
     if (!en || en.status !== "active") continue;
     if (en.nextAt && Date.parse(en.nextAt) > now) continue;
@@ -1004,7 +1005,7 @@ exports.scanOverdue = onSchedule({ schedule: "every day 13:00", region: REGION }
   const staleAccounts = [];
   accs.forEach((d) => {
     const a = d.data();
-    if (a.stage === "Won" || a.stage === "Lost") return;
+    if (a.archived || a.stage === "Won" || a.stage === "Lost") return;
     const last = lastActivity(a);
     if (last == null || (now - last) / 86400000 > STALE_DAYS) {
       staleAccounts.push({ id: d.id, name: a.name || "", owner: a.owner || "Unassigned", stage: a.stage || "New" });
@@ -1135,6 +1136,8 @@ function lastActivity(a) {
   (a.notes || []).forEach((n) => { const d = pDate(n.at); if (d) ds.push(d); });
   const dd = pDate(a.date);
   if (dd) ds.push(dd);
+  // Stage changes, creation and restores count as activity too.
+  ["stageChangedAt", "createdAt", "restoredAt"].forEach((k) => { const v = a[k] ? Date.parse(a[k]) : NaN; if (!isNaN(v)) ds.push(v); });
   return ds.length ? Math.max.apply(null, ds) : null;
 }
 
@@ -1542,7 +1545,7 @@ async function digestData() {
   acts.forEach((d) => { const a = d.data(); items.push({ who: a.ownerName || a.owner || "", whoUid: a.owner || "", title: a.title, due: a.due || "", kind: "Action" }); });
   build.forEach((d) => { const t = d.data(); if (t.status === "done") return; items.push({ who: t.assignee || "", title: t.title, due: t.due || "", kind: "Build" }); });
   tix.forEach((d) => { const t = d.data(); items.push({ who: t.assignee || "", title: `${t.sev === "safety" ? "SAFETY ticket" : "Ticket"}: ${t.title}`, due: t.due || "", kind: "Ticket" }); });
-  crm.forEach((d) => { const a = d.data(); if (!a.dueAt || a.stage === "Won" || a.stage === "Lost") return; items.push({ who: a.owner || "", title: (a.nextStep ? a.nextStep + " — " : "Follow up: ") + (a.name || "account"), due: String(a.dueAt).slice(0, 10), kind: "CRM" }); });
+  crm.forEach((d) => { const a = d.data(); if (a.archived || !a.dueAt || a.stage === "Won" || a.stage === "Lost") return; items.push({ who: a.owner || "", title: (a.nextStep ? a.nextStep + " — " : "Follow up: ") + (a.name || "account"), due: String(a.dueAt).slice(0, 10), kind: "CRM" }); });
   return { items, openTickets: tix.size };
 }
 function digestFor(user, data, todayStr) {

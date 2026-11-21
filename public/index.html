@@ -1471,6 +1471,56 @@ input[type=date]{color-scheme:dark}
   </div>
 </div>
 
+<div class="sheet" id="sh-lost" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill dim">CLOSED LOST</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Why was it lost?</h1>
+    <p class="sub" id="lr-name"></p>
+    <div class="rolepick" id="lr-reasons" style="flex-wrap:wrap"></div>
+    <label class="flabel" for="lr-note" style="margin-top:12px">Note (optional)</label>
+    <input class="field" id="lr-note" placeholder="e.g. Re-check after their July budget cycle" autocomplete="off">
+    <button class="btn" onclick="saveLostReason(true)">Save &amp; archive</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="saveLostReason(false)">Save, keep in Closed lost</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-archive" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill dim">ARCHIVE</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Archive this account?</h1>
+    <p class="sub" id="ar-name"></p>
+    <div class="rolepick" id="ar-reasons" style="flex-wrap:wrap"></div>
+    <div class="note" style="margin:12px 0">It leaves the pipeline, counts, queues, campaigns and daily emails. Nothing is deleted — restore it any time from Archive.</div>
+    <button class="btn" onclick="confirmArchive()">Archive</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="sh-deal" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <span class="pill wave">DEAL</span>
+    <h1 style="font-size:20px;margin:11px 0 4px">Deal details</h1>
+    <p class="sub">Value × stage probability feeds the weighted pipeline. Pilots close faster with written success criteria and a named decision-maker.</p>
+    <div class="row" style="gap:8px"><div style="flex:1"><label class="flabel" for="dl-value">Deal value ($)</label><input class="field" id="dl-value" type="number" inputmode="decimal" placeholder="auto from metrics" autocomplete="off"></div>
+      <div style="flex:1"><label class="flabel" for="dl-close">Expected close</label><input class="field" id="dl-close" type="date"></div></div>
+    <label class="flabel" for="dl-buyer">Decision-maker (signs / funds it)</label>
+    <input class="field" id="dl-buyer" placeholder="e.g. Regional EHS Director" autocomplete="off">
+    <label class="flabel" for="dl-funding">Funding source</label>
+    <div class="rolepick" id="dl-funding" style="flex-wrap:wrap"></div>
+    <div class="row" style="gap:8px;margin-top:10px"><div style="flex:1"><label class="flabel" for="dl-pstart">Pilot start</label><input class="field" id="dl-pstart" type="date"></div>
+      <div style="flex:1"><label class="flabel" for="dl-pend">Pilot end</label><input class="field" id="dl-pend" type="date"></div></div>
+    <label class="flabel" for="dl-criteria">Pilot success criteria</label>
+    <textarea class="field" id="dl-criteria" placeholder="e.g. 95% of drills acknowledged within 30s across 30 workers for 6 weeks" style="min-height:70px;resize:vertical;font-family:var(--font-b)"></textarea>
+    <label class="flabel" for="dl-sites">Sites / seats in scope</label>
+    <input class="field" id="dl-sites" placeholder="e.g. 1 site · 30 workers — expansion: 12 sites" autocomplete="off">
+    <button class="btn" onclick="saveDeal()">Save</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheets()">Cancel</button>
+  </div>
+</div>
+
 <div class="sheet" id="sh-metrics" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
@@ -7474,7 +7524,54 @@ const STAGES=['New','Contacted','Engaged','Meeting','Proposal','Won','Lost'];
 const RAISE_STAGES=['Prospect','Pitched','Diligence','Committed','Wired','Passed'];
 const STAGEMETA={New:'dim',Contacted:'amber',Engaged:'wave',Meeting:'wave',Proposal:'good',Won:'good',Lost:'dim'};
 const STALE_DAYS=30;
-let CRMA=[], crmReady=false, crmSource='local';
+/* Stage playbook (HubSpot/Pipedrive-style): each stage has an exit
+   criterion, a win probability for the weighted forecast, and a "rotting"
+   limit — days without activity before the deal is flagged. A future next
+   step (dueAt) keeps a deal fresh. */
+const STAGE_INFO={
+  New:      {p:0,  rot:21, exit:'Right segment, a real contact found'},
+  Contacted:{p:0,  rot:21, exit:'First outreach sent — waiting on a reply'},
+  Engaged:  {p:10, rot:14, exit:'They replied — two-way conversation going'},
+  Meeting:  {p:40, rot:14, exit:'Demo held; need, decision-maker and funding confirmed'},
+  Proposal: {p:60, rot:10, exit:'Pilot or quote sent with success criteria, price and close date'},
+  Won:      {p:100,rot:0,  exit:'Signed / PO received'},
+  Lost:     {p:0,  rot:0,  exit:'Closed — reason recorded'}};
+const OPEN_STAGES=['New','Contacted','Engaged','Meeting','Proposal'];
+/* Prospecting = who we're working (account status); Deals = a real buying
+   conversation. Only deals count toward the weighted pipeline. */
+const PROSPECT_STAGES=['New','Contacted','Engaged'], DEAL_STAGES=['Meeting','Proposal'];
+const ARCHIVE_REASONS=['Stale — no activity','Nurture — revisit later','Not a fit / disqualified','Lost'];
+const LOST_REASONS=['No budget / funding','No need right now','Went with another option','Timing — revisit later','No response','Not a fit','Other'];
+let CRMA=[], CRMARCH=[], crmReady=false, crmSource='local';
+/* Archived accounts leave CRMA (so every pipeline view, count, queue and the
+   daily digest ignore them) and live in CRMARCH until restored. */
+function splitArchive(){const all=CRMA.concat(CRMARCH);CRMARCH=all.filter(a=>a.archived);CRMA=all.filter(a=>!a.archived)}
+function findAcct(id){return CRMA.find(x=>x.id===id)||CRMARCH.find(x=>x.id===id)}
+function archiveAccount(id,reason){const a=findAcct(id);if(!a)return;const by=(CURRENT_USER&&CURRENT_USER.name)||'';
+  const patch={archived:true,archivedAt:new Date().toISOString(),archivedBy:by,archiveReason:reason||'Archived',preArchiveStage:a.stage||'New'};
+  if(a.campaign&&a.campaign.status==='active')patch.campaign=Object.assign({},a.campaign,{status:'stopped'});
+  updateAccount(id,patch);splitArchive();if(acctId===id&&crmTab==='account')renderCRM();else crmRerenderMain();refreshPulse();toast('✓ Archived '+displayName(a)+' — restore it any time from Archive')}
+function restoreAccount(id){const a=findAcct(id);if(!a)return;
+  updateAccount(id,{archived:false,restoredAt:new Date().toISOString(),archiveReason:''});splitArchive();
+  if(crmTab==='account'&&acctId===id)renderCRM();else crmRerenderMain();refreshPulse();toast('✓ Restored '+displayName(a)+' to '+(a.stage||'New'))}
+/* Segment playbooks — how each kind of customer actually buys (research,
+   Nov 2026). Segment defaults from the account's list; it can be overridden. */
+const SEGMENTS={
+  employer:{label:'Employer',motion:'Two triggers: OSHA 1910.165 names tactile alerting devices (EHS owns it) and ADA accommodation lists vibrating pagers (HR owns it). Run a paid 30–90 day pilot with 2–3 written success criteria and conversion terms agreed up front; start security/legal review during the pilot. Expand site by site.'},
+  senior:{label:'Senior living',motion:'Decision group: Executive Director, Director of Nursing, procurement. Pilot one community, then roll out across the operator\u2019s portfolio. Group purchasing organizations reach multi-site operators. (Finland: wellbeing counties buy through public tenders.)'},
+  stateat:{label:'State AT program',motion:'AT Act programs run device loans and financing — get bands into lending libraries so clients can try before a state or agency buys. Track loans and which agencies refer.'},
+  vr:{label:'Voc rehab agency',motion:'Become an approved vendor. Every sale needs a counselor\u2019s service authorization first, and the invoice must match that authorization number exactly. Store only the case/authorization number — never client details.'},
+  school:{label:'School / Deaf ed',motion:'If a device is written into a student\u2019s IEP the district must fund it. Fiscal year runs July–June: plan in fall, decide April–May, POs from July 1.'},
+  partner:{label:'Partner / referral',motion:'Partner pipeline: give each audiologist or association a referral code tied to Shopify, mark deals they source, and review partner-sourced revenue monthly.'},
+  consumer:{label:'Consumer',motion:'Direct on Shopify — support, not sales. Route issues to Support.'}};
+const BOARD_SEGMENT={'State Out Reach AT':'stateat','Voc Rehab':'vr','B2B Senior Living':'senior','US Audiologists':'partner','Associations & Foundations':'partner','Influencers/Affiliate':'partner','Customer On Boarding':'employer'};
+const FUNDING_SOURCES=['Employer budget','VR authorization','State AT / lending library','School / IEP','Grant / foundation','Self-pay'];
+function segmentOf(a){if(a.segment&&SEGMENTS[a.segment])return a.segment;if(BOARD_SEGMENT[a.board])return BOARD_SEGMENT[a.board];if(/amazon|warehouse|logistics|manufactur/i.test((a.name||'')+' '+(a.company||'')))return 'employer';return ''}
+function isOpenDeal(a){return OPEN_STAGES.includes(a.stage||'New')}
+function dealValue(a){if(a.dealValue!=null&&a.dealValue!=='')return Number(a.dealValue)||0;return acctRevenue(a).total}
+function stageProb(a){return (STAGE_INFO[a.stage||'New']||{p:0}).p}
+function weightedValue(a){return dealValue(a)*stageProb(a)/100}
+function daysIdle(a){const la=lastAct(a);return la==null?null:Math.floor((Date.now()-la)/864e5)}
 let crmView='hub', crmOwner='all', crmBoard='all', crmTag='all', crmQ='', acctId=null, crmDrill=null;
 function linkify(v){v=v||'';if(/@/.test(v)&&!/\s/.test(v))return '<a href="mailto:'+esc(v)+'" style="color:var(--wave)">'+esc(v)+'</a>';
   if(!/\s/.test(v)&&/^https?:|\.(com|org|gov|net|edu|io)/i.test(v)){const u=/^https?:/.test(v)?v:'https://'+v;return '<a href="'+esc(u)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(v)+'</a>'}
@@ -7483,15 +7580,19 @@ function pDate(s){if(!s)return null;s=(''+s).trim();
   const m=s.match(/^(\d{1,2})\/([A-Za-z]+)\/(\d{4})/);
   if(m){const mo={january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11}[m[2].toLowerCase()];if(mo!=null)return new Date(+m[3],mo,+m[1]).getTime()}
   const d=Date.parse(s);return isNaN(d)?null:d}
-function lastAct(a){let ds=[];(a.notes||[]).forEach(n=>{const d=pDate(n.at);if(d)ds.push(d)});const dd=pDate(a.date);if(dd)ds.push(dd);return ds.length?Math.max.apply(null,ds):null}
-function isStale(a){if(a.stage==='Won'||a.stage==='Lost')return false;const la=lastAct(a);return la==null||(Date.now()-la)/864e5>STALE_DAYS}
+function lastAct(a){let ds=[];(a.notes||[]).forEach(n=>{const d=pDate(n.at);if(d)ds.push(d)});const dd=pDate(a.date);if(dd)ds.push(dd);
+  ['stageChangedAt','createdAt','restoredAt'].forEach(k=>{const v=a[k]?Date.parse(a[k]):NaN;if(!isNaN(v))ds.push(v)});return ds.length?Math.max.apply(null,ds):null}
+/* Rotting (Pipedrive): an open deal with no activity past its stage's limit
+   and no next step scheduled in the future. */
+function isStale(a){if(a.archived||!isOpenDeal(a))return false;const due=a.dueAt?dayMs(a.dueAt):null;if(due!=null&&due>=todayMs())return false;
+  const la=lastAct(a);const lim=(STAGE_INFO[a.stage||'New']||{}).rot||STALE_DAYS;return la==null||(Date.now()-la)/864e5>lim}
 function localSeed(){let base=(window.CRM_SEED||[]).map(a=>Object.assign({},a));try{const nw=JSON.parse(localStorage.getItem('sw_crm_new')||'[]');base=nw.concat(base)}catch(e){}try{const ov=JSON.parse(localStorage.getItem('sw_crm_edits')||'{}');base.forEach(a=>{if(ov[a.id])Object.assign(a,ov[a.id])})}catch(e){}return base}
 /* ---- add account, contacts, company metrics ---- */
 function openAddAcct(){addAcctBoard='Added';['na-name','na-contact','na-email','na-phone','na-location','na-owner'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});document.getElementById('na-stage').innerHTML=STAGES.map(s=>'<button data-v="'+s+'" class="'+(s==='New'?'on':'')+'">'+s+'</button>').join('');const h=document.querySelector('#sh-addacct h1');if(h)h.textContent='Add an account';closeSheets();openSheet('sh-addacct')}
 function saveNewAccount(){const name=document.getElementById('na-name').value.trim();if(!name){toast('Enter an account name');return}
   const sb=document.querySelector('#na-stage button.on');
   const board=addAcctBoard||'Added';const investor=board==='Fundraise';
-  const rec={id:'c'+Date.now().toString(36),board:board,name:name,contact:document.getElementById('na-contact').value.trim(),owner:document.getElementById('na-owner').value.trim()||'Unassigned',email:document.getElementById('na-email').value.trim(),phone:document.getElementById('na-phone').value.trim(),location:document.getElementById('na-location').value.trim(),stage:sb?sb.dataset.v:'New',status:'',tags:[],notes:[],contacts:[],extra:{}};
+  const rec={id:'c'+Date.now().toString(36),createdAt:new Date().toISOString(),board:board,name:name,contact:document.getElementById('na-contact').value.trim(),owner:document.getElementById('na-owner').value.trim()||'Unassigned',email:document.getElementById('na-email').value.trim(),phone:document.getElementById('na-phone').value.trim(),location:document.getElementById('na-location').value.trim(),stage:sb?sb.dataset.v:'New',status:'',tags:[],notes:[],contacts:[],extra:{}};
   if(investor){rec.commit=0;rec.commitStatus='';}
   addAccount(rec);addAcctBoard='Added';closeSheets();crmSeg='all';crmQ='';renderCRM();toast('✓ '+(investor?'Investor':'Account')+' added — '+name)}
 /* Investors live in their own finance-gated collection; everything else in the team CRM. */
@@ -7510,22 +7611,22 @@ function renderMetrics(a){const m=a.metrics||{};const rv=acctRevenue(a),sp=acctS
   const tiles=[['Bands online',m.bandsOnline],['Active users',m.activeUsers],['MRR',(m.mrr!=null&&m.mrr!=='')?money0(m.mrr):''],['ARR',rv.arr?money0(rv.arr):''],['Wholesale',rv.wholesale?(money0(rv.wholesale)+(m.wholesaleUnits?' · '+m.wholesaleUnits+' bands':'')):''],['Billing',m.billingStatus],['Open invoices',m.openInvoices]];
   if(sp)tiles.push(['Spent on account',money0(sp)],['Return',rv.total?(Math.round(rv.total/sp*10)/10+'× ('+money0(rv.total-sp)+')'):'—']);
   document.getElementById('ac-metrics').innerHTML=tiles.map(t=>'<div class="tile"><div class="n">'+((t[1]!=null&&t[1]!=='')?esc(String(t[1])):'—')+'</div><div class="l">'+t[0]+'</div></div>').join('')}
-function openMetrics(id){const a=CRMA.find(x=>x.id===id);if(!a)return;const m=a.metrics||{};
+function openMetrics(id){const a=findAcct(id);if(!a)return;const m=a.metrics||{};
   document.getElementById('m-bands').value=m.bandsOnline!=null?m.bandsOnline:'';document.getElementById('m-users').value=m.activeUsers!=null?m.activeUsers:'';
   document.getElementById('m-mrr').value=m.mrr!=null?m.mrr:'';document.getElementById('m-invoices').value=m.openInvoices!=null?m.openInvoices:'';
   document.getElementById('m-wunits').value=m.wholesaleUnits!=null?m.wholesaleUnits:'';document.getElementById('m-wprice').value=m.wholesalePrice!=null?m.wholesalePrice:'';metricsHint();
   document.querySelectorAll('#m-billing button').forEach(b=>b.classList.toggle('on',b.dataset.v===(m.billingStatus||'')));
   openSheet('sh-metrics')}
 function num(id){const v=document.getElementById(id).value.trim();return v===''?null:Number(v)}
-function saveMetrics(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;const bb=document.querySelector('#m-billing button.on');
+function saveMetrics(){const a=findAcct(acctId);if(!a)return;const bb=document.querySelector('#m-billing button.on');
   const metrics=Object.assign({},a.metrics||{},{bandsOnline:num('m-bands'),activeUsers:num('m-users'),mrr:num('m-mrr'),wholesaleUnits:num('m-wunits'),wholesalePrice:num('m-wprice'),openInvoices:num('m-invoices'),billingStatus:bb?bb.dataset.v:''});
   updateAccount(acctId,{metrics:metrics});renderMetrics(a);document.getElementById('sh-metrics').classList.remove('on');toast('✓ Metrics saved')}
 function renderContacts(a){const cs=a.contacts||[];
   document.getElementById('ac-contacts').innerHTML=cs.length?cs.map((c,i)=>'<div class="card" style="padding:10px"><div class="row"><div class="grow"><div class="t">'+esc(c.name||'—')+(c.title?' · '+esc(c.title):'')+'</div><div class="d">'+[esc(c.email),esc(c.phone)].filter(Boolean).join(' · ')+'</div></div><a onclick="rmContact(\''+a.id+'\','+i+')" style="color:var(--faint);cursor:pointer;padding:0 4px">✕</a></div></div>').join(''):'<div class="d" style="color:var(--faint)">No extra contacts yet.</div>'}
-function addContact(id){const a=CRMA.find(x=>x.id===id);if(!a)return;const name=document.getElementById('ac-c-name').value.trim();if(!name){toast('Enter a contact name');return}
+function addContact(id){const a=findAcct(id);if(!a)return;const name=document.getElementById('ac-c-name').value.trim();if(!name){toast('Enter a contact name');return}
   const cs=(a.contacts||[]).slice();cs.push({name:name,email:document.getElementById('ac-c-email').value.trim()});updateAccount(id,{contacts:cs});
   document.getElementById('ac-c-name').value='';document.getElementById('ac-c-email').value='';renderContacts(a);toast('✓ Contact added')}
-function rmContact(id,i){const a=CRMA.find(x=>x.id===id);if(!a)return;const cs=(a.contacts||[]).slice();cs.splice(i,1);updateAccount(id,{contacts:cs});renderContacts(a)}
+function rmContact(id,i){const a=findAcct(id);if(!a)return;const cs=(a.contacts||[]).slice();cs.splice(i,1);updateAccount(id,{contacts:cs});renderContacts(a)}
 async function loadCRM(){
   crmReady=false;renderCRM();
   if(hasFirestore()){
@@ -7555,11 +7656,12 @@ async function loadCRM(){
       crmSource=CRMA.length && !snap.empty ?'firestore':'local';
     }catch(e){CRMA=localSeed();crmSource='local'}
   }else{CRMA=localSeed();crmSource='local'}
+  splitArchive();
   crmReady=true;renderCRM();refreshPulse();
 }
 function loadSeedFile(input){const f=input.files&&input.files[0];if(!f)return;const rd=new FileReader();rd.onload=e=>{try{const data=JSON.parse(e.target.result);window.CRM_SEED=Array.isArray(data)?data:(data.segments?[].concat.apply([],data.segments.map(s=>s.records||[])):[]);if(!window.CRM_SEED.length){toast('No accounts found in that file');return}toast('Loaded '+window.CRM_SEED.length+' accounts — saving to the shared workspace…');loadCRM();}catch(err){toast('That doesn\'t look like the accounts file (.json)')}};rd.readAsText(f);input.value='';}
 function updateAccount(id,patch){
-  const a=CRMA.find(x=>x.id===id);if(!a)return;Object.assign(a,patch);
+  const a=findAcct(id);if(!a)return;Object.assign(a,patch);
   if(crmSource==='firestore'&&hasFirestore()){firebase.firestore().collection(acctCol(a)).doc(id).set(patch,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
   else{try{const ov=JSON.parse(localStorage.getItem('sw_crm_edits')||'{}');ov[id]=Object.assign(ov[id]||{},patch);localStorage.setItem('sw_crm_edits',JSON.stringify(ov))}catch(e){}}
 }
@@ -7617,7 +7719,7 @@ function fundraiseEditorCard(){return '<div class="card"><div class="sec-head"><
   +'<div class="note" style="margin-top:9px">Wired &amp; committed roll up to the round total on Pulse and Financials.</div></div>';}
 function populateCommit(a){const ci=document.getElementById('ac-commit');if(!ci)return;ci.value=(a.commit!=null&&a.commit!=='')?a.commit:'';
   document.querySelectorAll('#ac-commit-status button').forEach(b=>{b.classList.toggle('on',b.dataset.v===(a.commitStatus||''));b.onclick=function(){document.querySelectorAll('#ac-commit-status button').forEach(x=>x.classList.remove('on'));this.classList.add('on')};});}
-function saveCommit(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;const amt=Number((''+(document.getElementById('ac-commit').value||'')).replace(/[^0-9.]/g,''))||0;const sb=document.querySelector('#ac-commit-status button.on');updateAccount(acctId,{commit:amt,commitStatus:sb?sb.dataset.v:''});refreshPulse();toast('✓ Commitment saved')}
+function saveCommit(){const a=findAcct(acctId);if(!a)return;const amt=Number((''+(document.getElementById('ac-commit').value||'')).replace(/[^0-9.]/g,''))||0;const sb=document.querySelector('#ac-commit-status button.on');updateAccount(acctId,{commit:amt,commitStatus:sb?sb.dataset.v:''});refreshPulse();toast('✓ Commitment saved')}
 function renderFundraise(v){
   const s=raiseStats();const pct=s.target?Math.min(100,Math.round(s.committed/s.target*100)):0;
   document.getElementById('crm-sub').innerHTML=(RAISE.round?esc(RAISE.round)+' · ':'')+fmtMoney(s.committed)+(s.target?' of '+fmtMoney(s.target):'')+' committed';
@@ -7787,9 +7889,9 @@ function crmBar(){const b=(x,l)=>'<button class="chip'+(crmView===x&&!crmDrill?'
   return '<div class="chips">'+b('hub','◧ Overview')+b('groups','▤ Groups')+b('list','☰ List')+'</div>';}
 function renderPipelineView(v){
   if(!CRMA.length){document.getElementById('crm-sub').textContent='No accounts yet.';v.innerHTML=crmEmpty();return}
-  const total=CRMA.length,won=CRMA.filter(a=>a.stage==='Won').length,stale=CRMA.filter(isStale).length;
+  const ps=pipeStats(),stale=ps.rotting;
   const enrolled=CRMA.filter(a=>a.campaign&&a.campaign.status==='active').length;
-  document.getElementById('crm-sub').innerHTML=total+' accounts · '+won+' won · <span style="color:var(--amber)">'+stale+' need follow-up</span>'+(enrolled?' · <span style="color:var(--wave)">'+enrolled+' in outreach</span>':'')+(crmSource==='local'?' · <span style="color:var(--faint)">local preview</span>':' · <span style="color:var(--good)">shared</span>');
+  document.getElementById('crm-sub').innerHTML=ps.deals+' deal'+(ps.deals===1?'':'s')+' · '+ps.prospects+' prospecting · '+ps.customers+' customers'+(stale?' · <span style="color:var(--amber)">'+stale+' gone quiet</span>':'')+(enrolled?' · <span style="color:var(--wave)">'+enrolled+' in outreach</span>':'')+(crmSource==='local'?' · <span style="color:var(--faint)">local preview</span>':' · <span style="color:var(--good)">shared</span>');
   if(crmDrill){v.innerHTML=crmBar()+renderDrillInner();return}
   if(crmView==='hub'){v.innerHTML=crmBar()+renderHubInner();hubSearch();return}
   // classic board / list / follow-up
@@ -7820,12 +7922,16 @@ function boardTilesHTML(){const boards={};CRMA.forEach(a=>{if(a.board==='Fundrai
   return '<div class="sec-head" style="margin-top:20px"><h2>Browse by list</h2></div>'+tileGrid(keys.map(b=>hubTile('openBoardDrill(decodeURIComponent(\''+encodeURIComponent(b)+'\'))',boards[b],b,'var(--wave)')).join(''));}
 /* Smart views (Close-style saved filters) — one-click daily work lists */
 const CRM_VIEWS={
-  needstep:{label:'Needs a next step',pill:'amber',pred:a=>a.stage!=='Won'&&a.stage!=='Lost'&&!a.dueAt&&isStale(a)},
+  deals:{label:'Active deals',pill:'good',pred:a=>DEAL_STAGES.includes(a.stage)},
+  rotting:{label:'Gone quiet (past stage limit)',pill:'amber',pred:a=>isStale(a)},
+  pilots:{label:'Pilots ending in 30 days',pill:'amber',pred:a=>{const m=a.pilotEnd?dayMs(a.pilotEnd):null;return m!=null&&m>=todayMs()&&m<=todayMs()+30*864e5}},
+  closing30:{label:'Expected to close in 30 days',pill:'wave',pred:a=>{const m=a.closeDate?dayMs(a.closeDate):null;return isOpenDeal(a)&&m!=null&&m<=todayMs()+30*864e5}},
+  needstep:{label:'Needs a next step',pill:'amber',pred:a=>isOpenDeal(a)&&!(a.dueAt&&dayMs(a.dueAt)!=null&&dayMs(a.dueAt)>=todayMs())},
   overdue:{label:'Overdue follow-ups',pill:'amber',pred:a=>{const m=a.dueAt?dayMs(a.dueAt):null;return m!=null&&m<todayMs()&&a.stage!=='Won'&&a.stage!=='Lost'}},
   week:{label:'Due this week',pill:'wave',pred:a=>{const m=a.dueAt?dayMs(a.dueAt):null;return m!=null&&m>=todayMs()&&m<=todayMs()+7*864e5}},
   mine:{label:'My accounts',pill:'dim',pred:a=>isMine(a.owner)},
   outreach:{label:'In outreach',pill:'wave',pred:a=>!!(a.campaign&&a.campaign.status==='active')},
-  closing:{label:'Closing soon',pill:'good',pred:a=>a.stage==='Proposal'||a.stage==='Meeting'}
+  customers:{label:'Customers',pill:'good',pred:a=>a.stage==='Won'}
 };
 function viewCount(k){return CRMA.filter(CRM_VIEWS[k].pred).length}
 let crmSurface='groups';
@@ -7833,10 +7939,19 @@ function crmSetSurface(s){crmSurface=s;const el=document.getElementById('crm-hom
 function homeSurfaceHTML(){const list=crmFiltered();return crmSurface==='list'?listHTML(list.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))):groupedHTML(list)}
 function crmStat(n,l,color){return '<div class="st"><div class="n"'+(color?' style="color:var(--'+color+')"':'')+'>'+n+'</div><div class="l">'+esc(l)+'</div></div>'}
 function savedViewRow(k){const v=CRM_VIEWS[k],n=viewCount(k);return '<button class="crow tap" style="width:100%;margin-bottom:6px" onclick="openView(\''+k+'\')"><div class="crow-main"><div class="crow-nm" style="font-size:13.5px">'+esc(v.label)+'</div></div><div class="crow-right"><span class="pill '+(n?v.pill:'dim')+'">'+n+'</span></div></button>'}
-function renderHubInner(){const f=crmFollowups();
-  const total=CRMA.length,won=CRMA.filter(a=>a.stage==='Won').length,stale=CRMA.filter(isStale).length,outreach=CRMA.filter(a=>a.campaign&&a.campaign.status==='active').length;
+function pipeStats(){const deals=CRMA.filter(a=>DEAL_STAGES.includes(a.stage));
+  return {deals:deals.length,weighted:deals.reduce((s,a)=>s+weightedValue(a),0),value:deals.reduce((s,a)=>s+dealValue(a),0),prospects:CRMA.filter(a=>PROSPECT_STAGES.includes(a.stage||'New')).length,
+    rotting:CRMA.filter(isStale).length,customers:CRMA.filter(a=>a.stage==='Won').length,archived:CRMARCH.length}}
+function rottingNudge(){const r=CRMA.filter(isStale);if(r.length<3)return '';
+  return '<div class="card" style="border-color:var(--amber);margin:0 0 12px"><div class="row" style="align-items:flex-start;gap:10px;flex-wrap:wrap"><div class="grow" style="min-width:200px"><div class="t">'+r.length+' deals have gone quiet</div><div class="d">No activity past their stage limit and no next step booked. Best practice: advance it, book a dated next step the buyer agreed to, or archive it so the pipeline stays honest.</div></div>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost" style="width:auto" onclick="openView(\'rotting\')">Review</button><button class="btn ghost" id="arch-all-btn" style="width:auto" onclick="archiveAllRotting(this)">Archive all '+r.length+'</button></div></div></div>'}
+function archiveAllRotting(btn){if(!btn.dataset.armed){btn.dataset.armed='1';btn.textContent='Tap again to archive';btn.style.borderColor='var(--amber)';setTimeout(()=>{if(btn&&btn.isConnected){delete btn.dataset.armed;crmRerenderMain()}},4000);return}
+  const r=CRMA.filter(isStale);r.forEach(a=>{const patch={archived:true,archivedAt:new Date().toISOString(),archivedBy:(CURRENT_USER&&CURRENT_USER.name)||'',archiveReason:'Stale — no activity',preArchiveStage:a.stage||'New'};if(a.campaign&&a.campaign.status==='active')patch.campaign=Object.assign({},a.campaign,{status:'stopped'});updateAccount(a.id,patch)});
+  splitArchive();renderCRM();refreshPulse();toast('✓ Archived '+r.length+' quiet deals — restore any of them from Archive')}
+function renderHubInner(){const f=crmFollowups();const ps=pipeStats();
   let html='';
-  html+='<div class="crm-strip">'+crmStat(total,'Accounts')+crmStat(won,'Won')+crmStat(stale,'Need follow-up','amber')+crmStat(outreach,'In outreach','wave')+'</div>';
+  html+='<div class="crm-strip">'+crmStat(ps.deals,'Active deals')+crmStat(fmtMoney(ps.weighted),'Weighted pipeline','good')+crmStat(ps.rotting,'Gone quiet','amber')+crmStat(ps.customers,'Customers','wave')+'</div>';
+  html+=rottingNudge();
   html+='<div class="searchbar" style="margin:0 0 2px"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input type="search" placeholder="Search accounts, owners, locations" value="'+esc(crmQ)+'" oninput="crmQ=this.value;hubSearch()"></div>';
   html+='<div id="hub-results"></div>';
   html+='<div id="hub-sections"><div class="crm-home">';
@@ -7864,23 +7979,29 @@ function renderHubInner(){const f=crmFollowups();
   return html;
 }
 function hubSearch(){const res=document.getElementById('hub-results'),secs=document.getElementById('hub-sections');if(!res)return;
-  if(crmQ){if(secs)secs.style.display='none';const list=CRMA.filter(qMatch).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    res.innerHTML='<div class="sec-head" style="margin-top:14px"><h2>Results</h2><span class="pill dim">'+list.length+'</span></div>'+listHTML(list);}
+  if(crmQ){if(secs)secs.style.display='none';const list=CRMA.filter(qMatch).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));const arch=CRMARCH.filter(qMatch);
+    res.innerHTML='<div class="sec-head" style="margin-top:14px"><h2>Results</h2><span class="pill dim">'+list.length+'</span></div>'+listHTML(list)
+      +(arch.length?'<div class="pulse-sub-h" style="margin-top:14px">In archive · '+arch.length+'</div>'+archiveListHTML(arch.slice(0,20)):'');}
   else{if(secs)secs.style.display='';res.innerHTML='';}}
 function openDrill(k){crmDrill=k;crmQ='';renderCRM()}
 function openBoardDrill(name){crmDrill='board:'+name;crmQ='';renderCRM()}
 function openView(k){crmDrill='view:'+k;crmQ='';renderCRM()}
 function closeDrill(){crmDrill=null;crmQ='';renderCRM()}
-function drillList(){const s=''+crmDrill;const isView=s.indexOf('view:')===0,isAll=s==='__all',isBoard=s.indexOf('board:')===0;
+function openArchive(){crmDrill='archive';crmQ='';renderCRM()}
+function drillList(){const s=''+crmDrill;
+  if(s==='archive')return CRMARCH.filter(qMatch).slice().sort((a,b)=>(b.archivedAt||'').localeCompare(a.archivedAt||''));const isView=s.indexOf('view:')===0,isAll=s==='__all',isBoard=s.indexOf('board:')===0;
   const boardName=isBoard?s.slice(6):'',vk=isView?s.slice(5):'',stage=(!isAll&&!isBoard&&!isView)?s:'';
   return CRMA.filter(a=>{if(isView&&CRM_VIEWS[vk]&&!CRM_VIEWS[vk].pred(a))return false;if(stage&&(a.stage||'New')!==stage)return false;if(isBoard&&a.board!==boardName)return false;return qMatch(a)}).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));}
-function drillLabel(){const s=''+crmDrill;if(s.indexOf('view:')===0)return (CRM_VIEWS[s.slice(5)]||{}).label||'View';if(s==='__all')return 'All accounts';if(s.indexOf('board:')===0)return 'List · '+s.slice(6);return 'Stage · '+s;}
+function drillLabel(){const s=''+crmDrill;if(s==='archive')return 'Archive';if(s.indexOf('view:')===0)return (CRM_VIEWS[s.slice(5)]||{}).label||'View';if(s==='__all')return 'All accounts';if(s.indexOf('board:')===0)return 'List · '+s.slice(6);return 'Stage · '+s;}
 function renderDrillInner(){const list=drillList();
   return '<button class="btn ghost" style="margin:2px 0 12px" onclick="closeDrill()">← Overview</button>'
     +'<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input type="search" placeholder="Search in '+esc(drillLabel())+'" value="'+esc(crmQ)+'" oninput="crmQ=this.value;renderDrillMain()"></div>'
     +'<div class="sec-head"><h2>'+esc(drillLabel())+'</h2><span class="pill dim" id="drill-count">'+list.length+'</span></div>'
-    +'<div id="crm-main">'+listHTML(list)+'</div>';}
-function renderDrillMain(){const el=document.getElementById('crm-main');if(!el)return;const list=drillList();el.innerHTML=listHTML(list);const c=document.getElementById('drill-count');if(c)c.textContent=list.length;}
+    +(crmDrill==='archive'?'<div class="note" style="margin-bottom:10px">Archived accounts are out of the pipeline, counts, queues, campaigns and daily emails — nothing is deleted. Restore one and it returns to the stage it was in.</div>':'')
+    +'<div id="crm-main">'+(crmDrill==='archive'?archiveListHTML(list):listHTML(list))+'</div>';}
+function archiveListHTML(list){return list.length?list.map(a=>{const nm=displayName(a),col=acctColor(nm);const when=a.archivedAt?new Date(a.archivedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+  return '<div class="crow tap" tabindex="0" onclick="openAcct(\''+a.id+'\')"><span class="crow-av" style="background:'+col+'22;color:'+col+'">'+esc(acctInitials(nm))+'</span><div class="crow-main"><div class="crow-nm">'+esc(nm)+'</div><div class="crow-sub">'+esc([a.preArchiveStage||a.stage||'New',a.archiveReason||'',when].filter(Boolean).join(' · '))+'</div></div><div class="crow-right"><button class="btn ghost" style="width:auto;padding:6px 12px" onclick="event.stopPropagation();restoreAccount(\''+a.id+'\')">Restore</button></div></div>'}).join(''):'<div class="empty"><div class="d">Nothing archived.</div></div>'}
+function renderDrillMain(){const el=document.getElementById('crm-main');if(!el)return;const list=drillList();el.innerHTML=crmDrill==='archive'?archiveListHTML(list):listHTML(list);const c=document.getElementById('drill-count');if(c)c.textContent=list.length;}
 function renderCrmMain(){const el=document.getElementById('crm-main');if(!el)return;const list=crmFiltered();
   if(crmView==='groups')el.innerHTML=groupedHTML(list);
   else if(crmView==='attention')el.innerHTML=listHTML(list.filter(isStale).sort((a,b)=>(lastAct(a)||0)-(lastAct(b)||0)));
@@ -7889,20 +8010,22 @@ let crmExpanded={};
 function crmRow(a,showStage){const nm=displayName(a),col=acctColor(nm);const dm=a.dueAt?dueMeta(dayMs(a.dueAt)):null;const stale=isStale(a);
   const meta=[a.owner&&a.owner!=='Unassigned'?a.owner:'Unassigned',a.location||''].filter(Boolean).join(' · ');
   let rt='';
-  if(dm&&dm.label)rt+='<span class="pill '+(dm.overdue||dm.soon?'amber':'dim')+'">'+esc(dm.label)+'</span>';
-  else if(stale)rt+='<span class="pill amber" title="No recent activity">stale</span>';
+  if(a.archived)rt+='<span class="pill dim" title="'+esc(a.archiveReason||'')+'">archived</span>';
+  else if(dm&&dm.label)rt+='<span class="pill '+(dm.overdue||dm.soon?'amber':'dim')+'">'+esc(dm.label)+'</span>';
+  else if(stale){const di=daysIdle(a);rt+='<span class="pill amber" title="No activity past this stage\u2019s limit">'+(di==null?'no activity':'quiet '+di+'d')+'</span>'}
+  if(DEAL_STAGES.includes(a.stage)&&dealValue(a))rt+='<span class="pill good">'+fmtMoney(dealValue(a))+'</span>';
   if(showStage)rt+=rowStageSelect(a);
   return '<div class="crow tap" tabindex="0" onclick="openAcct(\''+a.id+'\')"><span class="crow-av" style="background:'+col+'22;color:'+col+'">'+esc(acctInitials(nm))+'</span><div class="crow-main"><div class="crow-nm">'+esc(nm)+'</div><div class="crow-sub">'+esc(meta)+'</div></div><div class="crow-right">'+rt+'</div></div>';}
 function rowStageSelect(a){const cur=a.stage||'New';const cls={dim:'var(--faint-bg,rgba(0,0,0,.06))'};
   return '<select class="row-stage pill '+STAGEMETA[cur]+'" title="Change stage" onclick="event.stopPropagation()" onchange="quickStage(event,\''+a.id+'\')">'+STAGES.map(s=>'<option'+(s===cur?' selected':'')+'>'+s+'</option>').join('')+'</select>';}
 function crmRerenderMain(){if(crmDrill){renderDrillMain();return}if(crmView==='hub'){const el=document.getElementById('crm-home-main');if(el)el.innerHTML=homeSurfaceHTML();return}renderCrmMain();}
-function quickStage(e,id){e.stopPropagation();const v=e.target.value;const a=CRMA.find(x=>x.id===id);updateAccount(id,{stage:v});crmRerenderMain();refreshPulse();toast('✓ '+displayName(a)+' → '+v)}
+function quickStage(e,id){e.stopPropagation();const v=e.target.value;const a=findAcct(id);updateAccount(id,stagePatch(v));crmRerenderMain();refreshPulse();toast('✓ '+displayName(a)+' → '+v);afterStageChange(id,v)}
 /* Guided "Start working" queue — walk your follow-ups one at a time */
 let queueIds=[],queueIdx=0;
 function startQueue(){const f=crmFollowups();queueIds=f.overdue.concat(f.soon).map(x=>x.a.id);if(!queueIds.length){toast('Nothing in your queue 🎉');return}queueIdx=0;document.getElementById('crm-queue').classList.add('on');queueRender()}
 function queueRender(){const card=document.getElementById('q-card');if(!card)return;
   if(queueIdx>=queueIds.length){queueClose(true);return}
-  const a=CRMA.find(x=>x.id===queueIds[queueIdx]);if(!a){queueIdx++;return queueRender()}
+  const a=findAcct(queueIds[queueIdx]);if(!a){queueIdx++;return queueRender()}
   const nm=displayName(a),dm=a.dueAt?dueMeta(dayMs(a.dueAt)):null;const note=(a.notes&&a.notes[0])?a.notes[0].text:'';
   card.innerHTML='<div class="row" style="align-items:center"><span class="pill dim">'+(queueIdx+1)+' of '+queueIds.length+'</span>'+(dm&&dm.label?'<span class="pill '+(dm.overdue?'amber':'wave')+'" style="margin-left:auto">'+esc(dm.label)+'</span>':'')+'</div>'
     +'<h1 style="font-size:22px;margin:12px 0 3px">'+esc(nm)+'</h1>'
@@ -7913,18 +8036,27 @@ function queueRender(){const card=document.getElementById('q-card');if(!card)ret
     +'<div class="row" style="gap:8px;margin-top:8px"><button class="btn ghost" style="flex:1" onclick="queueOpenAcct()">Open account</button><button class="btn ghost" style="flex:1" onclick="queueSkip()">Skip →</button></div>'
     +'<button class="btn ghost" style="margin-top:8px;width:100%" onclick="queueClose(false)">Close</button>';}
 function queueNext(){queueIdx++;if(queueIdx>=queueIds.length)queueClose(true);else queueRender()}
-function queueDone(){const a=CRMA.find(x=>x.id===queueIds[queueIdx]);if(a){const notes=(a.notes||[]).slice();notes.unshift({user:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'}),text:'✓ Followed up'+(a.nextStep?': '+a.nextStep:'')});updateAccount(a.id,{dueAt:'',nextStep:'',notes:notes})}queueNext()}
-function queueSnooze(){const a=CRMA.find(x=>x.id===queueIds[queueIdx]);if(a)updateAccount(a.id,{dueAt:ymd(new Date(todayMs()+3*864e5))});queueNext()}
+function queueDone(){const a=findAcct(queueIds[queueIdx]);if(a){const notes=(a.notes||[]).slice();notes.unshift({user:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'}),text:'✓ Followed up'+(a.nextStep?': '+a.nextStep:'')});updateAccount(a.id,{dueAt:'',nextStep:'',notes:notes})}queueNext()}
+function queueSnooze(){const a=findAcct(queueIds[queueIdx]);if(a)updateAccount(a.id,{dueAt:ymd(new Date(todayMs()+3*864e5))});queueNext()}
 function queueSkip(){queueNext()}
 function queueOpenAcct(){const id=queueIds[queueIdx];queueClose(false);openAcct(id)}
 function queueClose(done){document.getElementById('crm-queue').classList.remove('on');renderCRM();refreshPulse();if(done)toast('✓ Queue clear — nice work 🎉')}
+/* Pipeline surface: Deals (closest to close first) → Prospecting → Closed.
+   Customers and Closed-lost start collapsed so they never crowd the flow. */
+const CRM_SECTIONS=[['Deals',['Proposal','Meeting']],['Prospecting',['Engaged','Contacted','New']],['Closed',['Won','Lost']]];
 function groupedHTML(list){let html='',any=false;
-  STAGES.forEach(st=>{const items=list.filter(a=>(a.stage||'New')===st);if(!items.length)return;any=true;
-    const open=(st in crmExpanded)?crmExpanded[st]:(items.length<=12);
-    html+='<div class="cgroup"><button class="cgroup-h" onclick="toggleCrmGroup(\''+st+'\')"><span class="cg-dot" style="background:'+STAGECOLOR[st]+'"></span><span class="cg-name">'+st+'</span><span class="pill '+STAGEMETA[st]+'">'+items.length+'</span><span class="cg-caret">'+(open?'▾ hide':'▸ show')+'</span></button>'
-      +(open?'<div class="cgroup-body">'+items.map(a=>crmRow(a,false)).join('')+'</div>':'')+'</div>';});
-  return any?html:'<div class="empty"><div class="d">No accounts match these filters.</div></div>';}
-function toggleCrmGroup(st){const items=crmFiltered().filter(a=>(a.stage||'New')===st);const cur=(st in crmExpanded)?crmExpanded[st]:(items.length<=12);crmExpanded[st]=!cur;renderCrmMain()}
+  CRM_SECTIONS.forEach(sec=>{const inSec=list.filter(a=>sec[1].includes(a.stage||'New'));
+    html+='<div class="pulse-sub-h" style="margin-top:'+(sec[0]==='Deals'?'4':'18')+'px">'+sec[0]+' · '+inSec.length+(sec[0]==='Deals'&&inSec.length?' · '+fmtMoney(inSec.reduce((s,a)=>s+weightedValue(a),0))+' weighted':'')+'</div>';
+    if(!inSec.length){html+='<div class="d" style="color:var(--faint);margin:0 0 6px">'+(sec[0]==='Deals'?'No live deals — a deal starts when a demo is held with a real buyer.':'None.')+'</div>';return}
+    sec[1].forEach(st=>{const items=list.filter(a=>(a.stage||'New')===st);if(!items.length)return;any=true;
+      const def=(st==='Won'||st==='Lost')?false:(items.length<=12);
+      const open=(st in crmExpanded)?crmExpanded[st]:def;const info=STAGE_INFO[st]||{};
+      const val=DEAL_STAGES.includes(st)?items.reduce((s,a)=>s+dealValue(a),0):0;
+      html+='<div class="cgroup"><button class="cgroup-h" onclick="toggleCrmGroup(\''+st+'\')" title="'+esc(info.exit||'')+'"><span class="cg-dot" style="background:'+STAGECOLOR[st]+'"></span><span class="cg-name">'+(st==='Won'?'Customers':st==='Lost'?'Closed lost':st)+(DEAL_STAGES.includes(st)?' <span style="color:var(--faint);font-weight:500">· '+info.p+'%'+(val?' · '+fmtMoney(val):'')+'</span>':'')+'</span><span class="pill '+STAGEMETA[st]+'">'+items.length+'</span><span class="cg-caret">'+(open?'▾ hide':'▸ show')+'</span></button>'
+        +(open?'<div class="cgroup-body">'+items.map(a=>crmRow(a,false)).join('')+'</div>':'')+'</div>';});});
+  html+='<button class="btn ghost" style="margin-top:14px" onclick="openArchive()">🗄 Archive · '+CRMARCH.length+'</button>';
+  return html;}
+function toggleCrmGroup(st){const items=crmFiltered().filter(a=>(a.stage||'New')===st);const cur=(st in crmExpanded)?crmExpanded[st]:((st==='Won'||st==='Lost')?false:items.length<=12);crmExpanded[st]=!cur;crmRerenderMain()}
 const STAGECOLOR={New:'#8791A0',Contacted:'#F2B04E',Engaged:'#4FD8EC',Meeting:'#7AC6FF',Proposal:'#54D9A0',Won:'#54D9A0',Lost:'#5A616B'};
 const AVCOLORS=['#4FD8EC','#54D9A0','#F2B04E','#A78BFA','#FF9F7A','#7AC6FF','#E5A3E0','#7BE0C3'];
 function displayName(a){let n=(a.name||'').trim();
@@ -7938,7 +8070,7 @@ function dragStart(e,id){dragId=id;try{e.dataTransfer.setData('text/plain',id);e
 function dragEnd(){dragId=null;document.querySelectorAll('.pcol.over').forEach(c=>c.classList.remove('over'))}
 function dragOver(e,el){e.preventDefault();el.classList.add('over')}
 function dragLeave(el){el.classList.remove('over')}
-function dropTo(e,stage,el){e.preventDefault();if(el)el.classList.remove('over');const id=dragId||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));if(!id)return;const a=CRMA.find(x=>x.id===id);if(a&&(a.stage||'New')!==stage){updateAccount(id,{stage:stage});renderCrmMain();toast('✓ '+displayName(a)+' → '+stage)}dragId=null}
+function dropTo(e,stage,el){e.preventDefault();if(el)el.classList.remove('over');const id=dragId||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));if(!id)return;const a=findAcct(id);if(a&&(a.stage||'New')!==stage){updateAccount(id,stagePatch(stage));renderCrmMain();toast('✓ '+displayName(a)+' → '+stage);afterStageChange(id,stage)}dragId=null}
 function cardHTML(a,showStage){
   const stale=isStale(a),nm=displayName(a),col=acctColor(nm),la=lastAct(a),m=a.metrics||{};
   const chips=[];
@@ -7960,9 +8092,9 @@ function pipelineHTML(list){return '<div class="pipe">'+STAGES.map(st=>{const it
     +'<div class="pcol-h" style="border-color:'+STAGECOLOR[st]+'"><span>'+st+(mrr?' · $'+mrr+'/mo':'')+'</span><span class="pill '+STAGEMETA[st]+'">'+items.length+'</span></div>'
     +'<div class="pcol-body">'+(items.length?items.map(a=>cardHTML(a,false)).join(''):'<div class="pcol-empty">Drop here</div>')+'</div></div>'}).join('')+'</div>'}
 function listHTML(list){return list.length?list.map(a=>crmRow(a,true)).join(''):'<div class="empty"><div class="d">No accounts match these filters.</div></div>'}
-function openAcct(id){const a=CRMA.find(x=>x.id===id);if(!a)return;acctId=id;crmTab='account';renderCRM();window.scrollTo(0,0)}
+function openAcct(id){const a=findAcct(id);if(!a)return;acctId=id;crmTab='account';renderCRM();window.scrollTo(0,0)}
 function renderAccountView(host){
-  const a=CRMA.find(x=>x.id===acctId);if(!a){backToPipeline();return}
+  const a=findAcct(acctId);if(!a){backToPipeline();return}
   const nm=displayName(a),col=acctColor(nm);
   const h1=document.getElementById('crm-h1');if(h1)h1.textContent=nm;
   document.getElementById('crm-sub').innerHTML='<a onclick="backToPipeline()" style="color:var(--wave);cursor:pointer;font-weight:600">← Back to pipeline</a>';
@@ -7977,15 +8109,19 @@ function renderAccountView(host){
       +'<button class="btn" id="ac-email">✉️ Email</button>'
       +'<button class="btn ghost" id="ac-enroll" onclick="openEnroll(acctId)">🚀 Enroll in campaign</button>'
       +'<button class="btn ghost" id="ac-dash">Client dashboard</button>'
+      +'<button class="btn ghost" id="ac-archive"></button>'
     +'</div>'
+    +'<div id="ac-archived-banner"></div>'
     +'<div class="acct-grid">'
       +'<div class="acct-col">'
-        +'<div class="card"><div class="sec-head"><h2>Stage</h2></div><div class="rolepick" id="ac-stage"></div>'
+        +'<div class="card"><div class="sec-head"><h2>Stage</h2></div><div class="rolepick" id="ac-stage"></div><div class="d" id="ac-stage-exit" style="margin-top:8px;color:var(--muted)"></div>'
           +'<p class="d" style="font-weight:600;color:var(--text);margin:16px 0 5px">Owner</p><input class="field" id="ac-owner" style="margin:0" onchange="saveOwner(acctId)" placeholder="Unassigned">'
           +'<p class="d" style="font-weight:600;color:var(--text);margin:16px 0 6px">Tags</p><div id="ac-tags" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px"></div>'
           +'<div class="searchbar" style="margin:0"><input id="ac-tag-input" placeholder="Add a tag (hot, ASL, K-12, VR)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addTag(acctId)}"></div>'
         +'</div>'
         +(a.board==='Fundraise'?fundraiseEditorCard():'')
+        +'<div class="card" id="ac-deal-card"></div>'
+        +'<div class="card" id="ac-playbook"></div>'
         +'<div class="card"><div class="sec-head"><h2>Next step</h2></div><input class="field" id="ac-nextstep" placeholder="e.g. Send proposal, book a demo" style="margin:0 0 8px"><div class="row" style="gap:8px"><input class="field" id="ac-due" type="date" style="margin:0;flex:1"><button class="btn ghost" onclick="saveNextStep()">Save</button></div><div class="note" style="margin-top:9px">Owner + due date show on your Pulse and the team past-due list.</div></div>'
         +'<div class="card"><div class="sec-head"><h2>Company dashboard</h2><a onclick="openMetrics(acctId)">Edit</a></div><div class="tiles" id="ac-metrics"></div><div class="note" style="margin-top:11px">Revenue counts software (ARR = MRR × 12) plus wholesale band sales. Money logged on activity notes shows here as spend and return. Live bands and users light up when this company\'s Safewave dashboard is linked.</div></div>'
         +'<div class="card"><div class="sec-head"><h2>Details</h2></div><div id="ac-body"></div></div>'
@@ -8017,26 +8153,76 @@ function populateAccount(a){const id=a.id;
   const dash=document.getElementById('ac-dash');dash.textContent=a.dashboardUrl?'Open client dashboard ↗':'Link client dashboard';
   dash.onclick=()=>{if(a.dashboardUrl){window.open(a.dashboardUrl,'_blank','noopener')}else{const u=prompt('Paste this client\'s Safewave dashboard link (temporary — the live device feed connects next):');if(u){updateAccount(id,{dashboardUrl:u});toast('✓ Dashboard linked');dash.textContent='Open client dashboard ↗'}}};
   const eb=document.getElementById('ac-email');if(a.email){eb.style.display='';eb.onclick=openCompose}else{eb.style.display='none'}
-  renderMetrics(a);renderContacts(a);renderCampaignBadge(a);
+  renderMetrics(a);renderContacts(a);renderCampaignBadge(a);renderDealCard(a);renderPlaybook(a);renderArchiveState(a);
+  const ex=document.getElementById('ac-stage-exit');if(ex){const info=STAGE_INFO[a.stage||'New'];ex.innerHTML=(!inv&&info)?('<b style="color:var(--text)">To be here:</b> '+esc(info.exit)+(info.p?' · '+info.p+'% win probability':'')):''}
   const ns=document.getElementById('ac-nextstep');if(ns)ns.value=a.nextStep||'';
   const du=document.getElementById('ac-due');if(du)du.value=a.dueAt?String(a.dueAt).slice(0,10):'';
   const cn=document.getElementById('ac-c-name');if(cn)cn.value='';const ce=document.getElementById('ac-c-email');if(ce)ce.value='';
   renderNotes(a);const ni=document.getElementById('note-input');if(ni)ni.value='';
   populateCommit(a);
 }
-function saveNextStep(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;const step=document.getElementById('ac-nextstep').value.trim(),due=document.getElementById('ac-due').value||'';updateAccount(acctId,{nextStep:step,dueAt:due});if(step&&a.owner&&a.owner!=='Unassigned')notifyAssignee(a.owner,'Follow-up assigned',step+' — '+displayName(a)+(due?' · due '+due:''),'s-crm');renderCrmMain();refreshPulse();toast('✓ Next step saved')}
+function renderArchiveState(a){const b=document.getElementById('ac-archive'),bn=document.getElementById('ac-archived-banner');if(!b)return;
+  if(a.board==='Fundraise'){b.style.display='none';if(bn)bn.innerHTML='';return}
+  b.style.display='';
+  if(a.archived){b.textContent='↩ Restore to pipeline';b.onclick=()=>restoreAccount(a.id);
+    if(bn)bn.innerHTML='<div class="card" style="border-color:var(--line);background:var(--surface-2)"><div class="t">Archived</div><div class="d">'+esc([a.archiveReason,a.archivedAt?new Date(a.archivedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'',a.archivedBy].filter(Boolean).join(' · '))+'. It\u2019s out of the pipeline, queues and campaigns. Restore returns it to '+esc(a.preArchiveStage||a.stage||'New')+'.</div></div>'}
+  else{b.textContent='🗄 Archive';b.onclick=()=>openArchiveSheet(a.id);if(bn)bn.innerHTML=''}}
+let archId=null;
+function openArchiveSheet(id){archId=id;const a=findAcct(id);document.getElementById('ar-name').textContent=a?displayName(a):'';
+  document.getElementById('ar-reasons').innerHTML=ARCHIVE_REASONS.filter(r=>r!=='Lost').map((r,i)=>'<button data-v="'+esc(r)+'"'+(i===0?' class="on"':'')+'>'+esc(r)+'</button>').join('');
+  document.querySelectorAll('#ar-reasons button').forEach(b=>b.onclick=function(){document.querySelectorAll('#ar-reasons button').forEach(x=>x.classList.remove('on'));this.classList.add('on')});
+  closeSheets();openSheet('sh-archive')}
+function confirmArchive(){const b=document.querySelector('#ar-reasons button.on');closeSheets();archiveAccount(archId,b?b.dataset.v:'Archived')}
+function renderDealCard(a){const el=document.getElementById('ac-deal-card');if(!el)return;if(a.board==='Fundraise'){el.style.display='none';return}el.style.display='';
+  const v=dealValue(a),w=weightedValue(a);const d=x=>x?new Date(String(x).slice(0,10)+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+  const rows=[['Value',v?fmtMoney(v)+(a.dealValue==null||a.dealValue===''?' <span style="color:var(--faint)">(from metrics)</span>':''):'—'],['Weighted',v?fmtMoney(w)+' · '+stageProb(a)+'%':'—'],['Expected close',d(a.closeDate)],['Decision-maker',a.buyer?esc(a.buyer):'—'],['Funding',a.funding?esc(a.funding):'—']];
+  if(a.pilotStart||a.pilotEnd)rows.push(['Pilot',d(a.pilotStart)+' → '+d(a.pilotEnd)]);
+  if(a.sites)rows.push(['Scope',esc(a.sites)]);
+  el.innerHTML='<div class="sec-head"><h2>Deal</h2><a onclick="openDeal(acctId)">Edit</a></div>'+rows.map(r=>'<div class="kv"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('')
+    +(a.successCriteria?'<div class="note" style="margin-top:9px"><b style="color:var(--text)">Success criteria:</b> '+esc(a.successCriteria)+'</div>':(DEAL_STAGES.includes(a.stage)?'<div class="note" style="margin-top:9px;color:var(--amber)">No written success criteria yet — pilots convert when the buyer signs off on 2–3 measurable criteria up front.</div>':''))}
+function openDeal(id){const a=findAcct(id);if(!a)return;
+  document.getElementById('dl-value').value=a.dealValue!=null?a.dealValue:'';document.getElementById('dl-close').value=a.closeDate?String(a.closeDate).slice(0,10):'';
+  document.getElementById('dl-buyer').value=a.buyer||'';document.getElementById('dl-pstart').value=a.pilotStart||'';document.getElementById('dl-pend').value=a.pilotEnd||'';
+  document.getElementById('dl-criteria').value=a.successCriteria||'';document.getElementById('dl-sites').value=a.sites||'';
+  document.getElementById('dl-value').placeholder=acctRevenue(a).total?('auto: '+fmtMoney(acctRevenue(a).total)):'e.g. 32250';
+  document.getElementById('dl-funding').innerHTML=FUNDING_SOURCES.map(f=>'<button data-v="'+esc(f)+'"'+(a.funding===f?' class="on"':'')+'>'+esc(f)+'</button>').join('');
+  document.querySelectorAll('#dl-funding button').forEach(b=>b.onclick=function(){const on=this.classList.contains('on');document.querySelectorAll('#dl-funding button').forEach(x=>x.classList.remove('on'));if(!on)this.classList.add('on')});
+  closeSheets();openSheet('sh-deal')}
+function saveDeal(){const a=findAcct(acctId);if(!a)return;const fv=document.getElementById('dl-value').value.trim();const fb=document.querySelector('#dl-funding button.on');
+  updateAccount(acctId,{dealValue:fv===''?null:Number(fv),closeDate:document.getElementById('dl-close').value||'',buyer:document.getElementById('dl-buyer').value.trim(),funding:fb?fb.dataset.v:'',
+    pilotStart:document.getElementById('dl-pstart').value||'',pilotEnd:document.getElementById('dl-pend').value||'',successCriteria:document.getElementById('dl-criteria').value.trim(),sites:document.getElementById('dl-sites').value.trim()});
+  closeSheets();renderDealCard(a);crmRerenderMain();toast('✓ Deal saved')}
+function renderPlaybook(a){const el=document.getElementById('ac-playbook');if(!el)return;if(a.board==='Fundraise'){el.style.display='none';return}el.style.display='';
+  const seg=segmentOf(a);
+  el.innerHTML='<div class="sec-head"><h2>How this segment buys</h2></div>'
+    +'<div class="rolepick" style="flex-wrap:wrap;margin-bottom:9px">'+Object.keys(SEGMENTS).map(k=>'<button class="'+(seg===k?'on':'')+'" onclick="setSegment(acctId,\''+k+'\')">'+esc(SEGMENTS[k].label)+'</button>').join('')+'</div>'
+    +(seg?'<div class="d" style="line-height:1.55">'+esc(SEGMENTS[seg].motion)+'</div>':'<div class="d" style="color:var(--faint)">Pick a segment to see its buying motion.</div>')}
+function setSegment(id,k){const a=findAcct(id);if(!a)return;updateAccount(id,{segment:k});renderPlaybook(a)}
+function saveNextStep(){const a=findAcct(acctId);if(!a)return;const step=document.getElementById('ac-nextstep').value.trim(),due=document.getElementById('ac-due').value||'';updateAccount(acctId,{nextStep:step,dueAt:due});if(step&&a.owner&&a.owner!=='Unassigned')notifyAssignee(a.owner,'Follow-up assigned',step+' — '+displayName(a)+(due?' · due '+due:''),'s-crm');renderCrmMain();refreshPulse();toast('✓ Next step saved')}
 function renderCampaignBadge(a){const el=document.getElementById('ac-campaign-badge');if(!el)return;const en=a.campaign;
   if(!en){el.innerHTML='';return}
   const map={active:'wave',completed:'good','no-email':'amber','no-sender':'amber'};
   el.innerHTML='<span class="pill '+(map[en.status]||'dim')+'" style="cursor:pointer" onclick="unenroll(\''+a.id+'\')" title="Click to remove">🚀 '+esc(en.name||'Campaign')+' · step '+((en.step||0)+1)+' ✕</span>';}
-function setStage(id,s,btn){updateAccount(id,{stage:s});btn.closest('.rolepick').querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderCrmMain();toast('✓ Moved to '+s)}
-function setRaiseStage(id,s,btn){const patch={raiseStage:s},map={Committed:'hard',Wired:'wired',Passed:'passed'};if(map[s])patch.commitStatus=map[s];updateAccount(id,patch);btn.closest('.rolepick').querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');const a=CRMA.find(x=>x.id===id);if(a)populateCommit(a);refreshPulse();toast('✓ Moved to '+s)}
+/* Every stage move stamps stageChangedAt (keeps rotting honest) and a move
+   to Lost asks why — lost reasons are how the pipeline gets smarter. */
+function stagePatch(s){return {stage:s,stageChangedAt:new Date().toISOString()}}
+function afterStageChange(id,s){if(s==='Lost')openLostReason(id)}
+let lostId=null;
+function openLostReason(id){lostId=id;const a=findAcct(id);const h=document.getElementById('lr-name');if(h)h.textContent=a?displayName(a):'';
+  document.getElementById('lr-reasons').innerHTML=LOST_REASONS.map(r=>'<button data-v="'+esc(r)+'">'+esc(r)+'</button>').join('');
+  document.querySelectorAll('#lr-reasons button').forEach(b=>b.onclick=function(){document.querySelectorAll('#lr-reasons button').forEach(x=>x.classList.remove('on'));this.classList.add('on')});
+  document.getElementById('lr-note').value='';closeSheets();openSheet('sh-lost')}
+function saveLostReason(archive){const b=document.querySelector('#lr-reasons button.on');if(!b){toast('Pick a reason');return}
+  const note=document.getElementById('lr-note').value.trim();updateAccount(lostId,{lostReason:b.dataset.v,lostNote:note,lostAt:new Date().toISOString()});
+  closeSheets();if(archive)archiveAccount(lostId,'Lost — '+b.dataset.v);else{crmRerenderMain();toast('✓ Marked lost · '+b.dataset.v)}}
+function setStage(id,s,btn){updateAccount(id,stagePatch(s));afterStageChange(id,s);btn.closest('.rolepick').querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderCrmMain();toast('✓ Moved to '+s)}
+function setRaiseStage(id,s,btn){const patch={raiseStage:s},map={Committed:'hard',Wired:'wired',Passed:'passed'};if(map[s])patch.commitStatus=map[s];updateAccount(id,patch);btn.closest('.rolepick').querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');const a=findAcct(id);if(a)populateCommit(a);refreshPulse();toast('✓ Moved to '+s)}
 function saveOwner(id){const v=document.getElementById('ac-owner').value.trim()||'Unassigned';updateAccount(id,{owner:v});renderCrmMain()}
 function renderTags(a){document.getElementById('ac-tags').innerHTML=(a.tags||[]).length?(a.tags||[]).map(t=>'<span class="pill wave" style="cursor:pointer" onclick="rmTag(\''+a.id+'\',decodeURIComponent(\''+encodeURIComponent(t)+'\'))">'+esc(t)+' ✕</span>').join(' '):'<span class="d" style="color:var(--faint)">No tags yet</span>'}
-function addTag(id){const inp=document.getElementById('ac-tag-input');const t=inp.value.trim();if(!t)return;const a=CRMA.find(x=>x.id===id);const tags=(a.tags||[]).slice();if(!tags.includes(t))tags.push(t);updateAccount(id,{tags:tags});inp.value='';renderTags(a);renderCrmMain()}
-function rmTag(id,t){const a=CRMA.find(x=>x.id===id);const tags=(a.tags||[]).filter(x=>x!==t);updateAccount(id,{tags:tags});renderTags(a);renderCrmMain()}
+function addTag(id){const inp=document.getElementById('ac-tag-input');const t=inp.value.trim();if(!t)return;const a=findAcct(id);const tags=(a.tags||[]).slice();if(!tags.includes(t))tags.push(t);updateAccount(id,{tags:tags});inp.value='';renderTags(a);renderCrmMain()}
+function rmTag(id,t){const a=findAcct(id);const tags=(a.tags||[]).filter(x=>x!==t);updateAccount(id,{tags:tags});renderTags(a);renderCrmMain()}
 function renderNotes(a){const notes=(a.notes||[]);document.getElementById('ac-notes').innerHTML=notes.length?notes.map(n=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([n.user,n.at].filter(Boolean).join(' · '))+(Number(n.spend)?' · <b style="color:var(--amber)">'+money0(n.spend)+' spent</b>':'')+'</div>'+esc(n.text||'')+'</div>').join(''):'<div class="d" style="color:var(--faint)">No activity yet — add a note or record a call.</div>'}
-function addNote(id){const inp=document.getElementById('note-input');const sEl=document.getElementById('note-spend');const spend=Math.max(0,Number(sEl&&sEl.value)||0);let t=inp.value.trim();if(!t&&!spend)return;if(!t)t='Spend logged';const a=CRMA.find(x=>x.id===id);const notes=(a.notes||[]).slice();const n={user:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'}),text:t};if(spend)n.spend=spend;notes.unshift(n);updateAccount(id,{notes:notes});inp.value='';if(sEl)sEl.value='';renderNotes(a);renderMetrics(a);renderCrmMain();toast(spend?'✓ Note + '+money0(spend)+' spend logged':'✓ Note logged')}
+function addNote(id){const inp=document.getElementById('note-input');const sEl=document.getElementById('note-spend');const spend=Math.max(0,Number(sEl&&sEl.value)||0);let t=inp.value.trim();if(!t&&!spend)return;if(!t)t='Spend logged';const a=findAcct(id);const notes=(a.notes||[]).slice();const n={user:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'}),text:t};if(spend)n.spend=spend;notes.unshift(n);updateAccount(id,{notes:notes});inp.value='';if(sEl)sEl.value='';renderNotes(a);renderMetrics(a);renderCrmMain();toast(spend?'✓ Note + '+money0(spend)+' spend logged':'✓ Note logged')}
 let crmRec=null;
 function toggleRecord(id){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;const btn=document.getElementById('rec-btn');
   if(!SR){toast('Voice capture isn\'t supported in this browser — type your note instead');return}
@@ -8083,11 +8269,11 @@ async function saveMail(){if(!hasFirestore()){toast('Enable Firestore first to s
   catch(e){toast('Could not save — '+((e&&e.code)||''))}}
 async function disconnectMail(){if(!hasFirestore())return;try{await firebase.firestore().collection('mail_credentials').doc(CURRENT_USER.uid).delete();CURRENT_USER.mail=null;toast('Email disconnected');closeSheets()}catch(e){toast('Could not disconnect')}}
 function logAccountEmail(a,to,subject,body){const notes=(a.notes||[]).slice();notes.unshift({user:(CURRENT_USER&&CURRENT_USER.email)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'}),text:'✉️ Email to '+to+(subject?(' — '+subject):'')+': '+body.slice(0,300)});updateAccount(a.id,{notes:notes})}
-function openCompose(){const a=CRMA.find(x=>x.id===acctId);if(!a)return;if(!a.email){toast('No email address on this account');return}
+function openCompose(){const a=findAcct(acctId);if(!a)return;if(!a.email){toast('No email address on this account');return}
   document.getElementById('cmp-to').textContent=a.email;document.getElementById('cmp-subject').value='';document.getElementById('cmp-body').value='';
   document.getElementById('cmp-hint').textContent=(CURRENT_USER.mail&&CURRENT_USER.mail.email)?('Sends from your address: '+CURRENT_USER.mail.email):'Not connected — this opens your mail app. Connect your email in Account for in-app send.';
   closeSheets();openSheet('sh-compose')}
-async function sendAccountEmail(){const a=CRMA.find(x=>x.id===acctId);if(!a||!a.email)return;
+async function sendAccountEmail(){const a=findAcct(acctId);if(!a||!a.email)return;
   const subject=document.getElementById('cmp-subject').value.trim(),body=document.getElementById('cmp-body').value.trim();
   if(!body){toast('Write a message first');return}
   if(!backendReady()||!(CURRENT_USER.mail&&CURRENT_USER.mail.email)){window.location.href='mailto:'+encodeURIComponent(a.email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);logAccountEmail(a,a.email,subject,body);closeSheets();renderCrmMain();toast('Opened your mail app · logged to the account');return}
@@ -8211,14 +8397,14 @@ function enrollMatching(id){const c=CAMP.find(x=>x.id===id);if(!c)return;const s
   if(!match.length){toast('No accounts with an email match that segment');return}
   if(!confirm('Enroll '+match.length+' account'+(match.length>1?'s':'')+' in “'+c.name+'”? The first email sends on the next daily run.'))return;
   match.forEach(a=>enrollAccount(a,c));renderCRM();toast('✓ Enrolled '+match.length+' account'+(match.length>1?'s':''))}
-function openEnroll(id){const a=CRMA.find(x=>x.id===id);if(!a)return;
+function openEnroll(id){const a=findAcct(id);if(!a)return;
   if(!CAMP.length){toast('Create a campaign first');crmGoTab('campaigns');return}
   document.getElementById('enroll-list').innerHTML=CAMP.map(c=>'<button class="btn ghost" style="width:100%;justify-content:space-between;margin-bottom:8px" onclick="doEnroll(\''+id+'\',\''+c.id+'\')"><span>'+esc(c.name)+'</span><span class="pill '+(c.status==='active'?'good':'dim')+'">'+(c.status==='active'?'ACTIVE':'PAUSED')+'</span></button>').join('');
   openSheet('sh-enroll')}
-function doEnroll(id,cid){const a=CRMA.find(x=>x.id===id),c=CAMP.find(x=>x.id===cid);if(!a||!c)return;
+function doEnroll(id,cid){const a=findAcct(id),c=CAMP.find(x=>x.id===cid);if(!a||!c)return;
   if(!(a.email||(a.contacts&&a.contacts[0]&&a.contacts[0].email))){toast('This account has no email address');return}
   enrollAccount(a,c);closeSheets();populateAccount(a);toast('✓ Enrolled in '+c.name)}
-function unenroll(id){const a=CRMA.find(x=>x.id===id);if(!a)return;updateAccount(id,{campaign:null});populateAccount(a);renderCrmMain();toast('Removed from campaign')}
+function unenroll(id){const a=findAcct(id);if(!a)return;updateAccount(id,{campaign:null});populateAccount(a);renderCrmMain();toast('Removed from campaign')}
 
 /* ---- Prospector: source new commercial contacts ---- */
 let prospResults=[], prospUseCase='';
@@ -8560,7 +8746,7 @@ function exportCSV(filename,header,rows){
   const lines=[header].concat(rows).map(r=>r.map(csvCell).join(','));
   try{const blob=new Blob([lines.join('\n')],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url)},120);toast('✓ Exported '+filename)}catch(e){toast('Export not supported here')}
 }
-function exportPipeline(){const rows=(CRMA||[]).map(a=>[displayName(a),a.owner||'',a.stage||'New',a.board||'',a.email||'',a.phone||'',a.location||'',(a.metrics&&a.metrics.mrr)||'',a.dueAt||'',a.nextStep||'']);exportCSV('safewave-pipeline.csv',['Account','Owner','Stage','List','Email','Phone','Location','MRR','Due','Next step'],rows)}
+function exportPipeline(){const rows=(CRMA||[]).concat(CRMARCH||[]).map(a=>[displayName(a),a.owner||'',a.stage||'New',a.archived?'Archived':'Active',a.board||'',(SEGMENTS[segmentOf(a)]||{}).label||'',a.email||'',a.phone||'',a.location||'',(a.metrics&&a.metrics.mrr)||'',dealValue(a)||'',a.closeDate||'',a.dueAt||'',a.nextStep||'',a.lostReason||'',a.archiveReason||'']);exportCSV('safewave-pipeline.csv',['Account','Owner','Stage','Status','List','Segment','Email','Phone','Location','MRR','Deal value','Expected close','Due','Next step','Lost reason','Archive reason'],rows)}
 function exportOrders(){const rows=ordersList().map(o=>{const f=FULF[o.n];return [o.n,o.name||'',o.date||'',o.total||'',isFulfilled(o)?'Fulfilled':'Open',(f&&f.serial)||'',(f&&f.tracking)||o.tracking||'']});exportCSV('safewave-orders.csv',['Order','Customer','Date','Total','Status','Band serial','Tracking'],rows)}
 function exportInventory(){const rows=[];LOCS.forEach(l=>{const k=l[0];rows.push([l[1],INV[k].S||0,INV[k].M||0,INV[k].L||0,SIZES.reduce((a,z)=>a+(INV[k][z]||0),0)])});rows.push(['Network total',net('S'),net('M'),net('L'),totalNetwork()]);exportCSV('safewave-inventory.csv',['Location','Small','Medium','Large','Total'],rows)}
 
