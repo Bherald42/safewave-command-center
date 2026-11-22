@@ -2116,6 +2116,8 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
    ============================================================ */
 const SNAPSHOT_DATE = new Date('2026-08-04T00:00:00');
 const LEAD = {transferWeeks:2, remakeWeeks:8, safety:0.25};
+/* Live = the backend Shopify sync has delivered data (orders or the stock mirror). */
+function shopLive(){return (typeof LIVEORDERS!=='undefined'&&LIVEORDERS.length>0)||(typeof SHOPSTOCK!=='undefined'&&!!SHOPSTOCK)}
 const SHOP = {
   grosse90:'$10.5k', aov:'$145', lastWeekRev:'$735', lastWeekOrders:5,
   sizes:[
@@ -2123,13 +2125,9 @@ const SHOP = {
     {size:'Medium', onHand:2, committed:0, burn:2.0},
     {size:'Large',  onHand:5, committed:1, burn:1.5},
   ],
-  orders:[
-    {n:'#1385', name:'Emily Buce',         date:'Aug 4', total:150, ful:'UNFULFILLED'},
-    {n:'#1384', name:'Michael Bye',        date:'Aug 3', total:150, ful:'UNFULFILLED'},
-    {n:'#1383', name:'Kurt Fahlman',       date:'Aug 2', total:150, ful:'FULFILLED'},
-    {n:'#1382', name:'Nga Branchini',      date:'Jul 31',total:150, ful:'FULFILLED'},
-    {n:'#1381', name:'Michelle Rutherford',date:'Jul 29',total:150, ful:'FULFILLED'},
-  ],
+  // Orders are never baked in here (customer names don't belong in the repo);
+  // they come only from the live Shopify sync (orders collection).
+  orders:[],
 };
 
 /* Real project decisions (not fabricated data — actual calls made during the build) */
@@ -2293,7 +2291,7 @@ async function syncShopify(backfill){
     toast('✓ Synced '+n+' order'+(n===1?'':'s')+' from Shopify');
   }catch(e){
     const m=(e&&e.message)||'';
-    toast(/connected yet|SHOPIFY|precondition/i.test(m)?'Shopify isn’t connected yet — add the Shopify Admin token, then Sync':'Sync failed — '+m);
+    toast(/connected yet|SHOPIFY|precondition/i.test(m)?'Shopify isn’t connected yet — the store’s app keys still need to be added':'Sync failed — '+m);
   }
   syncing=false;renderStock();
 }
@@ -2361,11 +2359,12 @@ function renderFulfillTab(body){
     +'<button class="btn ghost" style="flex:1;min-width:132px" onclick="demoSync()"><span>▶ Demo<span class="hide-sm"> walkthrough</span></span></button>'
     +'</div>';
   if(DEMO.length)html+='<div class="card" style="border-color:var(--wave)"><div class="row"><div class="grow"><div class="t">Demo mode</div><div class="d">These orders are a walkthrough — nothing is sent to Shopify or saved to the database.</div></div><button class="btn ghost" onclick="clearDemo()">Clear demo</button></div></div>';
+  if(!shopLive()&&!DEMO.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>SHOPIFY NOT CONNECTED</span><div class="t" style="margin-top:7px">New orders aren’t coming in here yet</div><div class="d">The Command Center can’t see your Shopify orders until the store is connected, so this list may be missing orders that are waiting to ship. Check <b>Shopify → Orders</b> for now.'+(isSuperAdmin()?' Setup: add the Shopify app keys as repo secrets, then tap Sync.':'')+'</div></div>';
   html+=oversoldCard();
   const blocks=stockBlocks();
   if(blocks.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>CAN’T SHIP</span><div class="t" style="margin-top:7px">'+blocks.map(z=>SIZELABEL[z]).join(', ')+' — 0 in Covington</div><div class="d">Transfer from Pace before these ship. Pace has '+blocks.map(z=>SIZELABEL[z]+' '+(INV.pace[z]||0)).join(', ')+'.</div></div>';
   html+='<div class="sec-head"><h2>To fulfill</h2><span class="pill '+(unf.length?'amber':'good')+'">'+unf.length+'</span></div>';
-  html+=unf.length?unf.map(fulfillCard).join(''):'<div class="empty"><div class="ico">✓</div><div class="t">All caught up</div><div class="d">No orders waiting. New paid orders appear here automatically.</div></div>';
+  html+=unf.length?unf.map(fulfillCard).join(''):(shopLive()||DEMO.length?'<div class="empty"><div class="ico">✓</div><div class="t">All caught up</div><div class="d">No orders waiting. New paid orders appear here automatically.</div></div>':'<div class="empty"><div class="t">No orders to show</div><div class="d">Shopify isn’t connected, so orders waiting in Shopify won’t appear here.</div></div>');
   if(done.length)html+='<div class="sec-head" style="margin-top:18px"><h2>Fulfilled</h2><span class="pill good">'+done.length+'</span></div>'+done.map(fulfilledCard).join('');
   body.innerHTML=html;
 }
@@ -5476,6 +5475,7 @@ function renderPulse(user){
   if(over.length)ops.push(opsCard('s-stock','amber','OVERSOLD','Shopify oversold: '+over.map(z=>SIZELABEL[z]+' '+SHOPSTOCK[z]).join(', '),'Restock in Shopify or pause the size so it stops selling'));
   blocks.forEach(z=>ops.push(opsCard('s-stock','amber','TRANSFER',SIZELABEL[z]+' bands: 0 in Covington','Can’t ship — transfer from Pace ('+(INV.pace[z]||0)+' available)')));
   const unfilled=(typeof unfulfilledOrders==='function')?unfulfilledOrders():[];
+  if(!shopLive()&&NAV_ALLOWED.has('s-stock'))ops.push(opsCard('s-stock','amber','CHECK SHOPIFY','Shopify isn’t connected','New orders don’t show here yet — check Shopify → Orders'));
   if(unfilled.length)ops.push(opsCard('s-stock','wave','TO SHIP',unfilled.length+' order'+(unfilled.length>1?'s':'')+' to fulfill',unfilled.slice(0,5).map(o=>o.n).join(', ')));
   if(!(user.mail&&user.mail.email))ops.push(opsCard('__mail','amber','SET UP','Connect your email','Send from your address + run campaigns'));
   let html='';
@@ -9595,7 +9595,7 @@ function renderFinance(){
   const SEC={};
   SEC.overview=
     // Compact KPI strip (Shopify, live) → runway table → 13 weeks → raise → charts.
-    '<div class="kpi-head"><span>Sales</span><span class="pill wave">Shopify · live</span></div>'
+    '<div class="kpi-head"><span>Sales</span>'+(shopLive()?'<span class="pill wave">Shopify · live</span>':'<span class="pill amber">Shopify · Aug 4 snapshot</span>')+'</div>'
     +'<div class="kpi-strip">'
       +kpiCell(SHOP.grosse90||SHOP.gross90,'Gross · 90 days')
       +kpiCell(SHOP.lastWeekRev,'Revenue · last wk')
