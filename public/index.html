@@ -1024,6 +1024,23 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 .tk-acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .tk-acts .btn{flex:1;min-width:130px;width:auto}
 #sh-ticket .side-panel{margin-top:14px}
+
+/* Ticket customer context */
+.tkc{border:1px solid var(--line);border-radius:12px;padding:0 12px;margin:10px 0 4px;background:var(--surface)}
+.tkc>summary{list-style:none;display:flex;align-items:baseline;gap:8px;padding:11px 0;cursor:pointer;font-weight:600}
+.tkc>summary::-webkit-details-marker{display:none}
+.tkc>summary::before{content:'▸';color:var(--wave);transition:transform .15s}
+.tkc[open]>summary::before{transform:rotate(90deg)}
+.tkc>summary .d{font-weight:400;color:var(--muted);font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tkc[open]{padding-bottom:10px}
+.tkc-row{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.tkc-ic{width:20px;flex:none;text-align:center}
+.tkc-main{min-width:0;flex:1}
+.tkc-k{font-size:12px;color:var(--muted);font-weight:600}
+.tkc-v{font-size:14px;white-space:pre-line;overflow-wrap:anywhere}
+.tkc-miss{color:var(--faint)}
+.tkc-prev{display:block;cursor:pointer;color:var(--wave);padding:2px 0}
+.tkc-prev span{color:var(--muted);font-size:12.5px}
 </style>
 </head>
 <body>
@@ -1944,6 +1961,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
       <button class="iconbtn" aria-label="Close ticket" onclick="closeSheets()">✕</button>
     </div>
     <div id="tkv-convo"></div>
+    <div id="tkv-context"></div>
     <div id="tkv-reply-box"></div>
     <div id="tkv-actions"></div>
     <details class="side-panel" id="tkv-details-wrap"><summary><span>Details &amp; assignment</span></summary><div id="tkv-body"></div><div id="tkv-meta-edit"></div></details>
@@ -6814,6 +6832,7 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
   (t.replies||[]).forEach(r=>{cv+='<div class="tk-msg team"><div class="tk-who">'+esc(r.by||'Safewave')+' <span>'+esc(tkWhen(r.at))+(r.via==='mail app'?' · from mail app':'')+'</span></div><div class="tk-txt">'+esc(r.text||'')+'</div></div>'});
   if(!(t.replies||[]).length&&t.lastReplyAt)cv+='<div class="d" style="margin:4px 0 8px;color:var(--muted)">Replied '+esc(tkWhen(t.lastReplyAt))+(t.lastReplyBy?' by '+esc(t.lastReplyBy):'')+'</div>';
   document.getElementById('tkv-convo').innerHTML=cv;
+  document.getElementById('tkv-context').innerHTML=ticketContextHTML(t);
   // reply box
   let rb='';
   if(t.email){
@@ -6840,6 +6859,32 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
   openSheet('sh-ticket');
   setTimeout(()=>{const ta=document.getElementById('tkv-reply');if(ta&&t.status!=='closed'&&window.innerWidth>=860)ta.focus()},80)
 }
+
+/* Customer context on a ticket: phone & app (sent by the app with the message),
+   their band (live from the app at the time, else what we shipped), orders and
+   earlier tickets — so support starts with the whole picture. */
+function tkCustName(t){return String(t.customer||'').split(' · ')[0].trim()}
+function ticketContextHTML(t){const name=tkCustName(t),email=(t.email||'').trim();
+  const d=t.device||{},au=t.appUser||{};
+  const rows=[];
+  // phone & app
+  const phone=[d.deviceModel,d.platform&&(d.platform==='ios'?'iOS':d.platform==='android'?'Android':d.platform)+(d.osVersion?' '+d.osVersion:''),d.appVersion?'app '+d.appVersion+(d.appBuild?' ('+d.appBuild+')':''):''].filter(Boolean).join(' · ');
+  rows.push(['📱','Phone & app',phone||'<span class="tkc-miss">Not sent with this message</span>',!!phone]);
+  // band: live (from the app at the time of the ticket) → else the band we shipped them
+  const live=(au.bands||[]).map(b=>[b.name||b.serial||'Band',b.firmware?'fw '+b.firmware:'',b.battery!=null?b.battery+'% battery':'',b.connected===true?'connected':b.connected===false?'not connected':'',b.lastConnected?'seen '+ageStr(new Date(b.lastConnected).toISOString()):''].filter(Boolean).join(' · '));
+  const shipped=Object.values(typeof BANDS!=='undefined'?BANDS:{}).filter(b=>sameCustomer(b.customer,'',name,email)).map(b=>[b.serial,SIZELABEL[b.size]||'',b.firmware?'fw '+b.firmware+' at ship':'',b.shippedAt?'shipped '+new Date(b.shippedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}):''].filter(Boolean).join(' · '));
+  rows.push(['⌚','Band',live.length?esc(live.join('\n')):shipped.length?esc(shipped.join('\n')):'<span class="tkc-miss">No band on record for this customer</span>',!!(live.length||shipped.length)]);
+  // orders
+  const orders=(typeof ordersList==='function'?ordersList():[]).filter(o=>sameCustomer(o.name,o.email,name,email));
+  rows.push(['🛒','Orders',orders.length?esc(orders.slice(0,3).map(o=>o.n+' · '+o.date+' · '+(isFulfilled(o)?'shipped':'not shipped')).join('\n'))+(orders.length>3?'\n+'+(orders.length-3)+' more':''):'<span class="tkc-miss">No orders matched</span>',orders.length>0]);
+  // earlier tickets
+  const prev=(TKTS||[]).filter(x=>x.id!==t.id&&sameCustomer(tkCustName(x),x.email,name,email)).sort((a,b)=>new Date(b.created)-new Date(a.created));
+  const prevHTML=prev.length?prev.slice(0,4).map(x=>'<a class="tkc-prev" onclick="openTicket(\''+esc(x.id)+'\')">'+esc(x.title)+' <span>'+esc(ageStr(x.created))+' · '+esc(x.status==='closed'?'resolved':x.status==='answered'?'replied':'open')+'</span></a>').join(''):'<span class="tkc-miss">None — first time writing in</span>';
+  rows.push(['🎫','Earlier tickets',prevHTML,prev.length>0]);
+  const known=rows.filter(r=>r[3]).length;
+  return '<details class="tkc"'+(known?' open':'')+'><summary><span>Customer</span><span class="d">'+esc([name||email,au.organizationName||''].filter(Boolean).join(' · '))+'</span></summary>'
+    +rows.map(r=>'<div class="tkc-row"><span class="tkc-ic" aria-hidden="true">'+r[0]+'</span><div class="tkc-main"><div class="tkc-k">'+r[1]+'</div><div class="tkc-v">'+r[2]+'</div></div></div>').join('')
+    +((name||email)?'<button class="btn ghost sm" style="margin-top:8px" onclick="viewCustomerFromTicket(\''+esc(t.id)+'\')">Full customer profile →</button>':'')+'</details>'}
 function tkLogReply(id,text,via){const r={by:(CURRENT_USER&&CURRENT_USER.name)||'Safewave',text:text,at:new Date().toISOString(),via:via};
   updTicket(id,x=>{x.replies=(x.replies||[]).concat([r]);x.lastReplyAt=r.at;x.lastReplyBy=r.by;if(x.status==='open')x.status='answered'})}
 function replyViaMailApp(id){const t=TKTS.find(x=>x.id===id);if(!t||!t.email)return;
