@@ -1565,6 +1565,28 @@ async function verifyCaller(req) {
   return c.email;
 }
 
+const clip = (v, n) => (v === undefined || v === null || v === "") ? null : String(v).slice(0, n || 60);
+function intakeDevice(d) {
+  if (!d || typeof d !== "object") return null;
+  const o = { platform: clip(d.platform, 20), osVersion: clip(d.osVersion, 30), deviceModel: clip(d.deviceModel, 60), appVersion: clip(d.appVersion, 30), appBuild: clip(d.appBuild, 30) };
+  Object.keys(o).forEach((k) => { if (o[k] === null) delete o[k]; });
+  return Object.keys(o).length ? o : null;
+}
+function intakeAppUser(u, site) {
+  if (!u || typeof u !== "object") return null;
+  const bands = (Array.isArray(u.bands) ? u.bands : []).slice(0, 4).map((b) => {
+    const o = { name: clip(b && b.name, 60), serial: clip(b && b.serial, 60), firmware: clip(b && b.firmware, 30),
+      battery: Number.isFinite(Number(b && b.battery)) ? Math.max(0, Math.min(100, Math.round(Number(b.battery)))) : null,
+      connected: (b && typeof b.connected === "boolean") ? b.connected : null,
+      lastConnected: Number.isFinite(Number(b && b.lastConnected)) ? Number(b.lastConnected) : null };
+    Object.keys(o).forEach((k) => { if (o[k] === null) delete o[k]; });
+    return o;
+  }).filter((o) => Object.keys(o).length);
+  const o = { userId: clip(u.userId, 128), organizationName: clip(site, 120) };
+  if (bands.length) o.bands = bands;
+  Object.keys(o).forEach((k) => { if (o[k] === null) delete o[k]; });
+  return Object.keys(o).length ? o : null;
+}
 exports.ticketIntake = onRequest({ region: REGION }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).send("POST only"); return; }
   let caller;
@@ -1603,6 +1625,12 @@ exports.ticketIntake = onRequest({ region: REGION }, async (req, res) => {
     by: fromDashboard ? (site || "Customer dashboard") : "Phone app",
     source: { project: "safewave-371716", collection: "contact_submissions", id: srcId, organizationId: b.organizationId || null },
   };
+  // Optional context the app / forwarder can send with the message: the phone
+  // and app version, and the customer's band(s) as the app saw them.
+  const dv = intakeDevice(b.device);
+  if (dv) t.device = dv;
+  const au = intakeAppUser(b.appUser, site);
+  if (au) t.appUser = au;
   await ref.set(t);
   await addNotification({
     to: "all",
