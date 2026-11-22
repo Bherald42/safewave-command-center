@@ -202,7 +202,7 @@ exports.askAgent = onCall({ region: REGION, timeoutSeconds: 120 }, async (reques
     "- Money is USD. 'Need follow-up' means an open account with no next step. Red is reserved for life-safety.\n" +
     "- Never mention API keys, secrets, environment variables, repositories, deploys or setup steps. If something isn't switched on, say it isn't available yet and that Brad can turn it on.\n" +
     "- For 'where is …' questions use ONLY this app map (phone: Menu in the bottom bar; desktop: left sidebar). If a page isn't listed, say you can't verify where it is.\n" +
-    "  Home (Today, My Work) · Messages (bottom bar on phones, top bar on desktop) · Customers → CRM (Pipeline; Campaigns and Prospect open from the Pipeline action row), Support · " +
+    "  Home (Today, My Work) · Messages (bottom bar on phones, top bar on desktop) · Customers → CRM (Pipeline; Campaigns and Prospect open from the Pipeline action row), Support, Invoices & POs (customer invoices with PDF + email, and the purchase orders customers send) · " +
     "Fundraise (Overview, Meetings, Traction, Financials, Plan, Investors, Data room) · Operations → Stock & orders · Product → Build, Release QC, Field, Feedback · " +
     "Finance → Financials (Overview, 13-week cash, P&L, Projections, Budget, Payroll, Build spend, Access) · Resources → Guides, Knowledge (this assistant) · " +
     "Settings → Users, Compliance, Vault. Some pages only show for people with access.\n\n" +
@@ -1323,6 +1323,199 @@ exports.runCampaigns = onSchedule({ schedule: "every day 15:00", region: REGION 
 /* ------------------------------------------------------------------ *
  * SCAN OVERDUE  →  nudges/summary
  * ------------------------------------------------------------------ */
+/* ================= INVOICES (PDF + email) =================
+   Invoices live in `invoices/{id}` (written by the app). The PDF is drawn here,
+   on the server, so the downloaded copy and the emailed copy are identical.
+   Company details and payment instructions come from `settings/invoicing`. */
+// INVOICE-PDF-BEGIN
+const INV_TERMS = { receipt: "Due on receipt", net15: "Net 15", net30: "Net 30", net45: "Net 45", net60: "Net 60" };
+function invNum(v) { const n = Number(String(v == null ? "" : v).replace(/[^0-9.-]/g, "")); return isFinite(n) ? n : 0; }
+function invMoney(n) { n = Math.round(invNum(n) * 100) / 100; return (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function invTotals(inv) {
+  const items = (inv.items || []).filter((i) => i && (i.desc || invNum(i.qty) || invNum(i.price)));
+  const subtotal = items.reduce((s, i) => s + invNum(i.qty) * invNum(i.price), 0);
+  const discount = Math.min(invNum(inv.discount), subtotal);
+  const tax = (subtotal - discount) * invNum(inv.taxRate) / 100;
+  const shipping = invNum(inv.shipping);
+  const total = Math.round((subtotal - discount + tax + shipping) * 100) / 100;
+  const paid = Math.round((inv.payments || []).reduce((s, p) => s + invNum(p.amount), 0) * 100) / 100;
+  return { items, subtotal, discount, tax, shipping, total, paid, balance: Math.round((total - paid) * 100) / 100 };
+}
+function invDate(ymd) {
+  if (!ymd) return "";
+  const d = new Date(String(ymd).slice(0, 10) + "T12:00:00Z");
+  return isNaN(d) ? String(ymd) : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+function renderInvoicePdf(inv, s) {
+  const PDFDocument = require("pdfkit");
+  s = s || {};
+  const T = invTotals(inv);
+  const WAVE = "#0a8fa6", INK = "#14212b", MUTED = "#5b6b78", LINE = "#dfe6ea", SOFT = "#f3f7f9";
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: "LETTER", margin: 50, info: { Title: "Invoice " + (inv.number || ""), Author: s.company || "Safewave Technology" } });
+    const out = []; doc.on("data", (c) => out.push(c)); doc.on("end", () => resolve(Buffer.concat(out))); doc.on("error", reject);
+    const L = 50, R = doc.page.width - 50, W = R - L, bottom = () => doc.page.height - 70;
+    // Header: wordmark + INVOICE
+    doc.fillColor(WAVE).font("Helvetica-Bold").fontSize(20).text(s.company || "Safewave Technology", L, 50, { width: W / 2 });
+    doc.fillColor(MUTED).font("Helvetica").fontSize(9);
+    const fromLines = [].concat(String(s.address || "").split("\n"), [s.email || "", s.phone || "", s.website || "safewavetech.com"]).map((x) => x.trim()).filter(Boolean);
+    doc.text(fromLines.join("\n"), L, doc.y + 4, { width: W / 2, lineGap: 1.5 });
+    const leftEnd = doc.y;
+    doc.fillColor(INK).font("Helvetica-Bold").fontSize(26).text(inv.status === "void" ? "INVOICE · VOID" : "INVOICE", L + W / 2, 48, { width: W / 2, align: "right" });
+    const meta = [["Invoice #", inv.number || "Draft"], ["Issued", invDate(inv.issueDate)], ["Terms", INV_TERMS[inv.terms] || inv.terms || ""], ["Due", invDate(inv.dueDate)]];
+    if (inv.poNumber) meta.push(["Customer PO", inv.poNumber]);
+    let my = 84;
+    meta.filter((m) => m[1]).forEach(([k, v]) => {
+      doc.font("Helvetica").fontSize(9).fillColor(MUTED).text(k, L + W / 2, my, { width: W / 4 - 6, align: "right" });
+      doc.font("Helvetica-Bold").fillColor(INK).text(String(v), L + (3 * W) / 4, my, { width: W / 4, align: "right" });
+      my += 14;
+    });
+    let y = Math.max(leftEnd, my) + 22;
+    // Bill to / Ship to
+    const b = inv.billTo || {}, sh = inv.shipTo || {};
+    const block = (title, o, x, w) => {
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(title.toUpperCase(), x, y, { width: w, characterSpacing: 0.8 });
+      const lines = [o.name, o.company, ...(String(o.address || "").split("\n")), o.email, o.phone].map((x) => (x || "").trim()).filter(Boolean);
+      doc.font("Helvetica").fontSize(10).fillColor(INK).text(lines.join("\n") || "—", x, y + 13, { width: w, lineGap: 1.5 });
+      return doc.y;
+    };
+    const hasShip = sh && (sh.address || sh.name || sh.company);
+    const e1 = block("Bill to", b, L, W / 2 - 10);
+    const e2 = hasShip ? block("Ship to", sh, L + W / 2, W / 2) : y;
+    y = Math.max(e1, e2) + 22;
+    // Line items
+    const cQ = L + W * 0.58, cP = L + W * 0.70, cA = L + W * 0.84;
+    const head = () => {
+      doc.rect(L, y, W, 22).fill(SOFT);
+      doc.fillColor(MUTED).font("Helvetica-Bold").fontSize(8.5);
+      doc.text("DESCRIPTION", L + 8, y + 7, { width: cQ - L - 16, characterSpacing: 0.6 });
+      doc.text("QTY", cQ, y + 7, { width: cP - cQ - 8, align: "right", characterSpacing: 0.6 });
+      doc.text("UNIT PRICE", cP, y + 7, { width: cA - cP - 8, align: "right", characterSpacing: 0.6 });
+      doc.text("AMOUNT", cA, y + 7, { width: R - cA - 8, align: "right", characterSpacing: 0.6 });
+      y += 28;
+    };
+    head();
+    T.items.forEach((it) => {
+      doc.font("Helvetica").fontSize(10);
+      const h = Math.max(doc.heightOfString(it.desc || "—", { width: cQ - L - 16 }), 12);
+      if (y + h + 10 > bottom()) { doc.addPage(); y = 50; head(); }
+      doc.font("Helvetica").fontSize(10).fillColor(INK).text(it.desc || "—", L + 8, y, { width: cQ - L - 16 });
+      const q = invNum(it.qty);
+      doc.text(String(Number.isInteger(q) ? q : q.toFixed(2)), cQ, y, { width: cP - cQ - 8, align: "right" });
+      doc.text(invMoney(it.price), cP, y, { width: cA - cP - 8, align: "right" });
+      doc.font("Helvetica-Bold").text(invMoney(invNum(it.qty) * invNum(it.price)), cA, y, { width: R - cA - 8, align: "right" });
+      y += h + 8;
+      doc.moveTo(L, y - 3).lineTo(R, y - 3).lineWidth(0.6).strokeColor(LINE).stroke();
+    });
+    // Totals
+    const rows = [["Subtotal", invMoney(T.subtotal)]];
+    if (T.discount) rows.push(["Discount", "-" + invMoney(T.discount)]);
+    if (invNum(inv.taxRate)) rows.push(["Tax (" + invNum(inv.taxRate) + "%)", invMoney(T.tax)]);
+    if (T.shipping) rows.push(["Shipping", invMoney(T.shipping)]);
+    rows.push(["Total", invMoney(T.total)]);
+    if (T.paid) rows.push(["Paid", "-" + invMoney(T.paid)]);
+    if (y + rows.length * 18 + 40 > bottom()) { doc.addPage(); y = 50; }
+    y += 8;
+    const tx = L + W * 0.55;
+    rows.forEach(([k, v]) => {
+      const strong = k === "Total";
+      doc.font(strong ? "Helvetica-Bold" : "Helvetica").fontSize(10).fillColor(strong ? INK : MUTED).text(k, tx, y, { width: W * 0.25, align: "right" });
+      doc.fillColor(INK).text(v, cA, y, { width: R - cA - 8, align: "right" });
+      y += 17;
+    });
+    y += 4;
+    doc.rect(tx + 10, y, R - tx - 10, 30).fill(inv.status === "void" ? SOFT : WAVE);
+    doc.font("Helvetica-Bold").fontSize(12).fillColor(inv.status === "void" ? MUTED : "#ffffff")
+      .text(inv.status === "void" ? "Void — nothing due" : (T.balance <= 0 && T.total > 0 ? "Paid in full" : "Balance due"), tx + 20, y + 9, { width: W * 0.25 });
+    if (inv.status !== "void" && !(T.balance <= 0 && T.total > 0)) doc.text(invMoney(T.balance), cA, y + 9, { width: R - cA - 8, align: "right" });
+    y += 50;
+    // Payment instructions + notes
+    const para = (title, body) => {
+      if (!body) return;
+      doc.font("Helvetica").fontSize(9.5);
+      const h = doc.heightOfString(body, { width: W }) + 18;
+      if (y + h > bottom()) { doc.addPage(); y = 50; }
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(title.toUpperCase(), L, y, { characterSpacing: 0.8 });
+      doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(body, L, y + 13, { width: W, lineGap: 1.5 });
+      y = doc.y + 16;
+    };
+    para("How to pay", s.paymentInstructions || "");
+    para("Notes", inv.notes || "");
+    // Footer (inside the bottom margin, so it never spills onto a blank page)
+    doc.page.margins.bottom = 0;
+    doc.font("Helvetica").fontSize(8.5).fillColor(MUTED)
+      .text((s.footer || "Thank you for supporting accessibility and safety for the Deaf and hard-of-hearing community.") + "  ·  " + (s.website || "safewavetech.com"),
+        L, doc.page.height - 50, { width: W, align: "center", lineBreak: false });
+    doc.end();
+  });
+}
+// INVOICE-PDF-END
+async function invoiceSettings() { const s = await db.collection("settings").doc("invoicing").get(); return s.exists ? s.data() : {}; }
+async function loadInvoice(id) {
+  const snap = await db.collection("invoices").doc(String(id || "")).get();
+  if (!snap.exists) throw new HttpsError("not-found", "Invoice not found.");
+  return Object.assign({ id: snap.id }, snap.data());
+}
+function invoiceFileName(inv) { return "Safewave-" + String(inv.number || "invoice").replace(/[^\w-]/g, "") + ".pdf"; }
+// The invoice as a PDF, for download (any signed-in teammate can read invoices).
+exports.invoicePdf = onCall({ region: REGION, memory: "512MiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  const inv = await loadInvoice((request.data || {}).id);
+  const pdf = await renderInvoicePdf(inv, await invoiceSettings());
+  return { name: invoiceFileName(inv), pdf: pdf.toString("base64") };
+});
+// Email the invoice (PDF attached) from sales@ when it's connected, otherwise
+// from the sender's own connected mailbox. Marks a draft as sent.
+exports.sendInvoice = onCall({ region: REGION, memory: "512MiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  if (request.auth.token.email === "jared@safewavetech.com") throw new HttpsError("permission-denied", "View-only.");
+  const d = request.data || {};
+  const to = String(d.to || "").split(/[,;\s]+/).map((x) => x.trim()).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+  if (!to.length) throw new HttpsError("invalid-argument", "Add the customer's email address.");
+  const inv = await loadInvoice(d.id);
+  if (inv.status === "void") throw new HttpsError("failed-precondition", "This invoice is void.");
+  const s = await invoiceSettings();
+  let creds = null, via = "";
+  const ib = await inboxCreds();
+  if (ib && d.fromInbox !== false) { creds = { email: ib.email, pass: ib.pass, smtp: ib.smtpHost, port: ib.smtpPort }; via = "sales@"; }
+  else { creds = await getCreds(request.auth.uid); via = "own"; }
+  if (!creds) throw new HttpsError("failed-precondition", "Connect the sales@ inbox (Support → Connect) or your own email (Account → Connect email) first.");
+  const prof = await getProfile(request.auth.uid);
+  const sender = senderFrom(creds, prof);
+  if (via === "sales@") sender.name = (prof.name || "Safewave") + " · Safewave";
+  const T = invTotals(inv);
+  const text = String(d.message || "").trim() || ("Hello,\n\nPlease find attached invoice " + inv.number + " for " + invMoney(T.balance) + ", due " + (invDate(inv.dueDate) || "on receipt") + ".\n\nThank you!");
+  const pdf = await renderInvoicePdf(inv, s);
+  try {
+    await deliver(creds, sender, { to: to.join(", "), subject: "Invoice " + inv.number + " from " + (s.company || "Safewave Technology"), text, attachments: [{ filename: invoiceFileName(inv), content: pdf, contentType: "application/pdf" }] });
+  } catch (e) {
+    logger.error("sendInvoice failed", e && e.message);
+    throw new HttpsError("internal", "Send failed — check the mailbox connection.");
+  }
+  const now = new Date().toISOString();
+  const patch = { sentAt: now, sentTo: to.join(", "), sentBy: prof.name || creds.email, history: admin.firestore.FieldValue.arrayUnion({ at: now, by: prof.name || creds.email, text: "Emailed to " + to.join(", ") + " from " + creds.email }) };
+  if (!inv.status || inv.status === "draft") patch.status = "sent";
+  await db.collection("invoices").doc(inv.id).set(patch, { merge: true });
+  if (inv.accountId) await logNote(inv.accountId, { user: creds.email, at: stamp(), text: "🧾 Invoice " + inv.number + " (" + invMoney(T.total) + ") emailed to " + to.join(", ") }).catch(() => {});
+  return { ok: true, from: creds.email };
+});
+// Daily: alert whoever raised an invoice once it goes past due unpaid.
+async function scanOverdueInvoices() {
+  const today = new Date().toISOString().slice(0, 10);
+  const qs = await db.collection("invoices").where("status", "==", "sent").get();
+  let n = 0;
+  for (const doc of qs.docs) {
+    const inv = doc.data();
+    if (!inv.dueDate || inv.dueDate >= today || inv.overdueAlertAt) continue;
+    const T = invTotals(inv);
+    if (T.balance <= 0) continue;
+    await addNotification({ to: inv.createdByUid || "all", title: "Invoice overdue: " + (inv.number || ""), body: ((inv.billTo && (inv.billTo.company || inv.billTo.name)) || "") + " · " + invMoney(T.balance) + " was due " + invDate(inv.dueDate), link: "s-invoices:inv:" + doc.id, by: "Invoices", at: admin.firestore.FieldValue.serverTimestamp() });
+    await doc.ref.set({ overdueAlertAt: new Date().toISOString() }, { merge: true });
+    n++;
+  }
+  return n;
+}
+
 exports.scanOverdue = onSchedule({ schedule: "every day 13:00", region: REGION }, async () => {
   const now = Date.now();
 
@@ -1352,7 +1545,8 @@ exports.scanOverdue = onSchedule({ schedule: "every day 13:00", region: REGION }
     staleCount: staleAccounts.length,
     breachedCount: breached.length,
   });
-  logger.info(`scanOverdue: ${staleAccounts.length} stale, ${breached.length} breached`);
+  const overdueInv = await scanOverdueInvoices().catch((e) => { logger.warn("invoice scan failed", e && e.message); return 0; });
+  logger.info(`scanOverdue: ${staleAccounts.length} stale, ${breached.length} breached, ${overdueInv} invoices newly overdue`);
   return null;
 });
 
@@ -1380,7 +1574,7 @@ function mailTransport(creds) {
     auth: { user: creds.email, pass: creds.pass },
   });
 }
-async function deliver(creds, sender, { to, subject, text, threadHeaders }) {
+async function deliver(creds, sender, { to, subject, text, threadHeaders, attachments }) {
   const transport = mailTransport(creds);
   await transport.sendMail({
     ...(threadHeaders || {}),
@@ -1389,6 +1583,7 @@ async function deliver(creds, sender, { to, subject, text, threadHeaders }) {
     subject: subject || "(no subject)",
     text: (text || "") + signatureText(sender),
     html: buildBrandedEmail(text || "", sender),
+    ...(attachments && attachments.length ? { attachments } : {}),
   });
 }
 async function logNote(accountId, note) {

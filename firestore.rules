@@ -153,6 +153,23 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if canOperate();
     }
+    // Customer invoices and the purchase orders customers send us (Customers →
+    // Invoices & POs). Team-shared like the CRM; Jared reads only. Sent invoices
+    // are voided, never deleted; only an unsent draft can be deleted.
+    match /invoices/{id} {
+      allow read: if signedIn();
+      allow create, update: if canOperate();
+      allow delete: if canOperate() && resource.data.status == 'draft';
+    }
+    match /customer_pos/{id} {
+      allow read: if signedIn();
+      allow write: if canOperate();
+    }
+    // Next invoice number (claimed in a transaction when an invoice is created).
+    match /counters/invoices {
+      allow read: if signedIn();
+      allow write: if canOperate();
+    }
 
     // Per-band identity (serial + lifecycle history) and the returns queue.
     match /bands/{serial} {
@@ -384,6 +401,12 @@ service cloud.firestore {
     match /qc_runs/{id} {
       allow read: if signedIn();
       allow write: if canOperate();
+    }
+    // Invoice letterhead: company address, payment instructions, default terms.
+    // Everyone who makes invoices reads it; the finance group edits it.
+    match /settings/invoicing {
+      allow read: if signedIn();
+      allow write: if canRaise();
     }
     match /settings/qc {
       allow read: if signedIn();

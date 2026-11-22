@@ -47,9 +47,18 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   `server_keys/{shopify,inbox}` (no client access). Repo secrets still win if set.
   `scheduledShopifySync` (every 15 min) syncs orders/stock and reads new sales@
   mail (IMAP, read-only) into Email tickets; email tickets reply from sales@.
+- **Invoices & customer POs** (Customers → Invoices & POs). Invoices are
+  numbered from `counters/invoices`, carry line items, terms, payments and a
+  history; sent invoices are voided, never deleted. The PDF is drawn server-side
+  (`invoicePdf`, pdfkit) so a download and the emailed copy (`sendInvoice`, from
+  sales@ when connected) are identical. Customer POs keep the uploaded file in
+  Storage (`customer_pos/`) and link to the invoices made from them.
+  `scanOverdue` alerts the invoice's creator once when it goes past due.
 - **Data is Firestore.** Collections include: `users`, `crm_accounts`, `tickets`,
   `campaigns`, `build_tasks`, `build_projects`, `inventory`, `fulfillments`,
-  `bands`, `returns`, `orders` (server-write only), `purchase_orders`,
+  `bands`, `returns`, `orders` (server-write only), `purchase_orders` (supplier POs),
+  `invoices` + `customer_pos` (Customers → Invoices & POs; `counters/invoices`,
+  `settings/invoicing` letterhead),
   `notifications`, `nudges`, `mail_credentials`, `chat_channels/{ch}/messages`,
   `feedback` (super-admin read), and `settings/{finance,chat,raise}`.
 - **Access rules live in `firestore.rules`** and `storage.rules`. Financials are

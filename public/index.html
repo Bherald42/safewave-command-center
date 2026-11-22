@@ -990,6 +990,23 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 .side-panel[open]{padding-bottom:10px}
 .side-panel .card{box-shadow:none;background:var(--surface-2);border:0}
 
+/* Invoices & POs: line-item grid, list rows, sticky save bar */
+.inv-fr{display:flex;gap:8px;flex-wrap:wrap}
+.inv-fr>div{flex:1 1 104px;min-width:0}
+#s-invoices .acct-col{min-width:0}
+#s-invoices .field{min-width:0}
+.bill-row{padding:12px 14px}
+.bill-row .t{overflow-wrap:anywhere}
+.inv-line{display:grid;grid-template-columns:minmax(0,1fr) 70px 100px 92px 30px;gap:6px;align-items:center;margin-bottom:6px}
+.inv-line .field{margin:0;min-width:0}
+.il-amt{text-align:right;font-weight:600;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.il-x{background:none;border:0;color:var(--faint);font-size:15px;cursor:pointer;min-height:36px;min-width:30px;border-radius:8px}
+.il-x:hover{color:var(--text);background:var(--surface-2)}
+@media(max-width:600px){.inv-line{grid-template-columns:64px minmax(0,1fr) auto 30px;padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:8px}.inv-line .il-desc{grid-column:1/-1}}
+.inv-savebar{position:sticky;bottom:calc(var(--navh,64px) + 8px);z-index:5;display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.08)}
+.inv-savebar .btn{flex:1;min-width:120px;width:auto}
+@media(min-width:860px){.inv-savebar{bottom:12px}}
+
 /* Stock: shipped orders as compact rows; secondary actions inside */
 .order-row{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:6px}
 .order-row>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer}
@@ -1197,6 +1214,13 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
     </main>
 
     <!-- VAULT · tools & passwords (leadership only) -->
+    <main class="screen" id="s-invoices">
+      <p class="eyebrow">Customers</p>
+      <h1 id="inv-h1">Invoices &amp; POs</h1>
+      <p class="sub" id="inv-sub">Bill customers and keep the purchase orders they send.</p>
+      <div id="inv-body"></div>
+    </main>
+
     <main class="screen" id="s-vault">
       <p class="eyebrow">Team</p>
       <h1>Tools &amp; Passwords</h1>
@@ -2167,6 +2191,7 @@ const NAV_ITEMS = [
   {id:'s-qc',      label:'Release QC',roles:['admin','manager'],         svg:'<path d="M12 2l3 3 4 .5.5 4 3 3-3 3-.5 4-4 .5-3 3-3-3-4-.5-.5-4-3-3 3-3 .5-4 4-.5z"/><path d="M9 12l2 2 4-4"/>'},
   {id:'s-crm',     label:'CRM',      roles:['admin','manager','member'], svg:'<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>'},
   {id:'s-chat',    label:'Chat',     roles:['admin','manager','member'], svg:'<path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.6A8.5 8.5 0 1 1 21 11.5z"/>'},
+  {id:'s-invoices',label:'Invoices', roles:['admin','manager'],          svg:'<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h5"/>'},
   {id:'s-comply',  label:'Comply',   roles:['admin'],                    svg:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'},
   {id:'s-vault',   label:'Vault',    roles:['admin','manager'],          svg:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>'},
   {id:'s-know',    label:'Knowledge',roles:['admin','manager','member'], svg:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/>'},
@@ -5487,6 +5512,7 @@ function renderPulse(user){
   blocks.forEach(z=>ops.push(opsCard('s-stock','amber','TRANSFER',SIZELABEL[z]+' bands: 0 in Covington','Can’t ship — transfer from Pace ('+(INV.pace[z]||0)+' available)')));
   const unfilled=(typeof unfulfilledOrders==='function')?unfulfilledOrders():[];
   if(!shopLive()&&NAV_ALLOWED.has('s-stock'))ops.push(opsCard('s-stock','amber','CHECK SHOPIFY','Shopify isn’t connected','New orders don’t show here yet — check Shopify → Orders'));
+  if(NAV_ALLOWED.has('s-invoices')){const od=INVOICES.filter(i=>invState(i)==='overdue');if(od.length)ops.push(opsCard('s-invoices:overdue','amber','OVERDUE',od.length+' invoice'+(od.length>1?'s':'')+' past due',fmtMoney(od.reduce((t,i)=>t+invTotals(i).balance,0))+' unpaid · '+od.slice(0,4).map(i=>i.number+' '+invWho(i)).join(', ')))}
   if(unfilled.length)ops.push(opsCard('s-stock','wave','TO SHIP',unfilled.length+' order'+(unfilled.length>1?'s':'')+' to fulfill',unfilled.slice(0,5).map(o=>o.n).join(', ')));
   if(!(user.mail&&user.mail.email))ops.push(opsCard('__mail','amber','SET UP','Connect your email','Send from your address + run campaigns'));
   let html='';
@@ -5608,6 +5634,9 @@ async function agentAsk(q){if(agentThinking)return;
 /* ---- "Where is …?" — answered from the live menu for THIS person, never guessed ---- */
 const NAV_FIND=[
   ['s-vault',/\b(vault|password|passwords|logins?|credentials?)\b/],
+  ['s-stock',/supplier (po|purchase order)s?|\bforecast\b/],
+  ['s-invoices:pos',/\b(customer )?(pos?|purchase orders?)\b/],
+  ['s-invoices',/\b(invoices?|invoicing|billing|receivables?|a\/r|accounts receivable)\b/],
   ['s-finance:cash13',/13[- ]?week|cash forecast/],
   ['s-raise:dataroom',/data ?room/],
   ['s-crm:campaigns',/\bcampaigns?\b/],
@@ -5628,7 +5657,7 @@ const NAV_FIND=[
   ['s-users',/\b(users|team roster|roles?|invite)\b/],
   ['s-comply',/\b(compliance|soc ?2|hipaa)\b/],
 ];
-const NAV_SUB={'s-finance:cash13':'13-week cash','s-raise:dataroom':'Data room','s-crm:campaigns':'Campaigns','s-crm:prospect':'Prospect'};
+const NAV_SUB={'s-invoices:pos':'Customer POs','s-finance:cash13':'13-week cash','s-raise:dataroom':'Data room','s-crm:campaigns':'Campaigns','s-crm:prospect':'Prospect'};
 function navRoute(pid){const page=pid.split(':')[0],sub=NAV_SUB[pid];
   if(page==='s-pulse')return {path:['Home'],label:'Home'};
   if(page==='s-chat')return {path:['Messages'],label:'Messages'};
@@ -5650,6 +5679,7 @@ function navAnswer(q){const t=(''+q).toLowerCase();
 function agentGo(pid){const [page,sub]=pid.split(':');
   if(page==='s-finance'&&sub){finTab=sub}if(page==='s-raise'&&sub&&typeof raiseSec!=='undefined'){try{raiseSec=sub}catch(e){}}
   if(page==='s-crm'&&sub){goto('s-crm');crmGoTab(sub);return}
+  if(page==='s-invoices'&&sub){goto(pid);return}
   goto(page)}
 /* ---- On-device answer engine: no API, no key, works offline over live data ---- */
 function localAnswer(q){const s=agentSnapshot();const t=(''+q).toLowerCase();const has=(...w)=>w.some(x=>t.includes(x));
@@ -5734,7 +5764,7 @@ function agentSnapshot(){try{
 
 /* ================= FEEDBACK (every screen → Brad, the super admin) ================= */
 let FEEDBACK=[], fbUnsub=null;
-const SCREEN_LABELS={'s-pulse':'Pulse','s-finance':'Financials','s-stock':'Stock','s-support':'Tickets','s-build':'Build','s-qc':'Release QC','s-chat':'Chat','s-crm':'CRM','s-comply':'Compliance','s-know':'Knowledge','s-field':'Field'};
+const SCREEN_LABELS={'s-invoices':'Invoices','s-pulse':'Pulse','s-finance':'Financials','s-stock':'Stock','s-support':'Tickets','s-build':'Build','s-qc':'Release QC','s-chat':'Chat','s-crm':'CRM','s-comply':'Compliance','s-know':'Knowledge','s-field':'Field'};
 let fbxFilter='open';
 function currentScreenId(){const el=document.querySelector('.screen.on');return el?el.id:'s-pulse'}
 function currentScreenLabel(){return SCREEN_LABELS[currentScreenId()]||'App'}
@@ -6546,7 +6576,7 @@ function financeAllowed(u){u=u||CURRENT_USER;if(!u)return false;const em=(u.emai
    dept (Google sign-ups, legacy accounts) keep the classic member nav. */
 const DEPTS=['ops','sales','tech'];
 const DEPT_COMMON=['s-pulse','s-chat','s-know','s-guides','s-feedback']; // everyone gets these
-const DEPT_TABS={ops:['s-stock','s-support'], sales:['s-crm','s-stock'], tech:['s-support','s-build','s-qc']};
+const DEPT_TABS={ops:['s-stock','s-support','s-invoices'], sales:['s-crm','s-stock','s-invoices'], tech:['s-support','s-build','s-qc']};
 function deptLabel(d){return {ops:'Ops',sales:'Sales',tech:'Tech'}[d]||''}
 function navAllowedIds(user){
   user=user||CURRENT_USER; if(!user)return null;
@@ -6562,7 +6592,7 @@ function navAllowedIds(user){
 const ICON_HOME='<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>';
 const NAV_GROUPS=[
   {id:'home',      label:'Home',       pages:['s-pulse'], svg:ICON_HOME},
-  {id:'customers', label:'Customers',  pages:['s-crm','s-support'], svg:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4a3.5 3.5 0 0 1 0 7M18 13.5a6 6 0 0 1 3.5 6.5"/>'},
+  {id:'customers', label:'Customers',  pages:['s-crm','s-support','s-invoices'], svg:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4a3.5 3.5 0 0 1 0 7M18 13.5a6 6 0 0 1 3.5 6.5"/>'},
   {id:'raise',     label:'Fundraise',  pages:['s-raise'], svg:'<path d="M12 2v20M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'},
   {id:'operations',label:'Operations', pages:['s-stock'], svg:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5" opacity=".55"/>'},
   {id:'product',   label:'Product',    pages:['s-build','s-qc','s-field','s-feedback'], svg:'<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>'},
@@ -6570,7 +6600,7 @@ const NAV_GROUPS=[
   {id:'resources', label:'Resources',  pages:['s-guides','s-know'], svg:'<path d="M2 5.5C4.5 4 8 4 11 5.5v14C8 18 4.5 18 2 19.5zM22 5.5C19.5 4 16 4 13 5.5v14c3-1.5 6.5-1.5 9 0z"/>'},
   {id:'settings',  label:'Settings',   pages:['s-users','s-comply','s-vault'], svg:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'},
 ];
-const PAGE_LABEL={'s-raise':'Fundraise','s-crm':'CRM','s-support':'Support','s-stock':'Stock & orders','s-build':'Build','s-qc':'Release QC','s-field':'Field','s-feedback':'Feedback',
+const PAGE_LABEL={'s-raise':'Fundraise','s-crm':'CRM','s-support':'Support','s-invoices':'Invoices & POs','s-stock':'Stock & orders','s-build':'Build','s-qc':'Release QC','s-field':'Field','s-feedback':'Feedback',
   's-finance':'Financials','s-guides':'Guides','s-know':'Knowledge','s-users':'Users','s-comply':'Compliance','s-vault':'Vault'};
 let NAV_ALLOWED=new Set(['s-pulse']), NAV_LAST={};
 function navGroupOf(id){return NAV_GROUPS.find(g=>g.pages.indexOf(id)>=0)||null}
@@ -6635,7 +6665,7 @@ function goto(id,btn){
   if(typeof id==='string'&&id.indexOf('s-guides:')===0){if(!guideLeaveOk())return;guideOpenId=id.slice(9);guideMode='read';guideVersionView=null;guideDirty=false;id='s-guides'}
   else if(id==='s-guides'&&btn&&guideMode!=='edit'){guideOpenId=null;guideMode='read'}
   if(typeof id==='string'&&id.indexOf('s-support:')===0){const tid=id.slice(10);goto('s-support');setTimeout(()=>openTicket(tid),60);return}
-  if(typeof id==='string'&&/^s-(chat|build|crm|raise|stock|feedback):/.test(id)){deepOpen(id);return}
+  if(typeof id==='string'&&/^s-(chat|build|crm|raise|stock|feedback|invoices):/.test(id)){deepOpen(id);return}
   const el=document.getElementById(id);if(!el)return;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));el.classList.add('on');
   syncNav(id);
@@ -6657,6 +6687,7 @@ function goto(id,btn){
   if(id==='s-users')renderUsers();
   if(id==='s-know')renderAgent();
   if(id==='s-guides')renderGuides();
+  if(id==='s-invoices')renderInvoices();
 }
 /* Notification deep links: 's-<screen>:<what>[:<id>]' lands on the exact
    record the alert is about, not just its screen. If the record is gone (or
@@ -6676,10 +6707,395 @@ function deepOpen(link){const p=link.split(':'),scr=p[0],a=p[1]||'',b=p.slice(2)
     if(a==='order'){const n='#'+b,o=ordersList().find(x=>x.n===n);stockTab=o&&!isFulfilled(o)?'fulfill':'orders';goto('s-stock');if(o)later(()=>openFulfill(n));return}
     if(a==='returns'){stockTab='returns';goto('s-stock');if(b&&RETURNS[b])later(()=>openReturnChecklist(b));return}
     if(['fulfill','inventory','forecast','orders'].includes(a))stockTab=a;goto('s-stock');return}
+  if(scr==='s-invoices'){invSettingsOpen=false;
+    if(a==='inv'&&b){invTab='invoices';poOpenId=null;poDraft=null;if(invOpenId!==b){invDraft=null;invDirty=false}invOpenId=b}
+    else if(a==='po'&&b){invTab='pos';invOpenId=null;invDraft=null;if(poOpenId!==b){poDraft=null;poDirty=false}poOpenId=b}
+    else{invOpenId=null;invDraft=null;poOpenId=null;poDraft=null;if(a==='pos')invTab='pos';else{invTab='invoices';if(['overdue','open','draft','paid','all'].includes(a))invFilter=a}}
+    goto('s-invoices');return}
   if(scr==='s-feedback'){fbxFilter=FEEDBACK.some(f=>f.id===a&&f.status==='resolved')?'all':'open';goto('s-feedback');
     if(a)later(()=>deepFlash('fbx-'+a));return}
   goto(scr)}
 function deepFlash(elId){const el=document.getElementById(elId);if(!el)return;el.scrollIntoView({block:'center',behavior:'smooth'});el.classList.add('deep-hit');setTimeout(()=>el.classList.remove('deep-hit'),2400)}
+
+/* ================= INVOICES & CUSTOMER POs =================
+   Customers → Invoices & POs. Invoices (`invoices`) and the purchase orders
+   customers send us (`customer_pos`) are team-shared like the CRM; Jared reads
+   only. Numbers come from counters/invoices, letterhead from settings/invoicing.
+   The PDF itself is drawn by the invoicePdf / sendInvoice Cloud Functions, so a
+   download and an emailed copy are the same document. */
+let INVOICES=[],CPOS=[],INVSET={},invUnsubs=[],invTab='invoices',invFilter='open',invQ='',invOpenId=null,poOpenId=null,invDraft=null,poDraft=null,invDirty=false,poDirty=false,invSettingsOpen=false,invLocalNext=0,invBusy=false,invLoaded=false,poLoaded=false;
+const INV_TERM_LIST=[['receipt','Due on receipt',0],['net15','Net 15',15],['net30','Net 30',30],['net45','Net 45',45],['net60','Net 60',60]];
+const PO_STAGES=[['received','Received'],['accepted','Accepted'],['shipped','Shipped'],['invoiced','Invoiced'],['closed','Closed']];
+const INV_PILL={draft:['dim','Draft'],sent:['wave','Sent'],partial:['wave','Part paid'],overdue:['amber','Overdue'],paid:['good','Paid'],void:['dim','Void']};
+const PAY_METHODS=['ACH','Check','Card','Wire','Amazon remittance','Other'];
+function invN(v){const n=Number(String(v==null?'':v).replace(/[^0-9.-]/g,''));return isFinite(n)?n:0}
+function money2(n){n=Math.round(invN(n)*100)/100;return (n<0?'-$':'$')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function invToday(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function invAddDays(ymd,n){const d=new Date((ymd||invToday())+'T12:00:00');d.setDate(d.getDate()+(n||0));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function invDay(ymd){return ymd?new Date(ymd+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}
+function invLines(x){return (x.items||[]).filter(i=>i&&(i.desc||invN(i.qty)||invN(i.price)))}
+function invTotals(inv){const items=invLines(inv);const subtotal=items.reduce((s,i)=>s+invN(i.qty)*invN(i.price),0);
+  const discount=Math.min(invN(inv.discount),subtotal),tax=(subtotal-discount)*invN(inv.taxRate)/100,shipping=invN(inv.shipping);
+  const total=Math.round((subtotal-discount+tax+shipping)*100)/100,paid=Math.round((inv.payments||[]).reduce((s,p)=>s+invN(p.amount),0)*100)/100;
+  return {items,subtotal,discount,tax,shipping,total,paid,balance:Math.round((total-paid)*100)/100}}
+function invState(inv){if(inv.status==='void')return 'void';if(!inv.status||inv.status==='draft')return 'draft';const T=invTotals(inv);
+  if(T.total>0&&T.balance<=0)return 'paid';if(inv.dueDate&&inv.dueDate<invToday())return 'overdue';return T.paid>0?'partial':'sent'}
+function invPill(inv){const p=INV_PILL[invState(inv)];return '<span class="pill '+p[0]+'">'+p[1]+'</span>'}
+function poTotal(po){const l=invLines(po);return l.length?Math.round(l.reduce((s,i)=>s+invN(i.qty)*invN(i.price),0)*100)/100:invN(po.amount)}
+function invWho(x){const b=x.billTo||{};return b.company||b.name||x.customer||'Customer'}
+function invCanEdit(){return !isObserver()}
+function invCanLetterhead(){return financeAllowed()}
+function invOpenInvoices(){return INVOICES.filter(i=>['sent','partial','overdue'].includes(invState(i)))}
+function invKpis(){const open=invOpenInvoices(),od=open.filter(i=>invState(i)==='overdue');const since=invAddDays(invToday(),-30);
+  let col=0;INVOICES.forEach(i=>{if(i.status==='void')return;(i.payments||[]).forEach(p=>{if((p.date||'')>=since)col+=invN(p.amount)})});
+  const openPO=CPOS.filter(p=>!['invoiced','closed'].includes(p.status||'received'));
+  return {outstanding:open.reduce((s,i)=>s+invTotals(i).balance,0),overdue:od.reduce((s,i)=>s+invTotals(i).balance,0),overdueN:od.length,collected:col,
+    drafts:INVOICES.filter(i=>invState(i)==='draft').length,openPO:openPO.length,openPOValue:openPO.reduce((s,p)=>s+poTotal(p),0)}}
+
+/* ---- live data ---- */
+function subscribeInvoices(){if(!hasFirestore())return;invUnsubs.forEach(u=>{try{u()}catch(e){}});invUnsubs=[];const fs=firebase.firestore();
+  try{invUnsubs.push(fs.collection('invoices').orderBy('createdAt','desc').limit(500).onSnapshot(qs=>{INVOICES=qs.docs.map(d=>Object.assign({id:d.id},d.data()));invLoaded=true;invRefresh()},()=>{}));
+    invUnsubs.push(fs.collection('customer_pos').orderBy('createdAt','desc').limit(500).onSnapshot(qs=>{CPOS=qs.docs.map(d=>Object.assign({id:d.id},d.data()));poLoaded=true;invRefresh()},()=>{}));
+    invUnsubs.push(fs.collection('settings').doc('invoicing').onSnapshot(s=>{INVSET=s.exists?(s.data()||{}):{}},()=>{}))}catch(e){}}
+let invRefreshT=null;
+function invRefresh(){clearTimeout(invRefreshT);invRefreshT=setTimeout(()=>{
+  const scr=document.getElementById('s-invoices');
+  // Never repaint an open editor (it would wipe what someone is typing); lists repaint live.
+  if(scr&&scr.classList.contains('on')&&((!invOpenId&&!poOpenId&&!invSettingsOpen)||(invOpenId&&!invDraft)||(poOpenId&&!poDraft)))renderInvoices();
+  if(typeof acctId!=='undefined'&&acctId&&document.getElementById('ac-billing'))renderBillingCard(findAcct(acctId));
+  if(typeof refreshPulse==='function')refreshPulse()},120)}
+
+/* ---- screen ---- */
+function invHead(h1,sub){const a=document.getElementById('inv-h1'),b=document.getElementById('inv-sub');if(a)a.textContent=h1;if(b)b.innerHTML=sub}
+function renderInvoices(){const body=document.getElementById('inv-body');if(!body)return;
+  if(invSettingsOpen){renderInvSettings(body);return}
+  if(invOpenId){if(!invDraft||invDraft.id!==invOpenId){const x=INVOICES.find(i=>i.id===invOpenId);if(!x&&invOpenId!=='new'){if(!invLoaded&&hasFirestore()){invHead('Invoice','Loading…');body.innerHTML='';return}invOpenId=null;return renderInvoices()}if(x){invDraft=JSON.parse(JSON.stringify(x));invDirty=false}}renderInvoiceEditor(body);return}
+  if(poOpenId){if(!poDraft||poDraft.id!==poOpenId){const x=CPOS.find(p=>p.id===poOpenId);if(!x&&poOpenId!=='new'){if(!poLoaded&&hasFirestore()){invHead('Customer PO','Loading…');body.innerHTML='';return}poOpenId=null;return renderInvoices()}if(x){poDraft=JSON.parse(JSON.stringify(x));poDirty=false}}renderPOEditor(body);return}
+  invHead('Invoices & POs','Bill customers and keep the purchase orders they send. PDFs and emails go out on Safewave <a onclick="invSettingsOpen=true;renderInvoices()" style="color:var(--wave);cursor:pointer;font-weight:600">letterhead</a>.');
+  const k=invKpis(),ro=!invCanEdit();
+  const tab=(id,l,n)=>'<button class="chip'+(invTab===id?' on':'')+'" onclick="invTab=\''+id+'\';renderInvoices()">'+l+(n?' · '+n:'')+'</button>';
+  let h='<div class="kpi-strip">'
+    +kpiCell(fmtMoney(k.outstanding),'Outstanding')
+    +'<div class="kc"><div class="n"'+(k.overdueN?' style="color:var(--amber)"':'')+'>'+esc(fmtMoney(k.overdue))+'</div><div class="l">Overdue'+(k.overdueN?' · '+k.overdueN:'')+'</div></div>'
+    +kpiCell(fmtMoney(k.collected),'Collected · 30 days')
+    +kpiCell(k.openPO?(k.openPO+' · '+fmtMoney(k.openPOValue)):'0','Open customer POs')
+  +'</div>'
+  +'<div class="chips">'+tab('invoices','Invoices',INVOICES.length)+tab('pos','Customer POs',CPOS.length)+'</div>'
+  +'<div class="row" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+    +'<div class="searchbar" style="flex:1;min-width:0;margin:0"><input id="inv-q" placeholder="'+(invTab==='pos'?'Search POs':'Search invoices')+' — customer, number, PO" value="'+esc(invQ)+'" oninput="invQ=this.value;invPaintList()"></div>'
+    +(ro?'':'<button class="btn" style="width:auto;white-space:nowrap" onclick="'+(invTab==='pos'?'newPO()':'newInvoice()')+'">＋ '+(invTab==='pos'?'Log a PO':'New invoice')+'</button>')
+  +'</div>';
+  if(invTab==='invoices'){const f=(id,l)=>'<button class="chip'+(invFilter===id?' on':'')+'" onclick="invFilter=\''+id+'\';renderInvoices()">'+l+'</button>';
+    h+='<div class="chips" style="margin-bottom:10px">'+f('open','Open')+f('overdue','Overdue')+f('draft','Drafts')+f('paid','Paid')+f('void','Void')+f('all','All')+'</div>'}
+  h+='<div id="inv-list"></div>';
+  if(ro)h+='<div class="note" style="margin-top:12px">View-only: you can open and download invoices, but not create or change them.</div>';
+  body.innerHTML=h;invPaintList()}
+function invMatch(x,q){if(!q)return true;q=q.toLowerCase();const b=x.billTo||{};return [x.number,b.company,b.name,b.email,x.poNumber,x.customer,x.notes].some(v=>(v||'').toLowerCase().includes(q))}
+function invPaintList(){const el=document.getElementById('inv-list');if(!el)return;
+  if(invTab==='pos'){const list=CPOS.filter(p=>invMatch(p,invQ));
+    el.innerHTML=list.length?list.map(poRowHTML).join(''):'<div class="empty">'+(CPOS.length?'No POs match.':'No customer POs yet. When a customer sends a purchase order, log it here with the PDF so it’s in one place and can be invoiced in a tap.')+'</div>';return}
+  const st=i=>invState(i);
+  const list=INVOICES.filter(i=>invMatch(i,invQ)).filter(i=>invFilter==='all'?true:invFilter==='open'?['draft','sent','partial','overdue'].includes(st(i)):invFilter==='paid'?st(i)==='paid':invFilter==='draft'?st(i)==='draft':invFilter==='overdue'?st(i)==='overdue':st(i)==='void')
+    .sort((a,b)=>{const r=s=>({overdue:0,partial:1,sent:2,draft:3,paid:4,void:5})[st(s)];return r(a)-r(b)||(b.issueDate||'').localeCompare(a.issueDate||'')});
+  el.innerHTML=list.length?list.map(invRowHTML).join(''):'<div class="empty">'+(INVOICES.length?'Nothing here.':'No invoices yet. Tap New invoice: pick the customer, add the bands or seats, and download or email the PDF.')+'</div>'}
+function invRowHTML(i){const T=invTotals(i),s=invState(i);
+  const due=s==='paid'?'paid':(i.dueDate?(s==='overdue'?'was due ':'due ')+invDay(i.dueDate):'');
+  return '<div class="card tap bill-row" tabindex="0" onclick="openInvoice(\''+i.id+'\')"><div class="row"><div class="grow" style="min-width:0"><div class="t">'+esc(invWho(i))+'</div>'
+    +'<div class="d">'+esc([i.number||'Draft',due,i.poNumber?'PO '+i.poNumber:''].filter(Boolean).join(' · '))+'</div></div>'
+    +'<div style="text-align:right;flex-shrink:0"><div class="t" style="font-variant-numeric:tabular-nums">'+money2(['paid','void'].includes(s)?T.total:T.balance)+'</div>'+invPill(i)+'</div></div></div>'}
+function poRowHTML(p){const st=PO_STAGES.find(x=>x[0]===(p.status||'received'))||PO_STAGES[0];const inv=INVOICES.filter(i=>i.poId===p.id&&i.status!=='void');
+  return '<div class="card tap bill-row" tabindex="0" onclick="openPO(\''+p.id+'\')"><div class="row"><div class="grow" style="min-width:0"><div class="t">'+esc(p.customer||'Customer')+'</div>'
+    +'<div class="d">'+esc(['PO '+(p.number||'—'),p.received?'received '+invDay(p.received):'',p.shipBy?'ship by '+invDay(p.shipBy):'',(p.files||[]).length?'📎 '+p.files.length:'',inv.length?'🧾 '+inv.map(i=>i.number).join(', '):''].filter(Boolean).join(' · '))+'</div></div>'
+    +'<div style="text-align:right;flex-shrink:0"><div class="t" style="font-variant-numeric:tabular-nums">'+money2(poTotal(p))+'</div><span class="pill '+(['invoiced','closed'].includes(st[0])?'dim':'wave')+'">'+st[1]+'</span></div></div></div>'}
+
+/* ---- shared: CRM account picker + line items ---- */
+function invAcctOptions(){return (CRMA||[]).filter(a=>a.board!=='Fundraise'&&!a.archived).map(a=>'<option value="'+esc(displayName(a))+'">').join('')}
+function invAcctByName(n){n=(n||'').trim().toLowerCase();if(!n)return null;return (CRMA||[]).find(a=>a.board!=='Fundraise'&&displayName(a).toLowerCase()===n)||null}
+function lnDraft(k){return k==='po'?poDraft:invDraft}
+function lnDirty(k){if(k==='po')poDirty=true;else invDirty=true}
+function linesHTML(k){const d=lnDraft(k),ro=!invCanEdit(),dis=ro?' disabled':'';
+  return '<div id="'+k+'-lines">'+(d.items||[]).map((it,i)=>'<div class="inv-line">'
+    +'<input class="field il-desc" aria-label="Description" placeholder="Description" value="'+esc(it.desc||'')+'" oninput="lnSet(\''+k+'\','+i+',\'desc\',this.value)"'+dis+'>'
+    +'<input class="field il-qty" aria-label="Quantity" type="number" inputmode="decimal" min="0" step="any" placeholder="Qty" value="'+esc(String(it.qty==null?'':it.qty))+'" oninput="lnSet(\''+k+'\','+i+',\'qty\',this.value)"'+dis+'>'
+    +'<input class="field il-price" aria-label="Unit price" type="number" inputmode="decimal" step="0.01" placeholder="Unit $" value="'+esc(String(it.price==null?'':it.price))+'" oninput="lnSet(\''+k+'\','+i+',\'price\',this.value)"'+dis+'>'
+    +'<div class="il-amt" id="'+k+'-amt-'+i+'">'+money2(invN(it.qty)*invN(it.price))+'</div>'
+    +(ro?'<span></span>':'<button class="il-x" type="button" aria-label="Remove line" onclick="lnDel(\''+k+'\','+i+')">✕</button>')+'</div>').join('')+'</div>'
+    +(ro?'':'<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:4px">'
+      +'<button class="btn ghost sm" type="button" onclick="lnAdd(\''+k+'\')">＋ Line</button>'
+      +['S','M','L'].map(z=>'<button class="btn ghost sm" type="button" onclick="lnAdd(\''+k+'\',\'Safewave Band — '+SIZELABEL[z]+'\',INVSET.bandPrice)">＋ Band '+z+'</button>').join('')
+      +'<button class="btn ghost sm" type="button" onclick="lnAdd(\''+k+'\',\'Safewave app — business seats, 12 months\',INVSET.seatPrice)">＋ App seats</button>'
+    +'</div>')}
+function lnSet(k,i,f,v){const d=lnDraft(k);if(!d||!d.items[i])return;d.items[i][f]=v;lnDirty(k);
+  const a=document.getElementById(k+'-amt-'+i);if(a)a.textContent=money2(invN(d.items[i].qty)*invN(d.items[i].price));(k==='po'?poPaintTotal:invPaintTotals)()}
+function lnRepaint(k){const el=document.getElementById(k+'-lines-wrap');if(el)el.innerHTML=linesHTML(k);(k==='po'?poPaintTotal:invPaintTotals)()}
+function lnAdd(k,desc,price){const d=lnDraft(k);d.items=(d.items||[]).concat([{desc:desc||'',qty:1,price:price==null?'':price}]);lnDirty(k);lnRepaint(k);
+  const ins=document.querySelectorAll('#'+k+'-lines .inv-line');const last=ins[ins.length-1];if(last){const f=last.querySelector(desc?'.il-qty':'.il-desc');if(f)f.focus()}}
+function lnDel(k,i){const d=lnDraft(k);d.items.splice(i,1);if(!d.items.length)d.items=[{desc:'',qty:1,price:''}];lnDirty(k);lnRepaint(k)}
+
+/* ---- invoice editor ---- */
+function newInvoiceDraft(pre){const terms=INVSET.terms||'net30',iss=invToday(),days=(INV_TERM_LIST.find(t=>t[0]===terms)||INV_TERM_LIST[2])[2];
+  return Object.assign({id:'new',number:'',status:'draft',accountId:'',billTo:{company:'',name:'',email:'',address:''},shipTo:{company:'',name:'',address:''},poId:'',poNumber:'',
+    issueDate:iss,terms:terms,dueDate:invAddDays(iss,days),items:[{desc:'',qty:1,price:''}],discount:'',taxRate:INVSET.taxRate||'',shipping:'',notes:INVSET.notes||'',payments:[],history:[]},pre||{})}
+function invLeaveOk(){if((invOpenId&&invDirty)||(poOpenId&&poDirty))return confirm('Leave without saving your changes?');return true}
+function newInvoice(pre){if(!invCanEdit())return;if(!invLeaveOk())return;invDraft=newInvoiceDraft(pre);invDirty=!!pre;invOpenId='new';poOpenId=null;poDraft=null;invSettingsOpen=false;
+  if(!document.getElementById('s-invoices').classList.contains('on'))goto('s-invoices');else renderInvoices();window.scrollTo(0,0)}
+function openInvoice(id){if(!invLeaveOk())return;invDraft=null;invDirty=false;invOpenId=id;poOpenId=null;poDraft=null;invSettingsOpen=false;
+  if(!document.getElementById('s-invoices').classList.contains('on'))goto('s-invoices');else renderInvoices();window.scrollTo(0,0)}
+function closeInvoice(){if(!invLeaveOk())return;invOpenId=null;invDraft=null;invDirty=false;renderInvoices();window.scrollTo(0,0)}
+function invSet(path,v){const d=invDraft;if(!d)return;const p=path.split('.');let o=d;for(let i=0;i<p.length-1;i++){o[p[i]]=o[p[i]]||{};o=o[p[i]]}o[p[p.length-1]]=v;invDirty=true;
+  if(path==='terms'||path==='issueDate'){const t=INV_TERM_LIST.find(x=>x[0]===d.terms);if(t){d.dueDate=invAddDays(d.issueDate,t[2]);const e=document.getElementById('iv-due');if(e)e.value=d.dueDate}}
+  if(['discount','taxRate','shipping'].includes(path))invPaintTotals()}
+function invPickAccount(name){const a=invAcctByName(name);if(!a){invSet('billTo.company',name);return}
+  const c=(a.contacts||[])[0]||{};invDraft.accountId=a.id;
+  invDraft.billTo=Object.assign({},invDraft.billTo,{company:displayName(a),name:invDraft.billTo.name||c.name||a.contact||'',email:invDraft.billTo.email||c.email||a.email||'',address:invDraft.billTo.address||a.address||a.location||''});
+  invDirty=true;const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v||''};
+  set('iv-co',invDraft.billTo.company);set('iv-nm',invDraft.billTo.name);set('iv-em',invDraft.billTo.email);set('iv-ad',invDraft.billTo.address);invPaintPOPick()}
+function invPOOptions(){const d=invDraft;const pos=CPOS.filter(p=>!d.accountId||p.accountId===d.accountId||p.id===d.poId);
+  return '<option value="">— None —</option>'+pos.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===d.poId?' selected':'')+'>PO '+esc(p.number||'')+' · '+esc(p.customer||'')+' · '+money2(poTotal(p))+'</option>').join('')}
+function invPaintPOPick(){const e=document.getElementById('iv-po');if(e)e.innerHTML=invPOOptions()}
+function invPickPO(id){const p=CPOS.find(x=>x.id===id);invDraft.poId=id||'';if(p){invDraft.poNumber=p.number||'';const e=document.getElementById('iv-pon');if(e)e.value=invDraft.poNumber}invDirty=true}
+function invPaintTotals(){const el=document.getElementById('inv-totals');if(!el||!invDraft)return;const T=invTotals(invDraft);
+  let r='<tr><th>Subtotal</th><td>'+money2(T.subtotal)+'</td></tr>';
+  if(T.discount)r+='<tr><th>Discount</th><td>-'+money2(T.discount)+'</td></tr>';
+  if(invN(invDraft.taxRate))r+='<tr><th>Tax <small>'+invN(invDraft.taxRate)+'%</small></th><td>'+money2(T.tax)+'</td></tr>';
+  if(T.shipping)r+='<tr><th>Shipping</th><td>'+money2(T.shipping)+'</td></tr>';
+  r+='<tr><th><b>Total</b></th><td>'+money2(T.total)+'</td></tr>';
+  if(T.paid)r+='<tr><th>Paid</th><td>-'+money2(T.paid)+'</td></tr>';
+  r+='<tr class="hl"><th>Balance due</th><td>'+money2(T.balance)+'</td></tr>';
+  el.innerHTML='<table class="frows"><tbody>'+r+'</tbody></table>'}
+function renderInvoiceEditor(body){const d=invDraft,ro=!invCanEdit(),dis=ro?' disabled':'',saved=d.id&&d.id!=='new',st=invState(d);
+  invHead(saved?(d.number||'Invoice'):'New invoice','<a onclick="closeInvoice()" style="color:var(--wave);cursor:pointer;font-weight:600">← All invoices</a>');
+  const b=d.billTo||{},sh=d.shipTo||{};
+  const terms=INV_TERM_LIST.map(t=>'<option value="'+t[0]+'"'+(d.terms===t[0]?' selected':'')+'>'+t[1]+'</option>').join('');
+  let h='<div class="row" style="gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">'+invPill(d)
+    +(d.sentAt?'<span class="d" style="color:var(--muted)">Sent '+esc(new Date(d.sentAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}))+(d.sentTo?' to '+esc(d.sentTo):'')+'</span>':'')+'</div>';
+  if(saved)h+='<div class="crm-acts" style="margin-bottom:14px">'
+    +'<button class="btn" onclick="invDownload()">⬇︎ Download PDF</button>'
+    +(ro||st==='void'?'':'<button class="btn ghost" onclick="invEmailOpen()">✉️ Email invoice</button>')
+    +(ro||st==='void'||st==='paid'?'':'<button class="btn ghost" onclick="invPayOpen()">＋ Record payment</button>')
+    +'</div><div id="inv-email"></div><div id="inv-pay"></div>';
+  h+='<div class="acct-grid"><div class="acct-col">'
+    +'<div class="card"><div class="sec-head"><h2>Bill to</h2></div>'
+      +'<label class="flabel" for="iv-co">Customer (type to find a CRM account)</label><input class="field" id="iv-co" list="iv-accts" autocomplete="off" value="'+esc(b.company||'')+'" onchange="invPickAccount(this.value)" oninput="invSet(\'billTo.company\',this.value)"'+dis+'><datalist id="iv-accts">'+invAcctOptions()+'</datalist>'
+      +'<div class="inv-fr"><div><label class="flabel" for="iv-nm">Attention</label><input class="field" id="iv-nm" placeholder="Accounts payable" value="'+esc(b.name||'')+'" oninput="invSet(\'billTo.name\',this.value)"'+dis+'></div>'
+      +'<div style="flex:1;min-width:0"><label class="flabel" for="iv-em">Email</label><input class="field" id="iv-em" type="email" placeholder="ap@customer.com" value="'+esc(b.email||'')+'" oninput="invSet(\'billTo.email\',this.value)"'+dis+'></div></div>'
+      +'<label class="flabel" for="iv-ad">Address</label><textarea class="field" id="iv-ad" rows="3" placeholder="Street\nCity, State ZIP" oninput="invSet(\'billTo.address\',this.value)"'+dis+'>'+esc(b.address||'')+'</textarea>'
+      +'<details class="side-panel" style="margin-top:4px"'+((sh.address||sh.company)?' open':'')+'><summary>Ship to (if different)</summary>'
+        +'<label class="flabel" for="iv-sco">Company</label><input class="field" id="iv-sco" value="'+esc(sh.company||'')+'" oninput="invSet(\'shipTo.company\',this.value)"'+dis+'>'
+        +'<label class="flabel" for="iv-sad">Address</label><textarea class="field" id="iv-sad" rows="3" oninput="invSet(\'shipTo.address\',this.value)"'+dis+'>'+esc(sh.address||'')+'</textarea></details>'
+    +'</div>'
+    +'<div class="card"><div class="sec-head"><h2>Dates &amp; PO</h2></div>'
+      +'<div class="inv-fr"><div><label class="flabel" for="iv-iss">Issued</label><input class="field" id="iv-iss" type="date" value="'+esc(d.issueDate||'')+'" onchange="invSet(\'issueDate\',this.value)"'+dis+'></div>'
+      +'<div style="flex:1;min-width:0"><label class="flabel" for="iv-terms">Terms</label><select class="field" id="iv-terms" onchange="invSet(\'terms\',this.value)"'+dis+'>'+terms+'</select></div>'
+      +'<div style="flex:1;min-width:0"><label class="flabel" for="iv-due">Due</label><input class="field" id="iv-due" type="date" value="'+esc(d.dueDate||'')+'" onchange="invSet(\'dueDate\',this.value)"'+dis+'></div></div>'
+      +'<div class="inv-fr"><div><label class="flabel" for="iv-po">Customer PO on file</label><select class="field" id="iv-po" onchange="invPickPO(this.value)"'+dis+'>'+invPOOptions()+'</select></div>'
+      +'<div style="flex:1;min-width:0"><label class="flabel" for="iv-pon">PO number</label><input class="field" id="iv-pon" value="'+esc(d.poNumber||'')+'" oninput="invSet(\'poNumber\',this.value)"'+dis+'></div></div>'
+    +'</div>'
+  +'</div><div class="acct-col">'
+    +'<div class="card"><div class="sec-head"><h2>Items</h2></div><div id="inv-lines-wrap">'+linesHTML('inv')+'</div>'
+      +'<div class="row" style="gap:8px;margin-top:12px"><div style="flex:1;min-width:0"><label class="flabel" for="iv-disc">Discount $</label><input class="field" id="iv-disc" type="number" inputmode="decimal" step="0.01" value="'+esc(String(d.discount||''))+'" oninput="invSet(\'discount\',this.value)"'+dis+'></div>'
+      +'<div style="flex:1;min-width:0"><label class="flabel" for="iv-tax">Tax %</label><input class="field" id="iv-tax" type="number" inputmode="decimal" step="0.01" value="'+esc(String(d.taxRate||''))+'" oninput="invSet(\'taxRate\',this.value)"'+dis+'></div>'
+      +'<div style="flex:1;min-width:0"><label class="flabel" for="iv-ship">Shipping $</label><input class="field" id="iv-ship" type="number" inputmode="decimal" step="0.01" value="'+esc(String(d.shipping||''))+'" oninput="invSet(\'shipping\',this.value)"'+dis+'></div></div>'
+      +'<div id="inv-totals"></div>'
+    +'</div>'
+    +'<div class="card"><div class="sec-head"><h2>Note to customer</h2></div><textarea class="field" id="iv-notes" rows="3" placeholder="Shows on the invoice, e.g. ship date or thank-you" style="margin:0" oninput="invSet(\'notes\',this.value)"'+dis+'>'+esc(d.notes||'')+'</textarea></div>'
+    +(saved?invPaymentsCard(d):'')
+    +(saved&&(d.history||[]).length?'<div class="card"><div class="sec-head"><h2>History</h2></div>'+(d.history||[]).slice().reverse().slice(0,12).map(x=>'<div class="note" style="margin-top:6px"><div class="meta">'+esc([x.by,x.at?new Date(x.at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):''].filter(Boolean).join(' · '))+'</div>'+esc(x.text||'')+'</div>').join('')+'</div>':'')
+  +'</div></div>';
+  if(!ro){h+='<div class="inv-savebar"><button class="btn" onclick="saveInvoice()">'+(saved?'Save changes':'Save invoice')+'</button>';
+    if(saved&&st==='draft')h+='<button class="btn ghost" onclick="invMarkSent()">Mark as sent</button><button class="btn ghost" onclick="invDeleteDraft()">Delete draft</button>';
+    if(saved&&!['draft','void'].includes(st))h+='<button class="btn ghost" onclick="invVoid()">Void</button>';
+    h+='</div>';
+    if(saved&&st!=='draft')h+='<p class="d" style="color:var(--muted);margin-top:8px">Changes to a sent invoice are kept in its history. To cancel it, void it: sent invoices are never deleted.</p>'}
+  body.innerHTML=h;invPaintTotals()}
+function invPaymentsCard(d){const ps=d.payments||[];
+  return '<div class="card"><div class="sec-head"><h2>Payments</h2><span class="pill '+(ps.length?'good':'dim')+'">'+ps.length+'</span></div>'
+    +(ps.length?'<table class="frows"><tbody>'+ps.map(p=>'<tr><th>'+esc(invDay(p.date))+'<small>'+esc([p.method,p.ref].filter(Boolean).join(' · '))+'</small></th><td>'+money2(p.amount)+'</td></tr>').join('')+'</tbody></table>'
+      :'<div class="d" style="color:var(--faint)">No payments recorded yet.</div>')+'</div>'}
+async function invSaveRecord(d,histText){const now=new Date().toISOString(),me=(CURRENT_USER&&CURRENT_USER.name)||'';const T=invTotals(d);
+  const rec=JSON.parse(JSON.stringify(d));delete rec.id;
+  rec.items=invLines(d).map(i=>({desc:i.desc||'',qty:invN(i.qty),price:invN(i.price)}));
+  rec.discount=invN(d.discount);rec.taxRate=invN(d.taxRate);rec.shipping=invN(d.shipping);
+  rec.total=T.total;rec.paid=T.paid;rec.balance=T.balance;rec.updatedAt=now;rec.updatedBy=me;
+  if(histText)rec.history=(rec.history||[]).concat([{at:now,by:me,text:histText}]);
+  if(hasFirestore())await firebase.firestore().collection('invoices').doc(d.id).set(rec);
+  const i=INVOICES.findIndex(x=>x.id===d.id),full=Object.assign({id:d.id},rec);if(i>=0)INVOICES[i]=full;else INVOICES.unshift(full);
+  invDraft=JSON.parse(JSON.stringify(full));invDirty=false;return full}
+async function claimInvoiceNumber(){const start=invN(INVSET.startNumber)||1001,pre=(INVSET.prefix||'INV-');
+  if(!hasFirestore()){invLocalNext=Math.max(invLocalNext,start);return pre+(invLocalNext++)}
+  const ref=firebase.firestore().collection('counters').doc('invoices');
+  const n=await firebase.firestore().runTransaction(async t=>{const s=await t.get(ref);const cur=s.exists?invN(s.data().next):0;const n=Math.max(cur,start);t.set(ref,{next:n+1},{merge:true});return n});
+  return pre+n}
+async function saveInvoice(quiet){if(!invCanEdit()||invBusy)return null;const d=invDraft;if(!d)return null;
+  if(!((d.billTo||{}).company||(d.billTo||{}).name)){toast('Who is this invoice for?');const e=document.getElementById('iv-co');if(e)e.focus();return null}
+  if(!invLines(d).length){toast('Add at least one item');return null}
+  invBusy=true;
+  try{let hist='Edited';
+    if(!d.id||d.id==='new'){d.id='inv'+Date.now().toString(36);d.number=await claimInvoiceNumber();d.createdAt=new Date().toISOString();d.createdBy=(CURRENT_USER&&CURRENT_USER.name)||'';d.createdByUid=(CURRENT_USER&&CURRENT_USER.uid)||'';d.status=d.status||'draft';hist='Created';}
+    else if(!invDirty){invBusy=false;if(!quiet)toast('Nothing to save');return d}
+    const was=INVOICES.find(x=>x.id===d.id);
+    const full=await invSaveRecord(d,hist);invOpenId=full.id;
+    if(full.poId&&(!was||was.poId!==full.poId))poLinkInvoice(full.poId,full.id);
+    if(!quiet){toast('✓ Saved '+full.number);renderInvoices()}
+    return full}
+  catch(e){toast('Save failed — '+((e&&e.code)||(e&&e.message)||'try again'));return null}
+  finally{invBusy=false}}
+function poLinkInvoice(poId,invId){const p=CPOS.find(x=>x.id===poId);if(!p)return;p.invoiceIds=Array.from(new Set((p.invoiceIds||[]).concat([invId])));
+  if(['received','accepted','shipped'].includes(p.status||'received'))p.status='invoiced';
+  if(hasFirestore())firebase.firestore().collection('customer_pos').doc(poId).set({invoiceIds:p.invoiceIds,status:p.status},{merge:true}).catch(()=>{})}
+async function invEnsureSaved(){if(invDraft&&(invDraft.id==='new'||invDirty))return await saveInvoice(true);return invDraft}
+async function invMarkSent(){const d=await invEnsureSaved();if(!d)return;invDraft.status='sent';invDraft.sentAt=new Date().toISOString();invDirty=true;
+  try{await invSaveRecord(invDraft,'Marked as sent');toast('✓ Marked as sent');renderInvoices()}catch(e){toast('Save failed')}}
+async function invVoid(){if(!confirm('Void '+(invDraft.number||'this invoice')+'? It stays on record but nothing is owed.'))return;invDraft.status='void';invDirty=true;
+  try{await invSaveRecord(invDraft,'Voided');toast('Voided');renderInvoices()}catch(e){toast('Save failed')}}
+async function invDeleteDraft(){if(!confirm('Delete this draft? This can’t be undone.'))return;const id=invDraft.id;
+  try{if(hasFirestore())await firebase.firestore().collection('invoices').doc(id).delete();INVOICES=INVOICES.filter(x=>x.id!==id);invOpenId=null;invDraft=null;invDirty=false;toast('Draft deleted');renderInvoices()}
+  catch(e){toast('Delete failed — '+((e&&e.code)||''))}}
+function invPayOpen(){const el=document.getElementById('inv-pay');if(!el)return;if(el.innerHTML){el.innerHTML='';return}const T=invTotals(invDraft);
+  el.innerHTML='<div class="card"><div class="sec-head"><h2>Record a payment</h2></div>'
+    +'<div class="inv-fr"><div><label class="flabel" for="pay-amt">Amount</label><input class="field" id="pay-amt" type="number" inputmode="decimal" step="0.01" value="'+(T.balance>0?T.balance.toFixed(2):'')+'"></div>'
+    +'<div style="flex:1;min-width:0"><label class="flabel" for="pay-date">Date received</label><input class="field" id="pay-date" type="date" value="'+invToday()+'"></div></div>'
+    +'<div class="inv-fr"><div><label class="flabel" for="pay-method">Method</label><select class="field" id="pay-method">'+PAY_METHODS.map(m=>'<option>'+m+'</option>').join('')+'</select></div>'
+    +'<div style="flex:1;min-width:0"><label class="flabel" for="pay-ref">Reference</label><input class="field" id="pay-ref" placeholder="Check # or transaction ID"></div></div>'
+    +'<button class="btn" onclick="invRecordPayment()">Save payment</button></div>';
+  const a=document.getElementById('pay-amt');if(a)a.focus()}
+async function invRecordPayment(){const amt=invN(document.getElementById('pay-amt').value);if(!(amt>0)){toast('Enter the amount received');return}
+  const d=await invEnsureSaved();if(!d)return;
+  const p={date:document.getElementById('pay-date').value||invToday(),amount:Math.round(amt*100)/100,method:document.getElementById('pay-method').value,ref:document.getElementById('pay-ref').value.trim(),by:(CURRENT_USER&&CURRENT_USER.name)||'',at:new Date().toISOString()};
+  invDraft.payments=(invDraft.payments||[]).concat([p]);if(!invDraft.status||invDraft.status==='draft')invDraft.status='sent';invDirty=true;
+  try{const full=await invSaveRecord(invDraft,'Payment '+money2(p.amount)+' ('+p.method+(p.ref?' '+p.ref:'')+')');const T=invTotals(full);
+    if(T.balance<=0&&full.createdByUid&&full.createdByUid!==(CURRENT_USER&&CURRENT_USER.uid))notify(full.createdByUid,'Invoice paid: '+full.number,invWho(full)+' · '+money2(T.total),'s-invoices:inv:'+full.id);
+    toast(T.balance<=0?'✓ Paid in full':'✓ Payment saved · '+money2(T.balance)+' left');renderInvoices()}
+  catch(e){toast('Save failed — '+((e&&e.code)||''))}}
+function invEmailOpen(){const el=document.getElementById('inv-email');if(!el)return;if(el.innerHTML){el.innerHTML='';return}const d=invDraft,T=invTotals(d);
+  const msg='Hello'+((d.billTo||{}).name?' '+d.billTo.name.split(' ')[0]:'')+',\n\nPlease find attached invoice '+(d.number||'')+' for '+money2(T.balance)+', due '+(invDay(d.dueDate)||'on receipt')+'.'+(d.poNumber?' It covers your PO '+d.poNumber+'.':'')+'\n\nThank you!';
+  const viaInbox=(typeof inboxOn==='function'&&inboxOn());
+  el.innerHTML='<div class="card"><div class="sec-head"><h2>Email this invoice</h2><span class="pill dim">PDF attached</span></div>'
+    +'<label class="flabel" for="ie-to">To</label><input class="field" id="ie-to" type="email" multiple value="'+esc((d.billTo||{}).email||'')+'" placeholder="ap@customer.com">'
+    +'<label class="flabel" for="ie-msg">Message</label><textarea class="field" id="ie-msg" rows="5">'+esc(msg)+'</textarea>'
+    +'<div class="d" style="color:var(--muted);margin-bottom:10px">'+(viaInbox?'Sends from the shared sales@ mailbox.':'Sends from your connected email (connect sales@ in Support to send from it).')+'</div>'
+    +'<button class="btn" id="ie-send" onclick="invSendEmail()">Send invoice</button></div>'}
+async function invSendEmail(){const to=document.getElementById('ie-to').value.trim();if(!/@/.test(to)){toast('Add the customer’s email');return}
+  if(!hasFirestore()||!firebase.functions){toast('Email needs the live app');return}
+  const d=await invEnsureSaved();if(!d)return;const btn=document.getElementById('ie-send');if(btn){btn.disabled=true;btn.textContent='Sending…'}
+  try{const r=await firebase.functions().httpsCallable('sendInvoice')({id:d.id,to:to,message:document.getElementById('ie-msg').value});
+    if(invDraft&&invDraft.id===d.id){invDraft.status=invDraft.status==='draft'?'sent':invDraft.status;invDraft.sentAt=new Date().toISOString();invDraft.sentTo=to;invDirty=false}
+    toast('✓ Sent from '+((r&&r.data&&r.data.from)||'your email'));renderInvoices()}
+  catch(e){toast((e&&e.message)||'Send failed');if(btn){btn.disabled=false;btn.textContent='Send invoice'}}}
+async function invDownload(){const d=await invEnsureSaved();if(!d)return;
+  if(!hasFirestore()||!firebase.functions){toast('PDF needs the live app');return}
+  toast('Preparing PDF…');
+  try{const r=await firebase.functions().httpsCallable('invoicePdf')({id:d.id});const bin=atob(r.data.pdf);const u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);
+    const url=URL.createObjectURL(new Blob([u8],{type:'application/pdf'}));const a=document.createElement('a');a.href=url;a.download=r.data.name||'invoice.pdf';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)}
+  catch(e){toast('PDF failed — '+((e&&e.message)||'try again'))}}
+
+/* ---- customer PO editor ---- */
+function newPODraft(pre){return Object.assign({id:'new',number:'',accountId:'',customer:'',received:invToday(),shipBy:'',status:'received',items:[{desc:'',qty:1,price:''}],amount:'',notes:'',files:[],invoiceIds:[]},pre||{})}
+function newPO(pre){if(!invCanEdit())return;if(!invLeaveOk())return;poDraft=newPODraft(pre);poDirty=!!pre;poOpenId='new';invOpenId=null;invDraft=null;invSettingsOpen=false;invTab='pos';
+  if(!document.getElementById('s-invoices').classList.contains('on'))goto('s-invoices');else renderInvoices();window.scrollTo(0,0)}
+function openPO(id){if(!invLeaveOk())return;poDraft=null;poDirty=false;poOpenId=id;invOpenId=null;invDraft=null;invSettingsOpen=false;invTab='pos';
+  if(!document.getElementById('s-invoices').classList.contains('on'))goto('s-invoices');else renderInvoices();window.scrollTo(0,0)}
+function closePO(){if(!invLeaveOk())return;poOpenId=null;poDraft=null;poDirty=false;renderInvoices();window.scrollTo(0,0)}
+function poSet(k,v){if(!poDraft)return;poDraft[k]=v;poDirty=true;if(k==='amount')poPaintTotal()}
+function poPickAccount(name){const a=invAcctByName(name);poDraft.customer=name;if(a)poDraft.accountId=a.id;poDirty=true}
+function poPaintTotal(){const el=document.getElementById('po-total');if(!el||!poDraft)return;const hasLines=invLines(poDraft).length;
+  el.innerHTML='<table class="frows"><tbody><tr class="hl"><th>PO total'+(hasLines?'':' <small>no lines — uses the amount below</small>')+'</th><td>'+money2(poTotal(poDraft))+'</td></tr></tbody></table>'}
+function renderPOEditor(body){const d=poDraft,ro=!invCanEdit(),dis=ro?' disabled':'',saved=d.id&&d.id!=='new';
+  invHead(saved?('PO '+(d.number||'')):'Log a customer PO','<a onclick="closePO()" style="color:var(--wave);cursor:pointer;font-weight:600">← All POs</a>');
+  const inv=INVOICES.filter(i=>i.poId===d.id||(d.invoiceIds||[]).includes(i.id));
+  let h='<div class="acct-grid"><div class="acct-col">'
+    +'<div class="card"><div class="sec-head"><h2>Purchase order</h2></div>'
+      +'<label class="flabel" for="po-co">Customer (type to find a CRM account)</label><input class="field" id="po-co" list="po-accts" autocomplete="off" value="'+esc(d.customer||'')+'" onchange="poPickAccount(this.value)" oninput="poSet(\'customer\',this.value)"'+dis+'><datalist id="po-accts">'+invAcctOptions()+'</datalist>'
+      +'<div class="inv-fr"><div><label class="flabel" for="po-num">Their PO number</label><input class="field" id="po-num" placeholder="e.g. 4500018231" value="'+esc(d.number||'')+'" oninput="poSet(\'number\',this.value)"'+dis+'></div>'
+      +'<div style="flex:1;min-width:0"><label class="flabel" for="po-rec">Received</label><input class="field" id="po-rec" type="date" value="'+esc(d.received||'')+'" onchange="poSet(\'received\',this.value)"'+dis+'></div>'
+      +'<div style="flex:1;min-width:0"><label class="flabel" for="po-ship">Ship by</label><input class="field" id="po-ship" type="date" value="'+esc(d.shipBy||'')+'" onchange="poSet(\'shipBy\',this.value)"'+dis+'></div></div>'
+      +'<p class="flabel" style="margin-top:4px">Status</p><div class="rolepick" id="po-stage">'+PO_STAGES.map(s=>'<button type="button" class="'+((d.status||'received')===s[0]?'on':'')+'" onclick="'+(ro?'':'poSet(\'status\',\''+s[0]+'\');document.querySelectorAll(\'#po-stage button\').forEach(b=>b.classList.remove(\'on\'));this.classList.add(\'on\')')+'"'+dis+'>'+s[1]+'</button>').join('')+'</div>'
+    +'</div>'
+    +'<div class="card"><div class="sec-head"><h2>PO document</h2><span class="pill dim">'+(d.files||[]).length+'</span></div>'
+      +((d.files||[]).length?(d.files||[]).map((f,i)=>'<div class="row" style="gap:8px;align-items:center;margin-bottom:6px"><a class="grow" href="'+esc(f.url)+'" target="_blank" rel="noopener" style="color:var(--wave);font-weight:600;overflow-wrap:anywhere">📎 '+esc(f.name)+'</a>'+(ro?'':'<button class="il-x" type="button" aria-label="Remove file" onclick="poRemoveFile('+i+')">✕</button>')+'</div>').join(''):'<div class="d" style="color:var(--faint);margin-bottom:8px">Attach the PO the customer sent (PDF, photo or spreadsheet).</div>')
+      +(ro?'':'<label class="btn ghost" style="margin-top:4px;cursor:pointer">＋ Attach file<input type="file" id="po-file" multiple accept=".pdf,image/*,.xlsx,.xls,.csv,.doc,.docx" style="display:none" onchange="poUpload(this.files)"></label>')
+    +'</div>'
+  +'</div><div class="acct-col">'
+    +'<div class="card"><div class="sec-head"><h2>What they ordered</h2></div><div id="po-lines-wrap">'+linesHTML('po')+'</div>'
+      +'<label class="flabel" for="po-amt" style="margin-top:12px">PO amount (if you don’t list lines)</label><input class="field" id="po-amt" type="number" inputmode="decimal" step="0.01" value="'+esc(String(d.amount||''))+'" oninput="poSet(\'amount\',this.value)"'+dis+'>'
+      +'<div id="po-total"></div></div>'
+    +'<div class="card"><div class="sec-head"><h2>Notes</h2></div><textarea class="field" id="po-notes" rows="3" style="margin:0" placeholder="Delivery instructions, contact, portal" oninput="poSet(\'notes\',this.value)"'+dis+'>'+esc(d.notes||'')+'</textarea></div>'
+    +(saved?'<div class="card"><div class="sec-head"><h2>Invoices</h2><span class="pill '+(inv.length?'good':'dim')+'">'+inv.length+'</span></div>'
+      +(inv.length?inv.map(invRowHTML).join(''):'<div class="d" style="color:var(--faint)">Not invoiced yet.</div>')
+      +(ro?'':'<button class="btn" style="margin-top:8px" onclick="invoiceFromPO()">🧾 Create invoice from this PO</button>')+'</div>':'')
+  +'</div></div>';
+  if(!ro)h+='<div class="inv-savebar"><button class="btn" onclick="savePO()">'+(saved?'Save changes':'Save PO')+'</button>'+(saved&&!inv.length?'<button class="btn ghost" onclick="deletePO()">Delete</button>':'')+'</div>';
+  body.innerHTML=h;poPaintTotal()}
+async function savePO(quiet){if(!invCanEdit()||invBusy)return null;const d=poDraft;if(!d)return null;
+  if(!(d.customer||'').trim()){toast('Which customer sent it?');return null}
+  if(!(d.number||'').trim()){toast('Add their PO number');const e=document.getElementById('po-num');if(e)e.focus();return null}
+  invBusy=true;
+  try{const now=new Date().toISOString(),me=(CURRENT_USER&&CURRENT_USER.name)||'';
+    if(!d.id||d.id==='new'){d.id='po'+Date.now().toString(36);d.createdAt=now;d.createdBy=me;d.createdByUid=(CURRENT_USER&&CURRENT_USER.uid)||''}
+    const rec=JSON.parse(JSON.stringify(d));delete rec.id;rec.items=invLines(d).map(i=>({desc:i.desc||'',qty:invN(i.qty),price:invN(i.price)}));rec.amount=invN(d.amount);rec.total=poTotal(d);rec.updatedAt=now;rec.updatedBy=me;
+    if(hasFirestore())await firebase.firestore().collection('customer_pos').doc(d.id).set(rec);
+    const i=CPOS.findIndex(x=>x.id===d.id),full=Object.assign({id:d.id},rec);if(i>=0)CPOS[i]=full;else CPOS.unshift(full);
+    poDraft=JSON.parse(JSON.stringify(full));poDirty=false;poOpenId=full.id;
+    if(!quiet){toast('✓ PO '+full.number+' saved');renderInvoices()}return full}
+  catch(e){toast('Save failed — '+((e&&e.code)||(e&&e.message)||'try again'));return null}
+  finally{invBusy=false}}
+async function deletePO(){if(!confirm('Delete PO '+(poDraft.number||'')+'?'))return;const id=poDraft.id;
+  try{if(hasFirestore())await firebase.firestore().collection('customer_pos').doc(id).delete();CPOS=CPOS.filter(x=>x.id!==id);poOpenId=null;poDraft=null;poDirty=false;toast('PO deleted');renderInvoices()}
+  catch(e){toast('Delete failed — '+((e&&e.code)||''))}}
+async function poUpload(files){if(!files||!files.length)return;
+  if(!(hasFirestore()&&firebase.storage)){toast('Files need the live app with Firebase Storage on');return}
+  if(poDraft.id==='new'||poDirty){const ok=await savePO(true);if(!ok)return}
+  const id=poDraft.id;const added=[];
+  for(const f of Array.from(files)){if(f.size>25*1024*1024){toast(f.name+' is over 25 MB');continue}
+    try{toast('Uploading '+f.name+'…');const path='customer_pos/'+id+'/'+Date.now()+'_'+f.name.replace(/[^\w.\-]/g,'_');
+      const ref=firebase.storage().ref(path);await ref.put(f,{contentType:f.type||'application/octet-stream'});added.push({name:f.name,url:await ref.getDownloadURL(),path:path,type:f.type||'',size:f.size,at:new Date().toISOString(),by:(CURRENT_USER&&CURRENT_USER.name)||''})}
+    catch(e){toast('Upload failed — '+((e&&e.code)||'is Firebase Storage on?'))}}
+  if(!added.length)return;
+  poDraft.files=(poDraft.files||[]).concat(added);
+  try{await firebase.firestore().collection('customer_pos').doc(id).set({files:poDraft.files},{merge:true});const p=CPOS.find(x=>x.id===id);if(p)p.files=poDraft.files.slice();toast('✓ Attached '+added.length+' file'+(added.length>1?'s':''));renderInvoices()}
+  catch(e){toast('Save failed — '+((e&&e.code)||''))}}
+async function poRemoveFile(i){const f=(poDraft.files||[])[i];if(!f||!confirm('Remove '+f.name+'?'))return;poDraft.files.splice(i,1);
+  try{if(hasFirestore()){await firebase.firestore().collection('customer_pos').doc(poDraft.id).set({files:poDraft.files},{merge:true});if(f.path&&firebase.storage)firebase.storage().ref(f.path).delete().catch(()=>{})}
+    const p=CPOS.find(x=>x.id===poDraft.id);if(p)p.files=poDraft.files.slice();renderInvoices()}catch(e){toast('Remove failed')}}
+async function invoiceFromPO(){if(poDirty){const ok=await savePO(true);if(!ok)return}const p=poDraft;const a=p.accountId?findAcct(p.accountId):invAcctByName(p.customer);const c=a?((a.contacts||[])[0]||{}):{};
+  const lines=invLines(p);
+  newInvoice({accountId:(a&&a.id)||'',billTo:{company:(a&&displayName(a))||p.customer||'',name:c.name||(a&&a.contact)||'',email:c.email||(a&&a.email)||'',address:(a&&(a.address||a.location))||''},
+    poId:p.id,poNumber:p.number||'',items:lines.length?lines.map(i=>({desc:i.desc,qty:i.qty,price:i.price})):[{desc:'Per purchase order '+(p.number||''),qty:1,price:invN(p.amount)||''}]})}
+
+/* ---- letterhead (settings/invoicing) ---- */
+function renderInvSettings(body){const s=INVSET||{},can=invCanLetterhead(),dis=can?'':' disabled';
+  invHead('Invoice letterhead','<a onclick="invSettingsOpen=false;renderInvoices()" style="color:var(--wave);cursor:pointer;font-weight:600">← Back</a>');
+  const f=(id,l,v,ph,type)=>'<label class="flabel" for="is-'+id+'">'+l+'</label><input class="field" id="is-'+id+'"'+(type?' type="'+type+'"':'')+' value="'+esc(String(v==null?'':v))+'" placeholder="'+esc(ph||'')+'"'+dis+'>';
+  const t=(id,l,v,ph)=>'<label class="flabel" for="is-'+id+'">'+l+'</label><textarea class="field" id="is-'+id+'" rows="3" placeholder="'+esc(ph||'')+'"'+dis+'>'+esc(v||'')+'</textarea>';
+  body.innerHTML=(can?'':'<div class="note" style="margin-bottom:12px">Only the finance group can change the letterhead.</div>')
+    +'<div class="acct-grid"><div class="acct-col"><div class="card"><div class="sec-head"><h2>From</h2></div>'
+      +f('company','Company name',s.company,'Safewave Technology')+t('address','Address',s.address,'Street\nCity, State ZIP')
+      +f('email','Billing email',s.email,'sales@safewavetech.com','email')+f('phone','Phone',s.phone,'')+f('website','Website',s.website,'safewavetech.com')+'</div></div>'
+    +'<div class="acct-col"><div class="card"><div class="sec-head"><h2>Payment &amp; defaults</h2></div>'
+      +t('pay','How to pay (printed on every invoice)',s.paymentInstructions,'e.g. ACH or check payable to Safewave Technology. Include the invoice number.')
+      +'<p class="d" style="color:var(--muted);margin:-4px 0 10px">Invoices go out to customers: share bank details only the way you’d put them on a paper invoice.</p>'
+      +'<label class="flabel" for="is-terms">Default terms</label><select class="field" id="is-terms"'+dis+'>'+INV_TERM_LIST.map(x=>'<option value="'+x[0]+'"'+((s.terms||'net30')===x[0]?' selected':'')+'>'+x[1]+'</option>').join('')+'</select>'
+      +'<div class="inv-fr"><div>'+f('band','Band price (wholesale) $',s.bandPrice,'','number')+'</div><div>'+f('seat','App seats price $',s.seatPrice,'','number')+'</div><div>'+f('tax','Default tax %',s.taxRate,'0','number')+'</div></div>'
+      +'<div class="inv-fr"><div>'+f('prefix','Number prefix',s.prefix,'INV-')+'</div><div>'+f('start','First number',s.startNumber,'1001','number')+'</div></div>'
+      +t('notes','Default note to customer',s.notes,'Thank you for your order!')+f('footer','Footer line',s.footer,'Thank you for supporting accessibility and safety…')
+      +(can?'<button class="btn" onclick="saveInvSettings()">Save letterhead</button>':'')+'</div></div></div>'}
+async function saveInvSettings(){if(!invCanLetterhead())return;const v=id=>{const e=document.getElementById('is-'+id);return e?e.value.trim():''};
+  const rec={company:v('company'),address:v('address'),email:v('email'),phone:v('phone'),website:v('website'),paymentInstructions:v('pay'),terms:v('terms')||'net30',
+    bandPrice:invN(v('band'))||'',seatPrice:invN(v('seat'))||'',taxRate:invN(v('tax'))||'',prefix:v('prefix')||'INV-',startNumber:invN(v('start'))||1001,notes:v('notes'),footer:v('footer'),updatedAt:new Date().toISOString(),updatedBy:(CURRENT_USER&&CURRENT_USER.name)||''};
+  try{if(hasFirestore())await firebase.firestore().collection('settings').doc('invoicing').set(rec,{merge:true});INVSET=Object.assign({},INVSET,rec);invSettingsOpen=false;toast('✓ Letterhead saved');renderInvoices()}
+  catch(e){toast('Save failed — '+((e&&e.code)||''))}}
+
+/* ---- CRM account: this customer's invoices + POs ---- */
+function renderBillingCard(a){const el=document.getElementById('ac-billing');if(!el||!a)return;if(a.board==='Fundraise'||!NAV_ALLOWED.has('s-invoices')){el.style.display='none';return}el.style.display='';
+  const nm=displayName(a).toLowerCase();
+  const inv=INVOICES.filter(i=>i.accountId===a.id||(!i.accountId&&(((i.billTo||{}).company)||'').toLowerCase()===nm));
+  const pos=CPOS.filter(p=>p.accountId===a.id||(!p.accountId&&(p.customer||'').toLowerCase()===nm));
+  const owed=inv.filter(i=>['sent','partial','overdue'].includes(invState(i))).reduce((s,i)=>s+invTotals(i).balance,0);
+  el.innerHTML='<div class="sec-head"><h2>Invoices &amp; POs</h2>'+(owed?'<span class="pill '+(inv.some(i=>invState(i)==='overdue')?'amber':'wave')+'">'+fmtMoney(owed)+' owed</span>':'')+'</div>'
+    +(inv.length||pos.length?inv.slice(0,5).map(invRowHTML).join('')+pos.slice(0,3).map(poRowHTML).join(''):'<div class="d" style="color:var(--faint);margin-bottom:8px">No invoices or POs yet.</div>')
+    +(invCanEdit()?'<div class="row" style="gap:8px;margin-top:8px"><button class="btn ghost" style="flex:1" onclick="invoiceForAcct(acctId)">🧾 New invoice</button><button class="btn ghost" style="flex:1" onclick="poForAcct(acctId)">📎 Log a PO</button></div>':'')}
+function invoiceForAcct(id){const a=findAcct(id);if(!a)return;const c=(a.contacts||[])[0]||{};newInvoice({accountId:a.id,billTo:{company:displayName(a),name:c.name||a.contact||'',email:c.email||a.email||'',address:a.address||a.location||''}})}
+function poForAcct(id){const a=findAcct(id);if(!a)return;newPO({accountId:a.id,customer:displayName(a)})}
 
 /* ================= SESSION ================= */
 function navRole(r){return r==='superadmin'?'admin':r}
@@ -6717,7 +7133,7 @@ function enterApp(user){
   document.getElementById('acc-email').textContent=user.email;
   document.getElementById('acc-role').textContent=userRoleText(user)+(user.fsOff?' · Firestore off':'');
   document.getElementById('acc-manage').style.display=(user.role==='superadmin'||user.role==='admin')?'block':'none';
-  buildNav(user.role);subscribeActions();renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
+  buildNav(user.role);subscribeActions();subscribeInvoices();renderPulse(user);renderStock();renderDecisions();syncTickets();loadCRM();loadCampaigns();loadMail();
   loadTeam();loadBuildTasks();loadProjects();loadChatChannels();loadInventory();loadFulfillments();loadBands();loadPOs();subscribeReturns();subscribeNotifications();subscribeOrders();
   if(canFundraise()){subscribeRaiseTasks();subscribeRaiseMeetings();loadRaise().then(()=>{refreshPulse();raiseRerender();});}
   subscribeFeedback();
@@ -9108,6 +9524,7 @@ function renderAccountView(host,ctx){const inRaise=ctx==='raise';
         +'</div>'
         +(a.board==='Fundraise'?fundraiseEditorCard():'')
         +'<div class="card" id="ac-deal-card"></div>'
+        +(a.board!=='Fundraise'&&!inRaise?'<div class="card" id="ac-billing"></div>':'')
         +'<div class="card" id="ac-playbook"></div>'
         +'<div class="card"><div class="sec-head"><h2>Next step</h2></div><input class="field" id="ac-nextstep" placeholder="e.g. Send proposal, book a demo" style="margin:0 0 8px"><div class="row" style="gap:8px"><input class="field" id="ac-due" type="date" style="margin:0;flex:1"><button class="btn ghost" onclick="saveNextStep()">Save</button></div><div class="note" style="margin-top:9px">Owner + due date show on your Pulse and the team past-due list.</div></div>'
         +'<div class="card"><div class="sec-head"><h2>Company dashboard</h2><a class="ro-hide" onclick="openMetrics(acctId)">Edit</a></div><div class="tiles" id="ac-metrics"></div><div class="note" style="margin-top:11px">Revenue counts software (ARR = MRR × 12) plus wholesale band sales. Money logged on activity notes shows here as spend and return. Live bands and users light up when this company\'s Safewave dashboard is linked.</div></div>'
@@ -9140,7 +9557,7 @@ function populateAccount(a){const id=a.id;
   const dash=document.getElementById('ac-dash');dash.textContent=a.dashboardUrl?'Open client dashboard ↗':'Link client dashboard';
   dash.onclick=()=>{if(a.dashboardUrl){window.open(a.dashboardUrl,'_blank','noopener')}else{const u=prompt('Paste this client\'s Safewave dashboard link (temporary — the live device feed connects next):');if(u){updateAccount(id,{dashboardUrl:u});toast('✓ Dashboard linked');dash.textContent='Open client dashboard ↗'}}};
   const eb=document.getElementById('ac-email');if(a.email){eb.style.display='';eb.onclick=openCompose}else{eb.style.display='none'}
-  renderMetrics(a);renderContacts(a);renderCampaignBadge(a);renderDealCard(a);renderPlaybook(a);renderArchiveState(a);
+  renderMetrics(a);renderContacts(a);renderCampaignBadge(a);renderDealCard(a);renderBillingCard(a);renderPlaybook(a);renderArchiveState(a);
   const ex=document.getElementById('ac-stage-exit');if(ex){const info=STAGE_INFO[a.stage||'New'];ex.innerHTML=(!inv&&info)?('<b style="color:var(--text)">To be here:</b> '+esc(info.exit)+(info.p?' · '+info.p+'% win probability':'')):''}
   const ns=document.getElementById('ac-nextstep');if(ns)ns.value=a.nextStep||'';
   const du=document.getElementById('ac-due');if(du)du.value=a.dueAt?String(a.dueAt).slice(0,10):'';
@@ -9710,6 +10127,8 @@ function renderFinance(){
       +kpiCell(SHOP.lastWeekOrders,'Orders · last wk')
       +kpiCell(SHOP.aov,'Avg order')
     +'</div>'
+    +((INVOICES.length||CPOS.length)?(()=>{const k=invKpis();return '<div class="kpi-head"><span>Receivables</span><a onclick="goto(\'s-invoices\')" style="color:var(--wave);cursor:pointer">Invoices &amp; POs →</a></div>'
+      +'<div class="kpi-strip">'+kpiCell(fmtMoney(k.outstanding),'Outstanding')+kpiCell(fmtMoney(k.overdue),'Overdue'+(k.overdueN?' · '+k.overdueN:''))+kpiCell(fmtMoney(k.collected),'Collected · 30 days')+kpiCell(fmtMoney(k.openPOValue),'Open customer POs')+'</div>'})():'')
     +'<div class="card"><div class="sec-head"><h2>Runway &amp; burn</h2><span class="pill dim">your projections</span></div>'
       +'<table class="frows"><tbody>'
         +'<tr><th>Projected MRR</th><td>'+fmtMoney(mrr)+'</td></tr>'
