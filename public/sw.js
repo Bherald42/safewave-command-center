@@ -3,7 +3,7 @@
    Network-first for navigations so teammates always get the latest build;
    falls back to cache when offline. Live data (Firestore) is fetched by the
    page itself and is not cached here. */
-const CACHE = 'safewave-shell-v4';
+const CACHE = 'safewave-shell-v5';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -35,15 +35,37 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(caches.match(req).then((cached) => cached || fetch(req)));
 });
 
-/* Web push — payload arrives from the backend once FCM/Shopify webhook are wired. */
+/* Web push — every Command Center alert is pushed here by the backend
+   (functions/index.js → deliverPush). requireInteraction keeps it on screen
+   until it's dealt with (desktop/Android); vibrate + renotify make each new
+   alert buzz even when an older one is still showing. Whether it can break
+   through Do Not Disturb is the phone's setting (allow Safewave in Focus). */
 self.addEventListener('push', (e) => {
-  let data = {};
-  try { data = e.data ? e.data.json() : {}; } catch (err) {}
-  const title = data.title || 'Safewave';
-  const body = data.body || 'New activity';
-  e.waitUntil(self.registration.showNotification(title, { body, icon: '/icon-192.png', badge: '/icon-192.png', data: data.url || '/' }));
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : '' }; }
+  const title = d.title || 'Safewave';
+  const link = /^s-[\w:-]+$/.test(d.link || '') ? d.link : 's-pulse';
+  const opts = {
+    body: d.body || 'New activity',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    requireInteraction: true,
+    vibrate: d.safety ? [600, 150, 600, 150, 600, 150, 900] : [300, 120, 300, 120, 500],
+    timestamp: Date.now(),
+    data: { link: link, id: d.id || '' },
+  };
+  if (d.id) { opts.tag = d.id; opts.renotify = true; }
+  const badge = (self.navigator && self.navigator.setAppBadge) ? self.navigator.setAppBadge().catch(() => {}) : Promise.resolve();
+  e.waitUntil(Promise.all([self.registration.showNotification(title, opts), badge]));
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  e.waitUntil(self.clients.matchAll({ type: 'window' }).then((cs) => { for (const c of cs) { if ('focus' in c) return c.focus(); } return self.clients.openWindow(e.notification.data || '/'); }));
+  const d = e.notification.data || {};
+  const link = typeof d === 'string' ? 's-pulse' : (d.link || 's-pulse');
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
+    for (const c of cs) {
+      if ('focus' in c) { c.postMessage({ type: 'sw-goto', link: link, id: d.id || '' }); return c.focus(); }
+    }
+    return self.clients.openWindow('/?go=' + encodeURIComponent(link) + (d.id ? '&nid=' + encodeURIComponent(d.id) : ''));
+  }));
 });

@@ -38,6 +38,99 @@ const STALE_DAYS = 30;
 const CAMPAIGN_SENDS_PER_RUN = 60; // safety cap per daily run
 
 /* ------------------------------------------------------------------ *
+ * PHONE / DESKTOP PUSH (standard Web Push, VAPID)
+ *
+ * Every Command Center alert is a doc in `notifications`. Each one is also
+ * pushed to the recipient's devices (to: uid) or everyone's (to: "all"), so it
+ * arrives even when the app is closed. Devices register in `push_subs`
+ * (owner-only). The VAPID key pair is generated here on first use and kept in
+ * `server_keys/vapid`, which no client can read (firestore.rules denies it), so
+ * there's no secret to set up. A notification is claimed (pushedAt) inside a
+ * transaction before sending, so it is never pushed twice.
+ * ------------------------------------------------------------------ */
+let VAPID = null;
+async function vapidKeys() {
+  if (VAPID) return VAPID;
+  const ref = db.collection("server_keys").doc("vapid");
+  VAPID = await db.runTransaction(async (t) => {
+    const s = await t.get(ref);
+    if (s.exists && s.data().publicKey && s.data().privateKey) return s.data();
+    const k = require("web-push").generateVAPIDKeys();
+    const rec = { publicKey: k.publicKey, privateKey: k.privateKey, createdAt: new Date().toISOString() };
+    t.set(ref, rec);
+    return rec;
+  });
+  return VAPID;
+}
+async function deliverPush(ref) {
+  let n = null;
+  const claimed = await db.runTransaction(async (t) => {
+    const s = await t.get(ref);
+    if (!s.exists || s.data().pushedAt) return false;
+    n = s.data();
+    t.update(ref, { pushedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return true;
+  }).catch((e) => { logger.warn("push claim failed", e && e.message); return false; });
+  if (!claimed || !n || !n.to) return 0;
+  const q = n.to === "all" ? db.collection("push_subs") : db.collection("push_subs").where("uid", "==", n.to);
+  const subs = await q.get();
+  if (subs.empty) return 0;
+  const webpush = require("web-push");
+  const k = await vapidKeys();
+  webpush.setVapidDetails("https://safewave-command-center.web.app", k.publicKey, k.privateKey);
+  const payload = JSON.stringify({ title: n.title || "Safewave", body: n.body || "", link: n.link || "", id: ref.id, safety: /safety/i.test(n.title || "") });
+  let sent = 0;
+  await Promise.all(subs.docs.map(async (d) => {
+    const sub = d.data();
+    if (n.to === "all" && n.by && sub.name && sub.name === n.by) return; // don't ping the person who caused it
+    try {
+      await webpush.sendNotification(sub.sub, payload, { TTL: 86400, urgency: "high", topic: undefined });
+      sent++;
+    } catch (e) {
+      const code = e && e.statusCode;
+      if (code === 404 || code === 410) await d.ref.delete().catch(() => {}); // device unsubscribed / expired
+      else logger.warn("push send failed", code || (e && e.message));
+    }
+  }));
+  return sent;
+}
+// Add an alert and push it right away (server-side senders use this).
+async function addNotification(data) {
+  const ref = await db.collection("notifications").add(data);
+  await deliverPush(ref).catch((e) => logger.warn("push failed", e && e.message));
+  return ref;
+}
+// Safety net: push anything from the last hour that wasn't pushed yet
+// (batched server alerts, or a client that went offline mid-send).
+async function sweepPush() {
+  const since = admin.firestore.Timestamp.fromMillis(Date.now() - 3600e3);
+  const qs = await db.collection("notifications").where("at", ">=", since).orderBy("at", "desc").limit(60).get();
+  let n = 0;
+  for (const d of qs.docs) { if (!d.data().pushedAt) n += await deliverPush(d.ref).catch(() => 0); }
+  return n;
+}
+exports.pushConfig = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  const k = await vapidKeys();
+  return { publicKey: k.publicKey };
+});
+// The app calls this right after it writes an alert, so it reaches phones now.
+exports.pushNow = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  const id = String((request.data && request.data.id) || "").replace(/[^\w-]/g, "");
+  if (!id) return { sent: 0 };
+  return { sent: await deliverPush(db.collection("notifications").doc(id)) };
+});
+// "Send a test to my phone" from the Alerts sheet.
+exports.pushTest = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  const subs = await db.collection("push_subs").where("uid", "==", request.auth.uid).get();
+  if (subs.empty) return { devices: 0, sent: 0 };
+  const ref = await db.collection("notifications").add({ to: request.auth.uid, title: "🔔 Test alert", body: "Push works on this device.", link: "s-pulse", by: "Push test", at: admin.firestore.FieldValue.serverTimestamp() });
+  return { devices: subs.size, sent: await deliverPush(ref) };
+});
+
+/* ------------------------------------------------------------------ *
  * SEND EMAIL from the signed-in user's own mailbox
  * ------------------------------------------------------------------ */
 exports.sendUserEmail = onCall({ region: REGION }, async (request) => {
@@ -76,7 +169,7 @@ exports.sendUserEmail = onCall({ region: REGION }, async (request) => {
 exports.askAgent = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to ask the assistant.");
   const key = process.env.ANTHROPIC_API_KEY || "";
-  if (!key) throw new HttpsError("failed-precondition", "The assistant isn't connected yet — add an ANTHROPIC_API_KEY secret to enable it.");
+  if (!key) throw new HttpsError("failed-precondition", "The AI model isn't connected yet.");
 
   const { question, context, history } = request.data || {};
   if (!question || !("" + question).trim()) throw new HttpsError("invalid-argument", "Ask a question.");
@@ -92,7 +185,13 @@ exports.askAgent = onCall({ region: REGION, timeoutSeconds: 120 }, async (reques
     "- Be concise and specific; cite real numbers from the snapshot.\n" +
     "- Format with short Markdown (headings, bullets, bold figures). No preamble like 'Certainly'.\n" +
     "- If the answer isn't in the snapshot, say what's missing and where in the app to find it — do not invent data.\n" +
-    "- Money is USD. 'Need follow-up' means an open account with no next step. Red is reserved for life-safety.\n\n" +
+    "- Money is USD. 'Need follow-up' means an open account with no next step. Red is reserved for life-safety.\n" +
+    "- Never mention API keys, secrets, environment variables, repositories, deploys or setup steps. If something isn't switched on, say it isn't available yet and that Brad can turn it on.\n" +
+    "- For 'where is …' questions use ONLY this app map (phone: Menu in the bottom bar; desktop: left sidebar). If a page isn't listed, say you can't verify where it is.\n" +
+    "  Home (Today, My Work) · Messages (bottom bar on phones, top bar on desktop) · Customers → CRM (Pipeline; Campaigns and Prospect open from the Pipeline action row), Support · " +
+    "Fundraise (Overview, Meetings, Traction, Financials, Plan, Investors, Data room) · Operations → Stock & orders · Product → Build, Release QC, Field, Feedback · " +
+    "Finance → Financials (Overview, 13-week cash, P&L, Projections, Budget, Payroll, Build spend, Access) · Resources → Guides, Knowledge (this assistant) · " +
+    "Settings → Users, Compliance, Vault. Some pages only show for people with access.\n\n" +
     "=== COMPANY DATA SNAPSHOT ===\n" + snapshot.slice(0, 90000);
 
   const msgs = [];
@@ -379,7 +478,7 @@ async function handleShopifyOrder(o) {
   const id = mapped.id, rec = mapped.rec;
   rec.at = new Date().toISOString(); // real-time arrival stamp for webhook orders
   await db.collection("orders").doc(id).set(rec, { merge: true });
-  await db.collection("notifications").add({
+  await addNotification({
     to: "all", title: "New order " + rec.n, body: rec.name + " · $" + rec.total,
     link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -426,7 +525,7 @@ async function handleShopifyReturn(topic, body) {
   const rec = { id: rmaId, order: n || ("#" + (r.order_id || "")), serial: serial, size: size, customer: customer, status: status, source: "shopify", at: (existing.exists && existing.data().at) || new Date().toISOString(), updatedAt: new Date().toISOString() };
   await db.collection("returns").doc(rmaId).set(rec, { merge: true });
   if (!existing.exists && status === "requested") {
-    await db.collection("notifications").add({
+    await addNotification({
       to: "all", title: "Return requested · " + rec.order, body: (customer || "") + (serial ? " · band " + serial : ""),
       link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -544,6 +643,7 @@ exports.syncShopifyOrders = onCall({ region: REGION, timeoutSeconds: 120 }, asyn
 // Scheduled reconcile: pulls the most-recent page every 15 minutes so new
 // orders and fulfilment/tracking changes land even if a webhook was missed.
 exports.scheduledShopifySync = onSchedule({ schedule: "every 15 minutes", region: REGION }, async () => {
+  await sweepPush().catch((e) => logger.warn("push sweep failed", e && e.message)); // alerts that missed their instant push
   if (!shopifyCreds().ok) { logger.info("scheduledShopifySync skipped — Shopify not configured"); return; }
   try {
     const n = await pullShopifyOrders({ backfill: false, by: "schedule" });
@@ -725,7 +825,7 @@ async function pullShopifyStock() {
   await ref.set({ stock: stock, stockAt: new Date().toISOString(), stockLocation: (d.location && d.location.name) || "" }, { merge: true });
   if (newlyOver.length) {
     const names = { S: "Small", M: "Medium", L: "Large" };
-    await db.collection("notifications").add({
+    await addNotification({
       to: "all", title: "Shopify oversold: " + newlyOver.map((z) => names[z] + " (" + stock[z] + ")").join(", "),
       body: "Customers bought more than the store shows in stock. Restock in Shopify or pause the size.",
       link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
@@ -834,7 +934,7 @@ async function runComplianceCheck(by) {
           link: "s-comply", by: "Standard watch", at: now,
         });
       });
-      await batch.commit();
+      await batch.commit(); await sweepPush().catch(() => {});
     } catch (e) { logger.error("compliance notify failed", e && e.message); }
   }
   return rec;
@@ -920,7 +1020,7 @@ exports.scanReleaseTesting = onSchedule({ schedule: "every day 14:00", region: R
           link: "s-qc", by: "Release QC", at: stamp,
         });
       });
-      await batch.commit();
+      await batch.commit(); await sweepPush().catch(() => {});
     } catch (e) { logger.error("scanReleaseTesting notify failed", e && e.message); }
   }
   logger.info("scanReleaseTesting: " + flags.length + " flag(s)");
@@ -1504,7 +1604,7 @@ exports.ticketIntake = onRequest({ region: REGION }, async (req, res) => {
     source: { project: "safewave-371716", collection: "contact_submissions", id: srcId, organizationId: b.organizationId || null },
   };
   await ref.set(t);
-  await db.collection("notifications").add({
+  await addNotification({
     to: "all",
     title: (safety ? "⚠ Safety ticket: " : "New ticket: ") + title,
     body: t.customer,
@@ -1604,7 +1704,7 @@ async function sendDigests(onlyUid) {
       try { await deliver(mail.creds, mail.sender, { to: user.email, subject, text }); sent++; continue; }
       catch (e) { logger.error("digest send failed", user.email, e && e.message); }
     }
-    await db.collection("notifications").add({ to: u.id, title: subject, body: "Open Home for your Today list", link: "s-pulse", by: "Daily email", at: admin.firestore.FieldValue.serverTimestamp() });
+    await addNotification({ to: u.id, title: subject, body: "Open Home for your Today list", link: "s-pulse", by: "Daily email", at: admin.firestore.FieldValue.serverTimestamp() });
     notified++;
   }
   logger.info(`dailyDigest: ${sent} emailed, ${notified} in-app${mail ? "" : " (no connected super-admin mailbox)"}`);
@@ -1730,7 +1830,7 @@ async function sendRaiseRollout() {
       catch (e) { logger.error("rollout send failed", em, e && e.message); }
     }
     const u = await db.collection("users").where("email", "==", em).limit(1).get();
-    if (!u.empty) { await db.collection("notifications").add({ to: u.docs[0].id, title: "Weekly raise rollout is ready", body: "Open Fundraise → Meetings", link: "s-raise", by: "Weekly email", at: admin.firestore.FieldValue.serverTimestamp() }); notified++; }
+    if (!u.empty) { await addNotification({ to: u.docs[0].id, title: "Weekly raise rollout is ready", body: "Open Fundraise → Meetings", link: "s-raise", by: "Weekly email", at: admin.firestore.FieldValue.serverTimestamp() }); notified++; }
   }
   await db.collection("settings").doc("raise").set({ lastRolloutAt: new Date().toISOString() }, { merge: true });
   logger.info(`raise rollout: ${sent} emailed, ${notified} in-app`);
