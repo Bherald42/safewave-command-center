@@ -1568,7 +1568,7 @@ async function verifyCaller(req) {
 const clip = (v, n) => (v === undefined || v === null || v === "") ? null : String(v).slice(0, n || 60);
 function intakeDevice(d) {
   if (!d || typeof d !== "object") return null;
-  const o = { platform: clip(d.platform, 20), osVersion: clip(d.osVersion, 30), deviceModel: clip(d.deviceModel, 60), appVersion: clip(d.appVersion, 30), appBuild: clip(d.appBuild, 30) };
+  const o = { platform: clip(d.platform, 20), osVersion: clip(d.osVersion, 30), deviceModel: clip(d.deviceModel, 60), appVersion: clip(d.appVersion, 30), appBuild: clip(d.appBuild, 30), source: clip(d.source, 12) };
   Object.keys(o).forEach((k) => { if (o[k] === null) delete o[k]; });
   return Object.keys(o).length ? o : null;
 }
@@ -1582,11 +1582,158 @@ function intakeAppUser(u, site) {
     Object.keys(o).forEach((k) => { if (o[k] === null) delete o[k]; });
     return o;
   }).filter((o) => Object.keys(o).length);
-  const o = { userId: clip(u.userId, 128), organizationName: clip(site, 120) };
+  const o = { userId: clip(u.userId, 128), organizationName: clip(site, 120),
+    lastOnline: Number.isFinite(Number(u.lastOnline)) && u.lastOnline ? Number(u.lastOnline) : null,
+    appOpen: typeof u.appOpen === "boolean" ? u.appOpen : null };
   if (bands.length) o.bands = bands;
   Object.keys(o).forEach((k) => { if (o[k] === null) delete o[k]; });
   return Object.keys(o).length ? o : null;
 }
+const LOG_KEYS = ["bandName", "reason", "wasConnected", "batteryLevel", "bleErrorCode", "bleReason", "firmwareVersion",
+  "missingPermissions", "osVersion", "healthConnected", "healthNotifPermission", "healthNotificationListener",
+  "healthBatteryOptimization", "healthStrictOEM", "healthAncsStatus", "healthBandBattery", "healthFirmwareUpdateAvailable",
+  "healthWarnings", "otaFromVersion", "otaToVersion", "otaPhase", "otaAttempts", "otaError", "appVersion"];
+function intakeLogs(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.slice(0, 60).map((l) => {
+    const m = {};
+    LOG_KEYS.forEach((k) => { const v = l && l.m && l.m[k]; if (v !== undefined && v !== null && v !== "") m[k] = typeof v === "boolean" ? v : String(v).slice(0, 300); });
+    return { type: clip(l && l.type, 40) || "event", at: Number(l && l.at) || 0, platform: clip(l && l.platform, 12), m };
+  }).filter((l) => l.at);
+}
+
+/* ------------------------------------------------------------------ *
+ * TICKET DIAGNOSIS — "why is this customer having this problem?"
+ * Built-in rules read the app's own signals (firmware update results, health
+ * snapshot warnings, disconnect reasons, battery, permissions) and write a
+ * likely cause, the evidence, next steps and a draft reply. When the AI model
+ * is connected it reasons over the same data and the rules' answer as a hint.
+ * The team reviews it in the ticket and decides what to send — nothing is
+ * sent to the customer automatically.
+ * ------------------------------------------------------------------ */
+const WARN_TEXT = {
+  bluetooth: ["Bluetooth is off on the phone", "Turn Bluetooth back on (Settings → Bluetooth)."],
+  connection: ["The band isn't connected to the app", "Open the Safewave app with the band nearby and wait for it to reconnect; if it doesn't, place the band on its charger for a few seconds and try again."],
+  ancs: ["iPhone notifications aren't reaching the band (Bluetooth notification sharing is off)", "Settings → Bluetooth → tap ⓘ next to the band → turn on Share System Notifications. If it isn't there, Forget the band and pair it again, tapping Allow when asked."],
+  notifPermission: ["Notifications are turned off for the Safewave app", "Settings → Notifications → Safewave → Allow Notifications."],
+  listener: ["Android notification access is off for Safewave", "Settings → Notifications → Device & app notifications (Notification access) → turn on Safewave."],
+  battopt: ["Android battery optimization can stop Safewave in the background", "Settings → Apps → Safewave → Battery → Unrestricted."],
+  autostart: ["This phone's maker blocks apps from running in the background", "Allow Safewave to auto-start / run in the background in the phone's battery or app-launch settings."],
+  bandBattery: ["The band's battery is low", "Charge the band to at least 40%."],
+  firmware: ["A firmware update is available for the band", "Update from the app (Account → Firmware update) with the band charged above 40% and the phone close by."],
+};
+function firstName(t) { return String(t.customer || "").split(" · ")[0].split(" ")[0] || "there"; }
+function ruleDiagnosis(t, logs) {
+  const text = String((t.desc || "") + " " + (t.title || "")).toLowerCase();
+  const L = (logs || []).slice().sort((a, b) => b.at - a.at);
+  const ago = (ms) => { const h = (Date.now() - ms) / 3.6e6; return h < 1 ? "under an hour ago" : h < 48 ? Math.round(h) + "h ago" : Math.round(h / 24) + " days ago"; };
+  const ev = [], steps = [];
+  let cause = "", conf = "low", reply = "";
+  const hi = firstName(t);
+  const health = L.find((l) => l.type === "health_snapshot");
+  const warnings = Array.from(new Set([].concat((t.health && t.health.warnings) || [], health && health.m.healthWarnings ? String(health.m.healthWarnings).split(",") : []).filter(Boolean)));
+  const band = (t.appUser && t.appUser.bands && t.appUser.bands[0]) || null;
+  if (band) ev.push("Band " + (band.name || "") + (band.firmware ? " on firmware " + band.firmware : "") + (band.battery != null ? ", battery " + band.battery + "%" : "") + (band.connected === true ? ", connected" : band.connected === false ? ", not connected" : "") + ".");
+  if (t.device && (t.device.platform || t.device.osVersion)) ev.push("Phone: " + [t.device.deviceModel, (t.device.platform === "ios" ? "iOS " : t.device.platform === "android" ? "Android " : "") + (t.device.osVersion || ""), t.device.appVersion ? "app " + t.device.appVersion : ""].filter((x) => x && x.trim()).join(", ") + ".");
+  const otaFail = L.find((l) => l.type === "firmware_update_failed");
+  const otaOk = L.find((l) => l.type === "firmware_update_succeeded");
+  const aboutUpdate = /firm ?ware|update|updat|ota/.test(text);
+  if (otaFail && (!otaOk || otaOk.at < otaFail.at)) {
+    const err = String(otaFail.m.otaError || "");
+    ev.unshift("Firmware update failed " + ago(otaFail.at) + (otaFail.m.otaPhase ? " during \"" + otaFail.m.otaPhase + "\"" : "") + ": \"" + err.slice(0, 160) + "\"" + (otaFail.m.otaAttempts ? " after " + otaFail.m.otaAttempts + " attempt(s)" : "") + ".");
+    if (/battery/i.test(err) && /40/.test(err)) {
+      cause = "The band's battery was too low to update — the app needs at least 40% before it will start."; conf = "high";
+      steps.push("Charge the band to 40% or more (about 30 minutes on the charger).", "Open the app with the band close by and run the update again.");
+      reply = "Hi " + hi + ",\n\nThanks for reaching out. The update stopped because the band's battery was under 40% — the app won't start a firmware update below that, so the band can't run flat partway through.\n\nPlease charge the band for about 30 minutes, then open the Safewave app with the band next to your phone and tap Update again. Let me know if it still gives you trouble.";
+    } else if (/not connected|disconnect|connection|gatt|133|timed out/i.test(err)) {
+      cause = "The band lost its Bluetooth connection partway through the update."; conf = "high";
+      steps.push("Place the band on its charger for a few seconds to restart it.", "Keep the phone right next to the band, keep the app open and the screen on during the update.", "Run the update again — the app restarts the transfer automatically.");
+      reply = "Hi " + hi + ",\n\nThanks for letting us know. The update was interrupted because the band lost its Bluetooth connection partway through. Nothing is damaged — the band keeps its current firmware until an update finishes.\n\nPlease place the band on its charger for a few seconds to restart it, then keep your phone right next to it with the Safewave app open and run the update again. Let me know how it goes.";
+    } else if (/download|fetch|network|internet/i.test(err)) {
+      cause = "The firmware file couldn't be downloaded — a phone internet problem, not the band."; conf = "medium";
+      steps.push("Make sure the phone has Wi-Fi or a good cell signal.", "Try the update again.");
+      reply = "Hi " + hi + ",\n\nThanks for reaching out. The update couldn't download, which usually means the phone's internet connection dropped. Please connect to Wi-Fi or a strong signal and tap Update again — let me know if you still see the error.";
+    } else {
+      cause = "The firmware update failed with: \"" + err.slice(0, 120) + "\"."; conf = "medium";
+      steps.push("Restart the band (a few seconds on the charger) and try once more with the phone close by.", "If it fails again, promote this ticket to Build with the error above.");
+    }
+  } else if (aboutUpdate && !L.some((l) => /^firmware_update/.test(l.type))) {
+    cause = "Firmware update error — but this customer's app version doesn't report update errors yet, so the exact error isn't in the logs."; conf = band && band.battery != null && band.battery < 40 ? "medium" : "low";
+    if (band && band.battery != null && band.battery < 40) { ev.push("The band was last seen at " + band.battery + "% — updates need at least 40%."); cause = "Most likely the band's battery is below 40%, which blocks firmware updates (the app doesn't report the exact error on this version)."; }
+    steps.push("Ask which error they see (a screenshot helps).", "Have them charge the band above 40%, keep it next to the phone, and retry.", "If it still fails, restart the band on its charger and try again.");
+    reply = "Hi " + hi + ",\n\nThanks for reaching out, and sorry about the trouble with the update. Two quick things usually fix it:\n\n1. Charge the band to at least 40% — the app won't start an update below that.\n2. Keep the band right next to your phone with the Safewave app open until it finishes.\n\nIf you still see the error, could you send a screenshot of it? That tells us exactly what's going on.";
+  }
+  // Setup warnings from the health snapshot
+  warnings.forEach((w) => { if (WARN_TEXT[w]) ev.push(WARN_TEXT[w][0] + (health ? " (health check " + ago(health.at) + ")" : "") + "."); });
+  if (!cause && warnings.length) {
+    const top = ["bluetooth", "notifPermission", "ancs", "listener", "connection", "battopt", "autostart", "bandBattery", "firmware"].find((w) => warnings.includes(w));
+    if (top) { cause = WARN_TEXT[top][0] + "."; conf = "medium"; warnings.forEach((w) => { if (WARN_TEXT[w]) steps.push(WARN_TEXT[w][1]); });
+      reply = "Hi " + hi + ",\n\nThanks for reaching out. From what your app reports, here's what to check:\n\n" + warnings.filter((w) => WARN_TEXT[w]).map((w, i) => (i + 1) + ". " + WARN_TEXT[w][1]).join("\n") + "\n\nLet me know if that sorts it out."; }
+  }
+  // Connection stability
+  const wk = Date.now() - 7 * 864e5;
+  const drops = L.filter((l) => l.type === "band_disconnected" && l.at >= wk && (l.m.reason || "") !== "user_initiated");
+  if (drops.length >= 3) {
+    const reasons = {}; drops.forEach((d) => { const r = d.m.bleReason || d.m.reason || "unknown"; reasons[r] = (reasons[r] || 0) + 1; });
+    ev.push("Band disconnected " + drops.length + " times in the last 7 days (" + Object.entries(reasons).map(([r, n]) => r + " ×" + n).join(", ") + ").");
+    if (!cause) { cause = "The band keeps dropping its Bluetooth connection."; conf = "medium"; steps.push("Keep the phone within about 30 ft of the band.", "Check battery optimization / background limits on the phone.", "If it continues, restart the band on its charger and update firmware."); }
+  }
+  const lowBat = L.filter((l) => l.type === "low_battery" && l.at >= wk).length;
+  if (lowBat) ev.push("Low band battery reported " + lowBat + " time(s) this week.");
+  const perm = L.find((l) => l.type === "permission_regressed");
+  if (perm) ev.push("Permissions turned off " + ago(perm.at) + ": " + (perm.m.missingPermissions || "unknown") + ".");
+  if (!cause) {
+    cause = L.length ? "Nothing in the app's recent activity points to a clear cause." : "No app activity on file for this customer, so there's nothing to diagnose from yet.";
+    conf = "low";
+    steps.push("Ask for a short description of what happens and a screenshot.", "Check the band is charged and near the phone with the app open.");
+  }
+  if (!reply) reply = "Hi " + hi + ",\n\nThanks for reaching out — we're looking into this. Could you tell me a bit more about what happens (and send a screenshot if there's an error on screen)? In the meantime, please make sure the band is charged and close to your phone with the Safewave app open.";
+  return { cause, confidence: conf, evidence: ev.slice(0, 8), steps: steps.slice(0, 6), reply, by: "rules", logCount: L.length, at: Date.now() };
+}
+async function aiDiagnosis(t, logs, hint) {
+  const key = process.env.ANTHROPIC_API_KEY || "";
+  if (!key) return null;
+  const data = { ticket: { title: t.title, message: (t.desc || "").slice(0, 3000), channel: t.channel, customerFirstName: firstName(t) }, device: t.device || null, appUser: t.appUser || null, health: t.health || null, recentAppActivity: (logs || []).slice(0, 40).map((l) => ({ type: l.type, at: new Date(l.at).toISOString(), platform: l.platform, ...l.m })) };
+  const sys = "You are Safewave's support engineer. Safewave makes the Safewave Band, a vibration-alert wristband for people who are Deaf or hard of hearing, paired over Bluetooth to the Safewave phone app.\n" +
+    "Diagnose the most likely cause of the customer's ticket from the app telemetry provided. Facts: firmware updates need the band at >= 40% battery; a band that stops answering mid-update is fixed by a few seconds on its charger; iPhone notifications reach the band only with 'Share System Notifications' on for the band in iOS Bluetooth settings; Android needs notification access and unrestricted battery for Safewave.\n" +
+    "Be honest about uncertainty: if the data doesn't show the cause, say so and say what to ask. Never invent log entries.\n" +
+    "Reply with ONLY a JSON object: {\"cause\": one sentence, \"confidence\": \"high\"|\"medium\"|\"low\", \"evidence\": [short strings citing the data], \"steps\": [short next steps for the team], \"reply\": a warm, plain-language email reply to the customer (first name greeting, no sign-off, under 140 words)}.";
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 1200, system: sys,
+      messages: [{ role: "user", content: "Built-in rules suggested (may be incomplete): " + JSON.stringify({ cause: hint.cause, confidence: hint.confidence, evidence: hint.evidence }) + "\n\nData:\n" + JSON.stringify(data).slice(0, 60000) }] }) });
+  if (!r.ok) { logger.warn("aiDiagnosis http " + r.status); return null; }
+  const j = await r.json();
+  const txt = ((j.content || []).find((c) => c.type === "text") || {}).text || "";
+  const m = txt.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  const o = JSON.parse(m[0]);
+  if (!o.cause || !o.reply) return null;
+  return { cause: String(o.cause).slice(0, 400), confidence: ["high", "medium", "low"].includes(o.confidence) ? o.confidence : "low",
+    evidence: (Array.isArray(o.evidence) ? o.evidence : []).slice(0, 8).map((x) => String(x).slice(0, 300)),
+    steps: (Array.isArray(o.steps) ? o.steps : []).slice(0, 6).map((x) => String(x).slice(0, 300)),
+    reply: String(o.reply).slice(0, 2000), by: "ai", logCount: (logs || []).length, at: Date.now() };
+}
+async function diagnoseTicket(t, logs) {
+  const rules = ruleDiagnosis(t, logs);
+  try { const ai = await aiDiagnosis(t, logs, rules); if (ai) return ai; } catch (e) { logger.warn("aiDiagnosis failed", e && e.message); }
+  return rules;
+}
+// Re-run (or run for the first time) from the ticket screen.
+exports.diagnoseTicket = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  if (request.auth.token.email === "jared@safewavetech.com") throw new HttpsError("permission-denied", "View-only.");
+  const id = String((request.data && request.data.id) || "").replace(/[^\w-]/g, "");
+  if (!id) throw new HttpsError("invalid-argument", "Missing ticket.");
+  const ref = db.collection("tickets").doc(id);
+  const s = await ref.get();
+  if (!s.exists) throw new HttpsError("not-found", "No such ticket.");
+  const dg = await db.collection("ticket_diag").doc(id).get();
+  const diagnosis = await diagnoseTicket(s.data(), dg.exists ? (dg.data().logs || []) : []);
+  await ref.set({ diagnosis }, { merge: true });
+  return { diagnosis };
+});
+
 exports.ticketIntake = onRequest({ region: REGION }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).send("POST only"); return; }
   let caller;
@@ -1631,7 +1778,14 @@ exports.ticketIntake = onRequest({ region: REGION }, async (req, res) => {
   if (dv) t.device = dv;
   const au = intakeAppUser(b.appUser, site);
   if (au) t.appUser = au;
+  const logs = intakeLogs(b.logs);
+  const health = (b.health && Array.isArray(b.health.warnings)) ? { warnings: b.health.warnings.slice(0, 12).map((w) => String(w).slice(0, 40)) } : null;
+  if (health) t.health = health;
   await ref.set(t);
+  // The app's recent activity for this customer lives beside the ticket (it can
+  // be long), then the ticket gets a first diagnosis for the team to review.
+  if (logs.length) await db.collection("ticket_diag").doc(id).set({ logs, at: Date.now() }).catch((e) => logger.warn("ticket_diag write", e && e.message));
+  try { await ref.set({ diagnosis: await diagnoseTicket(t, logs) }, { merge: true }); } catch (e) { logger.warn("diagnose at intake failed", e && e.message); }
   await addNotification({
     to: "all",
     title: (safety ? "⚠ Safety ticket: " : "New ticket: ") + title,

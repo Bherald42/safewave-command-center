@@ -30,6 +30,13 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   secret to set). Server code adds alerts with `addNotification()`; the app calls
   `pushNow` after it writes one; `scheduledShopifySync` sweeps anything missed.
   Devices opt in from the Alerts sheet (bell). iPhone needs the Home Screen app.
+- **Support tickets carry app diagnostics.** The phone app's Help & Support
+  messages are forwarded by `forwardSupportToCommandCenter` (in the
+  `safewave-dashboard` repo, app project `safewave-371716`) to `ticketIntake`,
+  with the customer's device, bands and recent `activity_logs` (technical fields
+  only, never notification content). Logs land in `ticket_diag/{ticketId}`;
+  `diagnoseTicket` writes `tickets.diagnosis` (built-in rules, or the AI model
+  when `ANTHROPIC_API_KEY` is set) — a draft the team reviews before sending.
 - **Data is Firestore.** Collections include: `users`, `crm_accounts`, `tickets`,
   `campaigns`, `build_tasks`, `build_projects`, `inventory`, `fulfillments`,
   `bands`, `returns`, `orders` (server-write only), `purchase_orders`,

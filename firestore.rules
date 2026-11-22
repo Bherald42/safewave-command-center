@@ -79,6 +79,13 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if canOperate();
     }
+    // The phone app's recent technical activity for a ticket's customer
+    // (connects, battery, permissions, firmware update results). Written only
+    // by the ticket intake function; readable by the team like tickets.
+    match /ticket_diag/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
 
     // Action items — one-off to-dos with an owner and a due date (Home →
     // Today, the daily email). Shared like tickets.

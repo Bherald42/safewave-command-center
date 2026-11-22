@@ -1041,6 +1041,22 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 .tkc-miss{color:var(--faint)}
 .tkc-prev{display:block;cursor:pointer;color:var(--wave);padding:2px 0}
 .tkc-prev span{color:var(--muted);font-size:12.5px}
+
+/* Ticket diagnosis + app activity */
+.tkd{border:1px solid var(--line);border-left:4px solid var(--wave);border-radius:12px;padding:12px 14px;margin:10px 0 4px;background:var(--surface)}
+.tkd-empty{border-left-color:var(--line)}
+.tkd-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:650;font-size:15px}
+.tkd-by{font-size:12px;color:var(--muted);font-weight:400;margin-left:auto}
+.tkd-cause{font-size:15px;font-weight:600;margin:8px 0 4px;line-height:1.4}
+.tkd-k{font-size:12px;font-weight:600;color:var(--muted);margin-top:10px}
+.tkd-list{margin:4px 0 0;padding-left:20px;font-size:14px;line-height:1.45;display:flex;flex-direction:column;gap:3px}
+.tkd-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.tkd-at{font-size:12px;color:var(--faint);margin-left:auto}
+.tk-logs{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:5px;font-size:13px}
+.tk-logs li{padding-left:10px;border-left:2px solid var(--line);overflow-wrap:anywhere}
+.tk-logs li.warn{border-left-color:var(--amber)}
+.tk-logs li span{color:var(--faint);font-size:12px}
+.tk-more summary{cursor:pointer;color:var(--wave);font-size:13px;margin-top:6px}
 </style>
 </head>
 <body>
@@ -1961,6 +1977,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
       <button class="iconbtn" aria-label="Close ticket" onclick="closeSheets()">✕</button>
     </div>
     <div id="tkv-convo"></div>
+    <div id="tkv-diag"></div>
     <div id="tkv-context"></div>
     <div id="tkv-reply-box"></div>
     <div id="tkv-actions"></div>
@@ -6833,6 +6850,8 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
   if(!(t.replies||[]).length&&t.lastReplyAt)cv+='<div class="d" style="margin:4px 0 8px;color:var(--muted)">Replied '+esc(tkWhen(t.lastReplyAt))+(t.lastReplyBy?' by '+esc(t.lastReplyBy):'')+'</div>';
   document.getElementById('tkv-convo').innerHTML=cv;
   document.getElementById('tkv-context').innerHTML=ticketContextHTML(t);
+  document.getElementById('tkv-diag').innerHTML=ticketDiagHTML(t);
+  loadTicketLogs(t.id);
   // reply box
   let rb='';
   if(t.email){
@@ -6869,7 +6888,7 @@ function ticketContextHTML(t){const name=tkCustName(t),email=(t.email||'').trim(
   const rows=[];
   // phone & app
   const phone=[d.deviceModel,d.platform&&(d.platform==='ios'?'iOS':d.platform==='android'?'Android':d.platform)+(d.osVersion?' '+d.osVersion:''),d.appVersion?'app '+d.appVersion+(d.appBuild?' ('+d.appBuild+')':''):''].filter(Boolean).join(' · ');
-  rows.push(['📱','Phone & app',phone||'<span class="tkc-miss">Not sent with this message</span>',!!phone]);
+  rows.push(['📱','Phone & app',phone?(phone+(d.source==='logs'?' <span class="tkc-miss">· from the app’s health check</span>':'')+(au.lastOnline?'<br><span class="tkc-miss">App last active '+esc(ageStr(new Date(au.lastOnline).toISOString()))+'</span>':'')):'<span class="tkc-miss">Not sent with this message</span>',!!phone]);
   // band: live (from the app at the time of the ticket) → else the band we shipped them
   const live=(au.bands||[]).map(b=>[b.name||b.serial||'Band',b.firmware?'fw '+b.firmware:'',b.battery!=null?b.battery+'% battery':'',b.connected===true?'connected':b.connected===false?'not connected':'',b.lastConnected?'seen '+ageStr(new Date(b.lastConnected).toISOString()):''].filter(Boolean).join(' · '));
   const shipped=Object.values(typeof BANDS!=='undefined'?BANDS:{}).filter(b=>sameCustomer(b.customer,'',name,email)).map(b=>[b.serial,SIZELABEL[b.size]||'',b.firmware?'fw '+b.firmware+' at ship':'',b.shippedAt?'shipped '+new Date(b.shippedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}):''].filter(Boolean).join(' · '));
@@ -6881,10 +6900,45 @@ function ticketContextHTML(t){const name=tkCustName(t),email=(t.email||'').trim(
   const prev=(TKTS||[]).filter(x=>x.id!==t.id&&sameCustomer(tkCustName(x),x.email,name,email)).sort((a,b)=>new Date(b.created)-new Date(a.created));
   const prevHTML=prev.length?prev.slice(0,4).map(x=>'<a class="tkc-prev" onclick="openTicket(\''+esc(x.id)+'\')">'+esc(x.title)+' <span>'+esc(ageStr(x.created))+' · '+esc(x.status==='closed'?'resolved':x.status==='answered'?'replied':'open')+'</span></a>').join(''):'<span class="tkc-miss">None — first time writing in</span>';
   rows.push(['🎫','Earlier tickets',prevHTML,prev.length>0]);
+  rows.push(['🧾','App activity','<div id="tkv-logs"><span class="tkc-miss">Loading…</span></div>',true]);
   const known=rows.filter(r=>r[3]).length;
   return '<details class="tkc"'+(known?' open':'')+'><summary><span>Customer</span><span class="d">'+esc([name||email,au.organizationName||''].filter(Boolean).join(' · '))+'</span></summary>'
     +rows.map(r=>'<div class="tkc-row"><span class="tkc-ic" aria-hidden="true">'+r[0]+'</span><div class="tkc-main"><div class="tkc-k">'+r[1]+'</div><div class="tkc-v">'+r[2]+'</div></div></div>').join('')
     +((name||email)?'<button class="btn ghost sm" style="margin-top:8px" onclick="viewCustomerFromTicket(\''+esc(t.id)+'\')">Full customer profile →</button>':'')+'</details>'}
+
+/* Likely cause (diagnosis) — written at intake by the rules engine or the AI
+   model, re-runnable here. A draft for the team to review: nothing goes to the
+   customer until someone presses Send. */
+const DIAG_CONF={high:['good','High confidence'],medium:['wave','Medium confidence'],low:['dim','Low confidence']};
+function ticketDiagHTML(t){const g=t.diagnosis;const canRun=!(typeof isObserver==='function'&&isObserver());
+  if(!g)return '<div class="tkd tkd-empty"><div class="tkd-h">🩺 Likely cause</div><div class="d">Not diagnosed yet.</div>'+(canRun?'<button class="btn ghost sm" style="margin-top:8px" onclick="rerunDiagnosis(\''+esc(t.id)+'\',this)">Diagnose from app data</button>':'')+'</div>';
+  const c=DIAG_CONF[g.confidence]||DIAG_CONF.low;
+  return '<div class="tkd"><div class="tkd-h">🩺 Likely cause <span class="pill '+c[0]+'">'+c[1]+'</span><span class="tkd-by">'+(g.by==='ai'?'AI draft':'Built-in rules')+' · review before sending</span></div>'
+    +'<div class="tkd-cause">'+esc(g.cause||'')+'</div>'
+    +((g.evidence||[]).length?'<div class="tkd-k">What the app shows</div><ul class="tkd-list">'+g.evidence.map(e=>'<li>'+esc(e)+'</li>').join('')+'</ul>':'')
+    +((g.steps||[]).length?'<div class="tkd-k">Next steps</div><ol class="tkd-list">'+g.steps.map(e=>'<li>'+esc(e)+'</li>').join('')+'</ol>':'')
+    +'<div class="tkd-acts">'+(g.reply&&t.email&&canRun?'<button class="btn sm" onclick="useDiagReply(\''+esc(t.id)+'\')">Use suggested reply</button>':'')+(canRun?'<button class="btn ghost sm" onclick="rerunDiagnosis(\''+esc(t.id)+'\',this)">Re-run</button>':'')+'<span class="tkd-at">'+(g.at?esc(ageStr(new Date(g.at).toISOString())):'')+(g.logCount!=null?' · '+g.logCount+' app event'+(g.logCount===1?'':'s'):'')+'</span></div></div>'}
+function useDiagReply(id){const t=TKTS.find(x=>x.id===id);const ta=document.getElementById('tkv-reply');if(!t||!t.diagnosis||!ta)return;
+  const me=((CURRENT_USER&&CURRENT_USER.name)||'').split(' ')[0];
+  ta.value=t.diagnosis.reply+(me?'\n\n'+me+'\nSafewave':'');ta.style.height='auto';ta.style.height=Math.min(420,ta.scrollHeight+4)+'px';ta.focus();ta.scrollIntoView({block:'center',behavior:'smooth'});toast('Draft added — edit it, then Send')}
+async function rerunDiagnosis(id,btn){if(!hasFirestore()||!firebase.functions){toast('Needs the shared cloud');return}
+  if(btn){btn.disabled=true;btn.textContent='Diagnosing…'}
+  try{const r=await firebase.functions().httpsCallable('diagnoseTicket')({id:id});const t=TKTS.find(x=>x.id===id);if(t&&r.data&&r.data.diagnosis)t.diagnosis=r.data.diagnosis;
+    const el=document.getElementById('tkv-diag');if(el&&t)el.innerHTML=ticketDiagHTML(t);toast('✓ Diagnosis updated')}
+  catch(e){if(btn){btn.disabled=false;btn.textContent='Re-run'}toast('Diagnosis failed — '+((e&&e.message)||'try again'))}}
+const TK_LOG_LABEL={band_connected:'Band connected',band_disconnected:'Band disconnected',app_closed:'App closed',low_battery:'Low band battery',user_login:'Signed in',user_logout:'Signed out',permission_regressed:'Permissions turned off',ancs_not_granted:'iPhone notifications not reaching band',health_snapshot:'Health check',unauthorized_band_attempt:'Tried another person’s band',firmware_update_succeeded:'Firmware updated',firmware_update_failed:'Firmware update failed'};
+function tkLogLine(l){const m=l.m||{};const bits=[];
+  if(l.type==='firmware_update_failed'||l.type==='firmware_update_succeeded'){if(m.otaFromVersion||m.otaToVersion)bits.push((m.otaFromVersion||'?')+' → '+(m.otaToVersion||'?'));if(m.otaPhase)bits.push(m.otaPhase);if(m.otaError)bits.push('“'+m.otaError+'”')}
+  else if(l.type==='health_snapshot'){const W={bluetooth:'Bluetooth off',connection:'band not connected',ancs:'iPhone notifications not reaching band',notifPermission:'app notifications off',listener:'notification access off',battopt:'battery optimization on',autostart:'phone blocks background',bandBattery:'band battery low',firmware:'firmware update available'};
+    if(m.healthWarnings)bits.push('needs attention: '+m.healthWarnings.split(',').map(w=>W[w]||w).join(', '));else bits.push('all checks OK');if(m.healthBandBattery)bits.push('band '+m.healthBandBattery+'%')}
+  else{if(m.reason&&m.reason!=='unknown')bits.push(m.reason);if(m.bleReason)bits.push(m.bleReason);if(m.batteryLevel)bits.push(m.batteryLevel+'%');if(m.missingPermissions)bits.push(m.missingPermissions);if(m.firmwareVersion)bits.push('fw '+m.firmwareVersion)}
+  const bad=/failed|regressed|not_granted|low_battery|unauthorized/.test(l.type)||(l.type==='health_snapshot'&&m.healthWarnings);
+  return '<li class="'+(bad?'warn':'')+'"><b>'+esc(TK_LOG_LABEL[l.type]||l.type)+'</b>'+(bits.length?' · '+esc(bits.join(' · ')):'')+' <span>'+esc(new Date(l.at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))+'</span></li>'}
+function loadTicketLogs(id){const el=()=>document.getElementById('tkv-logs');
+  if(!hasFirestore()){const e=el();if(e)e.innerHTML='<span class="tkc-miss">Needs the shared cloud</span>';return}
+  firebase.firestore().collection('ticket_diag').doc(id).get().then(d=>{const e=el();if(!e)return;const logs=(d.exists&&d.data().logs)||[];
+    e.innerHTML=logs.length?'<ul class="tk-logs">'+logs.slice(0,12).map(tkLogLine).join('')+'</ul>'+(logs.length>12?'<details class="tk-more"><summary>'+(logs.length-12)+' more</summary><ul class="tk-logs">'+logs.slice(12).map(tkLogLine).join('')+'</ul></details>':''):'<span class="tkc-miss">No app activity came with this ticket</span>'})
+    .catch(()=>{const e=el();if(e)e.innerHTML='<span class="tkc-miss">Couldn’t load app activity</span>'})}
 function tkLogReply(id,text,via){const r={by:(CURRENT_USER&&CURRENT_USER.name)||'Safewave',text:text,at:new Date().toISOString(),via:via};
   updTicket(id,x=>{x.replies=(x.replies||[]).concat([r]);x.lastReplyAt=r.at;x.lastReplyBy=r.by;if(x.status==='open')x.status='answered'})}
 function replyViaMailApp(id){const t=TKTS.find(x=>x.id===id);if(!t||!t.email)return;
