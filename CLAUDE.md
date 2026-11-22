@@ -24,6 +24,12 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   `sendUserEmail`, `sourceProspects`, `shopifyOrderWebhook`, `runCampaigns`,
   `scanOverdue`, `askAgent` (calls the Anthropic Messages API, model
   `claude-sonnet-5`, with a local fallback in the frontend).
+- **Alerts reach phones by Web Push.** Every alert is a `notifications` doc; the
+  backend pushes it to the recipient's devices (`push_subs`, owner-only) with a
+  VAPID key it generates and keeps in `server_keys/vapid` (no client access, no
+  secret to set). Server code adds alerts with `addNotification()`; the app calls
+  `pushNow` after it writes one; `scheduledShopifySync` sweeps anything missed.
+  Devices opt in from the Alerts sheet (bell). iPhone needs the Home Screen app.
 - **Data is Firestore.** Collections include: `users`, `crm_accounts`, `tickets`,
   `campaigns`, `build_tasks`, `build_projects`, `inventory`, `fulfillments`,
   `bands`, `returns`, `orders` (server-write only), `purchase_orders`,

@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Safewave">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 /* ================= DESIGN TOKENS ================= */
 :root{
@@ -851,6 +851,164 @@ input[type=date]{color-scheme:dark}
 .sim-log div{white-space:nowrap;padding:1px 0}.sim-log .ok{color:var(--good)}.sim-log .no{color:var(--amber)}.sim-log .ts{color:var(--faint)}
 .sim-note{font-size:11px;color:var(--muted);background:var(--wave-dim);border:1px solid var(--line);border-radius:9px;padding:8px 10px;line-height:1.5}
 @media(prefers-reduced-motion:reduce){.sim-halo.fire{animation:none}.sim-banner{transition:none}}
+
+/* ---- Alerts: bell, in-app banners, sheet rows, push card ---- */
+#notif-bell.has-unread{background:var(--amber-dim);border-color:var(--amber);color:var(--amber)}
+#notif-badge{min-width:18px;height:18px;font-size:11px;top:-5px;right:-5px;box-shadow:0 0 0 2px var(--surface)}
+#nbanners{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);width:min(440px,calc(100% - 24px));z-index:90;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.nbanner{pointer-events:auto;display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--wave);border-radius:14px;box-shadow:0 8px 28px rgba(20,30,50,.18);animation:nbIn .22s ease-out;overflow:hidden}
+.nbanner.safety{border-left-color:var(--safety)}
+.nbanner.out{opacity:0;transform:translateY(-8px);transition:all .2s}
+@keyframes nbIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+.nb-main{flex:1;min-width:0;display:flex;gap:10px;align-items:flex-start;padding:12px 4px 12px 14px;background:none;border:0;text-align:left;color:var(--text);font:inherit;cursor:pointer}
+.nb-dot{width:8px;height:8px;border-radius:50%;background:var(--wave);margin-top:6px;flex:none}
+.nbanner.safety .nb-dot{background:var(--safety)}
+.nb-txt{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:14px}
+.nb-txt span{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.nb-x{flex:none;width:44px;background:none;border:0;color:var(--muted);font-size:16px;cursor:pointer}
+.notif-head{display:flex;align-items:flex-start;gap:12px;margin:6px 0 10px}
+.notif-head .d{color:var(--muted);font-size:13px;margin-top:2px}
+.notif-actions{display:flex;gap:8px;margin-bottom:10px}
+.btn.sm{padding:8px 12px;font-size:13px;min-height:36px;width:auto}
+.nrow{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+.nrow:last-child{border-bottom:0}
+.nrow-main{flex:1;min-width:0;display:flex;gap:10px;align-items:flex-start;padding:12px 2px;background:none;border:0;text-align:left;font:inherit;color:var(--text);cursor:pointer}
+.nrow-dot{width:8px;height:8px;border-radius:50%;margin-top:7px;flex:none;background:transparent}
+.nrow.unread .nrow-dot{background:var(--wave)}
+.nrow.safety .nrow-dot{background:var(--safety)}
+.nrow-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.nrow-t{font-size:15px;font-weight:500;color:var(--muted)}
+.nrow.unread .nrow-t{font-weight:650;color:var(--text)}
+.nrow-d{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.nrow-m{font-size:12px;color:var(--faint)}
+.nrow-x{flex:none;width:44px;background:none;border:0;color:var(--faint);font-size:15px;cursor:pointer;border-radius:10px}
+.nrow-x:hover{color:var(--text);background:var(--surface-2)}
+.push-card{margin-top:16px;padding:14px;border-radius:14px;background:var(--surface-2)}
+.push-card.on{background:var(--good-dim)}
+.pc-row{display:flex;gap:10px;align-items:flex-start}
+.pc-ok{color:var(--good);font-weight:700}
+.pc-t{font-weight:600;font-size:15px}
+.pc-d{color:var(--muted);font-size:13px;margin-top:3px;line-height:1.45}
+.pc-acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.notif-dnd,.notif-tools{margin-top:10px;font-size:13px;color:var(--muted)}
+.notif-dnd summary,.notif-tools summary{cursor:pointer;font-weight:600;color:var(--wave);padding:8px 0}
+.notif-dnd ul{margin:4px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:8px;line-height:1.45}
+
+/* Chat title row with a close button (phones); the close is hidden on desktop. */
+.chat-titlebar{display:flex;align-items:center;gap:8px}
+.chat-titlebar h1{flex:1;min-width:0}
+.chat-close{display:none}
+@media(max-width:859px){.chat-close{display:inline-flex;width:36px;height:36px;flex:none}#s-chat #chat-h1{margin:0}#s-chat .chat-titlebar{margin:0 0 8px}}
+
+/* ===================== REFINEMENT PASS (UI/UX brief, Nov 2026) =====================
+   Same Safewave colors, logo and features — less visual noise. Appended last so it
+   overrides the older rules without rewriting them:
+   · one type family (Inter) on one scale: page title 27, section 18, body 15, meta 12–13
+   · numbers in Inter with tabular figures (mono stays only for code, logs and serials)
+   · 8px spacing rhythm, 14px radius, hairline cards without stacked shadows
+   · the small uppercase eyebrow above each title is dropped: the title says where you are */
+:root{--font-d:'Inter',sans-serif;--shadow:0 1px 2px rgba(20,30,50,.05)}
+:root[data-theme="dark"]{--shadow:0 1px 2px rgba(0,0,0,.25)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--shadow:0 1px 2px rgba(0,0,0,.25)}}
+body{font-size:15px}
+.screen>.eyebrow,.screen .eyebrow{display:none}
+h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
+.sub{font-size:14px;line-height:1.45;margin-bottom:16px}
+.sec-head h2{font-size:18px;font-weight:650;letter-spacing:-.01em}
+.card{padding:14px 16px;margin-bottom:8px}
+.card .t{font-size:15px}
+.card .d{font-size:13px}
+.tile .n,.kv b,.qa-ph b,.qs-num b,.qbtn .qn,.inv-row{font-family:var(--font-b);font-variant-numeric:tabular-nums}
+.tile .n{font-weight:700}
+.qs-grp,.rg-n,.divider,.note .meta,.cmdk-item .type,.cmdk-foot,.rg-comp b{font-family:var(--font-b)}
+.pill{font-family:var(--font-b)}
+
+/* ---- Home: smaller welcome, compact metric strip, Today right under it ---- */
+.pulse-hero{border-radius:16px;padding:14px 16px;margin-bottom:12px}
+.pulse-hero .ph-date{font-size:11px;letter-spacing:.06em}
+.pulse-hero h1{font-size:21px;margin:4px 0 2px}
+.pulse-hero .ph-line{font-size:14px;margin:0}
+.ph-cta{margin-top:10px;padding:7px 12px;border-radius:10px;font-size:13px;font-weight:600}
+.pulse-hero:has(.ph-streak) .ph-date{padding-right:56px}
+.ph-streak{top:12px;right:12px;padding:3px 9px;font-size:11.5px}
+.quick-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:16px}
+.qbtn{min-height:0;padding:10px 10px 9px;gap:2px;border-radius:12px;box-shadow:none}
+.qbtn:hover{transform:none}
+.qbtn .qic{display:none}
+.qbtn .qn{font-size:20px;font-weight:700;line-height:1.1}
+.qbtn .ql{font-size:12px;font-weight:500;line-height:1.25}
+@media(min-width:860px){.qbtn{padding:12px 14px}.qbtn .qic{display:flex;width:28px;height:28px;border-radius:8px;margin-bottom:4px}.qbtn .qic svg{width:16px;height:16px}.qbtn .qn{font-size:22px}}
+#pulse-attn .card{padding:12px 14px;margin-bottom:6px;box-shadow:none}
+.qbtn.attn{border-color:var(--line)}
+.qbtn.attn .qn{color:var(--amber)}
+
+/* ---- CRM: one nav level, compact saved views, readable metric strip ---- */
+.crm-strip .st{padding:10px 12px}
+.crm-strip .st .n{font-size:19px}
+.crm-strip .st .l{white-space:normal;line-height:1.25}
+.sv-chips{display:flex;flex-wrap:wrap;gap:6px}
+.sv-chip{display:inline-flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);font:500 13px var(--font-b);cursor:pointer}
+.sv-chip:hover{border-color:var(--wave)}
+.sv-chip b{font-weight:700;font-variant-numeric:tabular-nums;color:var(--muted)}
+.sv-chip b.amber{color:var(--amber)}.sv-chip b.good{color:var(--good)}.sv-chip b.wave{color:var(--wave)}
+.sv-more{margin-top:8px;font-size:13px;color:var(--muted)}
+.sv-more summary{cursor:pointer;padding:4px 0 8px;color:var(--wave);font-weight:600}
+.crm-acts{display:flex;gap:8px;flex-wrap:wrap}
+.crm-acts .btn{flex:1;min-width:110px;width:auto}
+.crow{padding:10px 12px}
+.crow-nm{font-size:15px;white-space:normal;overflow-wrap:anywhere}
+.crow-sub{font-size:12.5px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.crm-acts .btn{white-space:nowrap;font-size:13.5px;padding-left:10px;padding-right:10px}
+
+/* ---- Financials: compact KPI strip, label/value rows instead of cards-in-cards ---- */
+.kpi-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px;font-size:13px;font-weight:600;color:var(--muted)}
+.kpi-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:16px}
+.kpi-strip .kc{padding:12px 14px;border-right:1px solid var(--line);min-width:0}
+.kpi-strip .kc:last-child{border-right:0}
+.kpi-strip .n{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1;overflow-wrap:anywhere}
+.kpi-strip .l{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.25}
+@media(max-width:600px){.kpi-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi-strip .kc:nth-child(2n){border-right:0}.kpi-strip .kc:nth-child(-n+2){border-bottom:1px solid var(--line)}}
+.frows{width:100%;border-collapse:collapse;font-size:15px}
+.frows th{text-align:left;font-weight:500;color:var(--text);padding:10px 0;border-bottom:1px solid var(--line)}
+.frows th small{display:block;font-size:12px;color:var(--muted);font-weight:400;margin-top:1px}
+.frows td{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding:10px 0 10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.frows tr:last-child th,.frows tr:last-child td{border-bottom:0}
+.frows tr.hl td{color:var(--wave)}
+
+/* Secondary panels (e.g. Shopify signal on Support): collapsed, clearly labelled */
+.side-panel{margin-top:20px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:0 14px}
+.side-panel>summary{list-style:none;display:flex;align-items:center;gap:8px;padding:13px 0;cursor:pointer;font-weight:600;font-size:15px}
+.side-panel>summary::-webkit-details-marker{display:none}
+.side-panel>summary::before{content:'▸';color:var(--wave);transition:transform .15s}
+.side-panel[open]>summary::before{transform:rotate(90deg)}
+.side-panel>summary .pill{margin-left:auto}
+.side-panel[open]{padding-bottom:10px}
+.side-panel .card{box-shadow:none;background:var(--surface-2);border:0}
+
+/* Stock: shipped orders as compact rows; secondary actions inside */
+.order-row{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:6px}
+.order-row>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer}
+.order-row>summary::-webkit-details-marker{display:none}
+.order-row>summary::after{content:'▸';color:var(--faint);transition:transform .15s}
+.order-row[open]>summary::after{transform:rotate(90deg)}
+.order-row .t{font-weight:600;font-size:15px}
+.order-row .d{font-size:12.5px;color:var(--muted)}
+.or-body{padding:0 14px 12px}
+
+/* Release QC on phones: the four gates read as a vertical status list —
+   open/flagged gates full size, finished gates collapse to one line. */
+@media(max-width:760px){
+  .rg-tiles{grid-template-columns:1fr;gap:6px}
+  .rg-tile{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"n name pill" "n who pill" "bar bar bar";column-gap:10px;row-gap:2px;align-items:center;padding:10px 12px;box-shadow:none}
+  .rg-tile .rg-n{grid-area:n;align-self:start;padding-top:3px}
+  .rg-tile .rg-name{grid-area:name}
+  .rg-tile .rg-who{grid-area:who}
+  .rg-tile .pill{grid-area:pill}
+  .rg-tile .qs-bar{grid-area:bar;margin:6px 0 0!important}
+  .rg-tile.rg-done{grid-template-areas:"n name pill";padding:8px 12px;opacity:.85}
+  .rg-tile.rg-done .rg-who,.rg-tile.rg-done .qs-bar{display:none}
+  .rg-tile.rg-warn{border-left:4px solid var(--amber)}
+}
 </style>
 </head>
 <body>
@@ -898,7 +1056,7 @@ input[type=date]{color-scheme:dark}
     <button class="iconbtn" aria-label="Search everything (⌘K)" onclick="openCmdK()">
       <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
     </button>
-    <button class="iconbtn" style="position:relative" aria-label="Notifications" onclick="openNotifs()">
+    <button class="iconbtn" id="notif-bell" style="position:relative" aria-label="Alerts" onclick="openNotifs()">
       <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       <span id="notif-badge" style="display:none">0</span>
     </button>
@@ -1017,7 +1175,7 @@ input[type=date]{color-scheme:dark}
     <main class="screen" id="s-support">
       <p class="eyebrow">Support</p>
       <h1>Tickets &amp; customers</h1>
-      <p class="sub">Your live queue. Add tickets now; automatic capture from the app &amp; email connects next.</p>
+      <p class="sub">Messages from the Safewave app and the customer dashboard land here on their own. Log anything else with Add ticket.</p>
 
       <button class="btn" style="margin-bottom:18px" onclick="openAddTicket()">＋ Add ticket</button>
 
@@ -1031,12 +1189,11 @@ input[type=date]{color-scheme:dark}
         <div id="ticket-resolved" style="display:none"></div>
       </div>
 
-      <div class="sec">
-        <div class="sec-head"><h2>Live customer signal</h2><span class="pill good"><span class="dot"></span>SHOPIFY</span></div>
+      <details class="side-panel">
+        <summary><span>Recent Shopify orders</span><span class="pill good"><span class="dot"></span>SHOPIFY</span></summary>
+        <div class="d" style="margin:0 0 8px">For context when a customer writes in. Fulfillment lives in Operations → Stock &amp; orders.</div>
         <div id="support-orders"></div>
-      </div>
-
-      <div class="note">Tickets are saved on this device for now. Next: automatic capture from the app's Firebase (the in-app report button) and the sales@ inbox, so tickets land here on their own — auto-triaged, SLA-timed, promotable into Build.</div>
+      </details>
     </main>
 
     <!-- BUILD -->
@@ -1069,7 +1226,7 @@ input[type=date]{color-scheme:dark}
     <!-- CHAT -->
     <main class="screen" id="s-chat">
       <p class="eyebrow">Chat · team</p>
-      <h1 id="chat-h1">#general</h1>
+      <div class="chat-titlebar"><h1 id="chat-h1">#general</h1><button class="iconbtn chat-close" type="button" aria-label="Close messages" onclick="goto('s-pulse')">✕</button></div>
       <p class="sub" id="chat-sub">Real-time, for the whole team.</p>
       <div class="chips" id="chat-channels" style="margin-bottom:12px"></div>
       <div id="chat-stream" class="chat-stream"></div>
@@ -1849,12 +2006,14 @@ input[type=date]{color-scheme:dark}
 <div class="sheet" id="sh-notif" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
-    <span class="pill wave">NOTIFICATIONS</span>
-    <h1 style="font-size:20px;margin:11px 0 10px">Alerts</h1>
-    <button class="btn" id="notif-enable" style="display:none;margin-bottom:12px" onclick="enableNotifs()">🔔 Enable phone / desktop alerts</button>
-    <div id="notif-test"></div>
+    <div class="notif-head">
+      <div class="grow"><h1 style="font-size:22px;margin:0">Alerts</h1><div class="d" id="notif-count"></div></div>
+      <button class="iconbtn" aria-label="Close alerts" onclick="closeSheets()">✕</button>
+    </div>
+    <div class="notif-actions" id="notif-actions"><button class="btn ghost sm" onclick="notifReadAll()">Mark all read</button><button class="btn ghost sm" onclick="notifClearAll()">Clear all</button></div>
     <div id="notif-list"></div>
-    <button class="btn ghost" style="margin-top:12px" onclick="closeSheets()">Close</button>
+    <div id="notif-push"></div>
+    <div id="notif-test"></div>
   </div>
 </div>
 
@@ -1879,6 +2038,7 @@ input[type=date]{color-scheme:dark}
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="nbanners" aria-live="assertive"></div>
 
 <!-- Firebase (auto-configured by Firebase Hosting on the live domain) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
@@ -2151,7 +2311,12 @@ function renderFulfillTab(body){
   body.innerHTML=html;
 }
 function fulfillCard(o){return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · paid</div></div><span class="pill amber">TO SHIP</span></div><button class="btn" style="margin-top:10px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill this order</button></div>'}
-function fulfilledCard(o){const f=FULF[o.n]||{};const track=f.tracking||o.tracking||'';const tr=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(track)+'</a>':esc(track)):'';return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+(SIZELABEL[f.size]||'—')+' · '+esc(f.serial||'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+tr+'</div></div><span class="pill good">SHIPPED</span>'+shopifyLine(f)+'</div><div class="row" style="gap:8px;margin-top:9px">'+(f.shopify&&f.shopify.status==='failed'?'<button class="btn ghost" style="flex:1" onclick="pushShopifyFulfill(\''+esc(o.n)+'\')">Retry Shopify</button>':'')+'<button class="btn ghost" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Reprint label</button><button class="btn ghost" style="flex:1" onclick="startReturn(\''+esc(o.n)+'\')">Start return</button></div></div>'}
+function fulfilledCard(o){const f=FULF[o.n]||{};const track=f.tracking||o.tracking||'';const tr=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)" onclick="event.stopPropagation()">'+esc(track)+'</a>':esc(track)):'';
+  const failed=f.shopify&&f.shopify.status==='failed';
+  // Compact row: order · customer · shipment status. Reprint / return sit inside the row's details.
+  return '<details class="order-row"'+(failed?' open':'')+'><summary><div class="grow" style="min-width:0"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+(SIZELABEL[f.size]||'—')+(track?' · tracking '+esc(track):' · no tracking yet')+'</div></div><span class="pill good">SHIPPED</span></summary>'
+    +'<div class="or-body"><div class="d">'+(SIZELABEL[f.size]||'—')+' · '+esc(f.serial||'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+tr+'</div>'+shopifyLine(f)
+    +'<div class="row" style="gap:8px;margin-top:9px;flex-wrap:wrap">'+(failed?'<button class="btn" style="flex:1" onclick="pushShopifyFulfill(\''+esc(o.n)+'\')">Retry Shopify</button>':'')+'<button class="btn ghost sm" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Reprint label</button><button class="btn ghost sm" style="flex:1" onclick="startReturn(\''+esc(o.n)+'\')">Start return</button></div></div></details>'}
 function openFulfill(n){const o=ordersList().find(x=>x.n===n);if(!o)return;ffOrder=n;
   document.getElementById('ff-order').textContent=o.n+' · '+o.name;
   document.getElementById('ff-cust').textContent=o.date+' · $'+o.total+' · paid';
@@ -2568,7 +2733,7 @@ async function runComplyCheck(){
     complyTab='watch';
   }catch(e){
     const m=(e&&e.message)||'';
-    toast(/ANTHROPIC|assistant|precondition/i.test(m)?'Standard-watch needs the assistant — add ANTHROPIC_API_KEY, then retry':'Check failed — '+m);
+    toast(/ANTHROPIC|assistant|precondition/i.test(m)?'Standard-watch needs the connected AI model, which isn’t switched on yet':'Check failed — '+m);
   }
   complyChecking=false;renderComply();
 }
@@ -2978,7 +3143,7 @@ function relTaskRow(l,t,showOwner){
 function relTile(l,g,on){
   const st=relGateStats(l,g),pct=Math.round(st.done/st.total*100);
   const pill=st.complete?'<span class="pill good">Done ✓</span>':st.flags?'<span class="pill amber">⚑ '+st.flags+' flag'+(st.flags===1?'':'s')+'</span>':st.done?'<span class="pill wave">'+st.done+' of '+st.total+'</span>':'<span class="pill dim">Not started</span>';
-  return '<button class="rg-tile'+(on?' on':'')+(st.flags?' rg-warn':'')+'" aria-pressed="'+(on?'true':'false')+'" onclick="relPick('+g.n+')"><span class="rg-n">Gate '+g.n+'</span><span class="rg-name">'+esc(g.name)+'</span><span class="rg-who">'+esc(g.who)+'</span>'
+  return '<button class="rg-tile'+(on?' on':'')+(st.flags?' rg-warn':'')+(st.complete?' rg-done':'')+'" aria-pressed="'+(on?'true':'false')+'" onclick="relPick('+g.n+')"><span class="rg-n">Gate '+g.n+'</span><span class="rg-name">'+esc(g.name)+'</span><span class="rg-who">'+esc(g.who)+'</span>'
     +'<span class="qs-bar" style="margin:4px 0 2px"><i style="width:'+pct+'%'+(st.flags?';background:var(--amber)':'')+'"></i></span>'+pill+'</button>';
 }
 function relGateView(l,g){
@@ -5084,7 +5249,7 @@ function renderPulseQuick(user,needYou){
   let q=qbtn('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',needYou,'My tasks','pulseJumpTasks()',needYou>0);
   if(canSee('s-stock'))q+=qbtn(svgOf('s-stock'),unfulfilled,'To fulfill',"goto('s-stock')",unfulfilled>0);
   if(canSee('s-crm'))q+=qbtn(svgOf('s-crm'),crmFollow,'Follow-ups',"goto('s-crm')",crmFollow>0);
-  if(canSee('s-support'))q+=qbtn(svgOf('s-support'),openTk,'Open tickets',"goto('s-support')",openTk>0);
+  if(canSee('s-support'))q+=qbtn(svgOf('s-support'),openTk,'Tickets',"goto('s-support')",openTk>0);
   // Four tiles, as in the concept. Build tasks and Messages are one tap away in the nav.
   void myBuild;void chatUn;
   el.innerHTML=q;
@@ -5343,6 +5508,7 @@ function mdLite(s){s=esc(s);
   s=s.replace(/```([\s\S]*?)```/g,(m,c)=>'<pre style="white-space:pre-wrap;background:var(--surface-2,rgba(0,0,0,.05));padding:10px;border-radius:8px;overflow:auto">'+c+'</pre>');
   s=s.replace(/^###\s+(.+)$/gm,'<h3>$1</h3>').replace(/^##\s+(.+)$/gm,'<h3>$1</h3>').replace(/^#\s+(.+)$/gm,'<h3>$1</h3>');
   s=s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  s=s.replace(/\[\[goto:(s-[\w:-]+)\|([^\]]+)\]\]/g,(m,pid,l)=>'<button class="btn ghost sm" onclick="agentGo(\''+pid+'\')">'+l+' →</button>');
   const lines=s.split(/\n/);let out='',inList=false;
   lines.forEach(ln=>{const li=ln.match(/^\s*[-*]\s+(.+)/);
     if(li){if(!inList){out+='<ul>';inList=true}out+='<li>'+li[1]+'</li>'}
@@ -5358,17 +5524,63 @@ function agentSend(){const inp=document.getElementById('agent-input');const q=(i
 async function agentAsk(q){if(agentThinking)return;
   AGENT.push({role:'user',content:q});agentThinking=true;renderAgentThread();
   const history=AGENT.slice(0,-1).map(m=>({role:m.role,content:m.content}));
-  let ans=null,apiErr='';
-  if(hasFirestore()){
+  let ans=navAnswer(q),apiErr='';
+  if(!ans&&hasFirestore()){
     try{const r=await firebase.functions().httpsCallable('askAgent')({question:q,context:agentSnapshot(),history:history});ans=(r.data&&r.data.answer)||null;}
     catch(e){apiErr=(e&&e.message)||'';}
   }
   if(!ans){let local;try{local=localAnswer(q)}catch(e){local='Sorry — I hit a snag reading the data.'}
     const notWired=/connected yet|ANTHROPIC/i.test(apiErr)||!hasFirestore();
-    ans=local+(notWired?'\n\n_⚙️ Answered from the built-in engine. For open-ended questions, add an `ANTHROPIC_API_KEY` repo secret to switch on the full AI model._':(apiErr?'\n\n_(The AI model was unreachable just now — answered from the built-in engine.)_':''));
+    ans=local+(notWired?'\n\n_Answered by the built-in assistant, which reads your live data. Open-ended questions need the connected AI model, which isn’t switched on yet._':(apiErr?'\n\n_(The connected AI model was unreachable just now — answered by the built-in assistant.)_':''));
   }
   agentThinking=false;AGENT.push({role:'assistant',content:ans});renderAgentThread();
 }
+/* ---- "Where is …?" — answered from the live menu for THIS person, never guessed ---- */
+const NAV_FIND=[
+  ['s-vault',/\b(vault|password|passwords|logins?|credentials?)\b/],
+  ['s-finance:cash13',/13[- ]?week|cash forecast/],
+  ['s-raise:dataroom',/data ?room/],
+  ['s-crm:campaigns',/\bcampaigns?\b/],
+  ['s-crm:prospect',/\bprospect(or|ing)?\b/],
+  ['s-raise',/\b(fundrais\w*|the raise|investors?|cap table)\b/],
+  ['s-finance',/\b(financ\w*|p&l|pnl|payroll|budget|runway|burn)\b/],
+  ['s-crm',/\b(crm|pipeline|deals?|accounts?|leads?)\b/],
+  ['s-support',/\b(support|tickets?)\b/],
+  ['s-stock',/\b(stock|inventory|orders?|fulfil\w*|shipping|returns?)\b/],
+  ['s-qc',/\b(qc|release qc|release gates?|releases?)\b/],
+  ['s-pulse',/\b(home|today|my work|my tasks)\b/],
+  ['s-build',/\b(build board|build|roadmap|tasks?)\b/],
+  ['s-field',/\bfield( monitor)?\b/],
+  ['s-feedback',/\bfeedback\b/],
+  ['s-chat',/\b(messages|chat|channels?)\b/],
+  ['s-guides',/\bguides?\b/],
+  ['s-know',/\b(assistant|knowledge|copilot)\b/],
+  ['s-users',/\b(users|team roster|roles?|invite)\b/],
+  ['s-comply',/\b(compliance|soc ?2|hipaa)\b/],
+];
+const NAV_SUB={'s-finance:cash13':'13-week cash','s-raise:dataroom':'Data room','s-crm:campaigns':'Campaigns','s-crm:prospect':'Prospect'};
+function navRoute(pid){const page=pid.split(':')[0],sub=NAV_SUB[pid];
+  if(page==='s-pulse')return {path:['Home'],label:'Home'};
+  if(page==='s-chat')return {path:['Messages'],label:'Messages'};
+  const g=navGroupOf(page);if(!g)return null;
+  const path=[g.label];if(navPages(g).length>1)path.push(PAGE_LABEL[page]||page);
+  if(sub)path.push(sub);
+  return {path:path,label:sub||PAGE_LABEL[page]||g.label}}
+function navAnswer(q){const t=(''+q).toLowerCase();
+  if(!/\b(where|how do i (get to|find|open|reach)|how to (get to|find|open)|navigate|go to|take me)\b/.test(t))return null;
+  const hit=NAV_FIND.find(x=>x[1].test(t));if(!hit)return null;
+  const pid=hit[0],page=pid.split(':')[0];
+  if(page!=='s-pulse'&&!NAV_ALLOWED.has(page)){const r=navRoute(pid);return '### '+(r?r.label:'That page')+'\nThat page isn’t in your menu, so I can’t take you there. Access is set per person; ask Brad if you need it.'}
+  const r=navRoute(pid);if(!r)return null;
+  const mobile=window.innerWidth<860;
+  const where=page==='s-pulse'?(mobile?'the **Home** button in the bottom bar':'**Home** in the left sidebar')
+    :page==='s-chat'?(mobile?'**Messages** in the bottom bar':'the speech-bubble button in the top bar')
+    :(mobile?'**Menu** (bottom bar) → ':'the left sidebar → ')+r.path.map(x=>'**'+x+'**').join(' → ');
+  return '### '+r.label+'\nOpen it from '+where+'.\n\n[[goto:'+pid+'|Open '+r.label+']]'}
+function agentGo(pid){const [page,sub]=pid.split(':');
+  if(page==='s-finance'&&sub){finTab=sub}if(page==='s-raise'&&sub&&typeof raiseSec!=='undefined'){try{raiseSec=sub}catch(e){}}
+  if(page==='s-crm'&&sub){goto('s-crm');crmGoTab(sub);return}
+  goto(page)}
 /* ---- On-device answer engine: no API, no key, works offline over live data ---- */
 function localAnswer(q){const s=agentSnapshot();const t=(''+q).toLowerCase();const has=(...w)=>w.some(x=>t.includes(x));
   const fineOK=(typeof financeView==='function'&&financeView()&&s.financials);
@@ -6356,6 +6568,9 @@ function goto(id,btn){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));el.classList.add('on');
   syncNav(id);
   window.scrollTo(0,0);closeSheets();closeNavDrawer();
+  {const nv=document.querySelector('.nav');if(nv)nv.classList.remove('kb-hide');const ch=document.getElementById('s-chat');if(ch&&id!=='s-chat')ch.style.bottom='';}
+  if(id==='s-pulse')refreshPulse();
+  if(id==='s-support')renderSupport();
   if(id==='s-finance')renderFinance();
   if(id==='s-raise')renderRaise();
   if(id==='s-crm'){if(crmTab==='fundraise')crmTab='pipeline';renderCRM();}
@@ -6420,6 +6635,7 @@ function enterApp(user){
   subscribeGuides();
   goto('s-pulse');
   guideDeepLink();
+  pushDeepLink();
 }
 function guideDeepLink(){const m=(location.hash||'').match(/^#guide=([\w-]+)/);if(m)goto('s-guides:'+decodeURIComponent(m[1]))}
 window.addEventListener('hashchange',()=>{if(CURRENT_USER)guideDeepLink()});
@@ -6502,8 +6718,15 @@ function ocjson(v){return esc(JSON.stringify(v))}
 let TKTS=[], tktSource='local';
 function lsTickets(){try{return JSON.parse(localStorage.getItem(TK_KEY)||'[]')}catch(e){return[]}}
 function loadTickets(){return TKTS}
+// Live: a ticket closed on any device (or captured from the app/dashboard)
+// updates the Support queue and the Home "Open tickets" count right away.
+let tktUnsub=null;
 async function syncTickets(){
-  if(hasFirestore()){try{const s=await firebase.firestore().collection('tickets').get();TKTS=s.docs.map(d=>Object.assign({id:d.id},d.data()));tktSource='firestore'}catch(e){TKTS=lsTickets();tktSource='local'}}
+  if(hasFirestore()){
+    if(tktUnsub){try{tktUnsub()}catch(e){}tktUnsub=null}
+    try{tktUnsub=firebase.firestore().collection('tickets').onSnapshot(s=>{TKTS=s.docs.map(d=>Object.assign({id:d.id},d.data()));tktSource='firestore';renderSupport();refreshPulse()},
+      e=>{if(tktSource!=='firestore'){TKTS=lsTickets();tktSource='local';renderSupport();refreshPulse()}});return}
+    catch(e){TKTS=lsTickets();tktSource='local'}}
   else{TKTS=lsTickets();tktSource='local'}
   renderSupport();refreshPulse();
 }
@@ -6511,7 +6734,7 @@ function persistTicket(t){
   if(tktSource==='firestore'&&hasFirestore()){firebase.firestore().collection('tickets').doc(t.id).set(t,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
   else{const a=lsTickets();const i=a.findIndex(x=>x.id===t.id);if(i>=0)a[i]=t;else a.unshift(t);try{localStorage.setItem(TK_KEY,JSON.stringify(a))}catch(e){}}
 }
-function updTicket(id,fn){const t=TKTS.find(x=>x.id===id);if(t){fn(t);persistTicket(t)}return t}
+function updTicket(id,fn){const t=TKTS.find(x=>x.id===id);if(t){fn(t);persistTicket(t);setTimeout(refreshPulse,0)}return t}
 function backendReady(){return hasFirestore()&&!!firebase.functions}
 async function sendTicketReply(id){
   const t=TKTS.find(x=>x.id===id);if(!t)return;
@@ -6786,47 +7009,152 @@ function adminToggleFinance(email){
   }).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
 }
 
-/* ================= NOTIFICATIONS (in-app + browser) ================= */
-let NOTIF=[], notifUnsub=null, notifPrimed=false, notifLastRead=0;
+/* ================= NOTIFICATIONS (in-app + phone push) =================
+   Every alert is a doc in `notifications` (to: a uid, or 'all'). Three ways it
+   reaches you:
+   1. Phone / desktop push (Web Push via the service worker) — arrives with the
+      app closed. Turn on per device from the Alerts sheet; the server pushes
+      every new alert (functions/index.js → deliverPush).
+   2. An in-app banner that stays until you tap it or close it.
+   3. The bell: amber count badge, plus the home-screen icon badge.
+   Read / cleared state lives on your user doc (notifState), so clearing on the
+   phone also clears on the laptop. */
+let NOTIF=[], notifUnsub=null, notifPrimed=false;
+let NSTATE={readAt:0,clearedAt:0,hidden:[],read:[]};
 function uidForName(name){if(!name)return null;const t=(TEAM||[]).find(x=>(x.name||'').toLowerCase()===(''+name).toLowerCase());return t?t.uid:null}
 function notify(to,title,body,link){if(!hasFirestore()||!to||!CURRENT_USER)return;
-  firebase.firestore().collection('notifications').add({to:to,title:title,body:body||'',link:link||'',by:CURRENT_USER.name||CURRENT_USER.email||'',at:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{})}
+  firebase.firestore().collection('notifications').add({to:to,title:title,body:body||'',link:link||'',by:CURRENT_USER.name||CURRENT_USER.email||'',at:firebase.firestore.FieldValue.serverTimestamp()})
+    .then(ref=>{try{firebase.functions().httpsCallable('pushNow')({id:ref.id}).catch(()=>{})}catch(e){}}).catch(()=>{})}
 function notifyAssignee(name,title,body,link){if(!name)return;const uid=uidForName(name);if(!uid||uid===(CURRENT_USER&&CURRENT_USER.uid))return;notify(uid,title,body,link)}
 function notifyAll(title,body,link){notify('all',title,body,link)}
 function notifAtMs(n){return (n.at&&n.at.toMillis)?n.at.toMillis():0}
-function unreadCount(){return NOTIF.filter(n=>notifAtMs(n)>notifLastRead&&n.by!==(CURRENT_USER&&CURRENT_USER.name)).length}
-function renderNotifBadge(){const b=document.getElementById('notif-badge');if(!b)return;const c=unreadCount();b.textContent=c>9?'9+':String(c);b.style.display=c?'flex':'none'}
-function popNotif(n){toast('🔔 '+n.title+(n.body?' — '+n.body:''));
-  try{if(window.Notification&&Notification.permission==='granted'){const nt=new Notification(n.title,{body:n.body||'',icon:'/icon-192.png'});nt.onclick=()=>{try{window.focus()}catch(e){}if(n.link)goto(n.link);nt.close()}}}catch(e){}}
+function nsKey(){return 'sw_nstate_'+((CURRENT_USER&&CURRENT_USER.uid)||'')}
+function nsSave(){NSTATE.hidden=NSTATE.hidden.slice(-200);NSTATE.read=NSTATE.read.slice(-200);
+  try{localStorage.setItem(nsKey(),JSON.stringify(NSTATE))}catch(e){}
+  if(hasFirestore()&&CURRENT_USER&&!CURRENT_USER.fsOff)firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({notifState:NSTATE},{merge:true}).catch(()=>{})}
+function nsMerge(x){if(!x)return;NSTATE.readAt=Math.max(NSTATE.readAt,Number(x.readAt)||0);NSTATE.clearedAt=Math.max(NSTATE.clearedAt,Number(x.clearedAt)||0);
+  NSTATE.hidden=Array.from(new Set(NSTATE.hidden.concat(x.hidden||[])));NSTATE.read=Array.from(new Set(NSTATE.read.concat(x.read||[])))}
+function notifMine(n){return n.by&&CURRENT_USER&&n.by===CURRENT_USER.name}
+// What's in the list: last 7 days, not cleared, not closed.
+function notifVisible(){const weekAgo=Date.now()-7*864e5;return NOTIF.filter(n=>{const t=notifAtMs(n);return (!t||t>=weekAgo)&&!(t&&t<=NSTATE.clearedAt)&&!NSTATE.hidden.includes(n.id)})}
+function notifUnread(n){if(notifMine(n)||NSTATE.read.includes(n.id))return false;const t=notifAtMs(n);return !t||t>NSTATE.readAt}
+function unreadCount(){return notifVisible().filter(notifUnread).length}
+function renderNotifBadge(){const c=unreadCount();const b=document.getElementById('notif-badge');
+  if(b){b.textContent=c>9?'9+':String(c);b.style.display=c?'flex':'none'}
+  const bell=document.getElementById('notif-bell');if(bell)bell.classList.toggle('has-unread',c>0);
+  try{if(navigator.setAppBadge){c?navigator.setAppBadge(c).catch(()=>{}):navigator.clearAppBadge().catch(()=>{})}}catch(e){}
+  if(document.getElementById('sh-notif')&&document.getElementById('sh-notif').classList.contains('on'))renderNotifList()}
+/* In-app banner: stays 10s, or until tapped / closed. Up to 3 stack. */
+function popNotif(n){
+  const wrap=document.getElementById('nbanners');
+  if(!wrap){toast('🔔 '+n.title+(n.body?' — '+n.body:''));return}
+  const el=document.createElement('div');el.className='nbanner'+(/safety/i.test(n.title||'')?' safety':'');el.setAttribute('role','alert');
+  el.innerHTML='<button class="nb-main" type="button"><span class="nb-dot"></span><span class="nb-txt"><b>'+esc(n.title||'Alert')+'</b>'+(n.body?'<span>'+esc(n.body)+'</span>':'')+'</span></button><button class="nb-x" type="button" aria-label="Close alert">✕</button>';
+  const close=()=>{el.classList.add('out');setTimeout(()=>el.remove(),220)};
+  el.querySelector('.nb-main').onclick=()=>{if(n.id){NSTATE.read.push(n.id);nsSave();renderNotifBadge()}close();if(n.link)goto(n.link)};
+  el.querySelector('.nb-x').onclick=close;
+  wrap.prepend(el);while(wrap.children.length>3)wrap.lastChild.remove();
+  setTimeout(close,10000);
+  // System notification too, but only where this device doesn't already get the push.
+  if(!PUSH.on&&window.Notification&&Notification.permission==='granted'){
+    const opts={body:n.body||'',icon:'/icon-192.png',badge:'/icon-192.png',tag:n.id||undefined,data:{link:n.link||''}};
+    try{if(navigator.serviceWorker&&navigator.serviceWorker.controller){navigator.serviceWorker.ready.then(r=>r.showNotification(n.title,opts)).catch(()=>{})}
+      else{const nt=new Notification(n.title,opts);nt.onclick=()=>{try{window.focus()}catch(e){}if(n.link)goto(n.link);nt.close()}}}catch(e){}}}
 function subscribeNotifications(){if(!hasFirestore()||!CURRENT_USER)return;
-  notifLastRead=Number(localStorage.getItem('sw_notif_read_'+CURRENT_USER.uid)||0)||0;notifPrimed=false;
+  NSTATE={readAt:0,clearedAt:0,hidden:[],read:[]};
+  try{nsMerge(JSON.parse(localStorage.getItem(nsKey())||'null'))}catch(e){}
+  NSTATE.readAt=Math.max(NSTATE.readAt,Number(localStorage.getItem('sw_notif_read_'+CURRENT_USER.uid)||0)||0); // pre-sync devices
+  firebase.firestore().collection('users').doc(CURRENT_USER.uid).get().then(d=>{if(d.exists){nsMerge(d.data().notifState);renderNotifBadge()}}).catch(()=>{});
+  notifPrimed=false;
   if(notifUnsub){try{notifUnsub()}catch(e){}}
-  try{notifUnsub=firebase.firestore().collection('notifications').orderBy('at','desc').limit(40).onSnapshot(qs=>{
-    const me=CURRENT_USER.uid,myName=CURRENT_USER.name;
-    qs.docChanges().forEach(ch=>{if(ch.type==='added'&&notifPrimed){const n=ch.doc.data();if((n.to===me||n.to==='all')&&n.by!==myName)popNotif(n)}});
+  try{notifUnsub=firebase.firestore().collection('notifications').orderBy('at','desc').limit(60).onSnapshot(qs=>{
+    const me=CURRENT_USER.uid;
+    qs.docChanges().forEach(ch=>{if(ch.type==='added'&&notifPrimed){const n=Object.assign({id:ch.doc.id},ch.doc.data());if((n.to===me||n.to==='all')&&!notifMine(n))popNotif(n)}});
     NOTIF=[];qs.forEach(d=>{const n=d.data();if(n.to===me||n.to==='all')NOTIF.push(Object.assign({id:d.id},n))});
     notifPrimed=true;renderNotifBadge();
-  },e=>{})}catch(e){}}
-/* Alerts you've already seen go grey; anything older than a week drops off.
-   "Seen" = it was in the list the last time you opened Alerts, or you tapped it. */
-function notifSeenSet(){try{return new Set(JSON.parse(localStorage.getItem('sw_notif_seen_'+((CURRENT_USER&&CURRENT_USER.uid)||''))||'[]'))}catch(e){return new Set()}}
-function notifMarkSeen(ids){try{const s=notifSeenSet();ids.forEach(i=>s.add(i));localStorage.setItem('sw_notif_seen_'+((CURRENT_USER&&CURRENT_USER.uid)||''),JSON.stringify(Array.from(s).slice(-300)))}catch(e){}}
-function openNotifs(){
-  const body=document.getElementById('notif-list');if(!body)return;
-  const prevRead=notifLastRead,seen=notifSeenSet(),weekAgo=Date.now()-7*864e5;
-  const list=NOTIF.filter(n=>{const t=notifAtMs(n);return !t||t>=weekAgo});
-  const isSeen=n=>seen.has(n.id)||(notifAtMs(n)&&notifAtMs(n)<=prevRead);
-  const fresh=list.filter(n=>!isSeen(n)),old=list.filter(isSeen);
-  const card=(n,dim)=>{const t=notifAtMs(n);const time=t?new Date(t).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';return '<div class="card tap'+(dim?' notif-seen':'')+'" tabindex="0" onclick="notifMarkSeen([\''+esc(n.id)+'\']);notifOpen(\''+esc(n.link||'')+'\')"><div class="row"><div class="grow"><div class="t">'+esc(n.title)+'</div><div class="d">'+esc(n.body||'')+(time?' · '+time:'')+'</div></div>'+(dim?'':'<span class="pill wave">NEW</span>')+'</div></div>'};
-  body.innerHTML=list.length?(fresh.map(n=>card(n,false)).join('')+(old.length?'<div class="pulse-sub-h" style="margin-top:12px">Seen</div>'+old.map(n=>card(n,true)).join(''):'')+'<div class="d" style="color:var(--faint);margin-top:10px;text-align:center">Alerts clear after 7 days.</div>'):'<div class="empty"><div class="d">No alerts this week.</div></div>';
-  notifMarkSeen(list.map(n=>n.id));
-  notifLastRead=Date.now();try{localStorage.setItem('sw_notif_read_'+CURRENT_USER.uid,String(notifLastRead))}catch(e){}renderNotifBadge();
-  const en=document.getElementById('notif-enable');if(en)en.style.display=(window.Notification&&Notification.permission==='default')?'':'none';
+  },e=>{})}catch(e){}
+  pushRefresh();
+  try{if(navigator.serviceWorker)navigator.serviceWorker.addEventListener('message',ev=>{const m=ev.data||{};if(m.type==='sw-goto'&&m.link){if(m.id){NSTATE.read.push(m.id);nsSave();renderNotifBadge()}closeSheets();goto(m.link)}})}catch(e){}}
+function notifWhen(t){if(!t)return 'now';const m=Math.round((Date.now()-t)/6e4);if(m<1)return 'now';if(m<60)return m+'m ago';const h=Math.round(m/60);if(h<24)return h+'h ago';return new Date(t).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
+function renderNotifList(){const body=document.getElementById('notif-list');if(!body)return;
+  const list=notifVisible();const un=list.filter(notifUnread);
+  const cnt=document.getElementById('notif-count');if(cnt)cnt.textContent=list.length?(un.length?un.length+' new · ':'')+list.length+' this week':'';
+  const acts=document.getElementById('notif-actions');if(acts)acts.style.display=list.length?'flex':'none';
+  const row=n=>{const u=notifUnread(n),sf=/safety/i.test(n.title||'');
+    return '<div class="nrow'+(u?' unread':'')+(sf?' safety':'')+'"><button class="nrow-main" type="button" onclick="notifTap(\''+esc(n.id)+'\')"><span class="nrow-dot" aria-hidden="true"></span><span class="nrow-txt"><span class="nrow-t">'+esc(n.title||'Alert')+'</span>'+(n.body?'<span class="nrow-d">'+esc(n.body)+'</span>':'')+'<span class="nrow-m">'+esc(notifWhen(notifAtMs(n)))+(n.by?' · '+esc(n.by):'')+'</span></span></button><button class="nrow-x" type="button" aria-label="Clear this alert" onclick="notifHide(\''+esc(n.id)+'\')">✕</button></div>'};
+  body.innerHTML=list.length?list.map(row).join(''):'<div class="empty"><div class="t" style="font-weight:600">You’re all caught up</div><div class="d">New alerts show here, on the bell, and on your phone once phone alerts are on.</div></div>'}
+function notifTap(id){const n=NOTIF.find(x=>x.id===id);if(!n)return;if(!NSTATE.read.includes(id))NSTATE.read.push(id);nsSave();renderNotifBadge();notifOpen(n.link||'')}
+function notifHide(id){NSTATE.hidden.push(id);nsSave();renderNotifBadge();renderNotifList()}
+function notifReadAll(){NSTATE.readAt=Date.now();nsSave();renderNotifBadge();renderNotifList();toast('✓ All marked read')}
+function notifClearAll(){NSTATE.clearedAt=Date.now();NSTATE.readAt=Date.now();NSTATE.hidden=[];nsSave();renderNotifBadge();renderNotifList();toast('✓ Alerts cleared')}
+function openNotifs(){renderNotifList();renderPushCard();
   const tt=document.getElementById('notif-test');
-  if(tt)tt.innerHTML=(CURRENT_USER&&CURRENT_USER.role==='superadmin')?'<div class="card" style="background:var(--surface-2);margin-bottom:12px"><div class="d" style="font-weight:600;color:var(--text);margin-bottom:8px">Test tools <span class="pill dim">super admin</span></div><div class="d" style="margin-bottom:10px">Try the alerts + auto-return flow without Shopify. These write real (clearly-labelled) test records.</div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost" style="flex:1;min-width:120px" onclick="testAlert()">🔔 Test this device</button><button class="btn ghost" style="flex:1;min-width:120px" onclick="simTestOrder()">📦 Fake new order</button><button class="btn ghost" style="flex:1;min-width:120px" onclick="simTestReturn()">↩︎ Fake return</button></div></div>':'';
+  if(tt)tt.innerHTML=(CURRENT_USER&&CURRENT_USER.role==='superadmin')?'<details class="notif-tools"><summary>Test tools <span class="pill dim">super admin</span></summary><div class="d" style="margin:8px 0 10px">Try the alerts + auto-return flow without Shopify. These write real (clearly-labelled) test records.</div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost" style="flex:1;min-width:120px" onclick="simTestOrder()">📦 Fake new order</button><button class="btn ghost" style="flex:1;min-width:120px" onclick="simTestReturn()">↩︎ Fake return</button></div></details>':'';
   openSheet('sh-notif');
-}
-function testAlert(){if(window.Notification&&Notification.permission==='default'){Notification.requestPermission().then(()=>popNotif({title:'🔔 Test alert',body:'Alerts work on this device.',link:'s-pulse'}))}else{popNotif({title:'🔔 Test alert',body:'Alerts work on this device.',link:'s-pulse'})}}
+  // Opening the sheet counts as seeing them: the badge clears, rows keep their NEW mark until you leave.
+  setTimeout(()=>{NSTATE.readAt=Date.now();nsSave();const b=document.getElementById('notif-badge');if(b)b.style.display='none';const bell=document.getElementById('notif-bell');if(bell)bell.classList.remove('has-unread');try{navigator.clearAppBadge&&navigator.clearAppBadge().catch(()=>{})}catch(e){}},1200)}
+
+/* ---- Phone / desktop push ---- */
+const PUSH={on:false,busy:false};
+function pushSupported(){return 'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window}
+function isIOSDevice(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
+function isAndroidDevice(){return /Android/i.test(navigator.userAgent)}
+function isStandaloneApp(){try{return window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(e){return false}}
+function b64urlToU8(s){const p='='.repeat((4-s.length%4)%4);const b=atob((s+p).replace(/-/g,'+').replace(/_/g,'/'));const a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a}
+async function pushSubId(endpoint){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(endpoint));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,40)}
+function swReady(ms){return Promise.race([navigator.serviceWorker.ready,new Promise((_,rej)=>setTimeout(()=>rej(new Error('no-sw')),ms||6000))])}
+async function pushRegister(ask){
+  if(!pushSupported())return 'unsupported';
+  if(!hasFirestore()||!CURRENT_USER||CURRENT_USER.fsOff)return 'offline';
+  let perm=Notification.permission;
+  if(perm==='default'&&ask)perm=await Notification.requestPermission();
+  if(perm!=='granted')return perm;
+  const reg=await swReady();
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub){const r=await firebase.functions().httpsCallable('pushConfig')({});const key=b64urlToU8(r.data.publicKey);
+    try{sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key})}
+    catch(e){const old=await reg.pushManager.getSubscription();if(old){await old.unsubscribe().catch(()=>{});sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key})}else throw e}}
+  const id=await pushSubId(sub.endpoint);
+  await firebase.firestore().collection('push_subs').doc(id).set({uid:CURRENT_USER.uid,name:CURRENT_USER.name||'',sub:JSON.parse(JSON.stringify(sub)),ua:navigator.userAgent.slice(0,160),at:new Date().toISOString()});
+  PUSH.on=true;try{localStorage.setItem('sw_push_on','1')}catch(e){}
+  return 'granted'}
+// On sign-in: if this device already allowed alerts, quietly re-save its subscription.
+function pushRefresh(){if(!pushSupported()||Notification.permission!=='granted')return;pushRegister(false).then(()=>renderPushCard()).catch(()=>{})}
+async function pushEnable(){if(PUSH.busy)return;PUSH.busy=true;renderPushCard();
+  try{const r=await pushRegister(true);
+    if(r==='granted')toast('✓ Phone alerts on for this device');
+    else if(r==='denied')toast('Alerts are blocked for this site — allow them in your phone/browser settings');
+    else if(r==='unsupported')toast(isIOSDevice()?'Add Safewave to your Home Screen first, then open it from there':'This browser can’t do push alerts');
+    else if(r==='offline')toast('Not connected to the shared cloud');}
+  catch(e){toast('Couldn’t turn on alerts — '+((e&&(e.code||e.message))||'try again'))}
+  PUSH.busy=false;renderPushCard()}
+async function pushTestSend(){try{const r=await firebase.functions().httpsCallable('pushTest')({});const d=r.data||{};toast(d.devices?('✓ Test sent to '+d.devices+' device'+(d.devices>1?'s':'')):'No devices on yet — tap “Turn on phone alerts”')}catch(e){toast('Test failed — '+((e&&e.code)||'try again'))}}
+async function pushDisable(){try{const reg=await swReady(3000);const sub=await reg.pushManager.getSubscription();if(sub){const id=await pushSubId(sub.endpoint);await firebase.firestore().collection('push_subs').doc(id).delete().catch(()=>{});await sub.unsubscribe()}}catch(e){}
+  PUSH.on=false;try{localStorage.removeItem('sw_push_on')}catch(e){}renderPushCard();toast('Phone alerts off for this device')}
+function dndHelpHTML(){
+  const ios='<li><b>iPhone — let alerts through Do Not Disturb / Focus:</b> Settings → Focus → Do Not Disturb (repeat for Sleep, Work…) → Apps → Add → <b>Safewave</b>. Then Settings → Notifications → <b>Safewave</b> → Allow, Banner style <b>Persistent</b>, Sounds on.</li>';
+  const andr='<li><b>Android — let alerts through Do Not Disturb:</b> Settings → Notifications → Do Not Disturb → Apps → add <b>Safewave</b> (or Chrome if you use it in the browser). Long-press a Safewave alert → set it to <b>Priority</b> / “Override Do Not Disturb”.</li>';
+  const desk='<li><b>Mac / PC:</b> allow notifications for your browser in System Settings → Notifications (and add it to Focus “Allowed apps”).</li>';
+  const first=isIOSDevice()?ios+andr:isAndroidDevice()?andr+ios:desk+ios+andr;
+  return '<details class="notif-dnd"><summary>Get alerts in Do Not Disturb &amp; silent mode</summary><ul>'+first+'<li><b>Silent switch:</b> the alert still appears on your lock screen and buzzes when vibration is on, but no web app can force a sound past the silent switch. Only Apple-approved Critical Alerts can, and websites can’t get that.</li></ul></details>'}
+function renderPushCard(){const el=document.getElementById('notif-push');if(!el)return;
+  let h='';
+  if(!pushSupported()){
+    h=isIOSDevice()&&!isStandaloneApp()
+      ?'<div class="push-card off"><div class="pc-t">Get alerts on this iPhone</div><div class="pc-d">iPhone only delivers alerts to apps on the Home Screen. Tap <b>Share</b> <span aria-hidden="true">⎋</span> → <b>Add to Home Screen</b>, open Safewave from the new icon, then come back here and tap <b>Turn on phone alerts</b>.</div></div>'
+      :'<div class="push-card off"><div class="pc-t">Push alerts aren’t available in this browser</div><div class="pc-d">Use Chrome, Edge or Safari, or the Home Screen app on iPhone.</div></div>'}
+  else if(Notification.permission==='denied'){
+    h='<div class="push-card off"><div class="pc-t">Alerts are blocked on this device</div><div class="pc-d">'+(isIOSDevice()?'Settings → Notifications → Safewave → Allow Notifications.':'Click the lock icon by the address bar → Notifications → Allow, then reload.')+'</div></div>'}
+  else if(PUSH.on&&Notification.permission==='granted'){
+    h='<div class="push-card on"><div class="pc-row"><span class="pc-ok" aria-hidden="true">✓</span><div class="grow"><div class="pc-t">Phone alerts are on for this device</div><div class="pc-d">New orders, tickets, your tasks and mentions arrive even with the app closed.</div></div></div><div class="pc-acts"><button class="btn ghost sm" onclick="pushTestSend()">Send a test</button><button class="btn ghost sm" onclick="pushDisable()">Turn off here</button></div></div>'}
+  else{
+    h='<div class="push-card off"><div class="pc-t">Get alerts on this device</div><div class="pc-d">Turn on push so alerts reach you with the app closed.</div><button class="btn" style="margin-top:10px" '+(PUSH.busy?'disabled':'')+' onclick="pushEnable()">'+(PUSH.busy?'Turning on…':'🔔 Turn on phone alerts')+'</button></div>'}
+  el.innerHTML=h+dndHelpHTML()}
+// Back-compat for older buttons
+function enableNotifs(){pushEnable()}
+function testAlert(){pushTestSend()}
+// Tapping a push opens the app at ?go=<screen>
+function pushDeepLink(){try{const u=new URL(location.href);const g=u.searchParams.get('go');if(!g)return;u.searchParams.delete('go');const nid=u.searchParams.get('nid');u.searchParams.delete('nid');history.replaceState(null,'',u.pathname+(u.search||'')+u.hash);if(nid){NSTATE.read.push(nid);nsSave()}if(/^s-[\w:-]+$/.test(g))goto(g)}catch(e){}}
 function simTestOrder(){const n='#TEST-'+Date.now().toString(36).toUpperCase().slice(-4);
   notify('all','New order '+n,'Test Customer · $150','s-stock');
   popNotif({title:'New order '+n,body:'Test Customer · $150',link:'s-stock'});
@@ -6841,8 +7169,6 @@ function simTestReturn(){const id='RMA-TEST-'+Date.now().toString(36).toUpperCas
   closeSheets();goto('s-stock');stockTab='returns';renderStock();
   toast('✓ Fake return '+id+' opened — run it through to restock');}
 function notifOpen(link){closeSheets();if(link)goto(link)}
-function enableNotifs(){if(!window.Notification){toast('This browser doesn’t support alerts');return}
-  Notification.requestPermission().then(p=>{toast(p==='granted'?'✓ Alerts on — you’ll get new orders + your tasks':'Alerts blocked — turn them on in browser settings');const en=document.getElementById('notif-enable');if(en)en.style.display=(p==='default')?'':'none'})}
 
 /* ================= TEAM ROSTER · TASKS · BUILD BOARD · CHAT ================= */
 /* date helpers */
@@ -7372,8 +7698,12 @@ function renderChat(){renderChatChannels();subscribeChat();markChannelRead(chatC
    there, so the pinned composer would hide behind it. Use the VisualViewport
    API to raise the chat area's bottom edge to just above the keyboard. */
 let chatVVWired=false;
+function chatTyping(){const a=document.activeElement;return !!(a&&(a.tagName==='TEXTAREA'||(a.tagName==='INPUT'&&/text|search|url|email/.test(a.type||'text')))&&a.closest&&a.closest('#s-chat'))}
 function chatKeyboardFit(){const el=document.getElementById('s-chat');if(!el)return;const vv=window.visualViewport;const nav=document.querySelector('.nav');
-  if(!vv||window.innerWidth>=860||!el.classList.contains('on')){el.style.bottom='';if(nav)nav.classList.remove('kb-hide');return}
+  // Only a focused text box means "keyboard up". Coming back from a PDF or
+  // another app, iOS can report a stale, shrunken viewport with no keyboard —
+  // which used to strand the screen mid-page with the tab bar hidden.
+  if(!vv||window.innerWidth>=860||!el.classList.contains('on')||!chatTyping()){el.style.bottom='';if(nav)nav.classList.remove('kb-hide');return}
   const kb=Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop));
   if(kb>60){el.style.bottom=kb+'px';if(nav)nav.classList.add('kb-hide');}      // keyboard up: sit the composer right on it, hide the tab bar
   else{el.style.bottom='';if(nav)nav.classList.remove('kb-hide');}
@@ -7381,7 +7711,10 @@ function chatKeyboardFit(){const el=document.getElementById('s-chat');if(!el)ret
 function chatWireViewport(){if(chatVVWired||!window.visualViewport)return;chatVVWired=true;
   window.visualViewport.addEventListener('resize',chatKeyboardFit);
   window.visualViewport.addEventListener('scroll',chatKeyboardFit);
-  window.addEventListener('orientationchange',function(){setTimeout(chatKeyboardFit,250)});}
+  window.addEventListener('orientationchange',function(){setTimeout(chatKeyboardFit,250)});
+  // Returning from an opened attachment (PDF, image) or another app: re-seat the layout.
+  const reseat=function(){if(document.visibilityState==='hidden')return;const el=document.getElementById('s-chat');if(el&&el.classList.contains('on')&&window.innerWidth<860){try{window.scrollTo(0,0)}catch(e){}}setTimeout(chatKeyboardFit,50);setTimeout(chatKeyboardFit,400)};
+  window.addEventListener('pageshow',reseat);window.addEventListener('focus',reseat);document.addEventListener('visibilitychange',reseat);}
 function chatFocus(){setTimeout(function(){chatKeyboardFit();const st=document.getElementById('chat-stream');if(st)st.scrollTop=st.scrollHeight},60)}
 function chatBlur(){setTimeout(chatKeyboardFit,60)}
 function renderChatChannels(){const el=document.getElementById('chat-channels');if(!el)return;
@@ -7784,7 +8117,11 @@ function canFundraise(){return financeView()}   // can SEE the raise
 function canEditRaise(){return financeAllowed()} // can change it (never observers)
 function crmTabsHTML(){
   const tab=(id,l,ic)=>'<button class="chip'+(crmTab===id?' on':'')+'" onclick="crmGoTab(\''+id+'\')">'+ic+' '+l+'</button>';
-  return '<div class="chips" style="margin-bottom:16px">'+tab('pipeline','Pipeline','▦')+tab('campaigns','Campaigns','🚀')+tab('prospect','Prospect','🔎')+'</div>';
+  void tab;
+  // One navigation level: Pipeline is the CRM's home. Campaigns and Prospect open
+  // from its action row and carry a single way back.
+  if(crmTab==='pipeline')return '';
+  return '<div class="chips" style="margin-bottom:12px"><button class="chip" onclick="crmGoTab(\'pipeline\')">‹ Pipeline</button></div>';
 }
 function renderCRM(){
   const body=document.getElementById('crm-body');if(!body)return;
@@ -8239,14 +8576,14 @@ function fundraiseCard(a){const cm=COMMIT_META[a.commitStatus]||{label:raiseStag
   return '<div class="card tap" tabindex="0" onclick="openInvestor(\''+a.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(displayName(a))+'</div><div class="d">'+[esc(a.owner&&a.owner!=='Unassigned'?a.owner:''),a.nextStep?esc(a.nextStep):'',dm.label].filter(Boolean).join(' · ')+'</div></div><div style="text-align:right"><div class="mono" style="font-weight:600">'+(c?fmtMoney(c):'—')+'</div><span class="pill '+cm.pill+'">'+cm.label+'</span></div></div></div>'}
 function crmSetView(x){crmView=x;crmDrill=null;renderCRM()}
 function crmBar(){const b=(x,l)=>'<button class="chip'+(crmView===x&&!crmDrill?' on':'')+'" onclick="crmSetView(\''+x+'\')">'+l+'</button>';
-  return '<div class="chips">'+b('hub','◧ Overview')+b('groups','▤ Groups')+b('list','☰ List')+'</div>';}
+  return '<div class="chips"><button class="chip" onclick="crmSetView(\'hub\')">‹ Pipeline</button>'+b('groups','▤ Stages')+b('list','☰ List')+'</div>';}
 function renderPipelineView(v){
   if(!salesAccts().length&&!CRMARCH.length){document.getElementById('crm-sub').textContent='No accounts yet.';v.innerHTML=crmEmpty();return}
   const ps=pipeStats(),stale=ps.rotting;
   const enrolled=CRMA.filter(a=>a.campaign&&a.campaign.status==='active').length;
   document.getElementById('crm-sub').innerHTML=ps.deals+' deal'+(ps.deals===1?'':'s')+' · '+ps.prospects+' prospecting · '+ps.customers+' customers'+(stale?' · <span style="color:var(--amber)">'+stale+' gone quiet</span>':'')+(enrolled?' · <span style="color:var(--wave)">'+enrolled+' in outreach</span>':'')+(crmSource==='local'?' · <span style="color:var(--faint)">local preview</span>':' · <span style="color:var(--good)">shared</span>');
   if(crmDrill){v.innerHTML=crmBar()+renderDrillInner();return}
-  if(crmView==='hub'){v.innerHTML=crmBar()+renderHubInner();hubSearch();return}
+  if(crmView==='hub'){v.innerHTML=renderHubInner();hubSearch();return}
   // classic board / list / follow-up
   const owners=Array.from(new Set(salesAccts().map(a=>a.owner||'Unassigned'))).sort();
   const boards=Array.from(new Set(salesAccts().map(a=>a.board))).sort();
@@ -8291,12 +8628,13 @@ let crmSurface='groups';
 function crmSetSurface(s){crmSurface=s;const el=document.getElementById('crm-home-main');if(el)el.innerHTML=homeSurfaceHTML();document.querySelectorAll('#crm-surface-toggle .chip').forEach(b=>b.classList.toggle('on',b.dataset.s===s))}
 function homeSurfaceHTML(){const list=crmFiltered();return crmSurface==='list'?listHTML(list.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))):groupedHTML(list)}
 function crmStat(n,l,color){return '<div class="st"><div class="n"'+(color?' style="color:var(--'+color+')"':'')+'>'+n+'</div><div class="l">'+esc(l)+'</div></div>'}
+function savedViewChip(k){const v=CRM_VIEWS[k],n=viewCount(k);return '<button class="sv-chip" onclick="openView(\''+k+'\')"><span>'+esc(v.label)+'</span><b class="'+(n?v.pill:'dim')+'">'+n+'</b></button>'}
 function savedViewRow(k){const v=CRM_VIEWS[k],n=viewCount(k);return '<button class="crow tap" style="width:100%;margin-bottom:6px" onclick="openView(\''+k+'\')"><div class="crow-main"><div class="crow-nm" style="font-size:13.5px">'+esc(v.label)+'</div></div><div class="crow-right"><span class="pill '+(n?v.pill:'dim')+'">'+n+'</span></div></button>'}
 function pipeStats(){const S=salesAccts();const deals=S.filter(a=>DEAL_STAGES.includes(a.stage));
   return {deals:deals.length,weighted:deals.reduce((s,a)=>s+weightedValue(a),0),value:deals.reduce((s,a)=>s+dealValue(a),0),prospects:S.filter(a=>PROSPECT_STAGES.includes(a.stage||'New')).length,
     rotting:S.filter(isStale).length,customers:S.filter(a=>a.stage==='Won').length,archived:CRMARCH.length}}
 function rottingNudge(){const r=CRMA.filter(isStale);if(r.length<3)return '';
-  return '<div class="card" style="border-color:var(--amber);margin:0 0 12px"><div class="row" style="align-items:flex-start;gap:10px;flex-wrap:wrap"><div class="grow" style="min-width:200px"><div class="t">'+r.length+' deals have gone quiet</div><div class="d">No activity past their stage limit and no next step booked. Best practice: advance it, book a dated next step the buyer agreed to, or archive it so the pipeline stays honest.</div></div>'
+  return '<div class="card" style="border-color:var(--amber);margin:0 0 12px"><div class="row" style="align-items:flex-start;gap:10px;flex-wrap:wrap"><div class="grow" style="min-width:200px"><div class="t">'+r.length+' deals have gone quiet</div><div class="d">No activity past their stage limit. Advance, book a next step, or archive.</div></div>'
     +'<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost ro-ok" style="width:auto" onclick="openView(\'rotting\')">Review</button><button class="btn ghost" id="arch-all-btn" style="width:auto" onclick="archiveAllRotting(this)">Archive all '+r.length+'</button></div></div></div>'}
 function archiveAllRotting(btn){if(!btn.dataset.armed){btn.dataset.armed='1';btn.textContent='Tap again to archive';btn.style.borderColor='var(--amber)';setTimeout(()=>{if(btn&&btn.isConnected){delete btn.dataset.armed;crmRerenderMain()}},4000);return}
   const r=salesAccts().filter(isStale);r.forEach(a=>{const patch={archived:true,archivedAt:new Date().toISOString(),archivedBy:(CURRENT_USER&&CURRENT_USER.name)||'',archiveReason:'Stale — no activity',preArchiveStage:a.stage||'New'};if(a.campaign&&a.campaign.status==='active')patch.campaign=Object.assign({},a.campaign,{status:'stopped'});updateAccount(a.id,patch)});
@@ -8318,14 +8656,16 @@ function renderHubInner(){const f=crmFollowups();const ps=pipeStats();
       if(f.soon.length){html+='<div class="pulse-sub-h">Due soon · '+f.soon.length+'</div>'+f.soon.slice(0,6).map(x=>followRow(x.a)).join('')}
     }else{html+='<div class="card" style="color:var(--muted);margin:0">Nothing due. Give an account a next step + date and it shows up here.</div>'}
     html+='</div>';
-    html+='<div><div class="sec-head" style="margin-top:0"><h2>Saved views</h2></div>'+Object.keys(CRM_VIEWS).map(savedViewRow).join('')+'</div>';
-    html+='<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost" style="flex:1;min-width:120px" onclick="openAddAcct()">＋ Add</button><button class="btn ghost" style="flex:1;min-width:120px" onclick="crmGoTab(\'campaigns\')">🚀 Campaigns</button><button class="btn ghost" style="flex:1;min-width:120px" onclick="crmGoTab(\'prospect\')">🔎 Prospect</button></div>';
+    {const ks=Object.keys(CRM_VIEWS),has=ks.filter(k=>viewCount(k)),none=ks.filter(k=>!viewCount(k));
+    html+='<div><div class="sec-head" style="margin-top:0"><h2>Saved views</h2></div><div class="sv-chips">'+has.map(savedViewChip).join('')+'</div>'
+      +(none.length?'<details class="sv-more"><summary>More views · '+none.length+' empty</summary><div class="sv-chips">'+none.map(savedViewChip).join('')+'</div></details>':'')+'</div>';}
+    html+='<div class="crm-acts"><button class="btn ghost" onclick="openAddAcct()">＋ Add</button><button class="btn ghost" onclick="crmGoTab(\'campaigns\')">🚀 Campaigns</button><button class="btn ghost" onclick="crmGoTab(\'prospect\')">🔎 Prospect</button></div>';
   html+='</div>';
   // RIGHT surface — the live pipeline (no columns; groups or dense list)
   html+='<div class="crm-surface"><div class="surf-head"><h2 style="font-family:var(--font-d);font-size:18px;font-weight:700">Pipeline</h2>'
     +'<div class="chips" id="crm-surface-toggle" style="margin-left:auto">'
     +'<button class="chip'+(crmSurface==='groups'?' on':'')+'" data-s="groups" onclick="crmSetSurface(\'groups\')">▤ Stages</button>'
-    +'<button class="chip'+(crmSurface==='list'?' on':'')+'" data-s="list" onclick="crmSetSurface(\'list\')">☰ List</button></div></div>';
+    +'<button class="chip'+(crmSurface==='list'?' on':'')+'" data-s="list" onclick="crmSetSurface(\'list\')">☰ List</button><button class="chip" onclick="crmSetView(\'list\')" title="Filter by owner, list or tag">⚲ Filter</button></div></div>';
   html+='<div id="crm-home-main">'+homeSurfaceHTML()+'</div>';
   html+='</div>';
   html+='</div></div>';
@@ -8361,7 +8701,8 @@ function renderCrmMain(){const el=document.getElementById('crm-main');if(!el)ret
   else el.innerHTML=listHTML(list.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')))}
 let crmExpanded={};
 function crmRow(a,showStage){const nm=displayName(a),col=acctColor(nm);const dm=a.dueAt?dueMeta(dayMs(a.dueAt)):null;const stale=isStale(a);
-  const meta=[a.owner&&a.owner!=='Unassigned'?a.owner:'Unassigned',a.location||''].filter(Boolean).join(' · ');
+  const nxt=a.nextStep&&!a.archived&&a.stage!=='Won'&&a.stage!=='Lost'?'Next: '+a.nextStep:'';
+  const meta=[a.owner&&a.owner!=='Unassigned'?a.owner:'Unassigned',nxt||a.location||''].filter(Boolean).join(' · ');
   let rt='';
   if(a.archived)rt+='<span class="pill dim" title="'+esc(a.archiveReason||'')+'">archived</span>';
   else if(dm&&dm.label)rt+='<span class="pill '+(dm.overdue||dm.soon?'amber':'dim')+'">'+esc(dm.label)+'</span>';
@@ -9049,9 +9390,9 @@ function c13CheckIn(){if(!financeAllowed()){toast('View-only — changes are mad
 /* Overview card: the 13-week headline */
 function c13OverviewCard(){const f=cashForecast();
   return '<div class="card"><div class="sec-head"><h2>Next 13 weeks</h2><a class="ro-ok" onclick="finTab=\'cash13\';goto(\'s-finance\')">Open →</a></div>'
-    +'<div class="tiles"><div class="tile"><div class="n"'+(f.low.low?' style="color:var(--amber)"':'')+'>'+fmtMoney(f.low.end)+'</div><div class="l">Lowest · wk of '+esc(c13Label(f.low.start))+'</div></div>'
-    +'<div class="tile"><div class="n">'+fmtMoney(f.last.end)+'</div><div class="l">In 13 weeks</div></div>'
-    +'<div class="tile"><div class="n"'+(f.below?' style="color:var(--amber)"':'')+'>'+f.below+'</div><div class="l">Weeks below buffer</div></div></div>'
+    +'<table class="frows"><tbody><tr><th>Lowest balance <small>week of '+esc(c13Label(f.low.start))+'</small></th><td'+(f.low.low?' style="color:var(--amber)"':'')+'>'+fmtMoney(f.low.end)+'</td></tr>'
+    +'<tr><th>In 13 weeks</th><td>'+fmtMoney(f.last.end)+'</td></tr>'
+    +'<tr><th>Weeks below buffer</th><td'+(f.below?' style="color:var(--amber)"':'')+'>'+f.below+'</td></tr></tbody></table>'
     +(f.stale==null||f.stale>7?'<div class="note" style="margin-top:10px">'+(f.stale==null?'No bank balance check-in yet.':'Bank balance is '+f.stale+' days old.')+' Update it on the 13-week tab.</div>':'')+'</div>'}
 let finTab='overview';
 function finGoTab(t){finTab=t;renderFinance()}
@@ -9065,23 +9406,25 @@ function renderFinance(){
   const bs=buildSpend();const opex=opexManual+bs.totalSpent;
   const gross=rev-cogs,pnlNet=gross-opex;
   const ps=projSeries();
-  document.getElementById('fin-sub').innerHTML='Restricted to '+FINANCE_EMAILS.length+' teammate'+(FINANCE_EMAILS.length!==1?'s':'')+' · Shopify data + your projections';
+  document.getElementById('fin-sub').innerHTML='Operating money: sales, burn and cash. The round itself lives in <a onclick="goRaise()">Fundraise</a>. · Restricted to '+FINANCE_EMAILS.length+' teammate'+(FINANCE_EMAILS.length!==1?'s':'');
   const SEC={};
   SEC.overview=
-    '<div class="tiles" style="margin-bottom:16px">'
-      +ftile(SHOP.grosse90||SHOP.gross90,'Gross · 90 days','LIVE')
-      +ftile(SHOP.lastWeekRev,'Revenue · last wk','LIVE')
-      +ftile(SHOP.lastWeekOrders,'Orders · last wk','LIVE')
-      +ftile(SHOP.aov,'Avg order value','LIVE')
+    // Compact KPI strip (Shopify, live) → runway table → 13 weeks → raise → charts.
+    '<div class="kpi-head"><span>Sales</span><span class="pill wave">Shopify · live</span></div>'
+    +'<div class="kpi-strip">'
+      +kpiCell(SHOP.grosse90||SHOP.gross90,'Gross · 90 days')
+      +kpiCell(SHOP.lastWeekRev,'Revenue · last wk')
+      +kpiCell(SHOP.lastWeekOrders,'Orders · last wk')
+      +kpiCell(SHOP.aov,'Avg order')
     +'</div>'
-    +'<div class="card"><div class="sec-head"><h2>Runway &amp; burn</h2></div>'
-      +'<div class="tiles">'
-        +'<div class="tile"><div class="n">'+fmtMoney(mrr)+'</div><div class="l">Projected MRR</div></div>'
-        +'<div class="tile"><div class="n">'+fmtMoney(burn.total)+'</div><div class="l">Monthly burn (payroll+opex)</div></div>'
-        +'<div class="tile"><div class="n" style="color:'+(net>=0?'var(--good)':'var(--amber)')+'">'+fmtMoney(net)+'</div><div class="l">Net / month</div></div>'
-        +'<div class="tile"><div class="n">'+(runway===null?'∞':runway.toFixed(1))+'</div><div class="l">Months of runway</div></div>'
-      +'</div>'
-      +'<div class="row" style="gap:8px;margin-top:12px;align-items:center"><span class="d" style="font-weight:600;color:var(--text)">Cash on hand</span><input class="field" id="fp-cash" type="number" value="'+(parseMoney(financeData.cashOnHand)||0)+'" style="margin:0;max-width:180px"><button class="btn ghost" onclick="saveCash()">Save</button></div>'
+    +'<div class="card"><div class="sec-head"><h2>Runway &amp; burn</h2><span class="pill dim">your projections</span></div>'
+      +'<table class="frows"><tbody>'
+        +'<tr><th>Projected MRR</th><td>'+fmtMoney(mrr)+'</td></tr>'
+        +'<tr><th>Monthly burn <small>payroll + opex</small></th><td>'+fmtMoney(burn.total)+'</td></tr>'
+        +'<tr><th>Net per month</th><td style="color:'+(net>=0?'var(--good)':'var(--amber)')+'">'+fmtMoney(net)+'</td></tr>'
+        +'<tr class="hl"><th>Runway</th><td>'+(runway===null?'∞':runway.toFixed(1)+' months')+'</td></tr>'
+      +'</tbody></table>'
+      +'<div class="row" style="gap:8px;margin-top:12px;align-items:center"><span class="d" style="font-weight:600;color:var(--text);white-space:nowrap">Cash on hand</span><input class="field" id="fp-cash" type="number" value="'+(parseMoney(financeData.cashOnHand)||0)+'" style="margin:0;max-width:180px"><button class="btn ghost" onclick="saveCash()">Save</button></div>'
       +'<div class="note" style="margin-top:10px">'+(net>=0?'Net-positive at the current run-rate — runway is effectively unlimited while this holds.':'At '+fmtMoney(-net)+'/mo net burn, cash lasts ~'+(runway?runway.toFixed(1):'—')+' months. Grow enterprise MRR or trim opex to extend.')+'</div>'
     +'</div>'
     +c13OverviewCard()
@@ -9135,6 +9478,7 @@ function renderFinance(){
   const strip='<div class="chips" style="margin-bottom:16px">'+tabs.map(t=>'<button class="chip'+(finTab===t[0]?' on':'')+'" onclick="finGoTab(\''+t[0]+'\')">'+t[1]+'</button>').join('')+'</div>';
   body.innerHTML=strip+SEC[finTab];
 }
+function kpiCell(v,l){return '<div class="kc"><div class="n">'+esc(String(v==null?'—':v))+'</div><div class="l">'+esc(l)+'</div></div>'}
 function ftile(v,l,badge){return '<div class="tile"><div class="n">'+esc(String(v==null?'—':v))+'</div><div class="l">'+esc(l)+(badge?' <span class="pill wave" style="font-size:9px;padding:1px 6px">'+badge+'</span>':'')+'</div></div>'}
 function saveCash(){saveFinance({cashOnHand:Number(document.getElementById('fp-cash').value)||0,cash13:Object.assign(c13(),{asOf:ymd(new Date())})},'✓ Saved');renderFinance()}
 function saveProjections(){const pr={customers:Number(document.getElementById('fp-customers').value)||0,avgMrr:Number(document.getElementById('fp-mrr').value)||0,growthPct:Number(document.getElementById('fp-growth').value)||0,horizon:Number(document.getElementById('fp-horizon').value)||12};saveFinance({projections:pr},'✓ Projections saved');renderFinance()}

@@ -209,6 +209,18 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Push devices — one doc per phone/browser that turned on alerts. Only the
+    // signed-in owner can see or change their own; Cloud Functions send to them.
+    match /push_subs/{id} {
+      allow read, delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create, update: if signedIn() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'sub', 'ua', 'at']);
+    }
+    // Server-only keys (the Web Push signing key). No client may read or write.
+    match /server_keys/{id} {
+      allow read, write: if false;
+    }
+
     // Overdue/needs-attention summary, written by the scanOverdue function.
     match /nudges/{id} {
       allow read: if signedIn();
