@@ -359,6 +359,10 @@ input[type=date]{color-scheme:dark}
 .c-group.me .c-react{justify-content:flex-end}
 .re-chip{display:inline-flex;gap:4px;align-items:center;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:1px 8px;font-size:12px;cursor:pointer;user-select:none}
 .re-chip.mine{border-color:var(--wave);background:var(--wave-dim)}
+.re-chip{padding:2px 9px;font-size:12.5px;max-width:100%}
+.re-chip .re-e{font-size:13px}
+.re-chip .re-who{color:var(--muted);font-weight:500;overflow-wrap:anywhere}
+.re-chip.mine .re-who{color:var(--text)}
 .c-act{position:absolute;top:-14px;display:flex;gap:1px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:2px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:5}
 .c-group:not(.me) .c-act{left:6px}
 .c-group.me .c-act{right:6px}
@@ -7247,6 +7251,7 @@ async function loadTeam(){
   try{const qs=await firebase.firestore().collection('users').get();TEAM=qs.docs.map(d=>{const u=d.data()||{};return {uid:d.id,name:u.name||(u.email||'').split('@')[0]||d.id,email:u.email||'',role:u.role||'member',streak:u.streak||0,bestStreak:u.bestStreak||0,activeDays:u.activeDays||0,feedbackCount:u.feedbackCount||0}}).sort((a,b)=>a.name.localeCompare(b.name))}catch(e){TEAM=[]}
   if(CURRENT_USER&&!TEAM.some(t=>t.uid===CURRENT_USER.uid))TEAM.unshift({uid:CURRENT_USER.uid,name:CURRENT_USER.name,email:CURRENT_USER.email,role:CURRENT_USER.role});
   refreshPulse();
+  if(CHATMSGS.length&&typeof renderChatMessages==='function'){const c=document.getElementById('s-chat');if(c&&c.classList.contains('on'))renderChatMessages()} // reaction names
 }
 function assigneeOptions(sel){return '<option value="">Unassigned</option>'+TEAM.map(t=>'<option value="'+esc(t.name)+'"'+(sel===t.name?' selected':'')+'>'+esc(t.name)+'</option>').join('')}
 function isMine(name){if(!name||!CURRENT_USER)return false;const me=(CURRENT_USER.name||'').toLowerCase();const first=me.split(' ')[0];return name.toLowerCase()===me||(first.length>1&&name.toLowerCase().indexOf(first)>=0)}
@@ -7957,7 +7962,13 @@ function chatAttHtml(m){const a=m.att||[];if(!a.length)return '';
 const REACTS=['👍','✅','🎉','❤️','👀'];
 function jattr(fn,a,bb){return 'onclick="'+(fn+'('+ocjson(a)+(bb!==undefined?','+ocjson(bb):'')+')').replace(/"/g,'&quot;')+'"'}
 function chatReactHtml(m){const r=m.reactions||{};const keys=Object.keys(r).filter(k=>(r[k]||[]).length);if(!keys.length)return '';
-  return '<div class="c-react">'+keys.map(k=>{const mine=CURRENT_USER&&r[k].indexOf(CURRENT_USER.uid)>=0;return '<span class="re-chip'+(mine?' mine':'')+'" '+jattr('chatReact',m.id,k)+'>'+k+' '+r[k].length+'</span>'}).join('')+'</div>';}
+  // Each chip says WHO reacted (first names, "You" for you), not just a count.
+  return '<div class="c-react">'+keys.map(k=>{const uids=r[k];const mine=CURRENT_USER&&uids.indexOf(CURRENT_USER.uid)>=0;
+    const all=chatReactNames(uids);const shown=all.length>6?all.slice(0,5).join(', ')+' +'+(all.length-5):all.join(', ');
+    return '<span class="re-chip'+(mine?' mine':'')+'" title="'+esc(k+' '+all.join(', '))+'" aria-label="'+esc(k+' from '+all.join(', ')+(mine?'. Tap to remove yours':'. Tap to add yours'))+'" '+jattr('chatReact',m.id,k)+'><span class="re-e">'+k+'</span><span class="re-who">'+esc(shown)+'</span></span>'}).join('')+'</div>';}
+function chatReactNames(uids){const me=CURRENT_USER&&CURRENT_USER.uid;
+  const names=(uids||[]).map(u=>{if(u===me)return 'You';const t=(TEAM||[]).find(x=>x.uid===u);return t&&t.name?String(t.name).split(' ')[0]:'Teammate'});
+  return names.sort((a,b)=>(a==='You')-(b==='You'))}
 function chatActHtml(m,mine){if(!m.id)return '';
   let h='<div class="c-act">'+REACTS.map(e=>'<button type="button" title="React '+e+'" '+jattr('chatReact',m.id,e)+'>'+e+'</button>').join('');
   if(m.text)h+='<button type="button" title="Copy" '+jattr('chatCopyMsg',m.id)+'>⧉</button>';
