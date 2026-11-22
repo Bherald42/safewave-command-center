@@ -495,7 +495,7 @@ async function handleShopifyOrder(o) {
   await db.collection("orders").doc(id).set(rec, { merge: true });
   await addNotification({
     to: "all", title: "New order " + rec.n, body: rec.name + " · $" + rec.total,
-    link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
+    link: "s-stock:order:" + String(rec.n || "").replace(/[^\w-]/g, ""), by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
 
@@ -542,7 +542,7 @@ async function handleShopifyReturn(topic, body) {
   if (!existing.exists && status === "requested") {
     await addNotification({
       to: "all", title: "Return requested · " + rec.order, body: (customer || "") + (serial ? " · band " + serial : ""),
-      link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
+      link: "s-stock:returns:" + String(rmaId).replace(/[^\w-]/g, ""), by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
 }
@@ -755,7 +755,7 @@ async function handleInboundEmail(p, inboxAddr) {
   const om = subject.match(/order\s*#?\s*(\d{3,7})\s+placed by\s+(.+)$/i);
   if (om) {
     await loadShopifyKeys();
-    if (!shopifyCreds().ok) await addNotification({ to: "all", title: "New Shopify order #" + om[1], body: om[2].trim().slice(0, 60) + " — check Shopify → Orders", link: "s-stock", by: "sales@ inbox", at: admin.firestore.FieldValue.serverTimestamp() });
+    if (!shopifyCreds().ok) await addNotification({ to: "all", title: "New Shopify order #" + om[1], body: om[2].trim().slice(0, 60) + " — check Shopify → Orders", link: "s-stock:order:" + om[1], by: "sales@ inbox", at: admin.firestore.FieldValue.serverTimestamp() });
     return "order";
   }
   // Website contact form (sent by Shopify on the customer's behalf).
@@ -1053,7 +1053,7 @@ async function pullShopifyStock() {
     await addNotification({
       to: "all", title: "Shopify oversold: " + newlyOver.map((z) => names[z] + " (" + stock[z] + ")").join(", "),
       body: "Customers bought more than the store shows in stock. Restock in Shopify or pause the size.",
-      link: "s-stock", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
+      link: "s-stock:inventory", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
   return stock;
@@ -2271,7 +2271,7 @@ async function sendRaiseRollout() {
       catch (e) { logger.error("rollout send failed", em, e && e.message); }
     }
     const u = await db.collection("users").where("email", "==", em).limit(1).get();
-    if (!u.empty) { await addNotification({ to: u.docs[0].id, title: "Weekly raise rollout is ready", body: "Open Fundraise → Meetings", link: "s-raise", by: "Weekly email", at: admin.firestore.FieldValue.serverTimestamp() }); notified++; }
+    if (!u.empty) { await addNotification({ to: u.docs[0].id, title: "Weekly raise rollout is ready", body: "Open Fundraise → Meetings", link: "s-raise:meetings", by: "Weekly email", at: admin.firestore.FieldValue.serverTimestamp() }); notified++; }
   }
   await db.collection("settings").doc("raise").set({ lastRolloutAt: new Date().toISOString() }, { merge: true });
   logger.info(`raise rollout: ${sent} emailed, ${notified} in-app`);
