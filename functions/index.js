@@ -1608,7 +1608,7 @@ exports.ticketIntake = onRequest({ region: REGION }, async (req, res) => {
     to: "all",
     title: (safety ? "⚠ Safety ticket: " : "New ticket: ") + title,
     body: t.customer,
-    link: "s-support",
+    link: "s-support:" + id, // opens this ticket directly
     by: t.by,
     at: admin.firestore.FieldValue.serverTimestamp(),
   });
