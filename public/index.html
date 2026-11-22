@@ -5294,7 +5294,7 @@ function renderPulseHero(user,first,needYou,ongoing,opsCount){
     :(ongoing?('You’re on track — '+ongoing+' item'+(ongoing>1?'s':'')+' in progress'):'Your tasks are clear 🎉 — tap through below');
   el.innerHTML='<div class="pulse-hero">'
     +(s>0?'<span class="ph-streak">🔥 '+s+'d</span>':'')
-    +'<div class="ph-date">'+esc(SNAPSHOT_DATE.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}))+'</div>'
+    +'<div class="ph-date">'+esc(new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}))+'</div>'
     +'<h1>'+esc(greet)+', '+esc(first)+'</h1>'
     +'<p class="ph-line">'+esc(line)+'</p>'
     +'<button class="ph-cta" onclick="pulseJumpTasks()">'+(needYou?'See what needs you':'Review my work')+' →</button>'
@@ -7967,11 +7967,34 @@ function chatKeyboardFit(){const el=document.getElementById('s-chat');if(!el)ret
   // Only a focused text box means "keyboard up". Coming back from a PDF or
   // another app, iOS can report a stale, shrunken viewport with no keyboard —
   // which used to strand the screen mid-page with the tab bar hidden.
-  if(!vv||window.innerWidth>=860||!el.classList.contains('on')||!chatTyping()){el.style.bottom='';if(nav)nav.classList.remove('kb-hide');return}
+  if(!el.classList.contains('on')){el.style.bottom='';kbFit();return}   // other screens: the general tab-bar fit below
+  if(!vv||window.innerWidth>=860||!chatTyping()){el.style.bottom='';if(nav)nav.classList.remove('kb-hide');return}
   const kb=Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop));
   if(kb>60){el.style.bottom=kb+'px';if(nav)nav.classList.add('kb-hide');}      // keyboard up: sit the composer right on it, hide the tab bar
   else{el.style.bottom='';if(nav)nav.classList.remove('kb-hide');}
   const st=document.getElementById('chat-stream');if(st)st.scrollTop=st.scrollHeight;}
+/* Phones, every screen but Messages (which has its own fit above): hide the tab
+   bar while someone is typing, so it doesn't float over the form just above the
+   keyboard, and re-seat fixed bars once the keyboard closes. iOS Home Screen
+   apps can otherwise leave the tab bar stranded mid-screen until the next
+   scroll (seen on Fundraise → Meetings after filling in the time). */
+function isTextField(el){if(!el||!el.tagName)return false;if(el.isContentEditable||el.tagName==='TEXTAREA')return true;
+  return el.tagName==='INPUT'&&!/^(button|submit|reset|checkbox|radio|range|file|color|image|hidden)$/i.test(el.type||'')}
+let kbWasUp=false;
+function kbReseat(){requestAnimationFrame(()=>{const x=window.scrollX,y=window.scrollY;window.scrollTo(x,y+1);window.scrollTo(x,y)})}
+function kbFit(){const nav=document.querySelector('.nav');if(!nav)return;const ch=document.getElementById('s-chat');if(ch&&ch.classList.contains('on'))return;
+  if(window.innerWidth>=860){nav.classList.remove('kb-hide');kbWasUp=false;return}
+  const vv=window.visualViewport,typing=isTextField(document.activeElement);
+  const kb=vv?Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop)):0;
+  const up=typing&&(!vv||kb>60);
+  nav.classList.toggle('kb-hide',up);
+  if(kbWasUp&&!up)kbReseat();
+  kbWasUp=up}
+(function(){try{
+  document.addEventListener('focusin',e=>{if(isTextField(e.target))setTimeout(kbFit,350)});
+  document.addEventListener('focusout',()=>setTimeout(()=>{const was=kbWasUp;kbFit();if(!was&&!isTextField(document.activeElement)&&window.innerWidth<860)kbReseat()},150));
+  if(window.visualViewport){window.visualViewport.addEventListener('resize',kbFit);window.visualViewport.addEventListener('scroll',kbFit)}
+}catch(e){}})();
 function chatWireViewport(){if(chatVVWired||!window.visualViewport)return;chatVVWired=true;
   window.visualViewport.addEventListener('resize',chatKeyboardFit);
   window.visualViewport.addEventListener('scroll',chatKeyboardFit);
