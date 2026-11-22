@@ -41,6 +41,12 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   no Cloud Scheduler) also opens **AUTO-** tickets on its own from app telemetry (failed firmware update, alerts can't reach the
   band, repeated disconnects, band silent 2+ days); one per customer + issue,
   reopened if it recurs. Super admins can pause it (`settings/support.autoTickets`).
+- **Shopify and the sales@ inbox connect from inside the app.** A super admin
+  pastes the Shopify app keys (Stock → Connect Shopify) or the IONOS mailbox
+  password (Support → Connect); Cloud Functions test them and keep them in
+  `server_keys/{shopify,inbox}` (no client access). Repo secrets still win if set.
+  `scheduledShopifySync` (every 15 min) syncs orders/stock and reads new sales@
+  mail (IMAP, read-only) into Email tickets; email tickets reply from sales@.
 - **Data is Firestore.** Collections include: `users`, `crm_accounts`, `tickets`,
   `campaigns`, `build_tasks`, `build_projects`, `inventory`, `fulfillments`,
   `bands`, `returns`, `orders` (server-write only), `purchase_orders`,

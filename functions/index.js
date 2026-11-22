@@ -135,15 +135,29 @@ exports.pushTest = onCall({ region: REGION }, async (request) => {
  * ------------------------------------------------------------------ */
 exports.sendUserEmail = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to send email.");
-  const { to, subject, text, accountId, ticketId, auto } = request.data || {};
+  const { to, subject, text, accountId, ticketId, auto, fromInbox } = request.data || {};
   if (!to || !text) throw new HttpsError("invalid-argument", "Recipient and message are required.");
 
-  const creds = await getCreds(request.auth.uid);
+  // Email tickets can be answered from the shared sales@ mailbox (same thread).
+  let creds = null, threadHeaders = null;
+  if (fromInbox && ticketId) {
+    if (request.auth.token.email === "jared@safewavetech.com") throw new HttpsError("permission-denied", "View-only.");
+    const ib = await inboxCreds();
+    if (!ib) throw new HttpsError("failed-precondition", "The sales@ inbox isn't connected.");
+    creds = { email: ib.email, pass: ib.pass, smtp: ib.smtpHost, port: ib.smtpPort };
+    const tk = await db.collection("tickets").doc(String(ticketId)).get();
+    const mid = tk.exists ? ((tk.data().lastMessageId) || (tk.data().source && tk.data().source.messageId) || "") : "";
+    if (mid && /^<.+>$/.test(mid)) threadHeaders = { inReplyTo: mid, references: [mid] };
+  } else {
+    creds = await getCreds(request.auth.uid);
+  }
   if (!creds) throw new HttpsError("failed-precondition", "Connect your email first (Account → Connect email).");
-  const sender = senderFrom(creds, await getProfile(request.auth.uid));
+  const prof = await getProfile(request.auth.uid);
+  const sender = senderFrom(creds, prof);
+  if (fromInbox) sender.name = (prof.name || "Safewave") + " · Safewave";
 
   try {
-    await deliver(creds, sender, { to, subject, text });
+    await deliver(creds, sender, { to, subject, text, threadHeaders });
   } catch (e) {
     logger.error("sendUserEmail failed", e && e.message);
     throw new HttpsError("internal", "Send failed — check your email address and app password in Connect email.");
@@ -422,7 +436,8 @@ exports.sourceProspects = onCall({ region: REGION }, async (request) => {
  */
 exports.shopifyOrderWebhook = onRequest({ region: REGION }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).send("POST only"); return; }
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET || "";
+  await loadShopifyKeys();
+  const secret = process.env.SHOPIFY_WEBHOOK_SECRET || (SHOPIFY_FS && SHOPIFY_FS.webhookSecret) || "";
   if (!secret) { res.status(503).send("Webhook secret not configured"); return; }
 
   const hmac = req.get("X-Shopify-Hmac-Sha256") || "";
@@ -553,11 +568,24 @@ const SHOPIFY_API_VERSION = "2026-10";
 //  - SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET: an app made in Shopify's Dev
 //    Dashboard (the only kind Shopify lets you create now). We trade them for
 //    a 24-hour token with the client-credentials grant and cache it.
+/* Shopify keys come from repo secrets (functions/.env) OR — so a super admin
+   can connect the store from inside the Command Center without touching
+   GitHub — from server_keys/shopify, a server-only doc (rules deny every
+   client). loadShopifyKeys() refreshes the Firestore copy at most once a
+   minute; every Shopify entry point awaits it before using shopifyCreds(). */
+let SHOPIFY_FS = null, SHOPIFY_FS_AT = 0;
+async function loadShopifyKeys(force) {
+  if (process.env.SHOPIFY_STORE_DOMAIN) return;
+  if (!force && Date.now() - SHOPIFY_FS_AT < 60e3) return;
+  try { const k = await db.collection("server_keys").doc("shopify").get(); SHOPIFY_FS = k.exists ? k.data() : null; } catch (e) { /* keep last */ }
+  SHOPIFY_FS_AT = Date.now();
+}
 function shopifyCreds() {
-  const domain = (process.env.SHOPIFY_STORE_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
-  const token = process.env.SHOPIFY_ADMIN_TOKEN || "";
-  const clientId = process.env.SHOPIFY_CLIENT_ID || "";
-  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET || "";
+  const fs = (!process.env.SHOPIFY_STORE_DOMAIN && SHOPIFY_FS) || {};
+  const domain = (process.env.SHOPIFY_STORE_DOMAIN || fs.domain || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  const token = process.env.SHOPIFY_ADMIN_TOKEN || fs.token || "";
+  const clientId = process.env.SHOPIFY_CLIENT_ID || fs.clientId || "";
+  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET || fs.clientSecret || "";
   return { domain: domain, token: token, clientId: clientId, clientSecret: clientSecret,
     ok: !!(domain && (token || (clientId && clientSecret))) };
 }
@@ -622,11 +650,205 @@ async function pullShopifyOrders(opts) {
 }
 
 // Callable: "Sync now" / "Backfill history" from the Stock screen.
+
+async function requireSuper(request) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  const me = await db.collection("users").doc(request.auth.uid).get();
+  if (!(me.exists && me.data().role === "superadmin")) throw new HttpsError("permission-denied", "Super admin only.");
+  return (request.auth.token && request.auth.token.email) || request.auth.uid;
+}
+// Connect the Shopify store from inside the Command Center. Tests the keys
+// against the store first; only working keys are saved (server_keys/shopify,
+// never readable by any client). Then pulls order history and stock.
+exports.saveShopifyConnection = onCall({ region: REGION, timeoutSeconds: 300 }, async (request) => {
+  const by = await requireSuper(request);
+  const d = request.data || {};
+  let domain = String(d.domain || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  if (domain && !/\./.test(domain)) domain += ".myshopify.com";
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(domain)) throw new HttpsError("invalid-argument", "Use the store's .myshopify.com address (e.g. safewavetech.myshopify.com).");
+  const cand = { domain, token: String(d.token || "").trim(), clientId: String(d.clientId || "").trim(), clientSecret: String(d.clientSecret || "").trim(), webhookSecret: String(d.webhookSecret || "").trim() };
+  if (!cand.token && !(cand.clientId && cand.clientSecret)) throw new HttpsError("invalid-argument", "Paste the Admin API access token, or the Client ID and Client secret.");
+  if (process.env.SHOPIFY_STORE_DOMAIN) throw new HttpsError("failed-precondition", "Shopify is already connected through repo secrets.");
+  const prev = SHOPIFY_FS;
+  SHOPIFY_FS = cand; SHOPIFY_FS_AT = Date.now(); shopifyTokenCache = { token: "", exp: 0 };
+  let shopName = "";
+  try { const r = await shopifyGql("{ shop { name myshopifyDomain } }"); shopName = (r.shop && r.shop.name) || ""; }
+  catch (e) { SHOPIFY_FS = prev; shopifyTokenCache = { token: "", exp: 0 }; throw new HttpsError("failed-precondition", "Shopify didn't accept those keys — " + ((e && e.message) || "check them and that the app is installed")); }
+  await db.collection("server_keys").doc("shopify").set(Object.assign({}, cand, { savedBy: by, savedAt: new Date().toISOString() }));
+  await db.collection("settings").doc("shopify").set({ connected: true, domain, shopName, connectedAt: new Date().toISOString(), connectedBy: by, webhook: !!cand.webhookSecret }, { merge: true });
+  let synced = 0, stock = true;
+  try { synced = await pullShopifyOrders({ backfill: true, by: by }); } catch (e) { logger.warn("first sync failed", e && e.message); }
+  try { await pullShopifyStock(); } catch (e) { stock = false; logger.warn("first stock pull failed", e && e.message); }
+  return { ok: true, shopName, synced, stock };
+});
+exports.disconnectShopify = onCall({ region: REGION }, async (request) => {
+  await requireSuper(request);
+  await db.collection("server_keys").doc("shopify").delete().catch(() => {});
+  await db.collection("settings").doc("shopify").set({ connected: false, disconnectedAt: new Date().toISOString() }, { merge: true });
+  SHOPIFY_FS = null; SHOPIFY_FS_AT = Date.now(); shopifyTokenCache = { token: "", exp: 0 };
+  return { ok: true };
+});
+
+/* ------------------------------------------------------------------ *
+ * SALES@ INBOX → TICKETS
+ * Every 15 minutes (with the Shopify sync) the shared sales@ mailbox is read
+ * over IMAP — read-only: messages are never moved, deleted or marked read.
+ *  - Customer questions become Email tickets (with a first diagnosis + draft
+ *    reply); a reply on the same thread lands on the same ticket and reopens it.
+ *  - The website's contact form (sent by Shopify) is treated as the customer
+ *    who filled it in.
+ *  - Shopify order notifications raise a "new order" alert while the Shopify
+ *    API isn't connected (once it is, the order sync covers them).
+ *  - Newsletters, auto-replies, bounces and the team's own mail are skipped.
+ * Credentials live in server_keys/inbox (server-only); replies to email
+ * tickets go out from sales@ over the same account's SMTP.
+ * ------------------------------------------------------------------ */
+async function inboxCreds() { const s = await db.collection("server_keys").doc("inbox").get(); return s.exists ? s.data() : null; }
+function imapClient(c) {
+  const { ImapFlow } = require("imapflow");
+  return new ImapFlow({ host: c.imapHost, port: Number(c.imapPort) || 993, secure: Number(c.imapPort || 993) === 993, auth: { user: c.email, pass: c.pass }, logger: false });
+}
+exports.saveInboxConnection = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
+  const by = await requireSuper(request);
+  const d = request.data || {};
+  const c = { email: String(d.email || "").trim().toLowerCase(), pass: String(d.pass || ""), imapHost: String(d.imapHost || "imap.ionos.com").trim(), imapPort: Number(d.imapPort) || 993, smtpHost: String(d.smtpHost || "smtp.ionos.com").trim(), smtpPort: Number(d.smtpPort) || 587 };
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(c.email) || !c.pass) throw new HttpsError("invalid-argument", "Enter the mailbox address and its password.");
+  const client = imapClient(c);
+  try { await client.connect(); await client.mailboxOpen("INBOX", { readOnly: true }); await client.logout(); }
+  catch (e) { try { await client.logout(); } catch (x) { /* closed */ } throw new HttpsError("failed-precondition", "Couldn't sign in to the mailbox — check the address, password and server (" + ((e && (e.responseText || e.message)) || "login failed") + ")"); }
+  await db.collection("server_keys").doc("inbox").set(Object.assign({}, c, { savedBy: by, savedAt: new Date().toISOString() }));
+  await db.collection("server_keys").doc("inbox_state").delete().catch(() => {});
+  await db.collection("settings").doc("inbox").set({ connected: true, email: c.email, connectedAt: new Date().toISOString(), connectedBy: by }, { merge: true });
+  const r = await pollInbox().catch((e) => { logger.warn("first inbox poll", e && e.message); return { tickets: 0, replies: 0 }; });
+  return { ok: true, email: c.email, tickets: r.tickets || 0, replies: r.replies || 0 };
+});
+exports.disconnectInbox = onCall({ region: REGION }, async (request) => {
+  await requireSuper(request);
+  await db.collection("server_keys").doc("inbox").delete().catch(() => {});
+  await db.collection("settings").doc("inbox").set({ connected: false, disconnectedAt: new Date().toISOString() }, { merge: true });
+  return { ok: true };
+});
+exports.pollInboxNow = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  return await pollInbox();
+});
+function cleanEmailBody(t) {
+  let s = String(t || "").replace(/\r/g, "");
+  const cut = s.search(/^\s*(On .{4,200}wrote:|-{2,}\s*Original Message\s*-{2,}|From: .+\nSent: |_{8,})/im);
+  if (cut > 20) s = s.slice(0, cut);
+  s = s.split("\n").filter((l) => !/^\s*>/.test(l)).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return s.slice(0, 5000);
+}
+const normSubject = (s) => String(s || "").replace(/\[[A-Z]{2,4}-[A-Z0-9]{4,12}\]/g, "").replace(/^\s*((re|fw|fwd|aw|sv)\s*:\s*)+/i, "").replace(/\s+/g, " ").trim().toLowerCase();
+async function handleInboundEmail(p, inboxAddr) {
+  const hdr = (k) => { const v = p.headers && p.headers.get(k); return v ? String(typeof v === "object" ? (v.value || v.text || JSON.stringify(v)) : v) : ""; };
+  const from = (p.from && p.from.value && p.from.value[0]) || {};
+  let addr = String(from.address || "").toLowerCase(), name = String(from.name || "").trim();
+  const subject = String(p.subject || "").trim();
+  const body = cleanEmailBody(p.text || (p.html ? String(p.html).replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/[ \t]+/g, " ") : ""));
+  const msgId = String(p.messageId || "") || crypto.createHash("sha1").update(addr + subject + String(p.date)).digest("hex");
+  const seenRef = db.collection("inbox_seen").doc(crypto.createHash("sha1").update(msgId).digest("hex").slice(0, 32));
+  if ((await seenRef.get()).exists) return null;
+  await seenRef.set({ at: Date.now() });
+  const isShopify = /@shopify\.com$/.test(addr) || /shopify/i.test(hdr("x-mailer") + hdr("x-shopify-shop-domain"));
+  // Shopify order notification → alert while the Shopify API isn't connected.
+  const om = subject.match(/order\s*#?\s*(\d{3,7})\s+placed by\s+(.+)$/i);
+  if (om) {
+    await loadShopifyKeys();
+    if (!shopifyCreds().ok) await addNotification({ to: "all", title: "New Shopify order #" + om[1], body: om[2].trim().slice(0, 60) + " — check Shopify → Orders", link: "s-stock", by: "sales@ inbox", at: admin.firestore.FieldValue.serverTimestamp() });
+    return "order";
+  }
+  // Website contact form (sent by Shopify on the customer's behalf).
+  if (isShopify) {
+    const rt = (p.replyTo && p.replyTo.value && p.replyTo.value[0]) || null;
+    if (!rt || !/customer message|contact/i.test(subject)) return "skip";
+    addr = String(rt.address || "").toLowerCase(); name = String(rt.name || "").trim() || (body.match(/^\s*Name:\s*(.+)$/im) || [])[1] || "";
+  }
+  if (!addr || addr === inboxAddr || /@safewavetech\.com$/.test(addr)) return "skip";
+  if (/^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|bounce)/.test(addr)) return "skip";
+  if (/auto-(replied|generated)/i.test(hdr("auto-submitted")) || /bulk|list|junk/i.test(hdr("precedence")) || (p.headers && p.headers.get && p.headers.get("list")) || hdr("list-unsubscribe") || hdr("list-id")) return "skip";
+  if (/^(auto(matic)? ?reply|out of (the )?office|undeliverable|delivery status)/i.test(subject)) return "skip";
+  const text = body || subject;
+  if (!text) return "skip";
+  const nowIso = new Date().toISOString();
+  // Same thread? Ticket id in the subject, or same sender + same subject within 30 days.
+  const idm = subject.match(/\[((?:EM|TK|APP|AUTO)-[A-Z0-9]{4,12})\]/);
+  let ref = null;
+  if (idm) { const s = await db.collection("tickets").doc(idm[1]).get(); if (s.exists) ref = s.ref; }
+  if (!ref) {
+    const q = await db.collection("tickets").where("email", "==", addr).limit(30).get();
+    const ns = normSubject(subject);
+    const hit = q.docs.find((x) => { const t = x.data(); return t.channel === "Email" && normSubject(t.title) === ns && Date.now() - Date.parse(t.lastCustomerAt || t.created) < 30 * 864e5; });
+    if (hit) ref = hit.ref;
+  }
+  if (ref) {
+    const t = (await ref.get()).data() || {};
+    await ref.set({ replies: (t.replies || []).concat([{ by: name || addr, text: text.slice(0, 5000), at: nowIso, via: "customer-email" }]), status: "open", lastCustomerAt: nowIso, lastMessageId: msgId }, { merge: true });
+    await addNotification({ to: "all", title: "Reply from " + (name || addr), body: subject.slice(0, 80), link: "s-support:" + ref.id, by: "sales@ inbox", at: admin.firestore.FieldValue.serverTimestamp() });
+    return "reply";
+  }
+  const id = "EM-" + crypto.createHash("sha1").update(msgId).digest("hex").slice(0, 10).toUpperCase();
+  const firstLine = (subject || text.split("\n")[0] || "Email").trim();
+  const safety = SAFETY_WORDS.test(subject + " " + text);
+  const t = {
+    id, title: firstLine.length > 90 ? firstLine.slice(0, 87) + "…" : firstLine,
+    customer: name || addr, email: addr, channel: "Email", product: "General",
+    sev: safety ? "safety" : "medium", desc: text, assignee: "", due: "", status: "open",
+    created: (p.date ? new Date(p.date) : new Date()).toISOString(), lastCustomerAt: nowIso,
+    by: isShopify ? "Website contact form" : "sales@ inbox",
+    source: { collection: "email", messageId: msgId, mailbox: inboxAddr },
+  };
+  const ref2 = db.collection("tickets").doc(id);
+  await ref2.set(t);
+  try { await ref2.set({ diagnosis: await diagnoseTicket(t, []) }, { merge: true }); } catch (e) { /* optional */ }
+  await addNotification({ to: "all", title: (safety ? "⚠ Safety email: " : "New email: ") + t.title, body: t.customer, link: "s-support:" + id, by: "sales@ inbox", at: admin.firestore.FieldValue.serverTimestamp() });
+  return "ticket";
+}
+async function pollInbox() {
+  const c = await inboxCreds();
+  if (!c) return { skipped: "not connected" };
+  const { simpleParser } = require("mailparser");
+  const stRef = db.collection("server_keys").doc("inbox_state");
+  const st = (await stRef.get()).data() || {};
+  const client = imapClient(c);
+  const out = { tickets: 0, replies: 0, orders: 0, skipped: 0 };
+  await client.connect();
+  let lock = null;
+  try {
+    lock = await client.getMailboxLock("INBOX");
+    const box = client.mailbox;
+    const sameBox = st.uidValidity && String(st.uidValidity) === String(box.uidValidity);
+    let uids = sameBox && st.lastUid
+      ? (await client.search({ uid: (Number(st.lastUid) + 1) + ":*" }, { uid: true })).filter((u) => u > Number(st.lastUid))
+      : await client.search({ since: new Date(Date.now() - 3 * 864e5) }, { uid: true });
+    uids = (uids || []).sort((a, b) => a - b).slice(0, 40);
+    let maxUid = Number(st.lastUid) || 0;
+    for (const uid of uids) {
+      try {
+        const m = await client.fetchOne(String(uid), { source: true, flags: true }, { uid: true });
+        const wasSeen = m && m.flags && m.flags.has && m.flags.has("\\Seen");
+        if (m && !wasSeen) { try { await client.messageFlagsRemove(String(uid), ["\\Seen"], { uid: true }); } catch (e) { /* read-only is fine */ } }
+        const r = m && m.source ? await handleInboundEmail(await simpleParser(m.source), c.email) : null;
+        if (r === "ticket") out.tickets++; else if (r === "reply") out.replies++; else if (r === "order") out.orders++; else out.skipped++;
+      } catch (e) { logger.warn("inbox message " + uid, e && e.message); }
+      if (uid > maxUid) maxUid = uid;
+    }
+    if (!uids.length && !st.lastUid) maxUid = Math.max(0, (Number(box.uidNext) || 1) - 1);
+    await stRef.set({ lastUid: maxUid, uidValidity: String(box.uidValidity), lastPollAt: new Date().toISOString(), lastCounts: out });
+    await db.collection("settings").doc("inbox").set({ lastPollAt: new Date().toISOString(), lastCounts: out }, { merge: true });
+  } finally {
+    if (lock) lock.release();
+    try { await client.logout(); } catch (e) { /* closed */ }
+  }
+  return out;
+}
+
 exports.syncShopifyOrders = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to sync orders.");
+  await loadShopifyKeys();
   if (!shopifyCreds().ok) {
     throw new HttpsError("failed-precondition",
-      "Shopify isn't connected yet — add the SHOPIFY_STORE_DOMAIN and Shopify app secrets to enable order sync.");
+      "Shopify isn't connected yet — a super admin connects it from Stock → Connect Shopify.");
   }
   try {
     const by = (request.auth.token && request.auth.token.email) || request.auth.uid;
@@ -644,6 +866,8 @@ exports.syncShopifyOrders = onCall({ region: REGION, timeoutSeconds: 120 }, asyn
 // orders and fulfilment/tracking changes land even if a webhook was missed.
 exports.scheduledShopifySync = onSchedule({ schedule: "every 15 minutes", region: REGION }, async () => {
   await sweepPush().catch((e) => logger.warn("push sweep failed", e && e.message)); // alerts that missed their instant push
+  await pollInbox().catch((e) => logger.warn("inbox poll failed", e && e.message)); // sales@ email → tickets
+  await loadShopifyKeys();
   if (!shopifyCreds().ok) { logger.info("scheduledShopifySync skipped — Shopify not configured"); return; }
   try {
     const n = await pullShopifyOrders({ backfill: false, by: "schedule" });
@@ -739,8 +963,9 @@ async function findShopifyOrder(orderName, orderId) {
 
 exports.shopifyFulfillOrder = onCall({ region: REGION, timeoutSeconds: 60 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to fulfil orders.");
+  await loadShopifyKeys();
   if (!shopifyCreds().ok) {
-    throw new HttpsError("failed-precondition", "Shopify isn't connected yet — add the Shopify app secrets.");
+    throw new HttpsError("failed-precondition", "Shopify isn't connected yet — a super admin connects it from Stock → Connect Shopify.");
   }
   const data = request.data || {};
   const orderName = String(data.orderName || "").slice(0, 40);
@@ -1155,9 +1380,10 @@ function mailTransport(creds) {
     auth: { user: creds.email, pass: creds.pass },
   });
 }
-async function deliver(creds, sender, { to, subject, text }) {
+async function deliver(creds, sender, { to, subject, text, threadHeaders }) {
   const transport = mailTransport(creds);
   await transport.sendMail({
+    ...(threadHeaders || {}),
     from: `"${(sender.name || "").replace(/"/g, "")}" <${creds.email}>`,
     to,
     subject: subject || "(no subject)",
