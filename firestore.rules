@@ -83,6 +83,12 @@ service cloud.firestore {
     // (connects, battery, permissions, firmware update results). Written only
     // by the ticket intake function; readable by the team like tickets.
     // Support settings (e.g. pause auto-detected tickets). Super admin edits.
+    // sales@ inbox connection status (non-secret: address, last check).
+    // Written only by Cloud Functions; the password lives in server_keys.
+    match /settings/inbox {
+      allow read: if signedIn();
+      allow write: if false;
+    }
     match /settings/support {
       allow read: if signedIn();
       allow write: if isSuper();

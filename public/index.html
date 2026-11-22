@@ -2062,6 +2062,14 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
   </div>
 </div>
 
+<div class="sheet" id="sh-conn" onclick="if(event.target===this)closeSheets()">
+  <div class="sheet-body">
+    <div class="grab"></div>
+    <div style="display:flex;justify-content:flex-end"><button class="iconbtn" aria-label="Close" onclick="closeSheets()">✕</button></div>
+    <div id="conn-body"></div>
+  </div>
+</div>
+
 <div class="sheet" id="sh-notif" onclick="if(event.target===this)closeSheets()">
   <div class="sheet-body">
     <div class="grab"></div>
@@ -2117,7 +2125,8 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 const SNAPSHOT_DATE = new Date('2026-08-04T00:00:00');
 const LEAD = {transferWeeks:2, remakeWeeks:8, safety:0.25};
 /* Live = the backend Shopify sync has delivered data (orders or the stock mirror). */
-function shopLive(){return (typeof LIVEORDERS!=='undefined'&&LIVEORDERS.length>0)||(typeof SHOPSTOCK!=='undefined'&&!!SHOPSTOCK)}
+let SHOPCONN=null; // settings/shopify (non-secret): {connected, shopName, domain, lastSyncAt}
+function shopLive(){return (typeof LIVEORDERS!=='undefined'&&LIVEORDERS.length>0)||(typeof SHOPSTOCK!=='undefined'&&!!SHOPSTOCK)||!!(SHOPCONN&&SHOPCONN.connected)}
 const SHOP = {
   grosse90:'$10.5k', aov:'$145', lastWeekRev:'$735', lastWeekOrders:5,
   sizes:[
@@ -2209,7 +2218,7 @@ let SHOPSTOCK=null, shopStockUnsub=null;
 function subscribeShopStock(){if(!hasFirestore())return;
   if(shopStockUnsub){try{shopStockUnsub()}catch(e){}}
   try{shopStockUnsub=firebase.firestore().collection('settings').doc('shopify').onSnapshot(d=>{
-    const v=d.exists?d.data():{};SHOPSTOCK=v.stock?{S:Number(v.stock.S)||0,M:Number(v.stock.M)||0,L:Number(v.stock.L)||0,at:v.stockAt||'',loc:v.stockLocation||''}:null;
+    const v=d.exists?d.data():{};SHOPCONN={connected:!!v.connected,shopName:v.shopName||'',domain:v.domain||'',lastSyncAt:v.lastSyncAt||''};SHOPSTOCK=v.stock?{S:Number(v.stock.S)||0,M:Number(v.stock.M)||0,L:Number(v.stock.L)||0,at:v.stockAt||'',loc:v.stockLocation||''}:null;
     const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
   },e=>{})}catch(e){}}
 function shopOversold(){return SHOPSTOCK?SIZES.filter(z=>SHOPSTOCK[z]<0):[]}
@@ -2358,8 +2367,9 @@ function renderFulfillTab(body){
     +'<button class="btn ghost" style="flex:1;min-width:132px"'+(syncing?' disabled':'')+' onclick="syncShopify(true)"><span>⤓ Backfill<span class="hide-sm"> history</span></span></button>'
     +'<button class="btn ghost" style="flex:1;min-width:132px" onclick="demoSync()"><span>▶ Demo<span class="hide-sm"> walkthrough</span></span></button>'
     +'</div>';
+  if(SHOPCONN&&SHOPCONN.connected&&isSuperAdmin())html+='<div class="d" style="margin:-4px 0 10px;color:var(--muted)">✓ Connected to '+esc(SHOPCONN.shopName||SHOPCONN.domain)+(SHOPCONN.lastSyncAt?' · synced '+esc(ageStr(SHOPCONN.lastSyncAt)):'')+' · syncs every 15 min · <a style="color:var(--wave);cursor:pointer" onclick="openShopConnect()">Manage</a></div>';
   if(DEMO.length)html+='<div class="card" style="border-color:var(--wave)"><div class="row"><div class="grow"><div class="t">Demo mode</div><div class="d">These orders are a walkthrough — nothing is sent to Shopify or saved to the database.</div></div><button class="btn ghost" onclick="clearDemo()">Clear demo</button></div></div>';
-  if(!shopLive()&&!DEMO.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>SHOPIFY NOT CONNECTED</span><div class="t" style="margin-top:7px">New orders aren’t coming in here yet</div><div class="d">The Command Center can’t see your Shopify orders until the store is connected, so this list may be missing orders that are waiting to ship. Check <b>Shopify → Orders</b> for now.'+(isSuperAdmin()?' Setup: add the Shopify app keys as repo secrets, then tap Sync.':'')+'</div></div>';
+  if(!shopLive()&&!DEMO.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>SHOPIFY NOT CONNECTED</span><div class="t" style="margin-top:7px">New orders aren’t coming in here yet</div><div class="d">The Command Center can’t see your Shopify orders until the store is connected, so this list may be missing orders that are waiting to ship. Check <b>Shopify → Orders</b> for now.</div>'+(isSuperAdmin()?'<button class="btn" style="margin-top:10px" onclick="openShopConnect()">Connect Shopify</button>':'')+'</div>';
   html+=oversoldCard();
   const blocks=stockBlocks();
   if(blocks.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>CAN’T SHIP</span><div class="t" style="margin-top:7px">'+blocks.map(z=>SIZELABEL[z]).join(', ')+' — 0 in Covington</div><div class="d">Transfer from Pace before these ship. Pace has '+blocks.map(z=>SIZELABEL[z]+' '+(INV.pace[z]||0)).join(', ')+'.</div></div>';
@@ -6796,14 +6806,19 @@ function persistTicket(t){
 }
 function updTicket(id,fn){const t=TKTS.find(x=>x.id===id);if(t){fn(t);persistTicket(t);setTimeout(refreshPulse,0)}return t}
 function backendReady(){return hasFirestore()&&!!firebase.functions}
-async function sendTicketReply(id){
+async function sendTicketReply(id,fromInbox){
   const t=TKTS.find(x=>x.id===id);if(!t)return;
   const ta=document.getElementById('tkv-reply');const text=(ta&&ta.value||'').trim();
   if(!text){toast('Write a reply first');return}
   if(!t.email){toast('No email address on this ticket');return}
   if(!backendReady()){window.location.href='mailto:'+encodeURIComponent(t.email)+'?subject='+encodeURIComponent('Re: '+(t.title||''))+'&body='+encodeURIComponent(text);return}
-  if(!(CURRENT_USER.mail&&CURRENT_USER.mail.email)){replyViaMailApp(id);return}
+  if(!fromInbox&&!(CURRENT_USER.mail&&CURRENT_USER.mail.email)){replyViaMailApp(id);return}
   const btn=document.querySelector('#tkv-reply-box .btn');if(btn){btn.disabled=true;btn.textContent='Sending…'}
+  if(fromInbox){try{const subj='Re: '+String(t.title||'').replace(/^\s*re:\s*/i,'')+' ['+t.id+']';
+      await firebase.functions().httpsCallable('sendUserEmail')({to:t.email,subject:subj,text:text,ticketId:t.id,fromInbox:true});
+      toast('✓ Sent from '+((INBOXSET&&INBOXSET.email)||'sales@'));tkLogReply(id,text,'email');renderSupport();openTicket(id)}
+    catch(e){if(btn){btn.disabled=false;btn.textContent='Send from sales@'}toast('Send failed — '+((e&&e.message)||'try again'))}
+    return}
   try{await firebase.functions().httpsCallable('sendUserEmail')({to:t.email,subject:'Re: '+(t.title||''),text:text,ticketId:t.id});toast('✓ Reply sent from '+CURRENT_USER.mail.email);tkLogReply(id,text,'email');renderSupport();openTicket(id)}
   catch(e){if(btn){btn.disabled=false;btn.textContent='Send reply'}toast('Send failed — '+((e&&e.message)||'check Connect email'))}
 }
@@ -6848,7 +6863,7 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
   document.getElementById('tkv-meta').textContent=[t.customer||t.email||'Customer',t.channel,ageStr(t.created)].filter(Boolean).join(' · ');
   // conversation
   let cv='<div class="tk-msg cust"><div class="tk-who">'+esc(t.customer||'Customer')+' <span>'+esc(tkWhen(t.created))+'</span></div><div class="tk-txt">'+esc(t.desc||t.title||'')+'</div></div>';
-  (t.replies||[]).forEach(r=>{cv+='<div class="tk-msg team"><div class="tk-who">'+esc(r.by||'Safewave')+' <span>'+esc(tkWhen(r.at))+(r.via==='mail app'?' · from mail app':'')+'</span></div><div class="tk-txt">'+esc(r.text||'')+'</div></div>'});
+  (t.replies||[]).forEach(r=>{if(r.via==='customer-email'){cv+='<div class="tk-msg cust"><div class="tk-who">'+esc(r.by||'Customer')+' <span>'+esc(tkWhen(r.at))+' · email</span></div><div class="tk-txt">'+esc(r.text||'')+'</div></div>';return}cv+='<div class="tk-msg team"><div class="tk-who">'+esc(r.by||'Safewave')+' <span>'+esc(tkWhen(r.at))+(r.via==='mail app'?' · from mail app':'')+'</span></div><div class="tk-txt">'+esc(r.text||'')+'</div></div>'});
   if(!(t.replies||[]).length&&t.lastReplyAt)cv+='<div class="d" style="margin:4px 0 8px;color:var(--muted)">Replied '+esc(tkWhen(t.lastReplyAt))+(t.lastReplyBy?' by '+esc(t.lastReplyBy):'')+'</div>';
   document.getElementById('tkv-convo').innerHTML=cv;
   document.getElementById('tkv-context').innerHTML=ticketContextHTML(t);
@@ -6859,7 +6874,9 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
   if(t.email){
     rb='<label class="d" for="tkv-reply" style="font-weight:600;color:var(--text);display:block;margin:12px 0 6px">Reply to '+esc((t.customer||'').split(' · ')[0]||t.email)+' <span style="font-weight:400;color:var(--muted)">· '+esc(t.email)+'</span></label>'
       +'<textarea class="field" id="tkv-reply" placeholder="Write your reply…" style="min-height:96px;margin:0 0 8px;font-family:var(--font-b)"></textarea>'
-      +(tkMailOK()
+      +(t.channel==='Email'&&inboxOn()
+        ?'<button class="btn" onclick="sendTicketReply(\''+id+'\',true)">Send from '+esc(INBOXSET.email||'sales@')+'</button><div class="d" style="margin-top:6px;color:var(--muted)">Replies on the customer’s email thread and logs it here.</div>'
+        :tkMailOK()
         ?'<button class="btn" onclick="sendTicketReply(\''+id+'\')">Send reply</button><div class="d" style="margin-top:6px;color:var(--muted)">Sends from '+esc(CURRENT_USER.mail.email)+' and logs it here.</div>'
         :'<button class="btn" onclick="replyViaMailApp(\''+id+'\')">Reply in my mail app</button><div class="d" style="margin-top:6px;color:var(--muted)">Opens your email with the reply filled in, and logs it here. To send straight from the Command Center, <a onclick="closeSheets();openMail()">connect your email</a>.</div>');
   }else{
@@ -6948,12 +6965,56 @@ function loadTicketLogs(id){const el=()=>document.getElementById('tkv-logs');
 let SUPPORT_SET={autoTickets:true}, supportSetLoaded=false;
 function loadSupportSettings(){if(supportSetLoaded||!hasFirestore())return;supportSetLoaded=true;
   firebase.firestore().collection('settings').doc('support').onSnapshot(d=>{SUPPORT_SET=Object.assign({autoTickets:true},d.exists?d.data():{});renderAutoMon()},()=>{})}
-function renderAutoMon(){const el=document.getElementById('auto-mon');if(!el)return;loadSupportSettings();
+function renderAutoMon(){const el=document.getElementById('auto-mon');if(!el)return;loadSupportSettings();subscribeInboxSettings();
   const on=SUPPORT_SET.autoTickets!==false;
   el.innerHTML=(on?'🛰 App monitoring is on: problems the app detects open tickets here automatically (marked AUTO), with a draft message to review.':'⏸ App monitoring is paused: auto-detected problems won’t open tickets.')
-    +(isSuperAdmin()?' <a style="color:var(--wave);font-weight:600;cursor:pointer" onclick="toggleAutoTickets()">'+(on?'Pause':'Turn on')+'</a>':'')}
+    +(isSuperAdmin()?' <a style="color:var(--wave);font-weight:600;cursor:pointer" onclick="toggleAutoTickets()">'+(on?'Pause':'Turn on')+'</a>':'')
+    +'<br>'+(inboxOn()?'📧 sales@ inbox is connected: new emails become tickets every 15 min'+(INBOXSET.lastPollAt?' (checked '+esc(ageStr(INBOXSET.lastPollAt))+')':'')+'. <a style="color:var(--wave);font-weight:600;cursor:pointer" onclick="checkInboxNow()">Check now</a>'+(isSuperAdmin()?' · <a style="color:var(--wave);font-weight:600;cursor:pointer" onclick="openInboxConnect()">Manage</a>':'')
+      :'📧 The sales@ inbox isn’t connected, so email questions don’t become tickets yet.'+(isSuperAdmin()?' <a style="color:var(--wave);font-weight:600;cursor:pointer" onclick="openInboxConnect()">Connect</a>':''))}
 function toggleAutoTickets(){if(!isSuperAdmin())return;const on=SUPPORT_SET.autoTickets!==false;
   firebase.firestore().collection('settings').doc('support').set({autoTickets:!on},{merge:true}).then(()=>toast(on?'App monitoring paused':'✓ App monitoring on')).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+
+/* Connect Shopify / the sales@ inbox from inside the Command Center (super
+   admin). Keys go straight to a Cloud Function that tests them and stores them
+   server-only; the page never keeps or shows them again. */
+function connSheet(html){const el=document.getElementById('conn-body');if(!el)return;el.innerHTML=html;openSheet('sh-conn')}
+function openShopConnect(){if(!isSuperAdmin())return;const on=SHOPCONN&&SHOPCONN.connected;
+  connSheet('<h1 style="font-size:22px;margin:4px 0 6px">Connect Shopify</h1>'
+    +(on?'<div class="note" style="margin-bottom:12px">Connected to <b>'+esc(SHOPCONN.shopName||SHOPCONN.domain)+'</b>. Orders and stock sync every 15 minutes. Paste new keys below to replace them, or disconnect.</div>':'<div class="d" style="margin-bottom:10px">Orders and stock then sync every 15 minutes, and new orders alert your phone.</div>')
+    +'<details class="side-panel" style="margin:0 0 12px"><summary><span>How to get the keys (5 min)</span></summary><ol class="tkd-list" style="margin-bottom:10px"><li>Shopify admin → <b>Settings → Apps and sales channels → Develop apps</b> (or the Dev Dashboard) → <b>Create an app</b> named “Safewave Command Center”.</li><li>Admin API scopes: <b>read_orders, read_customers, read_merchant_managed_fulfillment_orders, write_merchant_managed_fulfillment_orders, read_inventory, read_locations, read_products</b>.</li><li><b>Install</b> the app, then copy the <b>Admin API access token</b> (starts with shpat_) — or the <b>Client ID</b> and <b>Client secret</b>.</li></ol></details>'
+    +'<label class="d" style="font-weight:600">Store address</label><input class="field" id="sc-domain" value="'+esc((SHOPCONN&&SHOPCONN.domain)||'safewavetech.myshopify.com')+'" autocomplete="off">'
+    +'<label class="d" style="font-weight:600">Admin API access token</label><input class="field" id="sc-token" type="password" placeholder="shpat_…" autocomplete="off">'
+    +'<div class="d" style="margin:2px 0 6px;color:var(--muted)">— or —</div>'
+    +'<div class="row" style="gap:8px"><input class="field" id="sc-cid" placeholder="Client ID" autocomplete="off" style="flex:1"><input class="field" id="sc-csec" type="password" placeholder="Client secret" autocomplete="off" style="flex:1"></div>'
+    +'<label class="d" style="font-weight:600">Webhook signing secret <span style="font-weight:400;color:var(--muted)">(optional — instant orders)</span></label><input class="field" id="sc-wh" type="password" autocomplete="off">'
+    +'<button class="btn" id="sc-go" onclick="saveShopConnect()">Test &amp; connect</button>'
+    +(on?'<button class="btn ghost" style="margin-top:8px" onclick="disconnectShop()">Disconnect Shopify</button>':''))}
+async function saveShopConnect(){const b=document.getElementById('sc-go');const v=id=>((document.getElementById(id)||{}).value||'').trim();
+  b.disabled=true;b.textContent='Testing with Shopify…';
+  try{const r=await firebase.functions().httpsCallable('saveShopifyConnection')({domain:v('sc-domain'),token:v('sc-token'),clientId:v('sc-cid'),clientSecret:v('sc-csec'),webhookSecret:v('sc-wh')});
+    const d=r.data||{};closeSheets();toast('✓ Connected to '+(d.shopName||'Shopify')+' — '+(d.synced||0)+' orders synced');renderStock();refreshPulse()}
+  catch(e){b.disabled=false;b.textContent='Test & connect';toast((e&&e.message)||'Couldn’t connect')}}
+async function disconnectShop(){try{await firebase.functions().httpsCallable('disconnectShopify')({});closeSheets();toast('Shopify disconnected')}catch(e){toast((e&&e.message)||'Failed')}}
+let INBOXSET=null,inboxSub=false;
+function subscribeInboxSettings(){if(inboxSub||!hasFirestore())return;inboxSub=true;
+  firebase.firestore().collection('settings').doc('inbox').onSnapshot(d=>{INBOXSET=d.exists?d.data():{connected:false};renderAutoMon()},()=>{})}
+function inboxOn(){return !!(INBOXSET&&INBOXSET.connected)}
+function openInboxConnect(){if(!isSuperAdmin())return;const on=inboxOn();
+  connSheet('<h1 style="font-size:22px;margin:4px 0 6px">Connect the sales@ inbox</h1>'
+    +'<div class="d" style="margin-bottom:10px">Every 15 minutes the Command Center reads new mail (it never moves, deletes or marks anything read). Customer questions and website contact-form messages become tickets, replies land on the same ticket, and you can answer from sales@. Shopify order emails raise a “new order” alert while Shopify isn’t connected.</div>'
+    +(on?'<div class="note" style="margin-bottom:12px">Connected: <b>'+esc(INBOXSET.email||'')+'</b>'+(INBOXSET.lastPollAt?' · checked '+esc(ageStr(INBOXSET.lastPollAt)):'')+'</div>':'')
+    +'<label class="d" style="font-weight:600">Mailbox</label><input class="field" id="ib-email" value="'+esc((INBOXSET&&INBOXSET.email)||'sales@safewavetech.com')+'" autocomplete="off">'
+    +'<label class="d" style="font-weight:600">Mailbox password</label><input class="field" id="ib-pass" type="password" autocomplete="new-password">'
+    +'<details class="side-panel" style="margin:0 0 12px"><summary><span>Server settings (IONOS)</span></summary><div class="row" style="gap:8px"><input class="field" id="ib-ih" value="imap.ionos.com" style="flex:2"><input class="field" id="ib-ip" value="993" style="flex:1"></div><div class="row" style="gap:8px"><input class="field" id="ib-sh" value="smtp.ionos.com" style="flex:2"><input class="field" id="ib-sp" value="587" style="flex:1"></div></details>'
+    +'<button class="btn" id="ib-go" onclick="saveInboxConnect()">Test &amp; connect</button>'
+    +(on?'<button class="btn ghost" style="margin-top:8px" onclick="disconnectInboxUI()">Disconnect inbox</button>':''))}
+async function saveInboxConnect(){const b=document.getElementById('ib-go');const v=id=>((document.getElementById(id)||{}).value||'').trim();
+  b.disabled=true;b.textContent='Signing in to the mailbox…';
+  try{const r=await firebase.functions().httpsCallable('saveInboxConnection')({email:v('ib-email'),pass:(document.getElementById('ib-pass')||{}).value||'',imapHost:v('ib-ih'),imapPort:v('ib-ip'),smtpHost:v('ib-sh'),smtpPort:v('ib-sp')});
+    const d=r.data||{};closeSheets();toast('✓ '+d.email+' connected — '+(d.tickets||0)+' new ticket'+(d.tickets===1?'':'s')+' from the last 3 days')}
+  catch(e){b.disabled=false;b.textContent='Test & connect';toast((e&&e.message)||'Couldn’t connect')}}
+async function disconnectInboxUI(){try{await firebase.functions().httpsCallable('disconnectInbox')({});closeSheets();toast('Inbox disconnected')}catch(e){toast((e&&e.message)||'Failed')}}
+async function checkInboxNow(){try{toast('Checking sales@…');const r=await firebase.functions().httpsCallable('pollInboxNow')({});const d=r.data||{};toast(d.skipped==='not connected'?'Inbox isn’t connected':'✓ '+(d.tickets||0)+' new · '+(d.replies||0)+' replies')}catch(e){toast((e&&e.message)||'Check failed')}}
 function tkLogReply(id,text,via){const r={by:(CURRENT_USER&&CURRENT_USER.name)||'Safewave',text:text,at:new Date().toISOString(),via:via};
   updTicket(id,x=>{x.replies=(x.replies||[]).concat([r]);x.lastReplyAt=r.at;x.lastReplyBy=r.by;if(x.status==='open')x.status='answered'})}
 function replyViaMailApp(id){const t=TKTS.find(x=>x.id===id);if(!t||!t.email)return;
