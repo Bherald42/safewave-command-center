@@ -37,8 +37,8 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   only, never notification content). Logs land in `ticket_diag/{ticketId}`;
   `diagnoseTicket` writes `tickets.diagnosis` (built-in rules, or the AI model
   when `ANTHROPIC_API_KEY` is set) — a draft the team reviews before sending.
-  `scanFieldHealth` (dashboard repo, every 30 min) also opens **AUTO-** tickets
-  on its own from app telemetry (failed firmware update, alerts can't reach the
+  `scanFieldHealth` (dashboard repo, an `activity_logs` trigger — that project has
+  no Cloud Scheduler) also opens **AUTO-** tickets on its own from app telemetry (failed firmware update, alerts can't reach the
   band, repeated disconnects, band silent 2+ days); one per customer + issue,
   reopened if it recurs. Super admins can pause it (`settings/support.autoTickets`).
 - **Data is Firestore.** Collections include: `users`, `crm_accounts`, `tickets`,

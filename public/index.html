@@ -6942,8 +6942,8 @@ function loadTicketLogs(id){const el=()=>document.getElementById('tkv-logs');
     e.innerHTML=logs.length?'<ul class="tk-logs">'+logs.slice(0,12).map(tkLogLine).join('')+'</ul>'+(logs.length>12?'<details class="tk-more"><summary>'+(logs.length-12)+' more</summary><ul class="tk-logs">'+logs.slice(12).map(tkLogLine).join('')+'</ul></details>':''):'<span class="tkc-miss">No app activity came with this ticket</span>'})
     .catch(()=>{const e=el();if(e)e.innerHTML='<span class="tkc-miss">Couldn’t load app activity</span>'})}
 
-/* App monitoring (proactive tickets): the phone app's health signals open
-   tickets on their own (firmware update failed, alerts can't reach the band,
+/* App monitoring (proactive tickets): as the phone app logs activity, its
+   health signals open tickets on their own (firmware update failed, alerts can't reach the band,
    repeated disconnects, band silent for days). Super admins can pause it. */
 let SUPPORT_SET={autoTickets:true}, supportSetLoaded=false;
 function loadSupportSettings(){if(supportSetLoaded||!hasFirestore())return;supportSetLoaded=true;
