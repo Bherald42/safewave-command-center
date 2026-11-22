@@ -1230,6 +1230,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
       <div class="sec">
         <div class="sec-head"><h2>Open queue</h2><span class="pill dim" id="ticket-count">0 open</span></div>
         <div id="ticket-list"></div>
+        <div class="d" id="auto-mon" style="margin-top:6px;color:var(--muted)"></div>
       </div>
 
       <div class="sec" id="ticket-waiting-sec" style="display:none">
@@ -6820,8 +6821,8 @@ function saveTicket(){
   if(t.assignee)notifyAssignee(t.assignee,'Ticket assigned to you',t.title,'s-support:'+t.id);
   toast('✓ Ticket '+t.id+' created — '+SEV[t.sev].label+' · '+t.channel)
 }
-function ticketCard(t){const s=SEV[t.sev];const breach=t.status==='open'&&slaLeft(t)<0;const rep=t.status==='answered'?' · <span style="color:var(--good)">replied '+ageStr(t.lastReplyAt||t.created)+'</span>':'';const dm=dueMeta(dayMs(t.due));const meta=[t.channel,t.customer,t.assignee].filter(Boolean).map(esc).join(' · ');
-  return '<div class="card tap" tabindex="0" onclick="openTicket(\''+t.id+'\')"><div class="row"><div class="grow"><div class="t">'+esc(t.title)+'</div><div class="d">'+t.id+' · '+meta+' · '+ageStr(t.created)+rep+(breach?' · <span style="color:var(--amber)">SLA past</span>':'')+'</div></div><span class="pill '+s.pill+'">'+s.label+'</span></div>'+(dm.label&&t.status==='open'?'<div style="margin-top:8px"><span class="pill '+dm.cls+'">'+esc(dm.label)+'</span></div>':'')+'</div>'}
+function ticketCard(t){const s=SEV[t.sev];const breach=t.status==='open'&&slaLeft(t)<0;const autoTag=t.auto?'<span class="pill wave" style="margin-right:6px">AUTO</span>':'';const rep=t.status==='answered'?' · <span style="color:var(--good)">replied '+ageStr(t.lastReplyAt||t.created)+'</span>':'';const dm=dueMeta(dayMs(t.due));const meta=[t.channel,t.customer,t.assignee].filter(Boolean).map(esc).join(' · ');
+  return '<div class="card tap" tabindex="0" onclick="openTicket(\''+t.id+'\')"><div class="row"><div class="grow"><div class="t">'+autoTag+esc(t.title)+(t.autoCount>1?' <span class="tkc-miss" style="font-weight:400;font-size:12.5px">· seen '+t.autoCount+'×</span>':'')+'</div><div class="d">'+t.id+' · '+meta+' · '+ageStr(t.created)+rep+(breach?' · <span style="color:var(--amber)">SLA past</span>':'')+'</div></div><span class="pill '+s.pill+'">'+s.label+'</span></div>'+(dm.label&&t.status==='open'?'<div style="margin-top:8px"><span class="pill '+dm.cls+'">'+esc(dm.label)+'</span></div>':'')+'</div>'}
 function renderSupport(){
   const all=loadTickets();
   const open=all.filter(t=>t.status==='open').sort((a,b)=>SEV[a.sev].rank-SEV[b.sev].rank||new Date(a.created)-new Date(b.created));
@@ -6830,6 +6831,7 @@ function renderSupport(){
   document.getElementById('ticket-count').textContent=open.length+' open';
   const wsec=document.getElementById('ticket-waiting-sec');if(wsec){wsec.style.display=waiting.length?'block':'none';document.getElementById('ticket-waiting').innerHTML=waiting.map(ticketCard).join('');document.getElementById('ticket-waiting-count').textContent=waiting.length}
   document.getElementById('ticket-list').innerHTML=open.length?open.map(ticketCard).join(''):'<div class="empty"><div class="ico">✓</div><div class="t">No open tickets</div><div class="d">Messages sent from the Safewave app and the customer dashboard land here automatically. Tap “＋ Add ticket” to log anything else (put the customer\u2019s email in the customer field so you can reply).</div></div>';
+  renderAutoMon();
   const rsec=document.getElementById('ticket-resolved-sec');
   if(resolved.length){rsec.style.display='block';document.getElementById('ticket-resolved').innerHTML=resolved.map(ticketCard).join('')}else rsec.style.display='none';
   document.getElementById('support-orders').innerHTML=ordersList().slice(0,3).map(o=>'<div class="card"><div class="row"><div class="grow"><div class="t">'+o.n+' · '+o.name+'</div><div class="d">'+o.date+' · '+o.ful.toLowerCase()+'</div></div><span class="pill '+(o.ful==='FULFILLED'?'good':'amber')+'">'+o.ful+'</span></div></div>').join('')
@@ -6939,6 +6941,19 @@ function loadTicketLogs(id){const el=()=>document.getElementById('tkv-logs');
   firebase.firestore().collection('ticket_diag').doc(id).get().then(d=>{const e=el();if(!e)return;const logs=(d.exists&&d.data().logs)||[];
     e.innerHTML=logs.length?'<ul class="tk-logs">'+logs.slice(0,12).map(tkLogLine).join('')+'</ul>'+(logs.length>12?'<details class="tk-more"><summary>'+(logs.length-12)+' more</summary><ul class="tk-logs">'+logs.slice(12).map(tkLogLine).join('')+'</ul></details>':''):'<span class="tkc-miss">No app activity came with this ticket</span>'})
     .catch(()=>{const e=el();if(e)e.innerHTML='<span class="tkc-miss">Couldn’t load app activity</span>'})}
+
+/* App monitoring (proactive tickets): the phone app's health signals open
+   tickets on their own (firmware update failed, alerts can't reach the band,
+   repeated disconnects, band silent for days). Super admins can pause it. */
+let SUPPORT_SET={autoTickets:true}, supportSetLoaded=false;
+function loadSupportSettings(){if(supportSetLoaded||!hasFirestore())return;supportSetLoaded=true;
+  firebase.firestore().collection('settings').doc('support').onSnapshot(d=>{SUPPORT_SET=Object.assign({autoTickets:true},d.exists?d.data():{});renderAutoMon()},()=>{})}
+function renderAutoMon(){const el=document.getElementById('auto-mon');if(!el)return;loadSupportSettings();
+  const on=SUPPORT_SET.autoTickets!==false;
+  el.innerHTML=(on?'🛰 App monitoring is on: problems the app detects open tickets here automatically (marked AUTO), with a draft message to review.':'⏸ App monitoring is paused: auto-detected problems won’t open tickets.')
+    +(isSuperAdmin()?' <a style="color:var(--wave);font-weight:600;cursor:pointer" onclick="toggleAutoTickets()">'+(on?'Pause':'Turn on')+'</a>':'')}
+function toggleAutoTickets(){if(!isSuperAdmin())return;const on=SUPPORT_SET.autoTickets!==false;
+  firebase.firestore().collection('settings').doc('support').set({autoTickets:!on},{merge:true}).then(()=>toast(on?'App monitoring paused':'✓ App monitoring on')).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
 function tkLogReply(id,text,via){const r={by:(CURRENT_USER&&CURRENT_USER.name)||'Safewave',text:text,at:new Date().toISOString(),via:via};
   updTicket(id,x=>{x.replies=(x.replies||[]).concat([r]);x.lastReplyAt=r.at;x.lastReplyBy=r.by;if(x.status==='open')x.status='answered'})}
 function replyViaMailApp(id){const t=TKTS.find(x=>x.id===id);if(!t||!t.email)return;
@@ -6951,7 +6966,7 @@ function saveTicketEmail(id){const v=((document.getElementById('tkv-email')||{})
   if(!/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(v)){toast('That doesn’t look like an email address');return}
   updTicket(id,x=>{x.email=v});openTicket(id);toast('✓ Email added')}
 function saveTicketMeta(id){const a=document.getElementById('tkv-assignee'),d=document.getElementById('tkv-due');const t0=TKTS.find(x=>x.id===id);const prev=t0?t0.assignee:null;const t=updTicket(id,t=>{t.assignee=a?a.value:t.assignee;t.due=d?d.value:t.due});if(t&&t.assignee&&t.assignee!==prev)notifyAssignee(t.assignee,'Ticket assigned to you',t.title,'s-support');closeSheets();renderSupport();refreshPulse();toast('✓ Saved')}
-function resolveTicket(id){updTicket(id,t=>t.status='closed');closeSheets();renderSupport();toast('✓ '+id+' resolved')}
+function resolveTicket(id){updTicket(id,t=>{t.status='closed';t.closedAt=new Date().toISOString()});closeSheets();renderSupport();toast('✓ '+id+' resolved')}
 function reopenTicket(id){updTicket(id,t=>t.status='open');closeSheets();renderSupport();toast(id+' reopened')}
 function promoteTicket(id){const t=(typeof TKTS!=='undefined'?TKTS:[]).find(x=>x.id===id);if(!t)return;
   if((typeof BUILDT!=='undefined'?BUILDT:[]).some(b=>b.ticketId===id)){toast('Already on the Build board');closeSheets();goto('s-build');return}

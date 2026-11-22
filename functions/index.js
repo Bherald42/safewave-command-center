@@ -1682,18 +1682,24 @@ function ruleDiagnosis(t, logs) {
   if (lowBat) ev.push("Low band battery reported " + lowBat + " time(s) this week.");
   const perm = L.find((l) => l.type === "permission_regressed");
   if (perm) ev.push("Permissions turned off " + ago(perm.at) + ": " + (perm.m.missingPermissions || "unknown") + ".");
+  if (!cause && t.auto && t.auto.issue === "offline") { cause = "The band hasn't connected to the app for days, even though the app is being used."; conf = "medium";
+    steps.push("Ask whether the band is charged and being worn.", "Have them open the app next to the band; if it won't connect, place the band on its charger for a few seconds, then Forget and re-pair it in the app.");
+    reply = "Hi " + hi + ",\n\nThis is the Safewave team — our app noticed your band hasn't connected for a few days, so we wanted to check in. Could you put the band on its charger for a few minutes, then open the Safewave app next to it? It should reconnect on its own. If it doesn't, reply here and we'll help you get it paired again."; }
   if (!cause) {
     cause = L.length ? "Nothing in the app's recent activity points to a clear cause." : "No app activity on file for this customer, so there's nothing to diagnose from yet.";
     conf = "low";
     steps.push("Ask for a short description of what happens and a screenshot.", "Check the band is charged and near the phone with the app open.");
   }
+  if (!reply && t.auto) reply = "Hi " + hi + ",\n\nThis is the Safewave team — our app flagged something with your band and we wanted to check in. Is everything working as expected? If the band isn't buzzing for your alerts, reply here and we'll walk you through a quick fix.";
   if (!reply) reply = "Hi " + hi + ",\n\nThanks for reaching out — we're looking into this. Could you tell me a bit more about what happens (and send a screenshot if there's an error on screen)? In the meantime, please make sure the band is charged and close to your phone with the Safewave app open.";
+  // Proactive tickets: the customer didn't write in, so the draft opens with what we noticed.
+  if (t.auto) reply = reply.replace(/Thanks for (reaching out|letting us know)(, and sorry about the trouble with the update)?\.( From what your app reports, here's what to check:)?/, (m0, a, b2, c) => "This is the Safewave team — our app flagged " + (t.auto.issue === "firmware" ? "a firmware update on your band that didn't finish" : t.auto.issue === "alerts" ? "a setting that can stop alerts from reaching your band" : t.auto.issue === "disconnects" ? "that your band has been dropping its connection" : t.auto.issue === "offline" ? "that your band hasn't connected for a few days" : "something with your band") + ", so we wanted to help right away." + (c ? " Here's what to check:" : ""));
   return { cause, confidence: conf, evidence: ev.slice(0, 8), steps: steps.slice(0, 6), reply, by: "rules", logCount: L.length, at: Date.now() };
 }
 async function aiDiagnosis(t, logs, hint) {
   const key = process.env.ANTHROPIC_API_KEY || "";
   if (!key) return null;
-  const data = { ticket: { title: t.title, message: (t.desc || "").slice(0, 3000), channel: t.channel, customerFirstName: firstName(t) }, device: t.device || null, appUser: t.appUser || null, health: t.health || null, recentAppActivity: (logs || []).slice(0, 40).map((l) => ({ type: l.type, at: new Date(l.at).toISOString(), platform: l.platform, ...l.m })) };
+  const data = { ticket: { title: t.title, message: (t.desc || "").slice(0, 3000), channel: t.channel, customerFirstName: firstName(t), proactive: !!t.auto, note: t.auto ? "The customer did NOT write in: the app detected this. The reply is a friendly first outreach that says what we noticed." : undefined }, device: t.device || null, appUser: t.appUser || null, health: t.health || null, recentAppActivity: (logs || []).slice(0, 40).map((l) => ({ type: l.type, at: new Date(l.at).toISOString(), platform: l.platform, ...l.m })) };
   const sys = "You are Safewave's support engineer. Safewave makes the Safewave Band, a vibration-alert wristband for people who are Deaf or hard of hearing, paired over Bluetooth to the Safewave phone app.\n" +
     "Diagnose the most likely cause of the customer's ticket from the app telemetry provided. Facts: firmware updates need the band at >= 40% battery; a band that stops answering mid-update is fixed by a few seconds on its charger; iPhone notifications reach the band only with 'Share System Notifications' on for the band in iOS Bluetooth settings; Android needs notification access and unrestricted battery for Safewave.\n" +
     "Be honest about uncertainty: if the data doesn't show the cause, say so and say what to ask. Never invent log entries.\n" +
@@ -1752,26 +1758,53 @@ exports.ticketIntake = onRequest({ region: REGION }, async (req, res) => {
   const title = (firstLine.length > 80 ? firstLine.slice(0, 77) + "…" : firstLine) || "Support request";
   const safety = SAFETY_WORDS.test(message);
 
-  const id = "APP-" + srcId.slice(-10).toUpperCase();
+  // Proactive (auto-detected) tickets: one per customer + issue. A repeat
+  // signal refreshes the open ticket quietly; if the ticket was resolved more
+  // than a day ago and the problem is back, it reopens and the team is alerted.
+  const auto = (b.auto && typeof b.auto === "object" && /^[a-f0-9]{6,20}$/.test(String(b.auto.key || ""))) ? {
+    issue: clip(b.auto.issue, 20) || "issue", key: String(b.auto.key), summary: clip(b.auto.summary, 100) || "Problem detected by the app",
+    sev: ["high", "medium", "low"].includes(b.auto.sev) ? b.auto.sev : "medium" } : null;
+  if (auto) {
+    const ps = await db.collection("settings").doc("support").get().catch(() => null);
+    if (ps && ps.exists && ps.data().autoTickets === false) { res.json({ ok: true, paused: true }); return; }
+  }
+  const id = auto ? "AUTO-" + auto.key.toUpperCase() : "APP-" + srcId.slice(-10).toUpperCase();
   const ref = db.collection("tickets").doc(id);
   const existing = await ref.get();
-  if (existing.exists) { res.json({ ok: true, id, duplicate: true }); return; }
+  if (existing.exists && !auto) { res.json({ ok: true, id, duplicate: true }); return; }
+  if (existing.exists && auto) {
+    const e = existing.data() || {};
+    const nowIso = new Date().toISOString();
+    const reopen = e.status === "closed" && (!e.closedAt || Date.now() - Date.parse(e.closedAt) > 864e5);
+    const patch = { autoLastSeen: nowIso, autoCount: (Number(e.autoCount) || 1) + 1, desc: message || e.desc };
+    const au2 = intakeAppUser(b.appUser, site); if (au2) patch.appUser = au2;
+    const dv2 = intakeDevice(b.device); if (dv2) patch.device = dv2;
+    const lg2 = intakeLogs(b.logs);
+    if (lg2.length) await db.collection("ticket_diag").doc(id).set({ logs: lg2, at: Date.now() }).catch(() => {});
+    if (reopen) Object.assign(patch, { status: "open", reopenedAt: nowIso, replies: (e.replies || []).concat([{ by: "App monitoring", text: "Detected again: " + (message || auto.summary), at: nowIso, via: "auto" }]) });
+    try { patch.diagnosis = await diagnoseTicket(Object.assign({}, e, patch, { auto: e.auto || auto }), lg2); } catch (err) { /* keep the old one */ }
+    await ref.set(patch, { merge: true });
+    if (reopen) await addNotification({ to: "all", title: "Problem back: " + auto.summary, body: e.customer || "", link: "s-support:" + id, by: "App monitoring", at: admin.firestore.FieldValue.serverTimestamp() });
+    res.json({ ok: true, id, refreshed: true, reopened: reopen });
+    return;
+  }
 
   const t = {
-    id, title,
+    id, title: auto ? auto.summary : title,
     customer: [name, site].filter(Boolean).join(" · ") || email || "App user",
     email,
-    channel: fromDashboard ? "Dashboard" : "In-app",
-    product: fromDashboard ? "Dashboard" : "App",
-    sev: safety ? "safety" : "medium",
+    channel: auto ? "Auto-detected" : fromDashboard ? "Dashboard" : "In-app",
+    product: auto ? "Band" : fromDashboard ? "Dashboard" : "App",
+    sev: auto ? auto.sev : safety ? "safety" : "medium",
     desc: message,
     assignee: "",
     due: "",
     status: "open",
     created: new Date().toISOString(),
-    by: fromDashboard ? (site || "Customer dashboard") : "Phone app",
-    source: { project: "safewave-371716", collection: "contact_submissions", id: srcId, organizationId: b.organizationId || null },
+    by: auto ? "App monitoring" : fromDashboard ? (site || "Customer dashboard") : "Phone app",
+    source: { project: "safewave-371716", collection: auto ? "activity_logs" : "contact_submissions", id: srcId, organizationId: b.organizationId || null },
   };
+  if (auto) Object.assign(t, { auto: { issue: auto.issue, key: auto.key }, autoCount: 1, autoLastSeen: t.created });
   // Optional context the app / forwarder can send with the message: the phone
   // and app version, and the customer's band(s) as the app saw them.
   const dv = intakeDevice(b.device);
@@ -1788,7 +1821,7 @@ exports.ticketIntake = onRequest({ region: REGION }, async (req, res) => {
   try { await ref.set({ diagnosis: await diagnoseTicket(t, logs) }, { merge: true }); } catch (e) { logger.warn("diagnose at intake failed", e && e.message); }
   await addNotification({
     to: "all",
-    title: (safety ? "⚠ Safety ticket: " : "New ticket: ") + title,
+    title: auto ? "Detected: " + auto.summary : (safety ? "⚠ Safety ticket: " : "New ticket: ") + title,
     body: t.customer,
     link: "s-support:" + id, // opens this ticket directly
     by: t.by,

@@ -82,6 +82,11 @@ service cloud.firestore {
     // The phone app's recent technical activity for a ticket's customer
     // (connects, battery, permissions, firmware update results). Written only
     // by the ticket intake function; readable by the team like tickets.
+    // Support settings (e.g. pause auto-detected tickets). Super admin edits.
+    match /settings/support {
+      allow read: if signedIn();
+      allow write: if isSuper();
+    }
     match /ticket_diag/{id} {
       allow read: if signedIn();
       allow write: if false;
