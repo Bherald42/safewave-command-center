@@ -863,6 +863,7 @@ input[type=date]{color-scheme:dark}
 .nbanner{pointer-events:auto;display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--wave);border-radius:14px;box-shadow:0 8px 28px rgba(20,30,50,.18);animation:nbIn .22s ease-out;overflow:hidden}
 .nbanner.safety{border-left-color:var(--safety)}
 .nbanner.out{opacity:0;transform:translateY(-8px);transition:all .2s}
+.deep-hit{box-shadow:0 0 0 2px var(--wave)!important;transition:box-shadow .3s}
 @keyframes nbIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
 .nb-main{flex:1;min-width:0;display:flex;gap:10px;align-items:flex-start;padding:12px 4px 12px 14px;background:none;border:0;text-align:left;color:var(--text);font:inherit;cursor:pointer}
 .nb-dot{width:8px;height:8px;border-radius:50%;background:var(--wave);margin-top:6px;flex:none}
@@ -2432,7 +2433,7 @@ function startReturn(n){const f=FULF[n];if(!f)return;
   const r={id:id,order:n,serial:f.serial||'',size:f.size,customer:f.name||'',status:'requested',requestedBy:(CURRENT_USER&&CURRENT_USER.name)||'',at:new Date().toISOString()};
   RETURNS[id]=r;if(!demo)persistReturn(r);
   if(BANDS[f.serial]){BANDS[f.serial].status='return-requested';if(!demo)persistBand(BANDS[f.serial])}
-  notifyAll('Return requested · '+n,(r.customer||'')+' · '+SIZELABEL[f.size]+' band '+r.serial,'s-stock');
+  notifyAll('Return requested · '+n,(r.customer||'')+' · '+SIZELABEL[f.size]+' band '+r.serial,'s-stock:returns:'+id);
   stockGoTab('returns');toast('✓ Return '+id+' opened — issue the label next');
 }
 function issueReturnLabel(id){const r=RETURNS[id];if(!r)return;r.status='label-issued';r.labelAt=new Date().toISOString();persistReturn(r);printReturnLabel(id);renderStock();toast('✓ Return label issued for '+r.order);}
@@ -5765,7 +5766,7 @@ async function sendFeedback(){const text=document.getElementById('fb-text').valu
   if(!hasFirestore()){toast('Not connected — feedback needs the shared cloud');return}
   rec.createdAt=firebase.firestore.FieldValue.serverTimestamp();
   firebase.firestore().collection('feedback').add(rec)
-    .then(()=>{notifySuper(type+' · '+rec.screenLabel,(CURRENT_USER.name||'A teammate')+': '+text.slice(0,90),'');
+    .then(ref=>{notifySuper(type+' · '+rec.screenLabel,(CURRENT_USER.name||'A teammate')+': '+text.slice(0,90),'s-feedback:'+ref.id);
       firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({feedbackCount:firebase.firestore.FieldValue.increment(1)},{merge:true}).catch(()=>{});
       CURRENT_USER.feedbackCount=(CURRENT_USER.feedbackCount||0)+1;const me=(TEAM||[]).find(t=>t.uid===CURRENT_USER.uid);if(me)me.feedbackCount=(me.feedbackCount||0)+1;refreshPulse();})
     .catch(e=>toast('Send failed — '+((e&&e.code)||'check rules')));
@@ -5912,7 +5913,7 @@ function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMi
   const tp=({Idea:'💡',Issue:'🐞',Question:'❓'})[f.type]||'💬';
   const shots=(f.shots&&f.shots.length)?f.shots:(f.shot?[f.shot]:[]);
   const thread=f.thread||[];const replyOpen=!!fbReplyOpen[f.id];
-  let h='<div class="card"><div class="row"><div class="grow"><div class="t">'+tp+' '+esc(f.type||'Feedback')+' · '+esc(f.screenLabel||'')+'</div><div class="d">'+esc(f.fromName||f.fromEmail||'Teammate')+(time?' · '+time:'')+'</div></div><span class="pill '+(resolved?'good':(thread.length?'accent':'wave'))+'">'+(resolved?'RESOLVED':(thread.length?'REPLIED':'OPEN'))+'</span></div>'
+  let h='<div class="card" id="fbx-'+esc(f.id)+'"><div class="row"><div class="grow"><div class="t">'+tp+' '+esc(f.type||'Feedback')+' · '+esc(f.screenLabel||'')+'</div><div class="d">'+esc(f.fromName||f.fromEmail||'Teammate')+(time?' · '+time:'')+'</div></div><span class="pill '+(resolved?'good':(thread.length?'accent':'wave'))+'">'+(resolved?'RESOLVED':(thread.length?'REPLIED':'OPEN'))+'</span></div>'
     +'<div class="note" style="margin-top:9px;white-space:pre-wrap">'+esc(f.text||'')+'</div>';
   if(shots.length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+shots.map(function(src,i){return '<img src="'+src+'" alt="attachment" style="width:78px;height:78px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="viewShotFb(\''+f.id+'\','+i+')">'}).join('')+'</div>';
   if(thread.length)h+='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px">'+thread.map(function(m,mi){const mine=m.uid===f.fromUid;const ms=m.shots||[];return '<div style="align-self:'+(mine?'flex-start':'flex-end')+';max-width:85%"><div style="font-size:11px;color:var(--faint);margin-bottom:2px">'+esc(m.by||(mine?'Submitter':'You'))+(m.at?' · '+fbShort(m.at):'')+'</div>'+(m.text?'<div style="background:'+(mine?'var(--surface-2)':'rgba(29,170,225,.14)')+';color:var(--text);border-radius:12px;padding:8px 11px;font-size:13px;line-height:18px;white-space:pre-wrap">'+esc(m.text)+'</div>':'')+(ms.length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;justify-content:'+(mine?'flex-start':'flex-end')+'">'+ms.map(function(src,pi){return '<img src="'+src+'" alt="attachment" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="viewReplyShot(\''+f.id+'\','+mi+','+pi+')">'}).join('')+'</div>':'')+'</div>'}).join('')+'</div>';
@@ -5949,8 +5950,8 @@ async function sendFeedbackReply(id){const el=document.getElementById('fb-reply-
   if(hasFirestore()){
     firebase.firestore().collection('feedback').doc(id).update({thread:firebase.firestore.FieldValue.arrayUnion(msg),lastReplyAt:firebase.firestore.FieldValue.serverTimestamp()})
       .then(()=>{const me=CURRENT_USER&&CURRENT_USER.uid;
-        if(f.fromUid&&f.fromUid!==me){notify(f.fromUid,'Reply to your feedback',(text||'📷 Photo').slice(0,140),'s-feedback');toast('✓ Reply sent — submitter alerted')}
-        else{notifySuper('Feedback reply · '+(f.screenLabel||''),((CURRENT_USER&&CURRENT_USER.name)||'Teammate')+': '+(text||'📷 Photo').slice(0,120),'s-feedback');toast('✓ Sent — Brad was alerted')}})
+        if(f.fromUid&&f.fromUid!==me){notify(f.fromUid,'Reply to your feedback',(text||'📷 Photo').slice(0,140),'s-feedback:'+id);toast('✓ Reply sent — submitter alerted')}
+        else{notifySuper('Feedback reply · '+(f.screenLabel||''),((CURRENT_USER&&CURRENT_USER.name)||'Teammate')+': '+(text||'📷 Photo').slice(0,120),'s-feedback:'+id);toast('✓ Sent — Brad was alerted')}})
       .catch(e=>toast('Reply failed — '+((e&&e.code)||'check rules')));
   }else{toast('Reply saved — connect the cloud to alert the submitter')}}
 function setFeedbackStatus(id,st){if(hasFirestore())firebase.firestore().collection('feedback').doc(id).set({status:st},{merge:true}).catch(e=>toast('Update failed — '+((e&&e.code)||'')));const f=FEEDBACK.find(x=>x.id===id);if(f)f.status=st;renderFeedbackInbox();renderFeedbackBadge()}
@@ -6634,6 +6635,7 @@ function goto(id,btn){
   if(typeof id==='string'&&id.indexOf('s-guides:')===0){if(!guideLeaveOk())return;guideOpenId=id.slice(9);guideMode='read';guideVersionView=null;guideDirty=false;id='s-guides'}
   else if(id==='s-guides'&&btn&&guideMode!=='edit'){guideOpenId=null;guideMode='read'}
   if(typeof id==='string'&&id.indexOf('s-support:')===0){const tid=id.slice(10);goto('s-support');setTimeout(()=>openTicket(tid),60);return}
+  if(typeof id==='string'&&/^s-(chat|build|crm|raise|stock|feedback):/.test(id)){deepOpen(id);return}
   const el=document.getElementById(id);if(!el)return;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));el.classList.add('on');
   syncNav(id);
@@ -6656,6 +6658,28 @@ function goto(id,btn){
   if(id==='s-know')renderAgent();
   if(id==='s-guides')renderGuides();
 }
+/* Notification deep links: 's-<screen>:<what>[:<id>]' lands on the exact
+   record the alert is about, not just its screen. If the record is gone (or
+   this person can't see it) it falls back to the screen itself. */
+function deepOpen(link){const p=link.split(':'),scr=p[0],a=p[1]||'',b=p.slice(2).join(':');
+  const later=f=>setTimeout(()=>{try{f()}catch(e){}},60);
+  if(scr==='s-chat'){if(a&&CHANNELS[a])chatChannel=a;goto('s-chat');return}
+  if(scr==='s-build'){buildProj=null;goto('s-build');
+    if(a==='task'&&BUILDT.some(x=>x.id===b))later(()=>openBuildTask(b));
+    else if(a==='proj'&&BUILDP.some(x=>x.id===b))openProjectDetail(b);return}
+  if(scr==='s-crm'){goto('s-crm');if(a&&findAcct(a))openAcct(a);return}
+  if(scr==='s-raise'){meetOpenId=null;
+    if(a==='meeting'){raiseSec='meetings';if(b&&RAISE_MEETINGS.some(m=>m.id===b))meetOpenId=b}
+    else if(RAISE_SECS.some(x=>x[0]===a))raiseSec=a;
+    goto('s-raise');return}
+  if(scr==='s-stock'){
+    if(a==='order'){const n='#'+b,o=ordersList().find(x=>x.n===n);stockTab=o&&!isFulfilled(o)?'fulfill':'orders';goto('s-stock');if(o)later(()=>openFulfill(n));return}
+    if(a==='returns'){stockTab='returns';goto('s-stock');if(b&&RETURNS[b])later(()=>openReturnChecklist(b));return}
+    if(['fulfill','inventory','forecast','orders'].includes(a))stockTab=a;goto('s-stock');return}
+  if(scr==='s-feedback'){fbxFilter=FEEDBACK.some(f=>f.id===a&&f.status==='resolved')?'all':'open';goto('s-feedback');
+    if(a)later(()=>deepFlash('fbx-'+a));return}
+  goto(scr)}
+function deepFlash(elId){const el=document.getElementById(elId);if(!el)return;el.scrollIntoView({block:'center',behavior:'smooth'});el.classList.add('deep-hit');setTimeout(()=>el.classList.remove('deep-hit'),2400)}
 
 /* ================= SESSION ================= */
 function navRole(r){return r==='superadmin'?'admin':r}
@@ -7026,7 +7050,7 @@ function replyViaMailApp(id){const t=TKTS.find(x=>x.id===id);if(!t||!t.email)ret
 function saveTicketEmail(id){const v=((document.getElementById('tkv-email')||{}).value||'').trim();
   if(!/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(v)){toast('That doesn’t look like an email address');return}
   updTicket(id,x=>{x.email=v});openTicket(id);toast('✓ Email added')}
-function saveTicketMeta(id){const a=document.getElementById('tkv-assignee'),d=document.getElementById('tkv-due');const t0=TKTS.find(x=>x.id===id);const prev=t0?t0.assignee:null;const t=updTicket(id,t=>{t.assignee=a?a.value:t.assignee;t.due=d?d.value:t.due});if(t&&t.assignee&&t.assignee!==prev)notifyAssignee(t.assignee,'Ticket assigned to you',t.title,'s-support');closeSheets();renderSupport();refreshPulse();toast('✓ Saved')}
+function saveTicketMeta(id){const a=document.getElementById('tkv-assignee'),d=document.getElementById('tkv-due');const t0=TKTS.find(x=>x.id===id);const prev=t0?t0.assignee:null;const t=updTicket(id,t=>{t.assignee=a?a.value:t.assignee;t.due=d?d.value:t.due});if(t&&t.assignee&&t.assignee!==prev)notifyAssignee(t.assignee,'Ticket assigned to you',t.title,'s-support:'+id);closeSheets();renderSupport();refreshPulse();toast('✓ Saved')}
 function resolveTicket(id){updTicket(id,t=>{t.status='closed';t.closedAt=new Date().toISOString()});closeSheets();renderSupport();toast('✓ '+id+' resolved')}
 function reopenTicket(id){updTicket(id,t=>t.status='open');closeSheets();renderSupport();toast(id+' reopened')}
 function promoteTicket(id){const t=(typeof TKTS!=='undefined'?TKTS:[]).find(x=>x.id===id);if(!t)return;
@@ -7035,7 +7059,7 @@ function promoteTicket(id){const t=(typeof TKTS!=='undefined'?TKTS:[]).find(x=>x
   const task={id:'b'+Date.now().toString(36),title:t.title,projectId:'support',assignee:t.assignee||'',start:'',due:t.due||'',status:'todo',priority:pr,ticketId:id,customer:t.customer||'',watchers:[],notes:t.desc||'',updates:[],createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()};
   BUILDT.unshift(task);persistBuild(task);
   updTicket(id,x=>{x.promoted=true});
-  if(task.assignee)notifyAssignee(task.assignee,'Ticket promoted to Build',t.title,'s-build');
+  if(task.assignee)notifyAssignee(task.assignee,'Ticket promoted to Build',t.title,'s-build:task:'+task.id);
   closeSheets();buildTab='focus';buildProj=null;goto('s-build');renderBuild();
   toast('✓ '+id+' pushed to Build');}
 
@@ -7322,7 +7346,7 @@ function renderNotifList(){const body=document.getElementById('notif-list');if(!
   const row=n=>{const u=notifUnread(n),sf=/safety/i.test(n.title||'');
     return '<div class="nrow'+(u?' unread':'')+(sf?' safety':'')+'"><button class="nrow-main" type="button" onclick="notifTap(\''+esc(n.id)+'\')"><span class="nrow-dot" aria-hidden="true"></span><span class="nrow-txt"><span class="nrow-t">'+esc(n.title||'Alert')+'</span>'+(n.body?'<span class="nrow-d">'+esc(n.body)+'</span>':'')+'<span class="nrow-m">'+esc(notifWhen(notifAtMs(n)))+(n.by?' · '+esc(n.by):'')+'</span></span></button><button class="nrow-x" type="button" aria-label="Clear this alert" onclick="notifHide(\''+esc(n.id)+'\')">✕</button></div>'};
   body.innerHTML=list.length?list.map(row).join(''):'<div class="empty"><div class="t" style="font-weight:600">You’re all caught up</div><div class="d">New alerts show here, on the bell, and on your phone once phone alerts are on.</div></div>'}
-function notifTap(id){const n=NOTIF.find(x=>x.id===id);if(!n)return;if(!NSTATE.read.includes(id))NSTATE.read.push(id);nsSave();renderNotifBadge();notifOpen(n.link||'')}
+function notifTap(id){const n=NOTIF.find(x=>x.id===id);if(!n)return;if(!NSTATE.read.includes(id))NSTATE.read.push(id);nsSave();renderNotifBadge();notifOpen(n.link||(/^(Idea|Issue|Question|Feedback)\b/.test(n.title||'')?'s-feedback':''))}
 function notifHide(id){NSTATE.hidden.push(id);nsSave();renderNotifBadge();renderNotifList()}
 function notifReadAll(){NSTATE.readAt=Date.now();nsSave();renderNotifBadge();renderNotifList();toast('✓ All marked read')}
 function notifClearAll(){NSTATE.clearedAt=Date.now();NSTATE.readAt=Date.now();NSTATE.hidden=[];nsSave();renderNotifBadge();renderNotifList();toast('✓ Alerts cleared')}
@@ -7395,7 +7419,7 @@ function testAlert(){pushTestSend()}
 // Tapping a push opens the app at ?go=<screen>
 function pushDeepLink(){try{const u=new URL(location.href);const g=u.searchParams.get('go');if(!g)return;u.searchParams.delete('go');const nid=u.searchParams.get('nid');u.searchParams.delete('nid');history.replaceState(null,'',u.pathname+(u.search||'')+u.hash);if(nid){NSTATE.read.push(nid);nsSave()}if(/^s-[\w:-]+$/.test(g))goto(g)}catch(e){}}
 function simTestOrder(){const n='#TEST-'+Date.now().toString(36).toUpperCase().slice(-4);
-  notify('all','New order '+n,'Test Customer · $150','s-stock');
+  notify('all','New order '+n,'Test Customer · $150','s-stock:order:'+n.slice(1));
   popNotif({title:'New order '+n,body:'Test Customer · $150',link:'s-stock'});
   LIVEORDERS.unshift({n:n,name:'Test Customer',total:150,date:'today',ful:'UNFULFILLED',email:'',tracking:'',trackingUrl:'',carrier:''});
   closeSheets();goto('s-stock');stockTab='fulfill';renderStock();refreshPulse();
@@ -7403,7 +7427,7 @@ function simTestOrder(){const n='#TEST-'+Date.now().toString(36).toUpperCase().s
 function simTestReturn(){const id='RMA-TEST-'+Date.now().toString(36).toUpperCase().slice(-4);
   const r={id:id,order:'#TEST',serial:'SW-TEST-'+id.slice(-4),size:'M',customer:'Test Customer',status:'requested',source:'test',at:new Date().toISOString()};
   persistReturn(r);RETURNS[id]=r;
-  notify('all','Return requested · #TEST','Test Customer · band '+r.serial,'s-stock');
+  notify('all','Return requested · #TEST','Test Customer · band '+r.serial,'s-stock:returns:'+id);
   popNotif({title:'Return requested · #TEST',body:'Test Customer · band '+r.serial,link:'s-stock'});
   closeSheets();goto('s-stock');stockTab='returns';renderStock();
   toast('✓ Fake return '+id+' opened — run it through to restock');}
@@ -7685,7 +7709,7 @@ async function pjPostUpdate(pid){
   const me=(CURRENT_USER&&CURRENT_USER.name)||'';
   const who={};if(p.owner)who[p.owner]=1;
   BUILDT.filter(t=>t.projectId===pid).forEach(t=>(t.watchers||[]).forEach(w=>who[w]=1));
-  Object.keys(who).filter(w=>w&&w!==me).forEach(w=>notifyAssignee(w,'Update on '+p.name,(text||'New file attached').slice(0,80),'s-build'));
+  Object.keys(who).filter(w=>w&&w!==me).forEach(w=>notifyAssignee(w,'Update on '+p.name,(text||'New file attached').slice(0,80),'s-build:proj:'+p.id));
   toast('✓ Update posted');
 }
 /* ---- task create/edit with status, watchers, updates, files ---- */
@@ -7741,7 +7765,7 @@ async function addUpdate(){if(!btEditId){toast('Save the task first');return}con
   t.updates=(t.updates||[]).concat([u]);persistBuild(t);
   document.getElementById('bt-update-text').value='';btFile=null;document.getElementById('bt-update-file').value='';document.getElementById('bt-file-name').textContent='';
   renderUpdates(t);
-  (t.watchers||[]).forEach(w=>notifyAssignee(w,'Update on '+t.title,text.slice(0,80),'s-build'));
+  (t.watchers||[]).forEach(w=>notifyAssignee(w,'Update on '+t.title,text.slice(0,80),'s-build:task:'+t.id));
   toast('✓ Update posted');
 }
 async function uploadBuildFile(taskId,file){
@@ -7756,11 +7780,11 @@ function saveBuildTask(){if(buildReadOnly()){toast('Read-only — oversight acce
   const deps=Array.from(document.querySelectorAll('#bt-deps button.on')).map(b=>b.dataset.v);
   const ccb=document.querySelector('#bt-costcat button.on');
   const data={title:title,projectId:document.getElementById('bt-project').value,assignee:document.getElementById('bt-assignee').value,start:document.getElementById('bt-start').value||'',due:document.getElementById('bt-due').value||'',status:stb?stb.dataset.v:'todo',priority:pr?pr.dataset.v:'medium',watchers:watchers,deps:deps,cost:Number(document.getElementById('bt-cost').value)||0,spent:Number(document.getElementById('bt-spent').value)||0,costCat:ccb?ccb.dataset.v:'none',notes:document.getElementById('bt-notes').value.trim()};
-  let prev=null,prevW=[];
+  let prev=null,prevW=[],tid=btEditId;
   if(btEditId){const t=BUILDT.find(x=>x.id===btEditId);if(t){prev=t.assignee;prevW=t.watchers||[];Object.assign(t,data);persistBuild(t)}}
-  else{const t=Object.assign({id:'b'+Date.now().toString(36),updates:[],createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()},data);BUILDT.unshift(t);persistBuild(t)}
-  if(data.assignee&&data.assignee!==prev)notifyAssignee(data.assignee,'Task assigned to you',data.title+(data.due?' · due '+data.due:''),'s-build');
-  watchers.filter(w=>prevW.indexOf(w)<0&&w!==data.assignee).forEach(w=>notifyAssignee(w,'You were tagged on a task',data.title,'s-build'));
+  else{const t=Object.assign({id:'b'+Date.now().toString(36),updates:[],createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdAt:new Date().toISOString()},data);BUILDT.unshift(t);persistBuild(t);tid=t.id}
+  if(data.assignee&&data.assignee!==prev)notifyAssignee(data.assignee,'Task assigned to you',data.title+(data.due?' · due '+data.due:''),'s-build:task:'+tid);
+  watchers.filter(w=>prevW.indexOf(w)<0&&w!==data.assignee).forEach(w=>notifyAssignee(w,'You were tagged on a task',data.title,'s-build:task:'+tid));
   closeSheets();renderBuild();refreshPulse();toast('✓ Task saved')}
 function markBuildDone(id){const t=BUILDT.find(x=>x.id===id);if(!t)return;t.status=taskStatus(t)==='done'?'todo':'done';persistBuild(t);renderBuild();refreshPulse();toast(taskStatus(t)==='done'?'✓ Done':'Reopened')}
 function deleteBuildTask(){if(buildReadOnly()){toast('Read-only — oversight access');return}if(!btEditId)return;const id=btEditId;BUILDT=BUILDT.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('build_tasks').doc(id).delete().catch(()=>{});closeSheets();renderBuild();refreshPulse();toast('Task deleted')}
@@ -8003,7 +8027,7 @@ function addChanMember(uid){const c=chatChannel,ch=CHANNELS[c];if(!ch||!chanCanM
   ch.members[uid]=true;ch.memberNames=ch.memberNames||{};ch.memberNames[uid]=(t&&t.name)||'';
   if(hasFirestore()){const patch={};patch['members.'+uid]=true;patch['memberNames.'+uid]=(t&&t.name)||'';firebase.firestore().collection('chat_channels').doc(c).update(patch).catch(e=>toast('Add failed — '+((e&&e.code)||'')))}
   renderChanMembers();renderChatChannels();
-  if(uid!==CURRENT_USER.uid)notify(uid,'Added to 🔒 '+c,(CURRENT_USER.name||'A teammate')+' added you to a private channel','s-chat');
+  if(uid!==CURRENT_USER.uid)notify(uid,'Added to 🔒 '+c,(CURRENT_USER.name||'A teammate')+' added you to a private channel','s-chat:'+c);
   toast('✓ Added '+((t&&t.name)||'teammate'));
 }
 function removeChanMember(uid){const c=chatChannel,ch=CHANNELS[c];if(!ch||!chanCanManage(c)){toast('Owner or admin only');return}if(uid===ch.createdBy){toast('The owner stays in the channel');return}
@@ -8076,10 +8100,10 @@ function sendChat(){const inp=document.getElementById('chat-input');const text=(
     const preview=text?text.slice(0,120):('📎 shared '+(atts[0]&&atts[0].kind==='image'?'a screenshot':(atts[0]?atts[0].name||'a file':'an attachment')));
     const cch=CHANNELS[chatChannel];
     if(men.all){
-      if(cch&&cch.private){Object.keys(cch.members||{}).forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,'🔒 '+chatChannel+' · '+who,preview,'s-chat')})}
-      else notify('all','#'+chatChannel+' · '+who,preview,'s-chat');
+      if(cch&&cch.private){Object.keys(cch.members||{}).forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,'🔒 '+chatChannel+' · '+who,preview,'s-chat:'+chatChannel)})}
+      else notify('all','#'+chatChannel+' · '+who,preview,'s-chat:'+chatChannel);
     }
-    else{men.uids.forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,(cch&&cch.private?'🔒 ':'#')+chatChannel+' · '+who+' mentioned you',preview,'s-chat')})}
+    else{men.uids.forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,(cch&&cch.private?'🔒 ':'#')+chatChannel+' · '+who+' mentioned you',preview,'s-chat:'+chatChannel)})}
   }).catch(e=>{toast('Send failed — '+((e&&e.code)||''));inp.value=text})}
 
 /* --- attachments: screenshots (reusing the annotate tool), images & files;
@@ -8434,11 +8458,11 @@ function saveRaiseTask(){const title=document.getElementById('rt-title').value.t
   const id='rt'+Date.now().toString(36);RAISE_TASKS.push(Object.assign({id:id},rec));
   if(hasFirestore())firebase.firestore().collection('raise_tasks').doc(id).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
   // Notification text stays generic: notifications are readable team-wide.
-  if(uid&&uid!==(CURRENT_USER&&CURRENT_USER.uid))notify(uid,'New raise task from '+((CURRENT_USER&&CURRENT_USER.name)||'Brad'),'Open Fundraise to see it'+(rec.due?' · due '+new Date(rec.due+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):''),'s-raise');
+  if(uid&&uid!==(CURRENT_USER&&CURRENT_USER.uid))notify(uid,'New raise task from '+((CURRENT_USER&&CURRENT_USER.name)||'Brad'),'Open Fundraise to see it'+(rec.due?' · due '+new Date(rec.due+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):''),'s-raise:overview');
   closeSheets();refreshPulse();if(raiseOn())renderRaise();toast('✓ Assigned to '+ownerName)}
 function doneRaiseTask(id,ev){if(ev)ev.stopPropagation();const x=(RAISE_TASKS||[]).find(t=>t.id===id);RAISE_TASKS=(RAISE_TASKS||[]).filter(t=>t.id!==id);
   if(hasFirestore())firebase.firestore().collection('raise_tasks').doc(id).set({status:'done',doneAt:new Date().toISOString(),doneBy:(CURRENT_USER&&CURRENT_USER.name)||''},{merge:true}).catch(()=>{});
-  if(x&&x.createdByUid&&x.createdByUid!==(CURRENT_USER&&CURRENT_USER.uid))notify(x.createdByUid,'Raise task done',((CURRENT_USER&&CURRENT_USER.name)||'Teammate')+' finished a raise task — see Fundraise','s-raise');
+  if(x&&x.createdByUid&&x.createdByUid!==(CURRENT_USER&&CURRENT_USER.uid))notify(x.createdByUid,'Raise task done',((CURRENT_USER&&CURRENT_USER.name)||'Teammate')+' finished a raise task — see Fundraise','s-raise:overview');
   refreshPulse();if(raiseOn()&&!raiseAcctId)renderRaise();toast('✓ Done')}
 function raiseOn(){const el=document.getElementById('s-raise');return !!(el&&el.classList.contains('on'))}
 function raiseRerender(){if(raiseOn()&&!raiseAcctId)renderRaise()}
@@ -8491,7 +8515,7 @@ function meetAddAction(){const m=meetById(meetOpenId);if(!m)return;const title=(
   const ownerName=document.getElementById('ma-owner').value;const due=document.getElementById('ma-due').value||'';const uid=uidForName(ownerName)||'';
   const id='rt'+Date.now().toString(36);const rec={title:title,ownerName:ownerName,owner:uid,due:due,status:'open',meetingId:m.id,meetingDate:m.date,investorId:'',investorName:'',createdBy:(CURRENT_USER&&CURRENT_USER.name)||'',createdByUid:(CURRENT_USER&&CURRENT_USER.uid)||'',createdAt:new Date().toISOString()};
   RAISE_TASKS.push(Object.assign({id:id},rec));if(hasFirestore())firebase.firestore().collection('raise_tasks').doc(id).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
-  if(uid&&uid!==(CURRENT_USER&&CURRENT_USER.uid))notify(uid,'New action item from the raise sync','Open Fundraise → Meetings'+(due?' · due '+niceDay(due):''),'s-raise');
+  if(uid&&uid!==(CURRENT_USER&&CURRENT_USER.uid))notify(uid,'New action item from the raise sync','Open Fundraise → Meetings'+(due?' · due '+niceDay(due):''),'s-raise:meeting:'+m.id);
   m.actions=(m.actions||[]).concat([{id:id,title:title,ownerName:ownerName,due:due,status:'open'}]);persistMeeting(m);refreshPulse();renderRaise();toast('✓ Action item → '+ownerName)}
 function meetDoneAction(id){const m=meetById(meetOpenId);if(m){(m.actions||[]).forEach(a=>{if(a.id===id)a.status='done'});persistMeeting(m)}doneRaiseTask(id)}
 function raiseMeetingsHTML(){
@@ -9138,7 +9162,7 @@ function renderPlaybook(a){const el=document.getElementById('ac-playbook');if(!e
     +'<div class="rolepick" style="flex-wrap:wrap;margin-bottom:9px">'+Object.keys(SEGMENTS).map(k=>'<button class="'+(seg===k?'on':'')+'" onclick="setSegment(acctId,\''+k+'\')">'+esc(SEGMENTS[k].label)+'</button>').join('')+'</div>'
     +(seg?'<div class="d" style="line-height:1.55">'+esc(SEGMENTS[seg].motion)+'</div>':'<div class="d" style="color:var(--faint)">Pick a segment to see its buying motion.</div>')}
 function setSegment(id,k){const a=findAcct(id);if(!a)return;updateAccount(id,{segment:k});renderPlaybook(a)}
-function saveNextStep(){const a=findAcct(acctId);if(!a)return;const step=document.getElementById('ac-nextstep').value.trim(),due=document.getElementById('ac-due').value||'';updateAccount(acctId,{nextStep:step,dueAt:due});if(step&&a.owner&&a.owner!=='Unassigned')notifyAssignee(a.owner,'Follow-up assigned',step+' — '+displayName(a)+(due?' · due '+due:''),'s-crm');renderCrmMain();refreshPulse();toast('✓ Next step saved')}
+function saveNextStep(){const a=findAcct(acctId);if(!a)return;const step=document.getElementById('ac-nextstep').value.trim(),due=document.getElementById('ac-due').value||'';updateAccount(acctId,{nextStep:step,dueAt:due});if(step&&a.owner&&a.owner!=='Unassigned')notifyAssignee(a.owner,'Follow-up assigned',step+' — '+displayName(a)+(due?' · due '+due:''),'s-crm:'+a.id);renderCrmMain();refreshPulse();toast('✓ Next step saved')}
 function renderCampaignBadge(a){const el=document.getElementById('ac-campaign-badge');if(!el)return;const en=a.campaign;
   if(!en){el.innerHTML='';return}
   const map={active:'wave',completed:'good','no-email':'amber','no-sender':'amber'};
