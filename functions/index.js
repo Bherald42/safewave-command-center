@@ -1020,17 +1020,17 @@ exports.shopifyFulfillOrder = onCall({ region: REGION, timeoutSeconds: 60 }, asy
   }
 });
 
-// Mirror Shopify's "available" count per band size at the shipping
-// location into settings/shopify.stock. Notifies everyone the moment a
-// size goes oversold (negative), not on every 15-minute pass.
-async function pullShopifyStock() {
+// Shopify stock per band size at the shipping location: available (what the
+// store can still sell), on_hand (what's on the shelf) and committed (held for
+// unshipped orders), plus each size's inventory item so counts can be pushed back.
+async function readShopifyStockLevels() {
   const loc = await shopifyShipLocationId();
   if (!loc) return null;
-  const d = await shopifyGql("query($id: ID!) { location(id: $id) { name inventoryLevels(first: 250) { nodes { " +
-    "quantities(names: [\"available\"]) { name quantity } " +
-    "item { variant { title selectedOptions { name value } product { title status } } } } } } }", { id: loc });
+  const d = await shopifyGql("query($id: ID!) { location(id: $id) { id name inventoryLevels(first: 250) { nodes { " +
+    "quantities(names: [\"available\", \"on_hand\", \"committed\"]) { name quantity } " +
+    "item { id variant { title selectedOptions { name value } product { title status } } } } } } }", { id: loc });
   const levels = (d.location && d.location.inventoryLevels && d.location.inventoryLevels.nodes) || [];
-  const stock = { S: 0, M: 0, L: 0 };
+  const sizes = { S: { available: 0, onHand: 0, committed: 0, items: [] }, M: { available: 0, onHand: 0, committed: 0, items: [] }, L: { available: 0, onHand: 0, committed: 0, items: [] } };
   let matched = 0;
   levels.forEach((lv) => {
     const v = lv.item && lv.item.variant;
@@ -1038,26 +1038,81 @@ async function pullShopifyStock() {
     const label = [v.title].concat((v.selectedOptions || []).map((o) => o.value)).join(" ");
     const m = label.match(/\b(small|medium|large|s|m|l)\b/i);
     if (!m) return;
-    const q = (lv.quantities || []).find((x) => x.name === "available");
-    stock[m[1][0].toUpperCase()] += Number((q && q.quantity) || 0);
+    const z = m[1][0].toUpperCase();
+    const q = (n) => Number(((lv.quantities || []).find((x) => x.name === n) || {}).quantity || 0);
+    sizes[z].available += q("available"); sizes[z].onHand += q("on_hand"); sizes[z].committed += q("committed");
+    sizes[z].items.push({ id: lv.item.id, onHand: q("on_hand") });
     matched++;
   });
   if (!matched) return null;
+  return { locationId: (d.location && d.location.id) || loc, locationName: (d.location && d.location.name) || "", sizes };
+}
+// Mirror Shopify's stock into settings/shopify. Notifies everyone the moment a
+// size goes oversold (available below zero), not on every 15-minute pass.
+async function pullShopifyStock() {
+  const r = await readShopifyStockLevels();
+  if (!r) return null;
+  const pick = (k) => ({ S: r.sizes.S[k], M: r.sizes.M[k], L: r.sizes.L[k] });
+  const stock = pick("available");
   const ref = db.collection("settings").doc("shopify");
   const prev = (await ref.get()).data() || {};
   const prevStock = prev.stock || {};
   const newlyOver = Object.keys(stock).filter((z) => stock[z] < 0 && !(Number(prevStock[z]) < 0));
-  await ref.set({ stock: stock, stockAt: new Date().toISOString(), stockLocation: (d.location && d.location.name) || "" }, { merge: true });
+  await ref.set({ stock: stock, stockOnHand: pick("onHand"), stockCommitted: pick("committed"), stockAt: new Date().toISOString(), stockLocation: r.locationName }, { merge: true });
   if (newlyOver.length) {
     const names = { S: "Small", M: "Medium", L: "Large" };
     await addNotification({
       to: "all", title: "Shopify oversold: " + newlyOver.map((z) => names[z] + " (" + stock[z] + ")").join(", "),
-      body: "Customers bought more than the store shows in stock. Restock in Shopify or pause the size.",
+      body: "Customers bought more than the store shows in stock. Send the Covington counts to Shopify from Stock, or pause the size.",
       link: "s-stock:inventory", by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
   return stock;
 }
+// Make Shopify's shelf count (on hand) at the shipping location match the
+// Command Center's Covington counts. Orders already placed stay reserved, so
+// Shopify's "available" = Covington minus what's held for unshipped orders.
+// Each size is compare-and-swap guarded and idempotent.
+exports.pushStockToShopify = onCall({ region: REGION, timeoutSeconds: 60 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  if (request.auth.token.email === "jared@safewavetech.com") throw new HttpsError("permission-denied", "View-only.");
+  const me = await db.collection("users").doc(request.auth.uid).get();
+  if (!me.exists) throw new HttpsError("permission-denied", "Not on the team roster.");
+  const by = (me.data().name) || request.auth.token.email || "Teammate";
+  if (!shopifyCreds().ok) await loadShopifyKeys(true);
+  if (!shopifyCreds().ok) throw new HttpsError("failed-precondition", "Shopify isn't connected.");
+  const inv = await db.collection("inventory").doc("main").get();
+  const cov = (inv.exists && inv.data().locations && inv.data().locations.covington) || {};
+  let r;
+  try { r = await readShopifyStockLevels(); } catch (e) { throw new HttpsError("internal", "Couldn't read Shopify stock: " + ((e && e.message) || "")); }
+  if (!r) throw new HttpsError("failed-precondition", "No band sizes found in Shopify at the shipping location.");
+  const names = { S: "Small", M: "Medium", L: "Large" };
+  const changes = [], skipped = [], quantities = [];
+  ["S", "M", "L"].forEach((z) => {
+    const target = Math.max(0, Math.round(Number(cov[z]) || 0));
+    const s = r.sizes[z];
+    if (s.items.length !== 1) { skipped.push(names[z] + (s.items.length ? " has more than one Shopify variant" : " isn't stocked at this location in Shopify")); return; }
+    if (s.onHand === target) return;
+    changes.push({ size: z, from: s.onHand, to: target, availableAfter: target - s.committed });
+    quantities.push({ inventoryItemId: s.items[0].id, locationId: r.locationId, quantity: target, changeFromQuantity: s.onHand });
+  });
+  if (quantities.length) {
+    const key = require("crypto").randomUUID();
+    let d;
+    try {
+      d = await shopifyGql("mutation($input: InventorySetQuantitiesInput!, $key: String!) { inventorySetQuantities(input: $input) @idempotent(key: $key) { inventoryAdjustmentGroup { changes { name delta } } userErrors { code field message } } }",
+        { key, input: { name: "on_hand", reason: "correction", referenceDocumentUri: "safewave://command-center/stock/" + Date.now(), quantities } });
+    } catch (e) {
+      const scope = e && (e.status === 401 || e.status === 403);
+      throw new HttpsError(scope ? "permission-denied" : "internal", scope ? "The Shopify app needs the write_inventory permission. Add it in the Shopify app's settings, then try again." : "Shopify said: " + ((e && e.message) || "unknown error"));
+    }
+    const errs = (d.inventorySetQuantities && d.inventorySetQuantities.userErrors) || [];
+    if (errs.length) throw new HttpsError("aborted", /change.?from|compare|changed/i.test(errs[0].message || "") ? "Shopify's stock changed while sending. Try again." : "Shopify said: " + errs[0].message);
+  }
+  const stock = await pullShopifyStock().catch(() => null);
+  await db.collection("inventory").doc("main").set({ lastShopifyPush: { at: new Date().toISOString(), by, changes, skipped } }, { merge: true });
+  return { changes, skipped, stock };
+});
 
 /* ------------------------------------------------------------------ *
  * COMPLIANCE STANDARD-WATCH — monthly (and on-demand) web check for

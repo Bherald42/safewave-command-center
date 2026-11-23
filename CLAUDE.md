@@ -47,6 +47,9 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   `server_keys/{shopify,inbox}` (no client access). Repo secrets still win if set.
   `scheduledShopifySync` (every 15 min) syncs orders/stock and reads new sales@
   mail (IMAP, read-only) into Email tickets; email tickets reply from sales@.
+  Stock mirrors Shopify's on hand / committed / available per size into
+  `settings/shopify`; **Send Covington counts to Shopify** (`pushStockToShopify`)
+  sets Shopify's on-hand to the Covington counts (needs the `write_inventory` scope).
 - **Invoices & customer POs** (Customers → Invoices & POs). Invoices are
   numbered from `counters/invoices`, carry line items, terms, payments and a
   history; sent invoices are voided, never deleted. The PDF is drawn server-side
