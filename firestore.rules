@@ -165,6 +165,11 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if canOperate();
     }
+    // Saved products picked onto invoices/POs (each line stays editable there).
+    match /invoice_products/{id} {
+      allow read: if signedIn();
+      allow write: if canOperate();
+    }
     // Next invoice number (claimed in a transaction when an invoice is created).
     match /counters/invoices {
       allow read: if signedIn();

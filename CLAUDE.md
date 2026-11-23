@@ -61,7 +61,7 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
 - **Data is Firestore.** Collections include: `users`, `crm_accounts`, `tickets`,
   `campaigns`, `build_tasks`, `build_projects`, `inventory`, `fulfillments`,
   `bands`, `returns`, `orders` (server-write only), `purchase_orders` (supplier POs),
-  `invoices` + `customer_pos` (Customers → Invoices & POs; `counters/invoices`,
+  `invoices` + `customer_pos` + `invoice_products` (Customers → Invoices & POs; `counters/invoices`,
   `settings/invoicing` letterhead),
   `notifications`, `nudges`, `mail_credentials`, `chat_channels/{ch}/messages`,
   `feedback` (super-admin read), and `settings/{finance,chat,raise}`.
