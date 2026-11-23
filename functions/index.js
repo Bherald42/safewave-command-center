@@ -1346,20 +1346,31 @@ function invDate(ymd) {
   const d = new Date(String(ymd).slice(0, 10) + "T12:00:00Z");
   return isNaN(d) ? String(ymd) : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
-function renderInvoicePdf(inv, s) {
+function invLogoBuffer(s) {
+  try {
+    const m = String((s && s.logo) || "").match(/^data:image\/(png|jpe?g);base64,(.+)$/);
+    if (m) return Buffer.from(m[2], "base64");
+  } catch (e) { /* fall through to the bundled logo */ }
+  try { return require("fs").readFileSync(require("path").join(__dirname, "assets", "safewave-logo.png")); } catch (e) { return null; }
+}
+function renderInvoicePdf(inv, s, remit) {
   const PDFDocument = require("pdfkit");
-  s = s || {};
+  s = s || {}; remit = remit || {};
   const T = invTotals(inv);
   const WAVE = "#0a8fa6", INK = "#14212b", MUTED = "#5b6b78", LINE = "#dfe6ea", SOFT = "#f3f7f9";
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "LETTER", margin: 50, info: { Title: "Invoice " + (inv.number || ""), Author: s.company || "Safewave Technology" } });
     const out = []; doc.on("data", (c) => out.push(c)); doc.on("end", () => resolve(Buffer.concat(out))); doc.on("error", reject);
     const L = 50, R = doc.page.width - 50, W = R - L, bottom = () => doc.page.height - 70;
-    // Header: wordmark + INVOICE
-    doc.fillColor(WAVE).font("Helvetica-Bold").fontSize(20).text(s.company || "Safewave Technology", L, 50, { width: W / 2 });
+    // Header: logo (or wordmark) + INVOICE
+    const logo = invLogoBuffer(s);
+    let logoOk = false;
+    if (logo) { try { doc.image(logo, L, 44, { fit: [170, 54] }); logoOk = true; } catch (e) { logoOk = false; } }
+    if (logoOk) doc.fillColor(INK).font("Helvetica-Bold").fontSize(10).text(s.company || "Safewave Technology", L, 104, { width: W / 2 });
+    else doc.fillColor(WAVE).font("Helvetica-Bold").fontSize(20).text(s.company || "Safewave Technology", L, 50, { width: W / 2 });
     doc.fillColor(MUTED).font("Helvetica").fontSize(9);
     const fromLines = [].concat(String(s.address || "").split("\n"), [s.email || "", s.phone || "", s.website || "safewavetech.com"]).map((x) => x.trim()).filter(Boolean);
-    doc.text(fromLines.join("\n"), L, doc.y + 4, { width: W / 2, lineGap: 1.5 });
+    doc.text(fromLines.join("\n"), L, doc.y + 3, { width: W / 2, lineGap: 1.5 });
     const leftEnd = doc.y;
     doc.fillColor(INK).font("Helvetica-Bold").fontSize(26).text(inv.status === "void" ? "INVOICE · VOID" : "INVOICE", L + W / 2, 48, { width: W / 2, align: "right" });
     const meta = [["Invoice #", inv.number || "Draft"], ["Issued", invDate(inv.issueDate)], ["Terms", INV_TERMS[inv.terms] || inv.terms || ""], ["Due", invDate(inv.dueDate)]];
@@ -1375,7 +1386,8 @@ function renderInvoicePdf(inv, s) {
     const b = inv.billTo || {}, sh = inv.shipTo || {};
     const block = (title, o, x, w) => {
       doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text(title.toUpperCase(), x, y, { width: w, characterSpacing: 0.8 });
-      const lines = [o.name, o.company, ...(String(o.address || "").split("\n")), o.email, o.phone].map((x) => (x || "").trim()).filter(Boolean);
+      const attn = (o.name || "").trim();
+      const lines = [o.company, attn ? (/^(attn|attention)\b/i.test(attn) ? attn : "Attn: " + attn) : "", ...(String(o.address || "").split("\n")), o.email, o.phone].map((x) => (x || "").trim()).filter(Boolean);
       doc.font("Helvetica").fontSize(10).fillColor(INK).text(lines.join("\n") || "—", x, y + 13, { width: w, lineGap: 1.5 });
       return doc.y;
     };
@@ -1439,7 +1451,31 @@ function renderInvoicePdf(inv, s) {
       doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(body, L, y + 13, { width: W, lineGap: 1.5 });
       y = doc.y + 16;
     };
-    para("How to pay", s.paymentInstructions || "");
+    // How to pay: ACH (bank details live server-side only), check, optional card link.
+    const ways = [];
+    if (remit.routing && remit.account) ways.push(["ACH / bank transfer", [[remit.bankName ? "Bank: " + remit.bankName : "", "Account name: " + (remit.accountName || s.company || "Safewave Technology")].filter(Boolean).join("   ·   "), "Routing (ABA): " + remit.routing + "   ·   Account: " + remit.account, remit.swift ? "SWIFT (international wires): " + remit.swift : ""].filter(Boolean).join("\n")]);
+    if (s.checkAddress) ways.push(["Check", "Payable to " + (s.checkPayable || s.company || "Safewave Technology") + ", mailed to: " + String(s.checkAddress).split("\n").map((x) => x.trim()).filter(Boolean).join(", ")]);
+    if (s.payLink) ways.push(["Pay online by card", String(s.payLink)]);
+    if (ways.length) {
+      const bodyH = ways.reduce((h, w) => h + doc.font("Helvetica").fontSize(9.5).heightOfString(w[1], { width: W - 140 }) + 8, 0) + 44;
+      if (y + bodyH > bottom()) { doc.addPage(); y = 50; }
+      doc.rect(L, y, W, bodyH).fill(SOFT);
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(MUTED).text("HOW TO PAY", L + 12, y + 10, { characterSpacing: 0.8 });
+      let py = y + 26;
+      ways.forEach(([k, v]) => {
+        doc.font("Helvetica-Bold").fontSize(9.5).fillColor(INK).text(k, L + 12, py, { width: 120 });
+        const isLink = k === "Pay online by card";
+        doc.font("Helvetica").fontSize(9.5).fillColor(isLink ? WAVE : INK).text(v, L + 128, py, { width: W - 140, link: isLink ? v : undefined, underline: isLink });
+        py = doc.y + 8;
+      });
+      doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text("Please include invoice " + (inv.number || "") + " with your payment.", L + 12, py - 2, { width: W - 24 });
+      y = y + bodyH + 14;
+      if (remit.routing) {
+        doc.font("Helvetica").fontSize(8).fillColor(MUTED).text("Our bank details never change by email. If you receive a request to pay a different account, call us to confirm first.", L, y, { width: W });
+        y = doc.y + 12;
+      }
+    }
+    para(ways.length ? "Payment note" : "How to pay", s.paymentInstructions || "");
     para("Notes", inv.notes || "");
     // Footer (inside the bottom margin, so it never spills onto a blank page)
     doc.page.margins.bottom = 0;
@@ -1451,6 +1487,39 @@ function renderInvoicePdf(inv, s) {
 }
 // INVOICE-PDF-END
 async function invoiceSettings() { const s = await db.collection("settings").doc("invoicing").get(); return s.exists ? s.data() : {}; }
+// Bank details for ACH. Kept server-only (server_keys has no client access);
+// the app sees only the last 4 digits via settings/invoicing.remit.
+async function invoiceRemit() { const s = await db.collection("server_keys").doc("invoice_remit").get(); return s.exists ? s.data() : {}; }
+function abaValid(r) { if (!/^\d{9}$/.test(r)) return false; const d = r.split("").map(Number); return (3 * (d[0] + d[3] + d[6]) + 7 * (d[1] + d[4] + d[7]) + (d[2] + d[5] + d[8])) % 10 === 0; }
+async function requireFinanceGroup(request) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  const email = String((request.auth.token && request.auth.token.email) || "").toLowerCase();
+  if (email === "jared@safewavetech.com") throw new HttpsError("permission-denied", "View-only.");
+  const me = await db.collection("users").doc(request.auth.uid).get();
+  if (me.exists && me.data().role === "superadmin") return email;
+  if (email === "trevon@safewavetech.com") return email;
+  const fin = await db.collection("settings").doc("finance").get();
+  const list = ((fin.exists && fin.data().emails) || []).map((e) => String(e || "").toLowerCase());
+  if (email && list.includes(email)) return email;
+  throw new HttpsError("permission-denied", "Only the finance group can change payment details.");
+}
+// Save (or clear) the ACH details printed on invoices.
+exports.saveInvoiceRemit = onCall({ region: REGION }, async (request) => {
+  const by = await requireFinanceGroup(request);
+  const d = request.data || {};
+  if (d.clear) {
+    await db.collection("server_keys").doc("invoice_remit").delete();
+    await db.collection("settings").doc("invoicing").set({ remit: { hasAch: false, updatedAt: new Date().toISOString(), updatedBy: by } }, { merge: true });
+    return { ok: true };
+  }
+  const routing = String(d.routing || "").replace(/\D/g, ""), account = String(d.account || "").replace(/[^\dA-Za-z]/g, "");
+  if (!abaValid(routing)) throw new HttpsError("invalid-argument", "That routing number doesn't check out. It should be the 9-digit ABA number for ACH.");
+  if (!/^[\dA-Za-z]{4,17}$/.test(account)) throw new HttpsError("invalid-argument", "Account number should be 4 to 17 digits.");
+  const rec = { bankName: String(d.bankName || "").slice(0, 80), accountName: String(d.accountName || "").slice(0, 120), routing, account, swift: String(d.swift || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11), updatedAt: new Date().toISOString(), updatedBy: by };
+  await db.collection("server_keys").doc("invoice_remit").set(rec);
+  await db.collection("settings").doc("invoicing").set({ remit: { hasAch: true, bankName: rec.bankName, accountName: rec.accountName, routingLast4: routing.slice(-4), accountLast4: account.slice(-4), swift: !!rec.swift, updatedAt: rec.updatedAt, updatedBy: by } }, { merge: true });
+  return { ok: true };
+});
 async function loadInvoice(id) {
   const snap = await db.collection("invoices").doc(String(id || "")).get();
   if (!snap.exists) throw new HttpsError("not-found", "Invoice not found.");
@@ -1461,7 +1530,7 @@ function invoiceFileName(inv) { return "Safewave-" + String(inv.number || "invoi
 exports.invoicePdf = onCall({ region: REGION, memory: "512MiB" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
   const inv = await loadInvoice((request.data || {}).id);
-  const pdf = await renderInvoicePdf(inv, await invoiceSettings());
+  const pdf = await renderInvoicePdf(inv, await invoiceSettings(), await invoiceRemit());
   return { name: invoiceFileName(inv), pdf: pdf.toString("base64") };
 });
 // Email the invoice (PDF attached) from sales@ when it's connected, otherwise
@@ -1484,8 +1553,9 @@ exports.sendInvoice = onCall({ region: REGION, memory: "512MiB" }, async (reques
   const sender = senderFrom(creds, prof);
   if (via === "sales@") sender.name = (prof.name || "Safewave") + " · Safewave";
   const T = invTotals(inv);
-  const text = String(d.message || "").trim() || ("Hello,\n\nPlease find attached invoice " + inv.number + " for " + invMoney(T.balance) + ", due " + (invDate(inv.dueDate) || "on receipt") + ".\n\nThank you!");
-  const pdf = await renderInvoicePdf(inv, s);
+  let text = String(d.message || "").trim() || ("Hello,\n\nPlease find attached invoice " + inv.number + " for " + invMoney(T.balance) + ", due " + (invDate(inv.dueDate) || "on receipt") + ".\n\nThank you!");
+  if (s.payLink && text.indexOf(s.payLink) < 0) text += "\n\nPay online by card: " + s.payLink + "\n(ACH and check details are on the attached invoice.)";
+  const pdf = await renderInvoicePdf(inv, s, await invoiceRemit());
   try {
     await deliver(creds, sender, { to: to.join(", "), subject: "Invoice " + inv.number + " from " + (s.company || "Safewave Technology"), text, attachments: [{ filename: invoiceFileName(inv), content: pdf, contentType: "application/pdf" }] });
   } catch (e) {
