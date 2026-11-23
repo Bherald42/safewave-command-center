@@ -992,11 +992,13 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 
 /* Invoices & POs: line-item grid, list rows, sticky save bar */
 .inv-fr{display:flex;gap:8px;flex-wrap:wrap}
-.inv-fr>div{flex:1 1 104px;min-width:0}
+.inv-fr>div{flex:1 1 132px;min-width:0}
 #s-invoices .acct-col{min-width:0}
 #s-invoices .field{min-width:0}
 .inv-logo-prev{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:flex-start;min-height:74px}
 .inv-logo-prev img{max-height:56px;max-width:100%;object-fit:contain}
+.inv-addrow{gap:6px;flex-wrap:wrap;margin-top:4px}
+.inv-addrow .il-pick{flex:1 1 220px;width:auto;margin:0;min-height:36px;padding-top:7px;padding-bottom:7px}
 .bill-row{padding:12px 14px}
 .bill-row .t{overflow-wrap:anywhere}
 .inv-line{display:grid;grid-template-columns:minmax(0,1fr) 70px 100px 92px 30px;gap:6px;align-items:center;margin-bottom:6px}
@@ -6712,7 +6714,7 @@ function deepOpen(link){const p=link.split(':'),scr=p[0],a=p[1]||'',b=p.slice(2)
   if(scr==='s-invoices'){invSettingsOpen=false;
     if(a==='inv'&&b){invTab='invoices';poOpenId=null;poDraft=null;if(invOpenId!==b){invDraft=null;invDirty=false}invOpenId=b}
     else if(a==='po'&&b){invTab='pos';invOpenId=null;invDraft=null;if(poOpenId!==b){poDraft=null;poDirty=false}poOpenId=b}
-    else{invOpenId=null;invDraft=null;poOpenId=null;poDraft=null;if(a==='pos')invTab='pos';else{invTab='invoices';if(['overdue','open','draft','paid','all'].includes(a))invFilter=a}}
+    else{invOpenId=null;invDraft=null;poOpenId=null;poDraft=null;if(a==='pos'||a==='products')invTab=a;else{invTab='invoices';if(['overdue','open','draft','paid','all'].includes(a))invFilter=a}}
     goto('s-invoices');return}
   if(scr==='s-feedback'){fbxFilter=FEEDBACK.some(f=>f.id===a&&f.status==='resolved')?'all':'open';goto('s-feedback');
     if(a)later(()=>deepFlash('fbx-'+a));return}
@@ -6725,7 +6727,7 @@ function deepFlash(elId){const el=document.getElementById(elId);if(!el)return;el
    only. Numbers come from counters/invoices, letterhead from settings/invoicing.
    The PDF itself is drawn by the invoicePdf / sendInvoice Cloud Functions, so a
    download and an emailed copy are the same document. */
-let INVOICES=[],CPOS=[],INVSET={},invUnsubs=[],invTab='invoices',invFilter='open',invQ='',invOpenId=null,poOpenId=null,invDraft=null,poDraft=null,invDirty=false,poDirty=false,invSettingsOpen=false,invLocalNext=0,invBusy=false,invLoaded=false,poLoaded=false;
+let INVOICES=[],CPOS=[],INVSET={},invUnsubs=[],invTab='invoices',invFilter='open',invQ='',invOpenId=null,poOpenId=null,invDraft=null,poDraft=null,invDirty=false,poDirty=false,invSettingsOpen=false,invLocalNext=0,invBusy=false,invLoaded=false,poLoaded=false,PRODUCTS=[],prodEditId=null;
 const INV_TERM_LIST=[['receipt','Due on receipt',0],['net15','Net 15',15],['net30','Net 30',30],['net45','Net 45',45],['net60','Net 60',60]];
 const PO_STAGES=[['received','Received'],['accepted','Accepted'],['shipped','Shipped'],['invoiced','Invoiced'],['closed','Closed']];
 const INV_PILL={draft:['dim','Draft'],sent:['wave','Sent'],partial:['wave','Part paid'],overdue:['amber','Overdue'],paid:['good','Paid'],void:['dim','Void']};
@@ -6758,6 +6760,7 @@ function invKpis(){const open=invOpenInvoices(),od=open.filter(i=>invState(i)===
 function subscribeInvoices(){if(!hasFirestore())return;invUnsubs.forEach(u=>{try{u()}catch(e){}});invUnsubs=[];const fs=firebase.firestore();
   try{invUnsubs.push(fs.collection('invoices').orderBy('createdAt','desc').limit(500).onSnapshot(qs=>{INVOICES=qs.docs.map(d=>Object.assign({id:d.id},d.data()));invLoaded=true;invRefresh()},()=>{}));
     invUnsubs.push(fs.collection('customer_pos').orderBy('createdAt','desc').limit(500).onSnapshot(qs=>{CPOS=qs.docs.map(d=>Object.assign({id:d.id},d.data()));poLoaded=true;invRefresh()},()=>{}));
+    invUnsubs.push(fs.collection('invoice_products').onSnapshot(qs=>{PRODUCTS=qs.docs.map(d=>Object.assign({id:d.id},d.data()));if(invTab==='products'&&!prodEditId)invRefresh();invRepaintPickers()},()=>{}));
     invUnsubs.push(fs.collection('settings').doc('invoicing').onSnapshot(s=>{INVSET=s.exists?(s.data()||{}):{}},()=>{}))}catch(e){}}
 let invRefreshT=null;
 function invRefresh(){clearTimeout(invRefreshT);invRefreshT=setTimeout(()=>{
@@ -6782,10 +6785,10 @@ function renderInvoices(){const body=document.getElementById('inv-body');if(!bod
     +kpiCell(fmtMoney(k.collected),'Collected · 30 days')
     +kpiCell(k.openPO?(k.openPO+' · '+fmtMoney(k.openPOValue)):'0','Open customer POs')
   +'</div>'
-  +'<div class="chips">'+tab('invoices','Invoices',INVOICES.length)+tab('pos','Customer POs',CPOS.length)+'</div>'
+  +'<div class="chips">'+tab('invoices','Invoices',INVOICES.length)+tab('pos','Customer POs',CPOS.length)+tab('products','Products',PRODUCTS.length)+'</div>'
   +'<div class="row" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">'
-    +'<div class="searchbar" style="flex:1;min-width:0;margin:0"><input id="inv-q" placeholder="'+(invTab==='pos'?'Search POs':'Search invoices')+' — customer, number, PO" value="'+esc(invQ)+'" oninput="invQ=this.value;invPaintList()"></div>'
-    +(ro?'':'<button class="btn" style="width:auto;white-space:nowrap" onclick="'+(invTab==='pos'?'newPO()':'newInvoice()')+'">＋ '+(invTab==='pos'?'Log a PO':'New invoice')+'</button>')
+    +'<div class="searchbar" style="flex:1;min-width:0;margin:0"><input id="inv-q" placeholder="'+(invTab==='pos'?'Search POs — customer, number':invTab==='products'?'Search products — name or SKU':'Search invoices — customer, number, PO')+'" value="'+esc(invQ)+'" oninput="invQ=this.value;invPaintList()"></div>'
+    +(ro?'':'<button class="btn" style="width:auto;white-space:nowrap" onclick="'+(invTab==='pos'?'newPO()':invTab==='products'?'prodEdit(\'new\')':'newInvoice()')+'">＋ '+(invTab==='pos'?'Log a PO':invTab==='products'?'New product':'New invoice')+'</button>')
   +'</div>';
   if(invTab==='invoices'){const f=(id,l)=>'<button class="chip'+(invFilter===id?' on':'')+'" onclick="invFilter=\''+id+'\';renderInvoices()">'+l+'</button>';
     h+='<div class="chips" style="margin-bottom:10px">'+f('open','Open')+f('overdue','Overdue')+f('draft','Drafts')+f('paid','Paid')+f('void','Void')+f('all','All')+'</div>'}
@@ -6794,6 +6797,7 @@ function renderInvoices(){const body=document.getElementById('inv-body');if(!bod
   body.innerHTML=h;invPaintList()}
 function invMatch(x,q){if(!q)return true;q=q.toLowerCase();const b=x.billTo||{};return [x.number,b.company,b.name,b.email,x.poNumber,x.customer,x.notes].some(v=>(v||'').toLowerCase().includes(q))}
 function invPaintList(){const el=document.getElementById('inv-list');if(!el)return;
+  if(invTab==='products'){el.innerHTML=productsHTML();return}
   if(invTab==='pos'){const list=CPOS.filter(p=>invMatch(p,invQ));
     el.innerHTML=list.length?list.map(poRowHTML).join(''):'<div class="empty">'+(CPOS.length?'No POs match.':'No customer POs yet. When a customer sends a purchase order, log it here with the PDF so it’s in one place and can be invoiced in a tap.')+'</div>';return}
   const st=i=>invState(i);
@@ -6822,11 +6826,19 @@ function linesHTML(k){const d=lnDraft(k),ro=!invCanEdit(),dis=ro?' disabled':'';
     +'<input class="field il-price" aria-label="Unit price" type="number" inputmode="decimal" step="0.01" placeholder="Unit $" value="'+esc(String(it.price==null?'':it.price))+'" oninput="lnSet(\''+k+'\','+i+',\'price\',this.value)"'+dis+'>'
     +'<div class="il-amt" id="'+k+'-amt-'+i+'">'+money2(invN(it.qty)*invN(it.price))+'</div>'
     +(ro?'<span></span>':'<button class="il-x" type="button" aria-label="Remove line" onclick="lnDel(\''+k+'\','+i+')">✕</button>')+'</div>').join('')+'</div>'
-    +(ro?'':'<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:4px">'
-      +'<button class="btn ghost sm" type="button" onclick="lnAdd(\''+k+'\')">＋ Line</button>'
-      +['S','M','L'].map(z=>'<button class="btn ghost sm" type="button" onclick="lnAdd(\''+k+'\',\'Safewave Band — '+SIZELABEL[z]+'\',INVSET.bandPrice)">＋ Band '+z+'</button>').join('')
-      +'<button class="btn ghost sm" type="button" onclick="lnAdd(\''+k+'\',\'Safewave app — business seats, 12 months\',INVSET.seatPrice)">＋ App seats</button>'
-    +'</div>')}
+    +(ro?'':'<div class="row inv-addrow" id="'+k+'-addrow">'+lnAddRowHTML(k)+'</div>')}
+function invActiveProducts(){return PRODUCTS.filter(p=>p.active!==false).sort((a,b)=>(invN(a.sort)-invN(b.sort))||(a.name||'').localeCompare(b.name||''))}
+function lnAddRowHTML(k){const ps=invActiveProducts();
+  if(!ps.length)return '<button class="btn ghost sm" type="button" onclick="lnAdd(\''+k+'\')">＋ Line</button>'
+    +['S','M','L'].map(z=>'<button class="btn ghost sm" type="button" onclick="lnAdd(\''+k+'\',\'Safewave Band — '+SIZELABEL[z]+'\',INVSET.bandPrice)">＋ Band '+z+'</button>').join('')
+    +'<button class="btn ghost sm" type="button" onclick="lnAdd(\''+k+'\',\'Safewave app — business seats, 12 months\',INVSET.seatPrice)">＋ App seats</button>';
+  return '<select class="field il-pick" aria-label="Add a product" onchange="lnAddProduct(\''+k+'\',this.value);this.value=\'\'"><option value="">＋ Add a product…</option>'
+    +ps.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name||'Product')+(p.price!==''&&p.price!=null?' · '+money2(p.price)+(p.unit&&p.unit!=='each'?' / '+esc(p.unit):''):'')+'</option>').join('')+'</select>'
+    +'<button class="btn ghost sm" type="button" onclick="lnAdd(\''+k+'\')">＋ Blank line</button>'}
+function invRepaintPickers(){['inv','po'].forEach(k=>{const el=document.getElementById(k+'-addrow');if(el)el.innerHTML=lnAddRowHTML(k)})}
+function lnAddProduct(k,id){const p=PRODUCTS.find(x=>x.id===id);if(!p)return;const d=lnDraft(k);
+  d.items=(d.items||[]).filter(i=>i.desc||invN(i.price)).concat([{desc:(p.name||'')+(p.detail?' — '+p.detail:''),qty:1,price:p.price==null?'':p.price,sku:p.sku||'',productId:p.id}]);
+  lnDirty(k);lnRepaint(k);const ins=document.querySelectorAll('#'+k+'-lines .inv-line');const last=ins[ins.length-1];if(last){const f=last.querySelector('.il-qty');if(f){f.focus();f.select&&f.select()}}}
 function lnSet(k,i,f,v){const d=lnDraft(k);if(!d||!d.items[i])return;d.items[i][f]=v;lnDirty(k);
   const a=document.getElementById(k+'-amt-'+i);if(a)a.textContent=money2(invN(d.items[i].qty)*invN(d.items[i].price));(k==='po'?poPaintTotal:invPaintTotals)()}
 function lnRepaint(k){const el=document.getElementById(k+'-lines-wrap');if(el)el.innerHTML=linesHTML(k);(k==='po'?poPaintTotal:invPaintTotals)()}
@@ -6916,7 +6928,7 @@ function invPaymentsCard(d){const ps=d.payments||[];
       :'<div class="d" style="color:var(--faint)">No payments recorded yet.</div>')+'</div>'}
 async function invSaveRecord(d,histText){const now=new Date().toISOString(),me=(CURRENT_USER&&CURRENT_USER.name)||'';const T=invTotals(d);
   const rec=JSON.parse(JSON.stringify(d));delete rec.id;
-  rec.items=invLines(d).map(i=>({desc:i.desc||'',qty:invN(i.qty),price:invN(i.price)}));
+  rec.items=invLines(d).map(i=>Object.assign({desc:i.desc||'',qty:invN(i.qty),price:invN(i.price)},i.sku?{sku:i.sku}:{},i.productId?{productId:i.productId}:{}));
   rec.discount=invN(d.discount);rec.taxRate=invN(d.taxRate);rec.shipping=invN(d.shipping);
   rec.total=T.total;rec.paid=T.paid;rec.balance=T.balance;rec.updatedAt=now;rec.updatedBy=me;
   if(histText)rec.history=(rec.history||[]).concat([{at:now,by:me,text:histText}]);
@@ -7034,7 +7046,7 @@ async function savePO(quiet){if(!invCanEdit()||invBusy)return null;const d=poDra
   invBusy=true;
   try{const now=new Date().toISOString(),me=(CURRENT_USER&&CURRENT_USER.name)||'';
     if(!d.id||d.id==='new'){d.id='po'+Date.now().toString(36);d.createdAt=now;d.createdBy=me;d.createdByUid=(CURRENT_USER&&CURRENT_USER.uid)||''}
-    const rec=JSON.parse(JSON.stringify(d));delete rec.id;rec.items=invLines(d).map(i=>({desc:i.desc||'',qty:invN(i.qty),price:invN(i.price)}));rec.amount=invN(d.amount);rec.total=poTotal(d);rec.updatedAt=now;rec.updatedBy=me;
+    const rec=JSON.parse(JSON.stringify(d));delete rec.id;rec.items=invLines(d).map(i=>Object.assign({desc:i.desc||'',qty:invN(i.qty),price:invN(i.price)},i.sku?{sku:i.sku}:{},i.productId?{productId:i.productId}:{}));rec.amount=invN(d.amount);rec.total=poTotal(d);rec.updatedAt=now;rec.updatedBy=me;
     if(hasFirestore())await firebase.firestore().collection('customer_pos').doc(d.id).set(rec);
     const i=CPOS.findIndex(x=>x.id===d.id),full=Object.assign({id:d.id},rec);if(i>=0)CPOS[i]=full;else CPOS.unshift(full);
     poDraft=JSON.parse(JSON.stringify(full));poDirty=false;poOpenId=full.id;
@@ -7062,7 +7074,50 @@ async function poRemoveFile(i){const f=(poDraft.files||[])[i];if(!f||!confirm('R
 async function invoiceFromPO(){if(poDirty){const ok=await savePO(true);if(!ok)return}const p=poDraft;const a=p.accountId?findAcct(p.accountId):invAcctByName(p.customer);const c=a?((a.contacts||[])[0]||{}):{};
   const lines=invLines(p);
   newInvoice({accountId:(a&&a.id)||'',billTo:{company:(a&&displayName(a))||p.customer||'',name:c.name||(a&&a.contact)||'',email:c.email||(a&&a.email)||'',address:(a&&(a.address||a.location))||''},
-    poId:p.id,poNumber:p.number||'',items:lines.length?lines.map(i=>({desc:i.desc,qty:i.qty,price:i.price})):[{desc:'Per purchase order '+(p.number||''),qty:1,price:invN(p.amount)||''}]})}
+    poId:p.id,poNumber:p.number||'',items:lines.length?lines.map(i=>Object.assign({desc:i.desc,qty:i.qty,price:i.price},i.sku?{sku:i.sku}:{},i.productId?{productId:i.productId}:{})):[{desc:'Per purchase order '+(p.number||''),qty:1,price:invN(p.amount)||''}]})}
+
+/* ---- product catalog (invoice_products): picked onto invoices and POs,
+   then every line stays editable on the invoice itself ---- */
+const PROD_UNITS=['each','seat','month','year','case','hour'];
+function productsHTML(){const ro=!invCanEdit();const q=(invQ||'').toLowerCase();
+  const list=PRODUCTS.filter(p=>!q||[p.name,p.detail,p.sku].some(v=>(v||'').toLowerCase().includes(q))).sort((a,b)=>((a.active===false)-(b.active===false))||(invN(a.sort)-invN(b.sort))||(a.name||'').localeCompare(b.name||''));
+  let h='';
+  if(prodEditId)h+=prodEditorHTML();
+  if(!PRODUCTS.length&&!prodEditId)return h+'<div class="empty"><div class="t">No products yet</div><div class="d">Save what you sell once (name, price, SKU) and add it to any invoice or PO in one tap. You can still change the price or wording on each invoice.</div>'
+    +(ro?'':'<button class="btn" onclick="prodSeed()">Add the standard Safewave products</button>')+'</div>';
+  h+=list.map(p=>'<div class="card tap bill-row" tabindex="0" onclick="'+(ro?'':'prodEdit(\''+p.id+'\')')+'"><div class="row"><div class="grow" style="min-width:0"><div class="t">'+esc(p.name||'Product')+'</div>'
+    +'<div class="d">'+esc([p.detail,p.sku?'SKU '+p.sku:''].filter(Boolean).join(' · ')||'—')+'</div></div>'
+    +'<div style="text-align:right;flex-shrink:0"><div class="t" style="font-variant-numeric:tabular-nums">'+(p.price!==''&&p.price!=null?money2(p.price):'—')+'</div><span class="pill '+(p.active===false?'dim':'wave')+'">'+(p.active===false?'Hidden':(p.unit&&p.unit!=='each'?'per '+esc(p.unit):'each'))+'</span></div></div></div>').join('');
+  return h}
+function prodEdit(id){if(!invCanEdit())return;prodEditId=id;invTab='products';invPaintList();window.scrollTo(0,0);setTimeout(()=>{const e=document.getElementById('pr-name');if(e)e.focus()},50)}
+function prodEditorHTML(){const p=prodEditId==='new'?{name:'',detail:'',sku:'',price:'',unit:'each',active:true}:(PRODUCTS.find(x=>x.id===prodEditId)||{});
+  const f=(id,l,v,ph,type)=>'<label class="flabel" for="pr-'+id+'">'+l+'</label><input class="field" id="pr-'+id+'"'+(type?' type="'+type+'"'+(type==='number'?' inputmode="decimal" step="0.01"':''):'')+' value="'+esc(String(v==null?'':v))+'" placeholder="'+esc(ph||'')+'">';
+  return '<div class="card" style="border-color:var(--wave)"><div class="sec-head"><h2>'+(prodEditId==='new'?'New product':'Edit product')+'</h2></div>'
+    +f('name','Name (prints on the invoice)',p.name,'e.g. Safewave Band — Medium')
+    +f('detail','Details (optional, added after the name)',p.detail,'e.g. wholesale, includes charger')
+    +'<div class="inv-fr"><div>'+f('price','Unit price $',p.price,'0.00','number')+'</div><div><label class="flabel" for="pr-unit">Per</label><select class="field" id="pr-unit">'+PROD_UNITS.map(u=>'<option'+((p.unit||'each')===u?' selected':'')+'>'+u+'</option>').join('')+'</select></div><div>'+f('sku','SKU (optional)',p.sku,'')+'</div></div>'
+    +'<label class="row" style="gap:8px;margin:2px 0 12px;font-size:14px;cursor:pointer"><input type="checkbox" id="pr-active"'+(p.active===false?'':' checked')+'> Show in the product picker</label>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" style="flex:1;width:auto" onclick="prodSave()">Save product</button><button class="btn ghost" style="flex:1;width:auto" onclick="prodEditId=null;invPaintList()">Cancel</button>'
+    +(prodEditId!=='new'?'<button class="btn ghost" style="flex:1;width:auto" onclick="prodDelete()">Delete</button>':'')+'</div>'
+    +'<p class="d" style="color:var(--muted);margin:8px 0 0">Changing a product only affects invoices you make from now on. Existing invoices keep what they say.</p></div>'}
+async function prodSave(){const v=id=>{const e=document.getElementById('pr-'+id);return e?e.value.trim():''};const name=v('name');if(!name){toast('Give the product a name');return}
+  const rec={name:name,detail:v('detail'),sku:v('sku'),price:v('price')===''?'':Math.round(invN(v('price'))*100)/100,unit:v('unit')||'each',active:document.getElementById('pr-active').checked,updatedAt:new Date().toISOString(),updatedBy:(CURRENT_USER&&CURRENT_USER.name)||''};
+  const id=prodEditId==='new'?'prd'+Date.now().toString(36):prodEditId;
+  if(prodEditId==='new'){rec.createdAt=rec.updatedAt;rec.sort=PRODUCTS.length}
+  try{if(hasFirestore())await firebase.firestore().collection('invoice_products').doc(id).set(rec,{merge:true});
+    const i=PRODUCTS.findIndex(x=>x.id===id);if(i>=0)PRODUCTS[i]=Object.assign({},PRODUCTS[i],rec);else PRODUCTS.push(Object.assign({id:id},rec));
+    prodEditId=null;toast('✓ Saved '+name);renderInvoices();invRepaintPickers()}
+  catch(e){toast('Save failed — '+((e&&e.code)||''))}}
+async function prodDelete(){const p=PRODUCTS.find(x=>x.id===prodEditId);if(!p||!confirm('Delete '+(p.name||'this product')+'? Invoices that already use it keep their lines.'))return;
+  try{if(hasFirestore())await firebase.firestore().collection('invoice_products').doc(p.id).delete();PRODUCTS=PRODUCTS.filter(x=>x.id!==p.id);prodEditId=null;toast('Product deleted');renderInvoices();invRepaintPickers()}
+  catch(e){toast('Delete failed — '+((e&&e.code)||''))}}
+async function prodSeed(){if(!invCanEdit()||PRODUCTS.length)return;const now=new Date().toISOString(),me=(CURRENT_USER&&CURRENT_USER.name)||'';
+  const seed=[['Safewave Band — Small','',INVSET.bandPrice,'each','SW-BAND-S'],['Safewave Band — Medium','',INVSET.bandPrice,'each','SW-BAND-M'],['Safewave Band — Large','',INVSET.bandPrice,'each','SW-BAND-L'],
+    ['Safewave for Business — app seats','12 months',INVSET.seatPrice,'seat','SW-BIZ-SEAT'],['Shipping & handling','','','each','']];
+  const recs=seed.map((x,i)=>({id:'prd'+Date.now().toString(36)+i,name:x[0],detail:x[1],price:x[2]==null?'':x[2],unit:x[3],sku:x[4],active:true,sort:i,createdAt:now,updatedAt:now,updatedBy:me}));
+  try{if(hasFirestore()){const b=firebase.firestore().batch();recs.forEach(r=>{const o=Object.assign({},r);delete o.id;b.set(firebase.firestore().collection('invoice_products').doc(r.id),o)});await b.commit()}
+    PRODUCTS=recs;toast('✓ Added '+recs.length+' products: set their prices next');renderInvoices();invRepaintPickers()}
+  catch(e){toast('Save failed — '+((e&&e.code)||''))}}
 
 /* ---- letterhead (settings/invoicing) ---- */
 let invLogoPending=null;
