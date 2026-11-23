@@ -995,6 +995,8 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 .inv-fr>div{flex:1 1 104px;min-width:0}
 #s-invoices .acct-col{min-width:0}
 #s-invoices .field{min-width:0}
+.inv-logo-prev{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:flex-start;min-height:74px}
+.inv-logo-prev img{max-height:56px;max-width:100%;object-fit:contain}
 .bill-row{padding:12px 14px}
 .bill-row .t{overflow-wrap:anywhere}
 .inv-line{display:grid;grid-template-columns:minmax(0,1fr) 70px 100px 92px 30px;gap:6px;align-items:center;margin-bottom:6px}
@@ -7063,26 +7065,65 @@ async function invoiceFromPO(){if(poDirty){const ok=await savePO(true);if(!ok)re
     poId:p.id,poNumber:p.number||'',items:lines.length?lines.map(i=>({desc:i.desc,qty:i.qty,price:i.price})):[{desc:'Per purchase order '+(p.number||''),qty:1,price:invN(p.amount)||''}]})}
 
 /* ---- letterhead (settings/invoicing) ---- */
-function renderInvSettings(body){const s=INVSET||{},can=invCanLetterhead(),dis=can?'':' disabled';
-  invHead('Invoice letterhead','<a onclick="invSettingsOpen=false;renderInvoices()" style="color:var(--wave);cursor:pointer;font-weight:600">← Back</a>');
+let invLogoPending=null;
+function invLogoSrc(){return invLogoPending!==null?(invLogoPending||'brand/safewave-logo.png'):((INVSET&&INVSET.logo)||'brand/safewave-logo.png')}
+function renderInvSettings(body){const s=INVSET||{},can=invCanLetterhead(),dis=can?'':' disabled',r=s.remit||{};
+  invHead('Invoice letterhead','<a onclick="invLogoPending=null;invSettingsOpen=false;renderInvoices()" style="color:var(--wave);cursor:pointer;font-weight:600">← Back</a>');
   const f=(id,l,v,ph,type)=>'<label class="flabel" for="is-'+id+'">'+l+'</label><input class="field" id="is-'+id+'"'+(type?' type="'+type+'"':'')+' value="'+esc(String(v==null?'':v))+'" placeholder="'+esc(ph||'')+'"'+dis+'>';
   const t=(id,l,v,ph)=>'<label class="flabel" for="is-'+id+'">'+l+'</label><textarea class="field" id="is-'+id+'" rows="3" placeholder="'+esc(ph||'')+'"'+dis+'>'+esc(v||'')+'</textarea>';
   body.innerHTML=(can?'':'<div class="note" style="margin-bottom:12px">Only the finance group can change the letterhead.</div>')
-    +'<div class="acct-grid"><div class="acct-col"><div class="card"><div class="sec-head"><h2>From</h2></div>'
+    +'<div class="acct-grid"><div class="acct-col">'
+    +'<div class="card"><div class="sec-head"><h2>Logo</h2>'+((invLogoPending!==null?invLogoPending:s.logo)?'<span class="pill wave">custom</span>':'<span class="pill dim">standard</span>')+'</div>'
+      +'<div class="inv-logo-prev"><img id="is-logo-img" src="'+esc(invLogoSrc())+'" alt="Invoice logo"></div>'
+      +(can?'<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px"><label class="btn ghost sm" style="cursor:pointer">Upload a logo<input type="file" accept="image/png,image/jpeg" style="display:none" onchange="invLogoPick(this.files[0])"></label>'
+        +((invLogoPending!==null?invLogoPending:s.logo)?'<button class="btn ghost sm" type="button" onclick="invLogoPending=\'\';renderInvoices()">Use the standard logo</button>':'')+'</div>'
+        +'<p class="d" style="color:var(--muted);margin:8px 0 0">PNG or JPG, ideally a wide logo on a white or clear background. It prints at the top left of every invoice.</p>':'')
+    +'</div>'
+    +'<div class="card"><div class="sec-head"><h2>From</h2></div>'
       +f('company','Company name',s.company,'Safewave Technology')+t('address','Address',s.address,'Street\nCity, State ZIP')
-      +f('email','Billing email',s.email,'sales@safewavetech.com','email')+f('phone','Phone',s.phone,'')+f('website','Website',s.website,'safewavetech.com')+'</div></div>'
-    +'<div class="acct-col"><div class="card"><div class="sec-head"><h2>Payment &amp; defaults</h2></div>'
-      +t('pay','How to pay (printed on every invoice)',s.paymentInstructions,'e.g. ACH or check payable to Safewave Technology. Include the invoice number.')
-      +'<p class="d" style="color:var(--muted);margin:-4px 0 10px">Invoices go out to customers: share bank details only the way you’d put them on a paper invoice.</p>'
+      +f('email','Billing email',s.email,'sales@safewavetech.com','email')+f('phone','Phone',s.phone,'')+f('website','Website',s.website,'safewavetech.com')+'</div>'
+    +'</div><div class="acct-col">'
+    +'<div class="card"><div class="sec-head"><h2>How customers pay</h2></div>'
+      +'<p class="d" style="color:var(--muted);margin:0 0 10px">Most business customers pay by ACH or check; their accounts-payable team keys your bank details in once. A card link is a nice extra for small customers.</p>'
+      +'<p class="flabel" style="margin-top:4px">ACH / bank transfer</p>'
+      +(r.hasAch?'<div class="note" style="margin-bottom:8px;color:var(--text)">On file: '+esc(r.bankName||'Bank')+' · routing ••••'+esc(r.routingLast4||'')+' · account ••••'+esc(r.accountLast4||'')+(r.updatedBy?' <span style="color:var(--muted)">(set by '+esc(r.updatedBy)+')</span>':'')+'</div>':'<div class="d" style="color:var(--faint);margin-bottom:8px">No bank details yet: invoices won’t show an ACH option.</div>')
+      +(can?'<details class="side-panel" style="margin:0 0 10px"'+(r.hasAch?'':' open')+'><summary>'+(r.hasAch?'Change bank details':'Add bank details')+'</summary>'
+        +'<div class="inv-fr"><div>'+f('bank','Bank name','','e.g. JPMorgan Chase Bank, N.A.')+'</div><div>'+f('acctname','Account name','',s.company||'Safewave Technology')+'</div></div>'
+        +'<div class="inv-fr"><div>'+f('routing','Routing number (ACH)','','9 digits','text')+'</div><div>'+f('acct','Account number','','','text')+'</div></div>'
+        +f('swift','SWIFT (only for international wires)','','optional')
+        +'<p class="d" style="color:var(--muted);margin:0 0 8px">Kept on the server only. The team sees just the last 4 digits; they print in full on invoices.</p>'
+        +'<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm" type="button" onclick="saveInvRemit()">Save bank details</button>'+(r.hasAch?'<button class="btn ghost sm" type="button" onclick="saveInvRemit(true)">Remove</button>':'')+'</div></details>':'')
+      +'<div class="inv-fr"><div>'+f('checkpay','Checks payable to',s.checkPayable,s.company||'Safewave Technology')+'</div></div>'
+      +t('checkaddr','Mail checks to (remit-to address)',s.checkAddress,'Attn: Accounts Receivable\nStreet\nCity, State ZIP')
+      +f('paylink','Pay-by-card link (optional)',s.payLink,'https://… (e.g. a Chase payment link)','url')
+      +t('pay','Payment note (optional)',s.paymentInstructions,'e.g. Questions about an invoice? sales@safewavetech.com')
+    +'</div>'
+    +'<div class="card"><div class="sec-head"><h2>Defaults</h2></div>'
       +'<label class="flabel" for="is-terms">Default terms</label><select class="field" id="is-terms"'+dis+'>'+INV_TERM_LIST.map(x=>'<option value="'+x[0]+'"'+((s.terms||'net30')===x[0]?' selected':'')+'>'+x[1]+'</option>').join('')+'</select>'
       +'<div class="inv-fr"><div>'+f('band','Band price (wholesale) $',s.bandPrice,'','number')+'</div><div>'+f('seat','App seats price $',s.seatPrice,'','number')+'</div><div>'+f('tax','Default tax %',s.taxRate,'0','number')+'</div></div>'
       +'<div class="inv-fr"><div>'+f('prefix','Number prefix',s.prefix,'INV-')+'</div><div>'+f('start','First number',s.startNumber,'1001','number')+'</div></div>'
       +t('notes','Default note to customer',s.notes,'Thank you for your order!')+f('footer','Footer line',s.footer,'Thank you for supporting accessibility and safety…')
-      +(can?'<button class="btn" onclick="saveInvSettings()">Save letterhead</button>':'')+'</div></div></div>'}
+      +(can?'<button class="btn" onclick="saveInvSettings()">Save letterhead</button>':'')+'</div>'
+    +'</div></div>'}
+function invLogoPick(file){if(!file)return;if(!/^image\/(png|jpe?g)$/.test(file.type)){toast('Use a PNG or JPG');return}
+  const rd=new FileReader();rd.onload=()=>{const img=new Image();img.onload=()=>{const sc=Math.min(1,900/img.width,300/img.height);const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*sc));c.height=Math.max(1,Math.round(img.height*sc));
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);let url=c.toDataURL('image/png');if(url.length>600000)url=c.toDataURL('image/jpeg',0.9);
+    if(url.length>800000){toast('That image is too large — try a smaller file');return}invLogoPending=url;renderInvoices();toast('Logo ready — tap Save letterhead')};img.onerror=()=>toast('Couldn’t read that image');img.src=rd.result};rd.readAsDataURL(file)}
+async function saveInvRemit(clear){if(!invCanLetterhead())return;if(!hasFirestore()||!firebase.functions){toast('Bank details need the live app');return}
+  const v=id=>{const e=document.getElementById('is-'+id);return e?e.value.trim():''};
+  if(clear&&!confirm('Remove the bank details from invoices?'))return;
+  const data=clear?{clear:true}:{bankName:v('bank'),accountName:v('acctname'),routing:v('routing'),account:v('acct'),swift:v('swift')};
+  if(!clear&&(!data.routing||!data.account)){toast('Add the routing and account numbers');return}
+  try{await firebase.functions().httpsCallable('saveInvoiceRemit')(data);
+    INVSET.remit=clear?{hasAch:false}:{hasAch:true,bankName:data.bankName,accountName:data.accountName,routingLast4:data.routing.replace(/\D/g,'').slice(-4),accountLast4:data.account.replace(/[^\dA-Za-z]/g,'').slice(-4),updatedBy:(CURRENT_USER&&CURRENT_USER.name)||''};
+    toast(clear?'Bank details removed':'✓ Bank details saved');renderInvoices()}
+  catch(e){toast((e&&e.message)||'Save failed')}}
 async function saveInvSettings(){if(!invCanLetterhead())return;const v=id=>{const e=document.getElementById('is-'+id);return e?e.value.trim():''};
-  const rec={company:v('company'),address:v('address'),email:v('email'),phone:v('phone'),website:v('website'),paymentInstructions:v('pay'),terms:v('terms')||'net30',
+  const link=v('paylink');if(link&&!/^https:\/\/\S+$/.test(link)){toast('The card link should start with https://');return}
+  const rec={company:v('company'),address:v('address'),email:v('email'),phone:v('phone'),website:v('website'),paymentInstructions:v('pay'),checkPayable:v('checkpay'),checkAddress:v('checkaddr'),payLink:link,terms:v('terms')||'net30',
     bandPrice:invN(v('band'))||'',seatPrice:invN(v('seat'))||'',taxRate:invN(v('tax'))||'',prefix:v('prefix')||'INV-',startNumber:invN(v('start'))||1001,notes:v('notes'),footer:v('footer'),updatedAt:new Date().toISOString(),updatedBy:(CURRENT_USER&&CURRENT_USER.name)||''};
-  try{if(hasFirestore())await firebase.firestore().collection('settings').doc('invoicing').set(rec,{merge:true});INVSET=Object.assign({},INVSET,rec);invSettingsOpen=false;toast('✓ Letterhead saved');renderInvoices()}
+  if(invLogoPending!==null)rec.logo=invLogoPending;
+  try{if(hasFirestore())await firebase.firestore().collection('settings').doc('invoicing').set(rec,{merge:true});INVSET=Object.assign({},INVSET,rec);invLogoPending=null;invSettingsOpen=false;toast('✓ Letterhead saved');renderInvoices()}
   catch(e){toast('Save failed — '+((e&&e.code)||''))}}
 
 /* ---- CRM account: this customer's invoices + POs ---- */

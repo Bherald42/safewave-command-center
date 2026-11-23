@@ -51,7 +51,11 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   numbered from `counters/invoices`, carry line items, terms, payments and a
   history; sent invoices are voided, never deleted. The PDF is drawn server-side
   (`invoicePdf`, pdfkit) so a download and the emailed copy (`sendInvoice`, from
-  sales@ when connected) are identical. Customer POs keep the uploaded file in
+  sales@ when connected) are identical. The PDF carries the logo (bundled
+  `functions/assets/safewave-logo.png`, or one uploaded in Letterhead) and a
+  How-to-pay block: ACH details live server-only in `server_keys/invoice_remit`
+  (set via `saveInvoiceRemit`, finance group; the app sees only last 4), plus
+  check remit-to address and an optional card link from `settings/invoicing`. Customer POs keep the uploaded file in
   Storage (`customer_pos/`) and link to the invoices made from them.
   `scanOverdue` alerts the invoice's creator once when it goes past due.
 - **Data is Firestore.** Collections include: `users`, `crm_accounts`, `tickets`,
