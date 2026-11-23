@@ -113,6 +113,12 @@ the deploy runner. Never commit a key, never print one, never move one into
 
 ## Design & product rules (non-negotiable)
 
+- **Logo:** the watch-and-shield mark with the "Safewave" wordmark. Files live in
+  `public/brand/` (`safewave-logo.png` for light backgrounds,
+  `safewave-logo-light.png` for dark, `safewave-mark.png` watch only, `favicon.png`)
+  and `functions/assets/safewave-logo.png` (invoice PDF). Don't reintroduce the
+  old knight logo or the Shopify-hosted `logo3x.png`.
+
 - **Red is reserved for life-safety only.** The Band is an accessibility/safety
   device — never use red for ordinary urgency, overdue tasks, or errors. Use **amber**
   for urgent-but-not-safety states.

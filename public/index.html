@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#EDF1F5">
 <title>Safewave Command Center</title>
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/brand/favicon.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -459,6 +460,7 @@ input[type=date]{color-scheme:dark}
 #login{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px 22px}
 .login-card{width:100%;max-width:400px}
 .login-card .logo{font-size:27px;justify-content:center;width:100%}
+.login-brand img{height:62px;width:auto;margin:0 auto}
 .login-sub{text-align:center;color:var(--muted);font-size:13.5px;margin:6px 0 30px}
 .err{background:var(--safety-dim);color:var(--safety);border-radius:10px;padding:11px 13px;font-size:12.5px;margin-bottom:12px;display:none}
 .err.show{display:block}
@@ -476,8 +478,12 @@ input[type=date]{color-scheme:dark}
 .appbar{position:sticky;top:0;z-index:40;background:var(--bar-bg);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--line);padding:13px 16px;display:flex;align-items:center;gap:12px}
 .appbar .logo{font-size:17px}
-.brand-logo{display:inline-flex;align-items:center;justify-content:center;background:#0B1420;border-radius:9px;padding:6px 12px;flex-shrink:0;cursor:pointer;line-height:0}
-.brand-logo img{height:22px;width:auto;display:block}
+.brand-logo{display:inline-flex;align-items:center;justify-content:center;border-radius:9px;padding:2px 4px;flex-shrink:0;cursor:pointer;line-height:0}
+.brand-logo img{height:34px;width:auto;display:block}
+@media(min-width:860px){.appbar .brand-logo img{height:40px}}
+.lg-on-dark{display:none!important}
+:root[data-theme="dark"] .lg-on-light{display:none!important}
+:root[data-theme="dark"] .lg-on-dark{display:block!important}
 .brand-logo:focus-visible{outline:2px solid var(--wave);outline-offset:2px}
 .spacer{flex:1}
 .iconbtn{background:var(--surface);border:1px solid var(--line);border-radius:99px;color:var(--muted);
@@ -1086,7 +1092,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 <!-- ================= LOGIN ================= -->
 <div id="login">
   <div class="login-card">
-    <div class="logo"><span class="wv"><i></i><i></i><i></i></span> Safewave</div>
+    <div class="logo login-brand"><img class="lg-on-light" src="brand/safewave-logo.png" alt="Safewave"><img class="lg-on-dark" src="brand/safewave-logo-light.png" alt="" aria-hidden="true"></div>
     <p class="login-sub">Command Center</p>
 
     <div class="err" id="login-err"></div>
@@ -1121,7 +1127,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 <!-- ================= APP ================= -->
 <div id="app">
   <header class="appbar">
-    <a class="brand-logo" href="#" onclick="goto('s-pulse');return false" aria-label="Safewave — go to Pulse"><img src="https://cdn.shopify.com/s/files/1/0630/9602/9423/files/logo3x.png?v=1646599241" alt="Safewave" onerror="this.style.display='none';if(!this.parentNode.querySelector('span'))this.parentNode.insertAdjacentHTML('beforeend','&lt;span style=&quot;color:#fff;font-family:var(--font-d);font-weight:700;font-size:15px;letter-spacing:-.01em&quot;&gt;Safewave&lt;/span&gt;')"></a>
+    <a class="brand-logo" href="#" onclick="goto('s-pulse');return false" aria-label="Safewave — go to Pulse"><img class="lg-on-light" src="brand/safewave-logo.png" alt="Safewave"><img class="lg-on-dark" src="brand/safewave-logo-light.png" alt="" aria-hidden="true"></a>
     <div class="spacer"></div>
     <button class="iconbtn" aria-label="Search everything (⌘K)" onclick="openCmdK()">
       <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
@@ -1144,7 +1150,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
   <nav class="nav" id="nav" aria-label="Sections"></nav>
   <div class="navdrawer" id="navdrawer" onclick="if(event.target===this)closeNavDrawer()">
     <div class="nd-body" role="dialog" aria-label="Menu">
-      <div class="nd-head"><span class="brand-logo" style="cursor:default"><img src="https://cdn.shopify.com/s/files/1/0630/9602/9423/files/logo3x.png?v=1646599241" alt="Safewave"></span>
+      <div class="nd-head"><span class="brand-logo" style="cursor:default"><img class="lg-on-light" src="brand/safewave-logo.png" alt="Safewave"><img class="lg-on-dark" src="brand/safewave-logo-light.png" alt="" aria-hidden="true"></span>
         <button class="iconbtn" aria-label="Close menu" onclick="closeNavDrawer()"><svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div id="nd-list"></div>
     </div>
