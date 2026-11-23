@@ -506,10 +506,13 @@ async function handleShopifyFulfillment(f) {
   const track = first.tracking_number || (first.tracking_numbers && first.tracking_numbers[0]) || "";
   const trackUrl = first.tracking_url || (first.tracking_urls && first.tracking_urls[0]) || "";
   const carrier = first.tracking_company || "";
+  const before = await db.collection("orders").doc(orderId).get();
+  const wasOpen = before.exists && before.data().ful !== "FULFILLED";
   await db.collection("orders").doc(orderId).set({ ful: "FULFILLED", tracking: track, trackingUrl: trackUrl, carrier: carrier }, { merge: true });
   // mirror the tracking number onto our in-app fulfilment + band records
   const ord = await db.collection("orders").doc(orderId).get();
   const n = ord.exists ? ord.data().n : null;
+  if (wasOpen && n) await deductShopifyShipment(orderId, n, ord.data().name).catch((e) => logger.warn("ship deduct failed", n, e && e.message));
   if (n && track) {
     const fs = await db.collection("fulfillments").doc(n).get();
     if (fs.exists) {
@@ -630,18 +633,32 @@ async function pullShopifyOrders(opts) {
   opts = opts || {};
   const maxPages = opts.backfill ? 40 : 1; // 40 * 250 = 10k-order ceiling
   let page = null, pages = 0;
-  const items = [];
+  const items = [], recent = {};
   do {
     const res = await fetchShopifyOrdersPage(page);
-    res.orders.forEach((o) => items.push(mapShopifyOrder(o)));
+    res.orders.forEach((o) => { const m = mapShopifyOrder(o); items.push(m); if (o.created_at && Date.now() - new Date(o.created_at).getTime() < 2 * 864e5) recent[m.id] = 1; });
     page = res.next;
     pages++;
   } while (page && pages < maxPages);
+  // Orders Shopify now shows shipped that the Command Center still had open
+  // (shipped in Shopify itself): their bands come off Covington below.
+  const shipped = [];
+  const done = items.filter((it) => it.rec.ful === "FULFILLED");
+  for (let i = 0; i < done.length; i += 100) {
+    const snaps = await db.getAll(...done.slice(i, i + 100).map((it) => db.collection("orders").doc(it.id)));
+    snaps.forEach((sn, j) => {
+      const it = done[i + j];
+      if (sn.exists ? sn.data().ful !== "FULFILLED" : (!opts.backfill && recent[it.id])) shipped.push(it);
+    });
+  }
   // Commit in batches (Firestore caps a batch at 500 writes).
   for (let i = 0; i < items.length; i += 400) {
     const batch = db.batch();
     items.slice(i, i + 400).forEach((it) => batch.set(db.collection("orders").doc(it.id), it.rec, { merge: true }));
     await batch.commit();
+  }
+  for (const it of shipped) {
+    await deductShopifyShipment(it.id, it.rec.n, it.rec.name).catch((e) => logger.warn("ship deduct failed", it.rec.n, e && e.message));
   }
   await db.collection("settings").doc("shopify").set({
     lastSyncAt: new Date().toISOString(), lastSyncCount: items.length, lastSyncBy: opts.by || "system",
@@ -1079,7 +1096,7 @@ exports.pushStockToShopify = onCall({ region: REGION, timeoutSeconds: 60 }, asyn
   const me = await db.collection("users").doc(request.auth.uid).get();
   if (!me.exists) throw new HttpsError("permission-denied", "Not on the team roster.");
   const by = (me.data().name) || request.auth.token.email || "Teammate";
-  if (!shopifyCreds().ok) await loadShopifyKeys(true);
+  await loadShopifyKeys();
   if (!shopifyCreds().ok) throw new HttpsError("failed-precondition", "Shopify isn't connected.");
   const inv = await db.collection("inventory").doc("main").get();
   const cov = (inv.exists && inv.data().locations && inv.data().locations.covington) || {};
@@ -1111,6 +1128,97 @@ exports.pushStockToShopify = onCall({ region: REGION, timeoutSeconds: 60 }, asyn
   }
   const stock = await pullShopifyStock().catch(() => null);
   await db.collection("inventory").doc("main").set({ lastShopifyPush: { at: new Date().toISOString(), by, changes, skipped } }, { merge: true });
+  return { changes, skipped, stock };
+});
+
+function bandSizeOf(label) { const m = String(label || "").match(/\b(small|medium|large|s|m|l)\b/i); return m ? m[1][0].toUpperCase() : null; }
+
+// An order shipped from Shopify itself (not through the Command Center's
+// Fulfill flow): take its bands off Covington and leave a fulfilment record,
+// so the shelf count here keeps matching Shopify's. Runs once per order: the
+// fulfilment record is the guard, and an order the Command Center fulfilled
+// already has one.
+async function deductShopifyShipment(orderId, n, name) {
+  if (!n || !/^\d+$/.test(String(orderId))) return null;
+  const fref = db.collection("fulfillments").doc(String(n).replace(/\//g, "-"));
+  if ((await fref.get()).exists) return null;
+  const d = await shopifyGql("query($id: ID!) { order(id: $id) { fulfillments(first: 10) { status fulfillmentLineItems(first: 50) { nodes { quantity lineItem { title variantTitle product { title } } } } } } }",
+    { id: "gid://shopify/Order/" + orderId });
+  const items = { S: 0, M: 0, L: 0 };
+  let total = 0;
+  ((d.order && d.order.fulfillments) || []).filter((f) => f.status === "SUCCESS").forEach((f) => {
+    ((f.fulfillmentLineItems && f.fulfillmentLineItems.nodes) || []).forEach((li) => {
+      const l = li.lineItem || {};
+      if (!/band/i.test((l.product && l.product.title) || l.title || "")) return;
+      const z = bandSizeOf(l.variantTitle) || bandSizeOf(l.title);
+      const q = Number(li.quantity) || 0;
+      if (z && q > 0) { items[z] += q; total += q; }
+    });
+  });
+  if (!total) return null;
+  const invRef = db.collection("inventory").doc("main");
+  const at = new Date().toISOString();
+  const ok = await db.runTransaction(async (tx) => {
+    const f = await tx.get(fref);
+    if (f.exists) return false;
+    const iv = await tx.get(invRef);
+    const cov = (iv.exists && iv.data().locations && iv.data().locations.covington) || {};
+    const next = {};
+    ["S", "M", "L"].forEach((z) => { next[z] = Math.max(0, (Number(cov[z]) || 0) - items[z]); });
+    tx.set(invRef, { locations: { covington: next }, updatedAt: at }, { merge: true });
+    tx.set(fref, { order: n, name: name || "", size: ["S", "M", "L"].find((z) => items[z]), items, status: "fulfilled", source: "shopify", signoffBy: "Shopify", signoffAt: at, stockDeducted: true });
+    return true;
+  });
+  if (ok) logger.info("Covington -" + total + " for " + n + " (shipped in Shopify)");
+  return ok ? items : null;
+}
+
+// Stock moved in the Command Center that Shopify can't see — a return put back
+// on the shelf, a Pace transfer received into Covington, a hand edit of the
+// Covington count, or a non-Shopify order shipped. Apply the same change to
+// Shopify's count at the shipping location. Shopify orders shipped through
+// Fulfill aren't sent here: Shopify takes those off itself when it's told the
+// order shipped. The client passes a key per move, so a retry can't double it.
+exports.adjustShopifyStock = onCall({ region: REGION, timeoutSeconds: 60 }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  if (request.auth.token.email === "jared@safewavetech.com") throw new HttpsError("permission-denied", "View-only.");
+  const me = await db.collection("users").doc(request.auth.uid).get();
+  if (!me.exists) throw new HttpsError("permission-denied", "Not on the team roster.");
+  const by = (me.data().name) || request.auth.token.email || "Teammate";
+  const data = request.data || {};
+  const deltas = {};
+  ["S", "M", "L"].forEach((z) => { const v = Math.round(Number((data.deltas || {})[z]) || 0); if (v && Math.abs(v) <= 1000) deltas[z] = v; });
+  if (!Object.keys(deltas).length) return { changes: [] };
+  const reasons = { transfer: "received", return: "restock", edit: "correction", ship: "correction" };
+  const kind = reasons[data.kind] ? data.kind : "edit";
+  const key = /^[\w-]{8,80}$/.test(String(data.key || "")) ? String(data.key) : require("crypto").randomUUID();
+  await loadShopifyKeys();
+  if (!shopifyCreds().ok) return { changes: [], skipped: ["Shopify isn't connected"] };
+  let r;
+  try { r = await readShopifyStockLevels(); } catch (e) { throw new HttpsError("internal", "Couldn't read Shopify stock: " + ((e && e.message) || "")); }
+  if (!r) throw new HttpsError("failed-precondition", "No band sizes found in Shopify at the shipping location.");
+  const names = { S: "Small", M: "Medium", L: "Large" };
+  const changes = [], skipped = [], adj = [];
+  Object.keys(deltas).forEach((z) => {
+    const s = r.sizes[z];
+    if (s.items.length !== 1) { skipped.push(names[z] + (s.items.length ? " has more than one Shopify variant" : " isn't stocked at this location in Shopify")); return; }
+    changes.push({ size: z, delta: deltas[z], from: s.onHand, to: s.onHand + deltas[z] });
+    adj.push({ inventoryItemId: s.items[0].id, locationId: r.locationId, delta: deltas[z], changeFromQuantity: null });
+  });
+  if (adj.length) {
+    let d;
+    try {
+      d = await shopifyGql("mutation($input: InventoryAdjustQuantitiesInput!, $key: String!) { inventoryAdjustQuantities(input: $input) @idempotent(key: $key) { inventoryAdjustmentGroup { changes { name delta } } userErrors { field message } } }",
+        { key, input: { name: "available", reason: reasons[kind], referenceDocumentUri: "safewave://command-center/stock/" + kind + "/" + String(data.ref || Date.now()).replace(/[^\w-]/g, "").slice(0, 60), changes: adj } });
+    } catch (e) {
+      const scope = e && (e.status === 401 || e.status === 403);
+      throw new HttpsError(scope ? "permission-denied" : "internal", scope ? "The Shopify app needs the write_inventory permission. Add it in the Shopify app's settings, then try again." : "Shopify said: " + ((e && e.message) || "unknown error"));
+    }
+    const errs = (d.inventoryAdjustQuantities && d.inventoryAdjustQuantities.userErrors) || [];
+    if (errs.length) throw new HttpsError("aborted", "Shopify said: " + errs[0].message);
+  }
+  const stock = await pullShopifyStock().catch(() => null);
+  if (changes.length) await db.collection("inventory").doc("main").set({ lastShopifyPush: { at: new Date().toISOString(), by, kind, changes, skipped } }, { merge: true });
   return { changes, skipped, stock };
 });
 

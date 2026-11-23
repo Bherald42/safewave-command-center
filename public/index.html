@@ -2282,6 +2282,7 @@ async function pushShopifyFulfill(n,quiet){
     if(!quiet)toast(st==='already_fulfilled'?'Shopify already had '+n+' as shipped':'✓ Shopify updated — customer emailed'+(f.tracking?' the tracking number':''));
   }catch(e){
     const m=(e&&e.message)||'';const off=/connected yet|precondition/i.test(m)||(e&&e.code==='functions/failed-precondition');
+    if(/not-found|couldn.t find|not a shopify order/i.test(m+' '+((e&&e.code)||''))&&f.size&&!f.shopifyAdjusted){f.shopifyAdjusted=true;f.shopify={status:'not_shopify'};shopAdjust({[f.size]:-1},'ship',n);renderStock();return}
     f.shopify={status:off?'not_connected':'failed',error:m};
     if(!quiet)toast(off?'Saved here. Shopify isn’t connected yet, so mark it shipped in Shopify for now':'Saved here, but Shopify didn’t update — tap Retry on the order');
   }
@@ -2291,10 +2292,34 @@ function shopifyLine(f){const s=(f&&f.shopify)||null;if(!s)return '';
   if(s.status==='created'||s.status==='tracking_updated'||s.status==='already_fulfilled')return '<span class="pill good" style="margin-left:6px">SHOPIFY ✓</span>';
   if(s.status==='sending')return '<span class="pill dim" style="margin-left:6px">SENDING…</span>';
   if(s.status==='not_connected')return '<span class="pill dim" style="margin-left:6px">MARK IN SHOPIFY</span>';
+  if(s.status==='not_shopify')return '<span class="pill dim" style="margin-left:6px">NOT A SHOPIFY ORDER</span>';
   return '<span class="pill amber" style="margin-left:6px">SHOPIFY NOT UPDATED</span>'}
 let LASTPUSH=null;
-async function loadInventory(){if(!hasFirestore())return;try{const d=await firebase.firestore().collection('inventory').doc('main').get();if(d.exists&&d.data().locations){SIZES.forEach(z=>0);INV=Object.assign({covington:{},pace:{},china:{}},d.data().locations)}LASTPUSH=(d.exists&&d.data().lastShopifyPush)||null;}catch(e){}
-  const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();}
+// Live: shipments made in Shopify take bands off Covington on the server, so
+// the counts here follow the database rather than a copy loaded at sign-in.
+let invUnsub=null;
+function loadInventory(){if(!hasFirestore())return;if(invUnsub){try{invUnsub()}catch(e){}}
+  try{invUnsub=firebase.firestore().collection('inventory').doc('main').onSnapshot(d=>{
+    if(d.exists&&d.data().locations)INV=Object.assign({covington:{},pace:{},china:{}},d.data().locations);
+    LASTPUSH=(d.exists&&d.data().lastShopifyPush)||null;
+    const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
+  },e=>{})}catch(e){}}
+// Move stock between locations as counted changes (+/-), so two people moving
+// stock at once can't overwrite each other. e.g. invMove({covington:{M:-1}})
+function invMove(ch){const upd={};Object.keys(ch).forEach(k=>{INV[k]=INV[k]||{};Object.keys(ch[k]).forEach(z=>{const q=Number(ch[k][z])||0;if(!q)return;INV[k][z]=(INV[k][z]||0)+q;
+    if(hasFirestore())(upd[k]=upd[k]||{})[z]=firebase.firestore.FieldValue.increment(q)})});
+  if(hasFirestore()&&Object.keys(upd).length)firebase.firestore().collection('inventory').doc('main').set({locations:upd,updatedAt:new Date().toISOString()},{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
+// Apply the same Covington change to Shopify's count (returns put back,
+// Pace transfers received, hand edits). Quiet unless something goes wrong.
+function shopAdjust(deltas,kind,ref){
+  if(!(SHOPCONN&&SHOPCONN.connected)||!hasFirestore()||isObserver())return;
+  if(!SIZES.some(z=>Number(deltas[z])))return;
+  const key='cc-'+kind+'-'+String(ref||'').replace(/[^\w-]/g,'').slice(0,40)+'-'+Date.now().toString(36);
+  firebase.functions().httpsCallable('adjustShopifyStock')({deltas:deltas,kind:kind,ref:ref||'',key:key}).then(r=>{
+    const ch=(r&&r.data&&r.data.changes)||[],sk=(r&&r.data&&r.data.skipped)||[];
+    if(ch.length)toast('✓ Shopify updated too: '+ch.map(c=>SIZELABEL[c.size]+' '+(c.delta>0?'+':'')+c.delta).join(', '));
+    else if(sk.length)toast('Shopify not updated — '+sk.join('; '));
+  }).catch(e=>toast('Saved here, but Shopify didn’t update — use Send Covington counts to Shopify on Stock'))}
 function saveInventory(){if(hasFirestore())firebase.firestore().collection('inventory').doc('main').set({locations:INV,updatedAt:new Date().toISOString()},{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
 /* ---- purchase orders: auto-drafted from the forecast ---- */
 let PO=[];
@@ -2312,9 +2337,9 @@ function draftChinaPO(){const COVER=26;const items=[];SIZES.forEach(z=>{const ne
   PO.unshift(o);persistPO(o);renderStock();toast('✓ Draft China PO — '+itemsStr(items))}
 function placePO(id){const o=PO.find(x=>x.id===id);if(!o)return;o.status='placed';o.placedAt=new Date().toISOString();const lead=o.kind==='china'?CHINA_LEAD_WEEKS:TRANSFER_WEEKS;o.eta=new Date(Date.now()+lead*7*864e5).toISOString();persistPO(o);renderStock();refreshPulse();toast('✓ '+o.id+' placed · ETA '+fmtDate(new Date(dayMs(o.eta))))}
 function receivePO(id){const o=PO.find(x=>x.id===id);if(!o)return;if(!confirm('Receive '+o.id+' into inventory? '+itemsStr(o.items)))return;
-  if(o.kind==='china'){o.items.forEach(it=>{INV.pace[it.size]=(INV.pace[it.size]||0)+it.qty})}
-  else{o.items.forEach(it=>{const q=Math.min(it.qty,INV.pace[it.size]||0);INV.pace[it.size]=(INV.pace[it.size]||0)-q;INV.covington[it.size]=(INV.covington[it.size]||0)+q})}
-  o.status='received';o.receivedAt=new Date().toISOString();persistPO(o);saveInventory();renderStock();refreshPulse();
+  if(o.kind==='china'){const p={};o.items.forEach(it=>{p[it.size]=(p[it.size]||0)+it.qty});invMove({pace:p})}
+  else{const p={},c={};o.items.forEach(it=>{const q=Math.min(it.qty,(INV.pace[it.size]||0)+(p[it.size]||0));p[it.size]=(p[it.size]||0)-q;c[it.size]=(c[it.size]||0)+q});invMove({pace:p,covington:c});shopAdjust(c,'transfer',o.id)}
+  o.status='received';o.receivedAt=new Date().toISOString();persistPO(o);renderStock();refreshPulse();
   toast('✓ '+o.id+' received into '+(o.kind==='china'?'Pace':'Covington'))}
 function deletePO(id){PO=PO.filter(x=>x.id!==id);if(hasFirestore())firebase.firestore().collection('purchase_orders').doc(id).delete().catch(()=>{});renderStock()}
 function poCard(o){const st={draft:['dim','DRAFT'],placed:['wave','PLACED'],received:['good','RECEIVED']}[o.status]||['dim',o.status];
@@ -2474,9 +2499,9 @@ function completeFulfillment(){const o=ordersList().find(x=>x.n===ffOrder);if(!o
   const demo=isDemoOrder(ffOrder);
   BANDS[serial]=band;if(!demo)persistBand(band);
   const rec={order:ffOrder,name:o.name,size:size,assignee:document.getElementById('ff-assignee').value,qc:qc,firmware:firmware,tracking:tracking,serial:serial,reissued:!!reuse,signoffBy:by,signoffAt:now,status:'fulfilled'};
-  FULF[ffOrder]=rec;o.ful='FULFILLED';INV.covington[size]=Math.max(0,cov(size)-1);
+  FULF[ffOrder]=rec;o.ful='FULFILLED';
   if(hasFirestore()&&!demo)firebase.firestore().collection('fulfillments').doc(ffOrder).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
-  if(!demo)saveInventory();
+  if(!demo)invMove({covington:{[size]:-1}});else INV.covington[size]=Math.max(0,cov(size)-1);
   closeSheets();renderStock();refreshPulse();printLabel(ffOrder);
   toast('✓ '+ffOrder+' shipped · '+serial+(reuse?' (reissued)':'')+' · '+SIZELABEL[size]+' -1'+(demo?' · demo':''));
   if(!demo){const n=ffOrder;setTimeout(()=>pushShopifyFulfill(n),1600)}
@@ -2514,9 +2539,9 @@ function completeReturn(){const r=RETURNS[curReturn];if(!r)return;
   if(disp==='restock'&&SIZES.indexOf(size)<0){toast('Pick the band size before restocking');return}
   r.size=size||r.size;r.status=disp==='restock'?'restocked':'scrapped';r.inspection=qc;r.notes=notes;r.closedBy=by;r.closedAt=now;persistReturn(r);
   const band=BANDS[r.serial];
-  if(disp==='restock'){INV.covington[size]=cov(size)+1;
+  if(disp==='restock'){invMove({covington:{[size]:1}});shopAdjust({[size]:1},'return',r.id);
     if(band){band.status='restocked';band.customer='';band.order='';band.history=(band.history||[]).concat([{at:now,event:'restocked',by:by}]);persistBand(band)}
-    saveInventory();toast('✓ '+r.serial+' back in Covington — reissuable');
+    toast('✓ '+r.serial+' back in Covington — reissuable');
   }else{
     if(band){band.status='scrapped';band.history=(band.history||[]).concat([{at:now,event:'scrapped',by:by}]);persistBand(band)}
     toast('Return '+r.id+' scrapped');
@@ -2574,11 +2599,13 @@ function renderInventoryTab(body){
     html+='<div class="note" style="margin-top:12px">'+(off.length?(ahead.length?'<b style="color:var(--amber)">Shopify shows more '+ahead.map(z=>SIZELABEL[z]).join(', ')+' on the shelf than Covington has.</b> ':'<b style="color:var(--amber)">Shopify’s shelf count is off for '+off.map(z=>SIZELABEL[z]).join(', ')+'.</b> '):'<b>Shopify’s shelf count matches Covington.</b> ')+'“Can sell” is the shelf count minus bands held for orders that haven’t shipped. Shopify refreshes every 15 minutes'+(lp&&lp.at?'; last sent from here '+esc(ageStr(lp.at))+(lp.by?' by '+esc(lp.by):''):'')+'.</div>';
     if(canPushStock())html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn'+(off.length?' primary':'')+'" id="push-stock-btn" onclick="pushStockToShopify()"'+(pushingStock?' disabled':'')+'>'+(pushingStock?'Sending…':'Send Covington counts to Shopify')+'</button></div>';
   }
-  html+='<div class="note" style="margin-top:12px">Covington ships to customers and clears QC. Pace NY is upstream (2-wk transfer). China is production ('+CHINA_LEAD_MONTHS+'-mo lead). Fulfilling an order or logging a return adjusts Covington automatically.</div>';
+  html+='<div class="note" style="margin-top:12px">Covington ships to customers and clears QC. Pace NY is upstream (2-wk transfer). China is production ('+CHINA_LEAD_MONTHS+'-mo lead). Stock moves update every place it’s counted: shipping here or in Shopify takes the band off Covington and Shopify; a restocked return or a Pace transfer received adds it to both; editing Covington’s count changes Shopify’s by the same amount.</div>';
   body.innerHTML=html;
 }
 function openInvEdit(k){invEditLoc=k;const l=LOCS.find(x=>x[0]===k);document.getElementById('ie-h').textContent='Edit '+l[1];document.getElementById('ie-S').value=INV[k].S||0;document.getElementById('ie-M').value=INV[k].M||0;document.getElementById('ie-L').value=INV[k].L||0;closeSheets();openSheet('sh-invedit')}
-function saveInvEdit(){const k=invEditLoc;if(!k)return;INV[k]={S:Number(document.getElementById('ie-S').value)||0,M:Number(document.getElementById('ie-M').value)||0,L:Number(document.getElementById('ie-L').value)||0};saveInventory();closeSheets();renderStock();refreshPulse();toast('✓ Inventory updated')}
+function saveInvEdit(){const k=invEditLoc;if(!k)return;const prev=Object.assign({},INV[k]);INV[k]={S:Math.max(0,Math.round(Number(document.getElementById('ie-S').value)||0)),M:Math.max(0,Math.round(Number(document.getElementById('ie-M').value)||0)),L:Math.max(0,Math.round(Number(document.getElementById('ie-L').value)||0))};
+  if(hasFirestore())firebase.firestore().collection('inventory').doc('main').set({locations:{[k]:INV[k]},updatedAt:new Date().toISOString()},{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
+  if(k==='covington'){const d={};SIZES.forEach(z=>{const q=INV[k][z]-(Number(prev[z])||0);if(q)d[z]=q});shopAdjust(d,'edit','count')}closeSheets();renderStock();refreshPulse();toast('✓ Inventory updated')}
 function renderForecastTab(body){
   let html='<div class="sec-head"><h2>When to start the China order</h2><span class="pill dim">'+CHINA_LEAD_MONTHS+'-mo lead</span></div>';
   html+='<div class="note" style="margin-bottom:12px">Projected from ~'+totalBurn().toFixed(1)+' bands/wk of Shopify sales. The bar is weeks of network cover; the amber marker is the '+CHINA_LEAD_WEEKS+'-wk China lead + '+SAFETY_WEEKS+'-wk safety. A bar shorter than the marker means order now.</div>';
