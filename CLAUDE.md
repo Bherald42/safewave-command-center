@@ -50,6 +50,10 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   Stock mirrors Shopify's on hand / committed / available per size into
   `settings/shopify`; **Send Covington counts to Shopify** (`pushStockToShopify`)
   sets Shopify's on-hand to the Covington counts (needs the `write_inventory` scope).
+  Stock moves keep both in step: orders shipped in Shopify itself take bands off
+  Covington (`deductShopifyShipment`, guarded by the `fulfillments` doc); restocked
+  returns, Pace transfers received and Covington hand edits are sent to Shopify
+  as deltas (`adjustShopifyStock`). The app moves stock with `invMove()` increments.
 - **Invoices & customer POs** (Customers → Invoices & POs). Invoices are
   numbered from `counters/invoices`, carry line items, terms, payments and a
   history; sent invoices are voided, never deleted. The PDF is drawn server-side
