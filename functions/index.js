@@ -2058,7 +2058,12 @@ function ruleDiagnosis(t, logs) {
   if (t.device && (t.device.platform || t.device.osVersion)) ev.push("Phone: " + [t.device.deviceModel, (t.device.platform === "ios" ? "iOS " : t.device.platform === "android" ? "Android " : "") + (t.device.osVersion || ""), t.device.appVersion ? "app " + t.device.appVersion : ""].filter((x) => x && x.trim()).join(", ") + ".");
   const otaFail = L.find((l) => l.type === "firmware_update_failed");
   const otaOk = L.find((l) => l.type === "firmware_update_succeeded");
-  const aboutUpdate = /firm ?ware|update|updat|ota/.test(text);
+  const aboutUpdate = /firm ?ware|update|updat|\bota\b/.test(text);
+  // What the customer actually wrote about. A band that keeps losing Bluetooth
+  // is the bigger problem (no alerts) and also stops an update from finishing,
+  // so when both come up the connection leads.
+  const aboutConn = /dis ?connect|blue ?tooth|\bble\b|searching|can'?t (find|connect|see)|won'?t (connect|pair|find)|not connect|no connection|lost connection|los(es|ing) (the )?connection|drop(s|ping|ped)? (the )?connection|keeps? (dropping|losing)|re-?pair|unpair|not pairing/.test(text);
+  const aboutAlerts = /(not|n'?t|never|stopped) (buzz|vibrat)|no (alerts|notifications|vibration)|(alerts|notifications) (don'?t|aren'?t|not|stopped)|miss(ed|ing) (alerts|notifications|calls)/.test(text);
   if (otaFail && (!otaOk || otaOk.at < otaFail.at)) {
     const err = String(otaFail.m.otaError || "");
     ev.unshift("Firmware update failed " + ago(otaFail.at) + (otaFail.m.otaPhase ? " during \"" + otaFail.m.otaPhase + "\"" : "") + ": \"" + err.slice(0, 160) + "\"" + (otaFail.m.otaAttempts ? " after " + otaFail.m.otaAttempts + " attempt(s)" : "") + ".");
@@ -2078,6 +2083,28 @@ function ruleDiagnosis(t, logs) {
       cause = "The firmware update failed with: \"" + err.slice(0, 120) + "\"."; conf = "medium";
       steps.push("Restart the band (a few seconds on the charger) and try once more with the phone close by.", "If it fails again, promote this ticket to Build with the error above.");
     }
+  } else if (aboutConn) {
+    const wk0 = Date.now() - 7 * 864e5;
+    const drops0 = L.filter((l) => l.type === "band_disconnected" && l.at >= wk0 && (l.m.reason || "") !== "user_initiated").length;
+    const btWarn = warnings.some((w) => ["bluetooth", "connection", "battopt", "autostart", "listener"].includes(w));
+    const searching = /searching/.test(text);
+    cause = "The band keeps losing its Bluetooth connection to the phone" + (searching ? " (the app is stuck on \"searching\" for the band)" : "") + "." +
+      (aboutUpdate ? " That is most likely also why the update won't finish: a firmware update needs a steady connection the whole way through." : "");
+    conf = drops0 >= 3 || btWarn ? "medium" : "low";
+    if (!L.length) ev.push("No app activity on file for this customer, so this is read from their message: ask which phone they use.");
+    steps.push("Restart the band: a few seconds on its charger (and make sure it's charged).",
+      "Check Bluetooth is on and Safewave is allowed to use it. Android: allow Nearby devices and set Safewave's battery to Unrestricted.",
+      "Keep the phone within about 30 ft of the band.",
+      "Still searching? Forget the band in the app and pair it again.");
+    if (aboutUpdate) steps.push("Once it stays connected, run the update with the band next to the phone and the app open.");
+    steps.push("Ask which phone and app version they have if it keeps dropping.");
+    reply = "Hi " + hi + ",\n\nThanks for reaching out, and I'm sorry the band keeps disconnecting. When the app keeps searching for the band, these steps fix it in most cases:\n\n" +
+      "1. Put the band on its charger for a few seconds to restart it, and make sure it's charged.\n" +
+      "2. Check that Bluetooth is on and the Safewave app is allowed to use it. On Android, also allow \"Nearby devices\" and set Safewave's battery setting to Unrestricted.\n" +
+      "3. Keep your phone within about 30 feet of the band.\n" +
+      "4. If it still can't find the band, forget the band in the Safewave app and pair it again.\n\n" +
+      (aboutUpdate ? "Once it stays connected, the update should go through too. Keep the band right next to your phone with the app open while it runs.\n\n" : "") +
+      "If it still drops after that, could you tell me which phone you're using? We'll dig in from there.";
   } else if (aboutUpdate && !L.some((l) => /^firmware_update/.test(l.type))) {
     cause = "Firmware update error — but this customer's app version doesn't report update errors yet, so the exact error isn't in the logs."; conf = band && band.battery != null && band.battery < 40 ? "medium" : "low";
     if (band && band.battery != null && band.battery < 40) { ev.push("The band was last seen at " + band.battery + "% — updates need at least 40%."); cause = "Most likely the band's battery is below 40%, which blocks firmware updates (the app doesn't report the exact error on this version)."; }
@@ -2090,6 +2117,11 @@ function ruleDiagnosis(t, logs) {
     const top = ["bluetooth", "notifPermission", "ancs", "listener", "connection", "battopt", "autostart", "bandBattery", "firmware"].find((w) => warnings.includes(w));
     if (top) { cause = WARN_TEXT[top][0] + "."; conf = "medium"; warnings.forEach((w) => { if (WARN_TEXT[w]) steps.push(WARN_TEXT[w][1]); });
       reply = "Hi " + hi + ",\n\nThanks for reaching out. From what your app reports, here's what to check:\n\n" + warnings.filter((w) => WARN_TEXT[w]).map((w, i) => (i + 1) + ". " + WARN_TEXT[w][1]).join("\n") + "\n\nLet me know if that sorts it out."; }
+  }
+  if (!cause && aboutAlerts && !warnings.length) {
+    cause = "Alerts aren't reaching the band. The usual cause is a phone setting (notification sharing or battery limits), but this customer's app hasn't reported which."; conf = "low";
+    steps.push("iPhone: Settings → Bluetooth → the band (ⓘ) → turn on Share System Notifications.", "Android: allow Safewave notification access and set its battery to Unrestricted.", "Check the app is connected to the band (not searching).");
+    reply = "Hi " + hi + ",\n\nThanks for reaching out. When the band stops buzzing for alerts, it's almost always a phone setting:\n\n1. On iPhone: go to Settings → Bluetooth, tap the ⓘ next to your Safewave band, and turn on Share System Notifications.\n2. On Android: allow Safewave notification access, and set its battery setting to Unrestricted.\n3. Make sure the Safewave app shows the band as connected.\n\nLet me know if alerts still don't come through and which phone you're using.";
   }
   // Connection stability
   const wk = Date.now() - 7 * 864e5;
@@ -2124,6 +2156,7 @@ async function aiDiagnosis(t, logs, hint) {
   const sys = "You are Safewave's support engineer. Safewave makes the Safewave Band, a vibration-alert wristband for people who are Deaf or hard of hearing, paired over Bluetooth to the Safewave phone app.\n" +
     "Diagnose the most likely cause of the customer's ticket from the app telemetry provided. Facts: firmware updates need the band at >= 40% battery; a band that stops answering mid-update is fixed by a few seconds on its charger; iPhone notifications reach the band only with 'Share System Notifications' on for the band in iOS Bluetooth settings; Android needs notification access and unrestricted battery for Safewave.\n" +
     "Be honest about uncertainty: if the data doesn't show the cause, say so and say what to ask. Never invent log entries.\n" +
+    "Read the customer's own words first: lead with the main problem they describe, and if they mention more than one, cover each (a band that keeps losing Bluetooth also can't finish a firmware update).\n" +
     "Reply with ONLY a JSON object: {\"cause\": one sentence, \"confidence\": \"high\"|\"medium\"|\"low\", \"evidence\": [short strings citing the data], \"steps\": [short next steps for the team], \"reply\": a warm, plain-language email reply to the customer (first name greeting, no sign-off, under 140 words)}.";
   const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
     headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
