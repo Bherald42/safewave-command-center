@@ -42,6 +42,15 @@ service firebase.storage {
         && request.auth.token.email != 'jared@safewavetech.com'
         && request.resource.size < 25 * 1024 * 1024;
     }
+    // Feedback attachments (PDFs, docs). Each file sits at a random, unlisted
+    // path recorded only on the feedback doc (readable by its sender and super
+    // admins), so there's no listing — only a direct get. A teammate uploads
+    // under their own uid, up to 25 MB.
+    match /feedback/{uid}/{allPaths=**} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 25 * 1024 * 1024;
+    }
     match /{allPaths=**} {
       allow read, write: if false;
     }
