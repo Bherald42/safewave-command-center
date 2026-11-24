@@ -3,8 +3,8 @@
    Network-first for navigations so teammates always get the latest build;
    falls back to cache when offline. Live data (Firestore) is fetched by the
    page itself and is not cached here. */
-const CACHE = 'safewave-shell-v7';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
+const CACHE = 'safewave-shell-v8';
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/brand/cc-favicon.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

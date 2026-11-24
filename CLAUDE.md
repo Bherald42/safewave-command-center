@@ -132,6 +132,10 @@ the deploy runner. Never commit a key, never print one, never move one into
   `safewave-logo-light.png` for dark, `safewave-mark.png` watch only, `favicon.png`)
   and `functions/assets/safewave-logo.png` (invoice PDF). Don't reintroduce the
   old knight logo or the Shopify-hosted `logo3x.png`.
+  The Command Center's own icon (favicon `brand/cc-favicon.png`, `apple-touch-icon.png`,
+  `icon-192/512.png`) is the watch on white with COMMAND above and CENTER below, so
+  it's never confused with the customer app; the header shows the logo + a
+  COMMAND CENTER tag (`.brand-tag`).
 
 - **Red is reserved for life-safety only.** The Band is an accessibility/safety
   device — never use red for ordinary urgency, overdue tasks, or errors. Use **amber**
