@@ -664,7 +664,7 @@ input[type=date]{color-scheme:dark}
 .tab:focus-visible{outline:2px solid var(--wave);outline-offset:-2px;border-radius:8px}
 .tab.dk,.nav .nav-sep,.nav .nav-fill{display:none}
 .tab .navdot{position:absolute;top:4px;left:calc(50% + 7px);min-width:8px;height:8px;border-radius:5px;background:var(--wave)}
-.subnav{display:none;gap:6px;padding:14px 16px 0;overflow-x:auto;scrollbar-width:none}
+.subnav{display:none;gap:6px;padding:14px 16px 0;flex-wrap:wrap}
 .subnav::-webkit-scrollbar{display:none}
 .subnav.on{display:flex}
 .subtab{flex:0 0 auto;background:var(--surface);border:1px solid var(--line);color:var(--muted);font:600 13px var(--font-b);
@@ -1201,23 +1201,24 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 
     <!-- FINANCIALS (restricted) -->
     <main class="screen" id="s-raise">
-      <p class="eyebrow">Fundraise · finance group only</p>
-      <h1 id="raise-h1">Fundraise</h1>
+      <p class="eyebrow">Fundraising · finance group only</p>
+      <h1 id="raise-h1">Fundraising</h1>
       <p class="sub" id="raise-sub"></p>
+      <div class="chips" id="raise-links" style="margin:-4px 0 12px"></div>
       <div id="raise-body"></div>
     </main>
 
     <main class="screen" id="s-finance">
-      <p class="eyebrow">Financials · restricted</p>
-      <h1>Financials</h1>
+      <p class="eyebrow">Finance · restricted</p>
+      <h1>Finance</h1>
       <p class="sub" id="fin-sub">Cashflow, projections, P&amp;L, budget &amp; payroll.</p>
       <div id="fin-body"></div>
     </main>
 
     <!-- STOCK -->
     <main class="screen" id="s-stock">
-      <p class="eyebrow">Stock · fulfillment &amp; inventory</p>
-      <h1 id="stock-h1">Stock &amp; Fulfillment</h1>
+      <p class="eyebrow">Operations · orders, inventory &amp; forecast</p>
+      <h1 id="stock-h1">Operations</h1>
       <p class="sub" id="stock-sub">Loading…</p>
       <div class="chips" id="stock-tabs" style="margin-bottom:14px"></div>
       <div id="stock-body"></div>
@@ -1225,7 +1226,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 
     <!-- VAULT · tools & passwords (leadership only) -->
     <main class="screen" id="s-invoices">
-      <p class="eyebrow">Customers</p>
+      <p class="eyebrow">Enterprise</p>
       <h1 id="inv-h1">Invoices &amp; POs</h1>
       <p class="sub" id="inv-sub">Bill customers and keep the purchase orders they send.</p>
       <div id="inv-body"></div>
@@ -1256,11 +1257,12 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 
     <!-- SUPPORT -->
     <main class="screen" id="s-support">
-      <p class="eyebrow">Support</p>
-      <h1>Tickets &amp; customers</h1>
+      <p class="eyebrow">Support · customer cases</p>
+      <h1>Support</h1>
       <p class="sub">Messages from the Safewave app and the customer dashboard land here on their own. Log anything else with Add ticket.</p>
 
-      <button class="btn" style="margin-bottom:18px" onclick="openAddTicket()">＋ Add ticket</button>
+      <button class="btn" style="margin-bottom:12px" onclick="openAddTicket()">＋ Add ticket</button>
+      <div class="chips" id="sup-seg" style="margin-bottom:16px"></div>
 
       <div class="sec">
         <div class="sec-head"><h2>Open queue</h2><span class="pill dim" id="ticket-count">0 open</span></div>
@@ -1280,15 +1282,15 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 
       <details class="side-panel">
         <summary><span>Recent Shopify orders</span><span class="pill good"><span class="dot"></span>SHOPIFY</span></summary>
-        <div class="d" style="margin:0 0 8px">For context when a customer writes in. Fulfillment lives in Operations → Stock &amp; orders.</div>
+        <div class="d" style="margin:0 0 8px">For context when a customer writes in. Shipping lives in Operations → Orders.</div>
         <div id="support-orders"></div>
       </details>
     </main>
 
     <!-- BUILD -->
     <main class="screen" id="s-build">
-      <p class="eyebrow">Build · project management</p>
-      <h1 id="build-h1">Development</h1>
+      <p class="eyebrow">Product &amp; Quality</p>
+      <h1 id="build-h1">Priorities</h1>
       <p class="sub" id="build-sub">Roadmap, projects, and the ranked list of what to build next.</p>
       <div class="chips" id="build-tabs" style="margin-bottom:14px"></div>
       <div id="build-body"></div>
@@ -1296,8 +1298,8 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 
     <!-- RELEASE QC · firmware & app soak-testing before release -->
     <main class="screen" id="s-qc">
-      <p class="eyebrow">Release QC · firmware &amp; app</p>
-      <h1 id="qc-h1">Release QC</h1>
+      <p class="eyebrow">Product &amp; Quality · firmware &amp; app</p>
+      <h1 id="qc-h1">Release Checks</h1>
       <p class="sub" id="qc-sub">Every build earns its release — soak-tested on a real band before it ships.</p>
       <div class="chips" id="qc-tabs" style="margin-bottom:14px"></div>
       <div id="qc-body"></div>
@@ -1306,8 +1308,8 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 
     <!-- FIELD MONITOR -->
     <main class="screen" id="s-field">
-      <p class="eyebrow">Field monitor · band health from real phones</p>
-      <h1>Field</h1>
+      <p class="eyebrow">Product &amp; Quality · band health from real phones</p>
+      <h1>Field Testing</h1>
       <p class="sub">Every wearer's band — live connection, alerts delivered, disconnect reasons, and battery — mirrored from the app so you can see exactly what each person is experiencing.</p>
       <div id="field-body"></div>
     </main>
@@ -1340,7 +1342,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 
     <!-- CRM -->
     <main class="screen" id="s-crm">
-      <p class="eyebrow">CRM · commercial clients</p>
+      <p class="eyebrow">Enterprise · prospects, deals &amp; business accounts</p>
       <h1 id="crm-h1">Command center</h1>
       <p class="sub" id="crm-sub">Loading…</p>
       <div id="crm-body"></div>
@@ -2016,6 +2018,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
       <div class="grow"><span class="pill dim" id="tkv-pill">TICKET</span><h1 style="font-size:20px;margin:8px 0 2px" id="tkv-title">—</h1><div class="d" id="tkv-meta"></div></div>
       <button class="iconbtn" aria-label="Close ticket" onclick="closeSheets()">✕</button>
     </div>
+    <div id="tkv-order"></div>
     <div id="tkv-convo"></div>
     <div id="tkv-diag"></div>
     <div id="tkv-context"></div>
@@ -2438,7 +2441,10 @@ function renderStock(){
   const unf=unfulfilledOrders().length;
   const openR=openReturns().length;
   const tab=(id,l)=>'<button class="chip'+(stockTab===id?' on':'')+'" onclick="stockGoTab(\''+id+'\')">'+l+'</button>';
-  const tb=document.getElementById('stock-tabs');if(tb)tb.innerHTML=tab('fulfill','Fulfill'+(unf?' · '+unf:''))+tab('returns','Returns'+(openR?' · '+openR:''))+tab('inventory','Inventory')+tab('forecast','Forecast')+tab('orders','Orders');
+  const tb=document.getElementById('stock-tabs');const inOrders=STOCK_ORDER_TABS.indexOf(stockTab)>=0;
+  if(tb){tb.innerHTML=inOrders?tab('fulfill','To ship'+(unf?' · '+unf:''))+tab('orders','All orders')+tab('returns','Returns'+(openR?' · '+openR:'')):'';tb.style.display=inOrders?'':'none'}
+  const sh=document.getElementById('stock-h1');if(sh)sh.textContent=inOrders?'Orders':stockTab==='inventory'?'Inventory':'Stock Forecast';
+  refreshSubnav();
   const sub=document.getElementById('stock-sub');if(sub)sub.innerHTML=totalAvail()+' sellable in Covington · '+totalNetwork()+' across network · ~'+totalBurn().toFixed(1)+'/wk';
   if(stockTab==='inventory')renderInventoryTab(body);
   else if(stockTab==='forecast')renderForecastTab(body);
@@ -2461,7 +2467,7 @@ function renderFulfillTab(body){
   html+=oversoldCard();
   const blocks=stockBlocks();
   if(blocks.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>CAN’T SHIP</span><div class="t" style="margin-top:7px">'+blocks.map(z=>SIZELABEL[z]).join(', ')+' — 0 in Covington</div><div class="d">Transfer from Pace before these ship. Pace has '+blocks.map(z=>SIZELABEL[z]+' '+(INV.pace[z]||0)).join(', ')+'.</div></div>';
-  html+='<div class="sec-head"><h2>To fulfill</h2><span class="pill '+(unf.length?'amber':'good')+'">'+unf.length+'</span></div>';
+  html+='<div class="sec-head"><h2>To ship</h2><span class="pill '+(unf.length?'amber':'good')+'">'+unf.length+'</span></div>';
   html+=unf.length?unf.map(fulfillCard).join(''):(shopLive()||DEMO.length?'<div class="empty"><div class="ico">✓</div><div class="t">All caught up</div><div class="d">No orders waiting. New paid orders appear here automatically.</div></div>':'<div class="empty"><div class="t">No orders to show</div><div class="d">Shopify isn’t connected, so orders waiting in Shopify won’t appear here.</div></div>');
   if(done.length)html+='<div class="sec-head" style="margin-top:18px"><h2>Fulfilled</h2><span class="pill good">'+done.length+'</span></div>'+done.map(fulfilledCard).join('');
   body.innerHTML=html;
@@ -6659,8 +6665,8 @@ function guideRestoreVersion(){const v=guideVersionView;if(!v)return;guideVersio
 /* ================= NAV / ROUTER ================= */
 let CURRENT_USER=null;
 const CUSTOMER_DASHBOARD_URL='https://safewave-371716.web.app/';
-const RAISE_NAV={id:'s-raise',label:'Fundraise',roles:[],svg:'<path d="M12 2v20M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'};
-const FINANCE_NAV={id:'s-finance',label:'Financials',roles:[],svg:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>'};
+const RAISE_NAV={id:'s-raise',label:'Fundraising',roles:[],svg:'<path d="M12 2v20M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'};
+const FINANCE_NAV={id:'s-finance',label:'Finance',roles:[],svg:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>'};
 const FEEDBACK_NAV={id:'s-feedback',label:'Feedback',roles:[],svg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'};
 const USERS_NAV={id:'s-users',label:'Users',roles:[],svg:'<circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 12 0"/><circle cx="17.5" cy="8.5" r="2.4"/><path d="M15.5 20a5 5 0 0 1 6.5-3.8"/>'};
 const FIELD_NAV={id:'s-field',label:'Field',roles:[],svg:'<path d="M4 20V10M10 20V4M16 20v-7M20 20H2"/><circle cx="10" cy="4" r="0"/>'};
@@ -6698,21 +6704,44 @@ function navAllowedIds(user){
 const ICON_HOME='<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>';
 const NAV_GROUPS=[
   {id:'home',      label:'Home',       pages:['s-pulse'], svg:ICON_HOME},
-  {id:'customers', label:'Customers',  pages:['s-crm','s-support','s-invoices'], svg:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4a3.5 3.5 0 0 1 0 7M18 13.5a6 6 0 0 1 3.5 6.5"/>'},
-  {id:'raise',     label:'Fundraise',  pages:['s-raise'], svg:'<path d="M12 2v20M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'},
-  {id:'operations',label:'Operations', pages:['s-stock'], svg:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5" opacity=".55"/>'},
-  {id:'product',   label:'Product',    pages:['s-build','s-qc','s-field','s-feedback'], svg:'<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>'},
+  {id:'enterprise',label:'Enterprise', pages:['s-crm','s-invoices'], svg:'<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+    pills:[{k:'pipeline',l:'Pipeline',page:'s-crm',go:()=>{crmTab='pipeline';acctId=null;crmDrill=null;crmView='hub'},on:()=>!(crmTab==='pipeline'&&!crmDrill&&crmView!=='hub')},
+           {k:'accounts',l:'Accounts',page:'s-crm',go:()=>{crmTab='pipeline';acctId=null;crmDrill=null;crmView='list'},on:()=>crmTab==='pipeline'&&!crmDrill&&crmView!=='hub'},
+           {k:'invoices',l:'Invoices & POs',page:'s-invoices'}]},
+  {id:'support',   label:'Support',    pages:['s-support'], svg:'<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/>'},
+  {id:'operations',label:'Operations', pages:['s-stock'], svg:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5" opacity=".55"/>',
+    pills:[{k:'orders',l:'Orders',page:'s-stock',go:()=>{if(STOCK_ORDER_TABS.indexOf(stockTab)<0)stockTab='fulfill'},on:()=>STOCK_ORDER_TABS.indexOf(stockTab)>=0},
+           {k:'inventory',l:'Inventory',page:'s-stock',go:()=>{stockTab='inventory'},on:()=>stockTab==='inventory'},
+           {k:'forecast',l:'Stock Forecast',page:'s-stock',go:()=>{stockTab='forecast'},on:()=>stockTab==='forecast'}]},
+  {id:'product',   label:'Product & Quality', pages:['s-build','s-qc','s-field','s-feedback'], svg:'<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+    pills:[{k:'priorities',l:'Priorities',page:'s-build',go:()=>{buildTab='focus';buildProj=null},on:()=>buildTab==='focus'},
+           {k:'projects',l:'Projects',page:'s-build',go:()=>{buildTab='projects';buildProj=null},on:()=>buildTab==='projects'},
+           {k:'roadmap',l:'Roadmap',page:'s-build',go:()=>{buildTab='roadmap';buildProj=null},on:()=>buildTab==='roadmap'},
+           {k:'qc',l:'Release Checks',page:'s-qc'},{k:'field',l:'Field Testing',page:'s-field'},{k:'feedback',l:'Feedback',page:'s-feedback'}]},
+  {id:'raise',     label:'Fundraising',pages:['s-raise'], svg:'<path d="M12 2v20M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'},
   {id:'finance',   label:'Finance',    pages:['s-finance'], svg:'<path d="M5 20v-6M10 20V9M15 20v-9M20 20V4"/>'},
   {id:'resources', label:'Resources',  pages:['s-guides','s-know'], svg:'<path d="M2 5.5C4.5 4 8 4 11 5.5v14C8 18 4.5 18 2 19.5zM22 5.5C19.5 4 16 4 13 5.5v14c3-1.5 6.5-1.5 9 0z"/>'},
   {id:'settings',  label:'Settings',   pages:['s-users','s-comply','s-vault'], svg:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'},
 ];
-const PAGE_LABEL={'s-raise':'Fundraise','s-crm':'CRM','s-support':'Support','s-invoices':'Invoices & POs','s-stock':'Stock & orders','s-build':'Build','s-qc':'Release QC','s-field':'Field','s-feedback':'Feedback',
-  's-finance':'Financials','s-guides':'Guides','s-know':'Knowledge','s-users':'Users','s-comply':'Compliance','s-vault':'Vault'};
+const STOCK_ORDER_TABS=['fulfill','orders','returns'];
+const PAGE_LABEL={'s-raise':'Fundraising','s-crm':'Pipeline','s-support':'Support','s-invoices':'Invoices & POs','s-stock':'Orders','s-build':'Priorities','s-qc':'Release Checks','s-field':'Field Testing','s-feedback':'Feedback',
+  's-finance':'Finance','s-guides':'Guides','s-know':'Knowledge','s-users':'Users','s-comply':'Compliance','s-vault':'Vault'};
 let NAV_ALLOWED=new Set(['s-pulse']), NAV_LAST={};
 function navGroupOf(id){return NAV_GROUPS.find(g=>g.pages.indexOf(id)>=0)||null}
 function navPages(g){return g.pages.filter(p=>NAV_ALLOWED.has(p))}
-function gotoGroup(gid){const g=NAV_GROUPS.find(x=>x.id===gid);if(!g)return;const pages=navPages(g);if(!pages.length)return;
-  const last=NAV_LAST[gid];goto(last&&pages.indexOf(last)>=0?last:pages[0]);closeNavDrawer()}
+// A section's pills: its pages, or finer views inside a page (Pipeline vs
+// Accounts in the CRM, Orders vs Inventory in Stock). Only pills whose page this
+// person can open are shown.
+function navPills(g){return g.pills?g.pills.filter(p=>NAV_ALLOWED.has(p.page)):navPages(g).map(p=>({k:p,l:PAGE_LABEL[p]||p,page:p}))}
+function navPillOn(g,id){const ps=navPills(g).filter(p=>p.page===id);return ps.find(p=>!p.on||p.on())||ps[0]||null}
+let NAV_LAST_PILL={};
+function navPill(gid,k){const g=NAV_GROUPS.find(x=>x.id===gid);if(!g)return;const p=navPills(g).find(x=>x.k===k);if(!p)return;
+  NAV_LAST_PILL[gid]=k;if(p.go)p.go();goto(p.page);closeNavDrawer()}
+function gotoGroup(gid){const g=NAV_GROUPS.find(x=>x.id===gid);if(!g)return;const pills=navPills(g);if(!pills.length)return;
+  if(g.pills){const last=pills.find(p=>p.k===NAV_LAST_PILL[gid]);navPill(gid,(last||pills[0]).k);return}
+  const pages=navPages(g);const last=NAV_LAST[gid];goto(last&&pages.indexOf(last)>=0?last:pages[0]);closeNavDrawer()}
+// Re-mark the section's pills after a screen changes its own view.
+function refreshSubnav(){const cur=document.querySelector('.screen.on');if(cur)syncNav(cur.id)}
 function navTab(cls,attrs,svg,label){return '<button class="tab '+cls+'" '+attrs+'><svg viewBox="0 0 24 24">'+svg+'</svg><span>'+esc(label)+'</span></button>'}
 function canOpenCustomerDashboard(){return isOversight()||['admin','manager','superadmin'].includes((CURRENT_USER&&CURRENT_USER.role)||'')}
 const ICON_EXT='<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M14 8h3v3M17 8l-5 5"/>';
@@ -6743,9 +6772,9 @@ function buildNav(role){
   h+=navTab('mb','data-m="menu" onclick="openNavDrawer()"','<path d="M4 6h16M4 12h16M4 18h16"/>','Menu');
   nav.innerHTML=h;
   // Mobile menu drawer (same sections as the sidebar)
-  let d=main.map(g=>navTab('','data-g="'+g.id+'" onclick="gotoGroup(\''+g.id+'\')"',g.svg,g.label)).join('');
+  let d=main.filter(g=>g.id!=='home').map(g=>navTab('','data-g="'+g.id+'" onclick="gotoGroup(\''+g.id+'\')"',g.svg,g.label)).join('');
   d+='<div class="nd-fill"></div>';
-  if(canOpenCustomerDashboard())d+='<a class="tab" href="'+CUSTOMER_DASHBOARD_URL+'" target="_blank" rel="noopener"><svg viewBox="0 0 24 24">'+ICON_EXT+'</svg><span>Customer dashboard ↗</span></a>';
+  if(canOpenCustomerDashboard())d+='<a class="tab" href="'+CUSTOMER_DASHBOARD_URL+'" target="_blank" rel="noopener"><svg viewBox="0 0 24 24">'+ICON_EXT+'</svg><span>Open Customer Dashboard ↗</span></a>';
   d+='<div class="nd-sep"></div>';
   if(settings)d+=navTab('','data-g="settings" onclick="gotoGroup(\'settings\')"',settings.svg,settings.label);
   const nd=document.getElementById('nd-list');if(nd)nd.innerHTML=d;
@@ -6758,9 +6787,9 @@ function syncNav(id){
     const on=t.dataset.g?(g&&t.dataset.g===g.id):t.dataset.s?t.dataset.s===id:false;
     t.classList.toggle('on',!!on);if(on)t.setAttribute('aria-current','page');else t.removeAttribute('aria-current')});
   const sub=document.getElementById('subnav');if(!sub)return;
-  const pages=g?navPages(g):[];
-  if(pages.length>1){
-    sub.innerHTML=pages.map(p=>'<button class="subtab'+(p===id?' on':'')+'" onclick="goto(\''+p+'\')"'+(p===id?' aria-current="page"':'')+'>'+esc(PAGE_LABEL[p]||p)+'</button>').join('');
+  const pills=g?navPills(g):[];
+  if(pills.length>1){const on=navPillOn(g,id);if(on&&g.pills)NAV_LAST_PILL[g.id]=on.k;
+    sub.innerHTML=pills.map(p=>{const a=on&&p.k===on.k;return '<button class="subtab'+(a?' on':'')+'" onclick="navPill(\''+g.id+'\',\''+p.k+'\')"'+(a?' aria-current="page"':'')+'>'+esc(p.l)+'</button>'}).join('');
     sub.classList.add('on');
   }else{sub.innerHTML='';sub.classList.remove('on')}
 }
@@ -6824,7 +6853,7 @@ function deepOpen(link){const p=link.split(':'),scr=p[0],a=p[1]||'',b=p.slice(2)
 function deepFlash(elId){const el=document.getElementById(elId);if(!el)return;el.scrollIntoView({block:'center',behavior:'smooth'});el.classList.add('deep-hit');setTimeout(()=>el.classList.remove('deep-hit'),2400)}
 
 /* ================= INVOICES & CUSTOMER POs =================
-   Customers → Invoices & POs. Invoices (`invoices`) and the purchase orders
+   Enterprise → Invoices & POs. Invoices (`invoices`) and the purchase orders
    customers send us (`customer_pos`) are team-shared like the CRM; Jared reads
    only. Numbers come from counters/invoices, letterhead from settings/invoicing.
    The PDF itself is drawn by the invoicePdf / sendInvoice Cloud Functions, so a
@@ -7476,8 +7505,24 @@ function saveTicket(){
 }
 function ticketCard(t){const s=SEV[t.sev];const breach=t.status==='open'&&slaLeft(t)<0;const autoTag=t.auto?'<span class="pill wave" style="margin-right:6px">AUTO</span>':'';const rep=t.status==='answered'?' · <span style="color:var(--good)">replied '+ageStr(t.lastReplyAt||t.created)+'</span>':'';const dm=dueMeta(dayMs(t.due));const meta=[t.channel,t.customer,t.assignee].filter(Boolean).map(esc).join(' · ');
   return '<div class="card tap" tabindex="0" onclick="openTicket(\''+t.id+'\')"><div class="row"><div class="grow"><div class="t">'+autoTag+esc(t.title)+(t.autoCount>1?' <span class="tkc-miss" style="font-weight:400;font-size:12.5px">· seen '+t.autoCount+'×</span>':'')+'</div><div class="d">'+t.id+' · '+meta+' · '+ageStr(t.created)+rep+(breach?' · <span style="color:var(--amber)">SLA past</span>':'')+'</div></div><span class="pill '+s.pill+'">'+s.label+'</span></div>'+(dm.label&&t.status==='open'?'<div style="margin-top:8px"><span class="pill '+dm.cls+'">'+esc(dm.label)+'</span></div>':'')+'</div>'}
+// Consumer vs Enterprise: cases from the customer dashboard (an organization's
+// admin) or tied to a business account are Enterprise; the rest are Consumer.
+let supSeg='all';
+function tkSegment(t){if(t.segment)return t.segment;if(t.channel==='Dashboard'||(t.source&&t.source.organizationId)||t.acctId)return 'enterprise';
+  const c=String(t.customer||'').toLowerCase();if(c&&typeof salesAccts==='function'&&salesAccts().some(a=>{const n=String(displayName(a)||'').toLowerCase();return n.length>3&&c.indexOf(n)>=0}))return 'enterprise';
+  return 'consumer'}
+function setSupSeg(v){supSeg=v;renderSupport()}
+// The Shopify order a case is about: an order number in its title or message,
+// or the customer's most recent order by email.
+function tkOrder(t){if(typeof ordersList!=='function')return null;const os=ordersList();const txt=(t.title||'')+' '+(t.desc||'');
+  const m=txt.match(/#\s?(\d{3,7})\b/)||txt.match(/\border\s+(?:no\.?|number)?\s*(\d{3,7})\b/i);
+  if(m){const o=os.find(x=>String(x.n).replace(/\D/g,'')===m[1]);if(o)return o}
+  const em=String(t.email||'').toLowerCase();return em?(os.find(x=>String(x.email||'').toLowerCase()===em)||null):null}
 function renderSupport(){
-  const all=loadTickets();
+  const every=loadTickets();const all=supSeg==='all'?every:every.filter(t=>tkSegment(t)===supSeg);
+  const segEl=document.getElementById('sup-seg');if(segEl){const n=v=>every.filter(t=>t.status!=='closed'&&(v==='all'||tkSegment(t)===v)).length;
+    const chip=(v,l)=>'<button class="chip'+(supSeg===v?' on':'')+'" onclick="setSupSeg(\''+v+'\')">'+l+(n(v)?' · '+n(v):'')+'</button>';
+    segEl.innerHTML=chip('all','All cases')+chip('consumer','Consumer')+chip('enterprise','Enterprise')}
   const open=all.filter(t=>t.status==='open').sort((a,b)=>SEV[a.sev].rank-SEV[b.sev].rank||new Date(a.created)-new Date(b.created));
   const waiting=all.filter(t=>t.status==='answered').sort((a,b)=>new Date(b.lastReplyAt||b.created)-new Date(a.lastReplyAt||a.created));
   const resolved=all.filter(t=>t.status==='closed');
@@ -7499,6 +7544,7 @@ function openTicket(id){const t=loadTickets().find(x=>x.id===id);if(!t)return;
   document.getElementById('tkv-title').textContent=t.title;
   const p=document.getElementById('tkv-pill');const sv=SEV[t.sev]||SEV.medium;p.className='pill '+sv.pill;p.textContent=sv.label+(t.status==='answered'?' · REPLIED':t.status==='closed'?' · RESOLVED':'');
   document.getElementById('tkv-meta').textContent=[t.customer||t.email||'Customer',t.channel,ageStr(t.created)].filter(Boolean).join(' · ');
+  {const oe=document.getElementById('tkv-order');if(oe){const o=tkOrder(t);oe.innerHTML=o?'<button class="btn ghost" style="margin:10px 0 0;justify-content:flex-start;color:var(--wave)" onclick="closeSheets();goto(\'s-stock:order:'+esc(String(o.n).replace(/[^\w-]/g,''))+'\')">View order '+esc(o.n)+' in Operations ›</button>':''}}
   // conversation
   let cv='<div class="tk-msg cust"><div class="tk-who">'+esc(t.customer||'Customer')+' <span>'+esc(tkWhen(t.created))+'</span></div><div class="tk-txt">'+esc(t.desc||t.title||'')+'</div></div>';
   (t.replies||[]).forEach(r=>{if(r.via==='customer-email'){cv+='<div class="tk-msg cust"><div class="tk-who">'+esc(r.by||'Customer')+' <span>'+esc(tkWhen(r.at))+' · email</span></div><div class="tk-txt">'+esc(r.text||'')+'</div></div>';return}cv+='<div class="tk-msg team"><div class="tk-who">'+esc(r.by||'Safewave')+' <span>'+esc(tkWhen(r.at))+(r.via==='mail app'?' · from mail app':'')+'</span></div><div class="tk-txt">'+esc(r.text||'')+'</div></div>'});
@@ -8116,15 +8162,15 @@ async function loadBuildTasks(){
   refreshPulse();
 }
 function persistBuild(t){if(hasFirestore())firebase.firestore().collection('build_tasks').doc(t.id).set(t,{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')))}
-function buildGoTab(t){buildTab=t;buildProj=null;renderBuild()}
+function buildGoTab(t){buildTab=t;buildProj=null;renderBuild();refreshSubnav()}
 function openProjectDetail(id){buildProj=id;renderBuild();window.scrollTo(0,0)}
 function renderBuild(){
   const body=document.getElementById('build-body');if(!body)return;
   const h1=document.getElementById('build-h1'),sub=document.getElementById('build-sub'),tb=document.getElementById('build-tabs');
   if(buildProj){if(tb)tb.innerHTML='';return renderProjectDetail(body,buildProj)}
   const tab=(id,l)=>'<button class="chip'+(buildTab===id?' on':'')+'" onclick="buildGoTab(\''+id+'\')">'+l+'</button>';
-  if(tb)tb.innerHTML=tab('focus','Focus')+tab('projects','Projects')+tab('roadmap','Roadmap');
-  if(h1)h1.textContent=buildTab==='roadmap'?'Roadmap':buildTab==='projects'?'Projects':'Focus';
+  void tab;if(tb){tb.innerHTML='';tb.style.display='none'}
+  if(h1)h1.textContent=buildTab==='roadmap'?'Roadmap':buildTab==='projects'?'Projects':'Priorities';refreshSubnav();
   if(buildTab==='projects')renderProjects(body,sub);
   else if(buildTab==='roadmap')renderRoadmap(body,sub);
   else renderFocus(body,sub);
@@ -9035,13 +9081,14 @@ function renderCRM(){
   const h1=document.getElementById('crm-h1');
   if(!crmReady){body.innerHTML='<div class="d" style="padding:16px">Loading…</div>';return}
   if(crmTab==='account'){body.innerHTML='';renderAccountView(body);return}
-  if(h1)h1.textContent=crmTab==='campaigns'?'Campaigns':crmTab==='prospect'?'Prospector':crmTab==='fundraise'?'Fundraise':'Pipeline';
+  if(h1)h1.textContent=crmTab==='campaigns'?'Campaigns':crmTab==='prospect'?'Prospector':crmTab==='fundraise'?'Fundraising':(crmView!=='hub'&&!crmDrill?'Accounts':'Pipeline');
   body.innerHTML=crmTabsHTML()+'<div id="crm-view"></div>';
   const v=document.getElementById('crm-view');
   if(crmTab==='campaigns')renderCampaigns(v);
   else if(crmTab==='prospect')renderProspect(v);
   else if(crmTab==='fundraise')renderFundraise(v);
   else renderPipelineView(v);
+  refreshSubnav();
 }
 /* ================= FUNDRAISE (investor pipeline on top of the CRM) ================= */
 let RAISE={target:0,round:''};
@@ -9105,9 +9152,11 @@ function raiseOn(){const el=document.getElementById('s-raise');return !!(el&&el.
 function raiseRerender(){if(raiseOn()&&!raiseAcctId)renderRaise()}
 function renderRaise(){const body=document.getElementById('raise-body');if(!body)return;
   const h1=document.getElementById('raise-h1');
-  if(!canFundraise()){if(h1)h1.textContent='Fundraise';document.getElementById('raise-sub').textContent='';body.innerHTML='<div class="empty"><div class="ico">🔒</div><div class="t">Restricted</div><div class="d">The raise is visible only to Brad, Trey and the finance list.</div></div>';return}
+  {const rl=document.getElementById('raise-links');if(rl)rl.innerHTML=''}
+  if(!canFundraise()){if(h1)h1.textContent='Fundraising';document.getElementById('raise-sub').textContent='';body.innerHTML='<div class="empty"><div class="ico">🔒</div><div class="t">Restricted</div><div class="d">The raise is visible only to Brad, Trey and the finance list.</div></div>';return}
   if(raiseAcctId&&findAcct(raiseAcctId)){if(crmTab==='account'){crmTab='pipeline';const cb=document.getElementById('crm-body');if(cb)cb.innerHTML=''}acctId=raiseAcctId;renderAccountView(body,'raise');return}
-  raiseAcctId=null;if(h1)h1.textContent='Fundraise';
+  raiseAcctId=null;if(h1)h1.textContent='Fundraising';
+  {const rl=document.getElementById('raise-links');if(rl)rl.innerHTML=(NAV_ALLOWED.has('s-finance')?'<button class="chip" onclick="gotoGroup(\'finance\')">Finance ›</button>':'')+(NAV_ALLOWED.has('s-crm')?'<button class="chip" onclick="navPill(\'enterprise\',\'pipeline\')">Pipeline metrics ›</button>':'')}
   renderFundraise(body);}
 function openInvestor(id){raiseAcctId=id;acctId=id;if(!raiseOn())goto('s-raise');else renderRaise();window.scrollTo(0,0)}
 function backToRaise(){raiseAcctId=null;acctId=null;renderRaise();window.scrollTo(0,0)}
