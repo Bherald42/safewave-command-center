@@ -202,9 +202,9 @@ exports.askAgent = onCall({ region: REGION, timeoutSeconds: 120 }, async (reques
     "- Money is USD. 'Need follow-up' means an open account with no next step. Red is reserved for life-safety.\n" +
     "- Never mention API keys, secrets, environment variables, repositories, deploys or setup steps. If something isn't switched on, say it isn't available yet and that Brad can turn it on.\n" +
     "- For 'where is …' questions use ONLY this app map (phone: Menu in the bottom bar; desktop: left sidebar). If a page isn't listed, say you can't verify where it is.\n" +
-    "  Home (Today, My Work) · Messages (bottom bar on phones, top bar on desktop) · Customers → CRM (Pipeline; Campaigns and Prospect open from the Pipeline action row), Support, Invoices & POs (customer invoices with PDF + email, and the purchase orders customers send) · " +
-    "Fundraise (Overview, Meetings, Traction, Financials, Plan, Investors, Data room) · Operations → Stock & orders · Product → Build, Release QC, Field, Feedback · " +
-    "Finance → Financials (Overview, 13-week cash, P&L, Projections, Budget, Payroll, Build spend, Access) · Resources → Guides, Knowledge (this assistant) · " +
+    "  Home (bottom bar on phones: Today, My Work) · Messages (bottom bar on phones, top bar on desktop) · Enterprise → Pipeline (Campaigns and Prospect open from the Pipeline action row), Accounts, Invoices & POs (customer invoices with PDF + email, and the purchase orders customers send) · " +
+    "Support (cases, filtered All / Consumer / Enterprise) · Operations → Orders (To ship, All orders, Returns), Inventory, Stock Forecast · Product & Quality → Priorities, Projects, Roadmap, Release Checks, Field Testing, Feedback · " +
+    "Fundraising (Overview, Meetings, Traction, Financials, Plan, Investors, Data room) · Finance (Overview, 13-week cash, P&L, Projections, Budget, Payroll, Build spend, Access) · Resources → Guides, Knowledge (this assistant) · " +
     "Settings → Users, Compliance, Vault. Some pages only show for people with access.\n\n" +
     "=== COMPANY DATA SNAPSHOT ===\n" + snapshot.slice(0, 90000);
 

@@ -54,7 +54,7 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   Covington (`deductShopifyShipment`, guarded by the `fulfillments` doc); restocked
   returns, Pace transfers received and Covington hand edits are sent to Shopify
   as deltas (`adjustShopifyStock`). The app moves stock with `invMove()` increments.
-- **Invoices & customer POs** (Customers → Invoices & POs). Invoices are
+- **Invoices & customer POs** (Enterprise → Invoices & POs). Invoices are
   numbered from `counters/invoices`, carry line items, terms, payments and a
   history; sent invoices are voided, never deleted. The PDF is drawn server-side
   (`invoicePdf`, pdfkit) so a download and the emailed copy (`sendInvoice`, from
@@ -65,10 +65,17 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   check remit-to address and an optional card link from `settings/invoicing`. Customer POs keep the uploaded file in
   Storage (`customer_pos/`) and link to the invoices made from them.
   `scanOverdue` alerts the invoice's creator once when it goes past due.
+- **Navigation** (`NAV_GROUPS`): Home (bottom bar on phones) · Enterprise
+  (Pipeline · Accounts · Invoices & POs) · Support (All / Consumer / Enterprise
+  case filter, `tkSegment`) · Operations (Orders → To ship · All orders · Returns;
+  Inventory; Stock Forecast) · Product & Quality (Priorities · Projects · Roadmap ·
+  Release Checks · Field Testing · Feedback) · Fundraising · Finance · Resources ·
+  Settings. A group's `pills` can point at views inside a page (`navPill`); screens
+  that switch their own view call `refreshSubnav()`.
 - **Data is Firestore.** Collections include: `users`, `crm_accounts`, `tickets`,
   `campaigns`, `build_tasks`, `build_projects`, `inventory`, `fulfillments`,
   `bands`, `returns`, `orders` (server-write only), `purchase_orders` (supplier POs),
-  `invoices` + `customer_pos` + `invoice_products` (Customers → Invoices & POs; `counters/invoices`,
+  `invoices` + `customer_pos` + `invoice_products` (Enterprise → Invoices & POs; `counters/invoices`,
   `settings/invoicing` letterhead),
   `notifications`, `nudges`, `mail_credentials`, `chat_channels/{ch}/messages`,
   `feedback` (super-admin read), and `settings/{finance,chat,raise}`.
