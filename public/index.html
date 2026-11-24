@@ -1950,7 +1950,10 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
     <div class="rolepick" id="fb-type"><button data-v="Idea" class="on">💡 Idea</button><button data-v="Issue">🐞 Issue</button><button data-v="Question">❓ Question</button></div>
     <textarea class="field" id="fb-text" placeholder="What's working, what's not, what would help…" style="min-height:130px;resize:vertical;font-family:var(--font-b);margin-top:12px"></textarea>
     <div id="fb-shot-tiles" style="display:none;gap:8px;flex-wrap:wrap;margin:2px 0 8px"></div>
-    <div class="row" style="gap:8px;margin-bottom:10px"><button class="btn ghost" id="fb-shot-btn" style="flex:1" onclick="captureScreenshot('feedback')">📷 Screenshot</button><button class="btn ghost" style="flex:1" onclick="document.getElementById('fb-photo-file').click()">🖼 Add photos (up to 10)</button></div>
+    <div id="fb-file-chips" style="display:none;flex-direction:column;gap:6px;margin:2px 0 8px"></div>
+    <div class="row" style="gap:8px;margin-bottom:10px"><button class="btn ghost" id="fb-shot-btn" style="flex:1" onclick="captureScreenshot('feedback')">📷 Screenshot</button><button class="btn ghost" style="flex:1" onclick="document.getElementById('fb-photo-file').click()">🖼 Photos</button><button class="btn ghost" style="flex:1" onclick="document.getElementById('fb-doc-file').click()">📎 PDF / file</button></div>
+    <p class="d" style="font-size:11.5px;margin:-4px 0 10px">Up to 10 photos and 5 files (PDFs, docs, sheets — 25 MB each). You can also drop files here.</p>
+    <input type="file" id="fb-doc-file" accept=".pdf,application/pdf,image/*,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.key,.pages,.numbers,.zip" multiple style="display:none" onchange="fbFilesPicked(this.files,null);this.value=''">
     <input type="file" id="fb-shot-file" accept="image/*" style="display:none" onchange="shotFilePicked(this)">
     <input type="file" id="fb-photo-file" accept="image/*" multiple style="display:none" onchange="photosPicked(this)">
     <button class="btn" onclick="sendFeedback()">Send to Brad</button>
@@ -1978,6 +1981,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
 
 <!-- Lightbox for viewing an attached screenshot -->
 <input type="file" id="fb-reply-file" accept="image/*" multiple style="display:none" onchange="replyPhotosPicked(this)">
+<input type="file" id="fb-reply-doc" accept=".pdf,application/pdf,image/*,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.key,.pages,.numbers,.zip" multiple style="display:none" onchange="fbFilesPicked(this.files,fbReplyTargetId);this.value=''">
 <div id="shot-view" onclick="this.style.display='none'"><img id="shot-view-img" alt="screenshot"><div id="shot-view-nav" style="display:none;position:absolute;left:0;right:0;bottom:22px;align-items:center;justify-content:center;gap:18px"><button onclick="shotViewStep(-1,event)" style="width:44px;height:44px;border-radius:22px;border:none;background:rgba(255,255,255,.14);color:#fff;font-size:20px;cursor:pointer">‹</button><span id="shot-view-count" style="color:#fff;font-size:13px;font-family:var(--font-m)"></span><button onclick="shotViewStep(1,event)" style="width:44px;height:44px;border-radius:22px;border:none;background:rgba(255,255,255,.14);color:#fff;font-size:20px;cursor:pointer">›</button></div></div>
 
 <!-- CRM guided "Start working" queue -->
@@ -5843,7 +5847,7 @@ function isOversight(u){u=u||CURRENT_USER;return !!(u&&u.email&&OVERSIGHT_EMAILS
 function buildReadOnly(){return isOversight()}
 function notifySuper(title,body,link){const t=(TEAM||[]).find(x=>(x.email||'').toLowerCase()===SUPER_EMAIL);if(t&&t.uid)notify(t.uid,title,body,link||'')}
 function openFeedback(){if(!CURRENT_USER)return;document.getElementById('fb-screen').textContent=currentScreenLabel();document.getElementById('fb-text').value='';
-  fbShots=[];renderShotTiles();
+  fbShots=[];renderShotTiles();fbFiles=[];renderFbFileChips();fbWireDrop();
   document.querySelectorAll('#fb-type button').forEach((b,i)=>{b.classList.toggle('on',i===0);b.onclick=function(){document.querySelectorAll('#fb-type button').forEach(x=>x.classList.remove('on'));this.classList.add('on')}});
   closeSheets();openSheet('sh-feedback')}
 /* A feedback doc must stay under Firestore's 1 MB cap, so all photos share
@@ -5853,19 +5857,51 @@ function fbDocSize(f){if(!f)return 0;let n=(f.text||'').length+2000;(f.shots||[]
 function reencodeShot(src,limit){return new Promise(res=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=img.width;c.height=img.height;c.getContext('2d').drawImage(img,0,0);res(encodeShot(c,limit))};img.onerror=()=>res(src);img.src=src})}
 async function fitShotsToBudget(list,budget){if(!list.length)return list;const total=list.reduce((a,x)=>a+x.length,0);if(total<=budget)return list;
   const per=Math.floor(budget/list.length);const out=[];for(const x of list)out.push(x.length>per?await reencodeShot(x,per):x);return out}
-async function sendFeedback(){const text=document.getElementById('fb-text').value.trim();if(!text){toast('Write your feedback first');return}
+async function sendFeedback(){const text=document.getElementById('fb-text').value.trim();if(!text&&!fbFiles.length){toast('Write your feedback first');return}
   if(fbShots.length)fbShots=await fitShotsToBudget(fbShots,880000);
   const type=((document.querySelector('#fb-type button.on')||{}).dataset||{}).v||'Idea';
   const rec={fromUid:CURRENT_USER.uid,fromName:CURRENT_USER.name||'',fromEmail:CURRENT_USER.email||'',screen:currentScreenId(),screenLabel:currentScreenLabel(),type:type,text:text,status:'open'};
   if(fbShots.length)rec.shots=fbShots.slice();
   if(!hasFirestore()){toast('Not connected — feedback needs the shared cloud');return}
+  if(fbFiles.length){const up=await fbUploadFiles(fbFiles);if(!up)return;rec.files=up;if(!rec.text)rec.text='📎 '+up.map(x=>x.name).join(', ')}
   rec.createdAt=firebase.firestore.FieldValue.serverTimestamp();
   firebase.firestore().collection('feedback').add(rec)
     .then(ref=>{notifySuper(type+' · '+rec.screenLabel,(CURRENT_USER.name||'A teammate')+': '+text.slice(0,90),'s-feedback:'+ref.id);
       firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({feedbackCount:firebase.firestore.FieldValue.increment(1)},{merge:true}).catch(()=>{});
       CURRENT_USER.feedbackCount=(CURRENT_USER.feedbackCount||0)+1;const me=(TEAM||[]).find(t=>t.uid===CURRENT_USER.uid);if(me)me.feedbackCount=(me.feedbackCount||0)+1;refreshPulse();})
     .catch(e=>toast('Send failed — '+((e&&e.code)||'check rules')));
-  fbShots=[];closeSheets();toast('✓ Sent to Brad — thank you')}
+  fbShots=[];fbFiles=[];closeSheets();toast('✓ Sent to Brad — thank you')}
+/* PDFs and other files on feedback and replies. They go to Storage under a
+   random, unlisted path (feedback/{uid}/…); the feedback doc keeps the link,
+   so only people who can read that feedback can find them. */
+const FB_MAX_FILES=5,FB_FILE_MAX=25*1024*1024;
+let fbFiles=[],fbReplyFiles={};
+function fbBytes(n){return n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
+function fbFileIcon(f){const n=(f.name||'').toLowerCase(),t=f.type||'';return /pdf/.test(t)||/\.pdf$/.test(n)?'📄':/sheet|excel|csv/.test(t)||/\.(xlsx?|csv|numbers)$/.test(n)?'📊':/presentation|powerpoint/.test(t)||/\.(pptx?|key)$/.test(n)?'📽':/zip/.test(t)||/\.zip$/.test(n)?'🗜':'📎'}
+function fbFilesPicked(list,replyId){let files=Array.prototype.slice.call(list||[]);if(!files.length)return;
+  const imgs=files.filter(f=>/^image\//.test(f.type||'')),docs=files.filter(f=>!/^image\//.test(f.type||''));
+  if(imgs.length){if(replyId){fbReplyTargetId=replyId;replyPhotosPicked({files:imgs,set value(v){}})}else photosPicked({files:imgs,set value(v){}})}
+  const cur=replyId?(fbReplyFiles[replyId]=fbReplyFiles[replyId]||[]):fbFiles;
+  docs.forEach(f=>{if(f.size>FB_FILE_MAX){toast(f.name+' is over 25 MB');return}if(cur.length>=FB_MAX_FILES){toast('Up to '+FB_MAX_FILES+' files per message');return}cur.push(f)});
+  if(replyId)renderFeedbackInbox();else renderFbFileChips()}
+function fbChipsHTML(list,rm){return list.map((f,i)=>'<div style="display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:var(--surface-2);min-width:0"><span>'+fbFileIcon(f)+'</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">'+esc(f.name)+'</span><span class="d" style="font-size:11px">'+fbBytes(f.size||0)+'</span>'+(rm?'<button aria-label="Remove" onclick="'+rm+'('+i+')" style="border:none;background:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 2px">✕</button>':'')+'</div>').join('')}
+function renderFbFileChips(){const w=document.getElementById('fb-file-chips');if(!w)return;w.style.display=fbFiles.length?'flex':'none';w.innerHTML=fbChipsHTML(fbFiles,'fbRemoveFile')}
+function fbRemoveFile(i){fbFiles.splice(i,1);renderFbFileChips()}
+function fbRemoveReplyFile(id,i){(fbReplyFiles[id]||[]).splice(i,1);renderFeedbackInbox()}
+async function fbUploadFiles(list){if(!firebase.storage){toast('Files need Firebase Storage on');return null}
+  const uid=(CURRENT_USER&&CURRENT_USER.uid)||'anon',out=[];
+  for(const f of list){try{toast('Uploading '+f.name+'…');const rnd=Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+      const path='feedback/'+uid+'/'+rnd+'/'+(f.name||'file').replace(/[^\w.\-]/g,'_').slice(-120);
+      const ref=firebase.storage().ref(path);await ref.put(f,{contentType:f.type||'application/octet-stream'});
+      out.push({name:f.name||'file',url:await ref.getDownloadURL(),path:path,type:f.type||'',size:f.size||0})}
+    catch(e){toast('Couldn’t upload '+f.name+' — '+((e&&e.code)||'try again'));return null}}
+  return out}
+function fbFileLinks(files){return (files||[]).length?'<div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">'+files.map(f=>'<a href="'+esc(f.url)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface-2);color:var(--text);text-decoration:none;min-width:0"><span>'+fbFileIcon(f)+'</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600">'+esc(f.name)+'</span><span class="d" style="font-size:11px">'+fbBytes(f.size||0)+' · Open</span></a>').join('')+'</div>':''}
+// Drag files onto the feedback sheet (desktop).
+function fbWireDrop(){const el=document.querySelector('#sh-feedback .sheet-body');if(!el||el.dataset.drop)return;el.dataset.drop='1';
+  el.addEventListener('dragover',e=>{if(e.dataTransfer&&Array.prototype.indexOf.call(e.dataTransfer.types||[],'Files')>=0){e.preventDefault();el.style.outline='2px dashed var(--accent)'}});
+  el.addEventListener('dragleave',e=>{if(e.target===el)el.style.outline=''});
+  el.addEventListener('drop',e=>{if(!(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length))return;e.preventDefault();el.style.outline='';fbFilesPicked(e.dataTransfer.files,null)})}
 function fbMs(f){return (f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMillis():0}
 function subscribeFeedback(){if(!hasFirestore()||!CURRENT_USER)return;
   if(fbUnsub){try{fbUnsub()}catch(e){}}
@@ -6011,11 +6047,13 @@ function fbxCard(f){const t=(f.createdAt&&f.createdAt.toMillis)?f.createdAt.toMi
   let h='<div class="card" id="fbx-'+esc(f.id)+'"><div class="row"><div class="grow"><div class="t">'+tp+' '+esc(f.type||'Feedback')+' · '+esc(f.screenLabel||'')+'</div><div class="d">'+esc(f.fromName||f.fromEmail||'Teammate')+(time?' · '+time:'')+'</div></div><span class="pill '+(resolved?'good':(thread.length?'accent':'wave'))+'">'+(resolved?'RESOLVED':(thread.length?'REPLIED':'OPEN'))+'</span></div>'
     +'<div class="note" style="margin-top:9px;white-space:pre-wrap">'+esc(f.text||'')+'</div>';
   if(shots.length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+shots.map(function(src,i){return '<img src="'+src+'" alt="attachment" style="width:78px;height:78px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="viewShotFb(\''+f.id+'\','+i+')">'}).join('')+'</div>';
-  if(thread.length)h+='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px">'+thread.map(function(m,mi){const mine=m.uid===f.fromUid;const ms=m.shots||[];return '<div style="align-self:'+(mine?'flex-start':'flex-end')+';max-width:85%"><div style="font-size:11px;color:var(--faint);margin-bottom:2px">'+esc(m.by||(mine?'Submitter':'You'))+(m.at?' · '+fbShort(m.at):'')+'</div>'+(m.text?'<div style="background:'+(mine?'var(--surface-2)':'rgba(29,170,225,.14)')+';color:var(--text);border-radius:12px;padding:8px 11px;font-size:13px;line-height:18px;white-space:pre-wrap">'+esc(m.text)+'</div>':'')+(ms.length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;justify-content:'+(mine?'flex-start':'flex-end')+'">'+ms.map(function(src,pi){return '<img src="'+src+'" alt="attachment" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="viewReplyShot(\''+f.id+'\','+mi+','+pi+')">'}).join('')+'</div>':'')+'</div>'}).join('')+'</div>';
+  h+=fbFileLinks(f.files);
+  if(thread.length)h+='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px">'+thread.map(function(m,mi){const mine=m.uid===f.fromUid;const ms=m.shots||[];return '<div style="align-self:'+(mine?'flex-start':'flex-end')+';max-width:85%"><div style="font-size:11px;color:var(--faint);margin-bottom:2px">'+esc(m.by||(mine?'Submitter':'You'))+(m.at?' · '+fbShort(m.at):'')+'</div>'+(m.text?'<div style="background:'+(mine?'var(--surface-2)':'rgba(29,170,225,.14)')+';color:var(--text);border-radius:12px;padding:8px 11px;font-size:13px;line-height:18px;white-space:pre-wrap">'+esc(m.text)+'</div>':'')+(ms.length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;justify-content:'+(mine?'flex-start':'flex-end')+'">'+ms.map(function(src,pi){return '<img src="'+src+'" alt="attachment" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="viewReplyShot(\''+f.id+'\','+mi+','+pi+')">'}).join('')+'</div>':'')+fbFileLinks(m.files)+'</div>'}).join('')+'</div>';
   if(replyOpen){var rShots=fbReplyShots[f.id]||[];
-    h+='<div style="margin-top:10px"><textarea class="field" id="fb-reply-'+f.id+'" placeholder="'+(isSuperAdmin()?'Write a reply — the submitter gets an alert with your message…':'Add more detail — Brad gets an alert…')+'" oninput="fbReplyText[\''+f.id+'\']=this.value" style="min-height:70px;resize:vertical;font-family:var(--font-b);width:100%">'+esc(fbReplyText[f.id]||'')+'</textarea>'
+    h+='<div style="margin-top:10px"><textarea class="field" id="fb-reply-'+f.id+'" placeholder="'+(isSuperAdmin()?'Write a reply — the submitter gets an alert with your message…':'Add more detail — Brad gets an alert…')+'" oninput="fbReplyText[\''+f.id+'\']=this.value" ondragover="event.preventDefault()" ondrop="if(event.dataTransfer&&event.dataTransfer.files.length){event.preventDefault();fbFilesPicked(event.dataTransfer.files,\''+f.id+'\')}" style="min-height:70px;resize:vertical;font-family:var(--font-b);width:100%">'+esc(fbReplyText[f.id]||'')+'</textarea>'
       +(rShots.length?'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px">'+rShots.map(function(src,i){return '<div style="position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1px solid var(--line)"><img src="'+src+'" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in" onclick="viewReplyDraft(\''+f.id+'\','+i+')"><button onclick="removeReplyShot(\''+f.id+'\','+i+')" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:9px;border:none;background:rgba(6,12,20,.8);color:#fff;font-size:11px;line-height:1;cursor:pointer;padding:0">✕</button></div>'}).join('')+'</div>':'')
-      +'<div class="row" style="gap:8px;margin-top:6px"><button class="btn" style="flex:1" onclick="sendFeedbackReply(\''+f.id+'\')">'+(isSuperAdmin()?'Send reply &amp; alert submitter':'Send to Brad')+'</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="addReplyPhotos(\''+f.id+'\')">🖼 Photos</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="toggleFbReply(\''+f.id+'\')">Close</button></div></div>';}
+      +((fbReplyFiles[f.id]||[]).length?'<div style="display:flex;flex-direction:column;gap:6px;margin:6px 0 2px">'+fbChipsHTML(fbReplyFiles[f.id],'fbRemoveReplyFile.bind(null,\''+f.id+'\')')+'</div>':'')
+      +'<div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap"><button class="btn" style="flex:1" onclick="sendFeedbackReply(\''+f.id+'\')">'+(isSuperAdmin()?'Send reply &amp; alert submitter':'Send to Brad')+'</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="addReplyPhotos(\''+f.id+'\')">🖼 Photos</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="fbReplyTargetId=\''+f.id+'\';document.getElementById(\'fb-reply-doc\').click()">📎 File</button><button class="btn ghost" style="flex:0 0 auto;width:auto" onclick="toggleFbReply(\''+f.id+'\')">Close</button></div></div>';}
   if(!isSuperAdmin()){h+='<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'+(resolved?'':'<button class="btn '+(replyOpen?'ghost':'')+'" style="flex:1 1 90px" onclick="toggleFbReply(\''+f.id+'\')">'+(replyOpen?'Close':'Add a reply')+'</button>')+'</div></div>';return h}
   h+='<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
       +(resolved?'<button class="btn ghost" style="flex:1 1 120px" onclick="setFeedbackStatus(\''+f.id+'\',\'open\')">Reopen</button>':'<button class="btn ghost" style="flex:1 1 120px" onclick="setFeedbackStatus(\''+f.id+'\',\'resolved\')">Mark resolved</button>')
@@ -6036,17 +6074,20 @@ function replyPhotosPicked(input){let files=Array.prototype.slice.call(input.fil
 function removeReplyShot(id,i){(fbReplyShots[id]||[]).splice(i,1);renderFeedbackInbox();}
 /* Post a reply into the feedback thread and alert the submitter with it. */
 async function sendFeedbackReply(id){const el=document.getElementById('fb-reply-'+id);const text=(el&&el.value||fbReplyText[id]||'').trim();const rShots=await fitShotsToBudget((fbReplyShots[id]||[]).slice(),Math.max(120000,880000-fbDocSize(FEEDBACK.find(x=>x.id===id))));
-  if(!text&&!rShots.length){toast('Write a reply or add a photo first');return}
+  const rFiles=(fbReplyFiles[id]||[]).slice();
+  if(!text&&!rShots.length&&!rFiles.length){toast('Write a reply or add a photo first');return}
   const f=FEEDBACK.find(x=>x.id===id);if(!f){toast('Feedback not found');return}
+  let upFiles=null;if(rFiles.length){if(!hasFirestore()){toast('Not connected — files need the shared cloud');return}upFiles=await fbUploadFiles(rFiles);if(!upFiles)return}
   const msg={by:(CURRENT_USER&&CURRENT_USER.name)||'Safewave team',uid:(CURRENT_USER&&CURRENT_USER.uid)||'admin',text:text,at:Date.now()};
   if(rShots.length)msg.shots=rShots;
+  if(upFiles&&upFiles.length)msg.files=upFiles;
   // Optimistic local update; the snapshot reconciles once the write lands.
-  f.thread=(f.thread||[]).concat([msg]);fbReplyText[id]='';fbReplyShots[id]=[];renderFeedbackInbox();
+  f.thread=(f.thread||[]).concat([msg]);fbReplyText[id]='';fbReplyShots[id]=[];fbReplyFiles[id]=[];renderFeedbackInbox();
   if(hasFirestore()){
     firebase.firestore().collection('feedback').doc(id).update({thread:firebase.firestore.FieldValue.arrayUnion(msg),lastReplyAt:firebase.firestore.FieldValue.serverTimestamp()})
       .then(()=>{const me=CURRENT_USER&&CURRENT_USER.uid;
-        if(f.fromUid&&f.fromUid!==me){notify(f.fromUid,'Reply to your feedback',(text||'📷 Photo').slice(0,140),'s-feedback:'+id);toast('✓ Reply sent — submitter alerted')}
-        else{notifySuper('Feedback reply · '+(f.screenLabel||''),((CURRENT_USER&&CURRENT_USER.name)||'Teammate')+': '+(text||'📷 Photo').slice(0,120),'s-feedback:'+id);toast('✓ Sent — Brad was alerted')}})
+        if(f.fromUid&&f.fromUid!==me){notify(f.fromUid,'Reply to your feedback',(text||(upFiles&&upFiles.length?'📎 '+upFiles[0].name:'📷 Photo')).slice(0,140),'s-feedback:'+id);toast('✓ Reply sent — submitter alerted')}
+        else{notifySuper('Feedback reply · '+(f.screenLabel||''),((CURRENT_USER&&CURRENT_USER.name)||'Teammate')+': '+(text||(upFiles&&upFiles.length?'📎 '+upFiles[0].name:'📷 Photo')).slice(0,120),'s-feedback:'+id);toast('✓ Sent — Brad was alerted')}})
       .catch(e=>toast('Reply failed — '+((e&&e.code)||'check rules')));
   }else{toast('Reply saved — connect the cloud to alert the submitter')}}
 function setFeedbackStatus(id,st){if(hasFirestore())firebase.firestore().collection('feedback').doc(id).set({status:st},{merge:true}).catch(e=>toast('Update failed — '+((e&&e.code)||'')));const f=FEEDBACK.find(x=>x.id===id);if(f)f.status=st;renderFeedbackInbox();renderFeedbackBadge()}
