@@ -480,6 +480,8 @@ function mapShopifyOrder(o) {
     source: "shopify",
     at: o.created_at ? new Date(o.created_at).toISOString() : new Date().toISOString(),
   };
+  if (o.cancelled_at) rec.cancelled = true;
+  if (o.financial_status) rec.financial = String(o.financial_status);
   rec.items = (o.line_items || []).map((li) => ({
     size: bandSizeOf(li.variant_title) || bandSizeOf(li.title) || "",
     qty: Number(li.quantity) || 0,
@@ -700,6 +702,38 @@ async function refreshShipments() {
   return n;
 }
 
+// Sales velocity per band size from the Shopify orders we hold: units sold in
+// each of the last 12 weeks (rolling 7-day windows ending now), the 4- and
+// 12-week weekly averages, and the burn rate the forecast plans with (60% the
+// last 4 weeks, 40% the last 12 — recent demand counts most, one odd week
+// doesn't swing it). Cancelled and refunded orders don't count.
+async function computeSalesVelocity() {
+  const WEEKS = 12, WK = 7 * 864e5, now = Date.now();
+  const qs = await db.collection("orders").where("at", ">=", new Date(now - WEEKS * WK).toISOString()).get();
+  const weekly = { S: Array(WEEKS).fill(0), M: Array(WEEKS).fill(0), L: Array(WEEKS).fill(0) };
+  let orders = 0, noItems = 0;
+  qs.forEach((d) => {
+    const o = d.data();
+    if (o.source !== "shopify" || o.cancelled || /refunded|voided/i.test(o.financial || "")) return;
+    const ago = Math.floor((now - Date.parse(o.at)) / WK);
+    if (!(ago >= 0 && ago < WEEKS)) return;
+    const its = (o.items || []).filter((i) => weekly[i.size]);
+    if (!its.length) { noItems++; return; }
+    orders++;
+    its.forEach((i) => { weekly[i.size][WEEKS - 1 - ago] += Number(i.qty) || 0; });
+  });
+  const avg = (a, from, to) => a.slice(from, to).reduce((x, y) => x + y, 0) / (to - from);
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const per = {};
+  ["S", "M", "L"].forEach((z) => {
+    const r4 = avg(weekly[z], WEEKS - 4, WEEKS), r12 = avg(weekly[z], 0, WEEKS), prev4 = avg(weekly[z], WEEKS - 8, WEEKS - 4);
+    per[z] = { r4: r2(r4), r12: r2(r12), prev4: r2(prev4), burn: r2(0.6 * r4 + 0.4 * r12) };
+  });
+  const velocity = { weeks: WEEKS, weekly, per, orders, noItems, at: new Date().toISOString() };
+  await db.collection("settings").doc("shopify").set({ velocity }, { merge: true });
+  return velocity;
+}
+
 // Callable: "Sync now" / "Backfill history" from the Stock screen.
 
 async function requireSuper(request) {
@@ -728,7 +762,7 @@ exports.saveShopifyConnection = onCall({ region: REGION, timeoutSeconds: 300 }, 
   await db.collection("server_keys").doc("shopify").set(Object.assign({}, cand, { savedBy: by, savedAt: new Date().toISOString() }));
   await db.collection("settings").doc("shopify").set({ connected: true, domain, shopName, connectedAt: new Date().toISOString(), connectedBy: by, webhook: !!cand.webhookSecret }, { merge: true });
   let synced = 0, stock = true;
-  try { synced = await pullShopifyOrders({ backfill: true, by: by }); } catch (e) { logger.warn("first sync failed", e && e.message); }
+  try { synced = await pullShopifyOrders({ backfill: true, by: by }); await computeSalesVelocity(); } catch (e) { logger.warn("first sync failed", e && e.message); }
   try { await pullShopifyStock(); } catch (e) { stock = false; logger.warn("first stock pull failed", e && e.message); }
   return { ok: true, shopName, synced, stock };
 });
@@ -905,6 +939,7 @@ exports.syncShopifyOrders = onCall({ region: REGION, timeoutSeconds: 120 }, asyn
     const by = (request.auth.token && request.auth.token.email) || request.auth.uid;
     const synced = await pullShopifyOrders({ backfill: !!(request.data && request.data.backfill), by: by });
     await refreshShipments().catch((e) => logger.warn("shipment refresh skipped", e && e.message));
+    await computeSalesVelocity().catch((e) => logger.warn("velocity skipped", e && e.message));
     try { await pullShopifyStock(); } catch (e) { logger.warn("Shopify stock mirror skipped", e && e.message); }
     const s = await db.collection("settings").doc("shopify").get();
     return { synced: synced, lastSyncAt: (s.exists && s.data().lastSyncAt) || null };
@@ -925,6 +960,7 @@ exports.scheduledShopifySync = onSchedule({ schedule: "every 15 minutes", region
     const n = await pullShopifyOrders({ backfill: false, by: "schedule" });
     logger.info("scheduledShopifySync upserted " + n + " orders");
     await refreshShipments().catch((e) => logger.warn("shipment refresh skipped", e && e.message));
+    await computeSalesVelocity().catch((e) => logger.warn("velocity skipped", e && e.message));
   } catch (e) {
     logger.error("scheduledShopifySync failed", e && e.message);
   }
