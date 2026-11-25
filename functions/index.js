@@ -481,6 +481,10 @@ function mapShopifyOrder(o) {
     at: o.created_at ? new Date(o.created_at).toISOString() : new Date().toISOString(),
   };
   if (o.cancelled_at) rec.cancelled = true;
+  if (o.test) rec.test = true;
+  // Revenue after refunds (Shopify's current total), so refunded orders don't
+  // count at full price in traction.
+  rec.net = Number(o.current_total_price != null ? o.current_total_price : o.total_price) || 0;
   if (o.financial_status) rec.financial = String(o.financial_status);
   rec.items = (o.line_items || []).map((li) => ({
     size: bandSizeOf(li.variant_title) || bandSizeOf(li.title) || "",
@@ -669,9 +673,15 @@ async function pullShopifyOrders(opts) {
   for (const it of shipped) {
     await deductShopifyShipment(it.id, it.rec.n, it.rec.name).catch((e) => logger.warn("ship deduct failed", it.rec.n, e && e.message));
   }
-  await db.collection("settings").doc("shopify").set({
-    lastSyncAt: new Date().toISOString(), lastSyncCount: items.length, lastSyncBy: opts.by || "system",
-  }, { merge: true });
+  // Which permissions the store granted the app: without read_all_orders
+  // Shopify only shares the last 60 days of orders; without write_inventory
+  // stock can't be sent to Shopify. The app shows what's missing.
+  let scopes = null;
+  try { const sc = await shopifyGql("{ currentAppInstallation { accessScopes { handle } } }"); scopes = ((sc.currentAppInstallation && sc.currentAppInstallation.accessScopes) || []).map((x) => x.handle); } catch (e) { /* keep last */ }
+  const meta = { lastSyncAt: new Date().toISOString(), lastSyncCount: items.length, lastSyncBy: opts.by || "system" };
+  if (scopes) meta.scopes = scopes;
+  if (opts.backfill) meta.backfillAt = meta.lastSyncAt;
+  await db.collection("settings").doc("shopify").set(meta, { merge: true });
   return items.length;
 }
 

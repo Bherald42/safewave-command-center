@@ -2347,7 +2347,8 @@ let SHOPSTOCK=null, shopStockUnsub=null;
 function subscribeShopStock(){if(!hasFirestore())return;
   if(shopStockUnsub){try{shopStockUnsub()}catch(e){}}
   try{shopStockUnsub=firebase.firestore().collection('settings').doc('shopify').onSnapshot(d=>{
-    const v=d.exists?d.data():{};SHOPCONN={connected:!!v.connected,shopName:v.shopName||'',domain:v.domain||'',lastSyncAt:v.lastSyncAt||''};SHOPSTOCK=v.stock?shopStockFrom(v):null;
+    const v=d.exists?d.data():{};if(SHOPCONN&&v.backfillAt&&SHOPCONN.backfillAt!==v.backfillAt&&typeof RAISE_ORDERS!=='undefined'){RAISE_ORDERS=null}
+    SHOPCONN={connected:!!v.connected,shopName:v.shopName||'',domain:v.domain||'',lastSyncAt:v.lastSyncAt||'',scopes:Array.isArray(v.scopes)?v.scopes:null,backfillAt:v.backfillAt||''};SHOPSTOCK=v.stock?shopStockFrom(v):null;
     if(v.velocity&&v.velocity.per){VELO=v.velocity;SIZES.forEach(z=>{const r=v.velocity.per[z];if(r&&typeof r.burn==='number')BURN[z]=r.burn})}
     const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
   },e=>{})}catch(e){}}
@@ -2824,6 +2825,7 @@ function renderInventoryTab(body){
     html+='<div class="inv-row"><span><b>Covington here</b></span><span>'+cov('S')+'</span><span>'+cov('M')+'</span><span>'+cov('L')+'</span><span><b>'+totalAvail()+'</b></span></div></div>';
     const lp=LASTPUSH;
     html+='<div class="note" style="margin-top:12px">'+(off.length?(ahead.length?'<b style="color:var(--amber)">Shopify shows more '+ahead.map(z=>SIZELABEL[z]).join(', ')+' on the shelf than Covington has.</b> ':'<b style="color:var(--amber)">Shopify’s shelf count is off for '+off.map(z=>SIZELABEL[z]).join(', ')+'.</b> '):'<b>Shopify’s shelf count matches Covington.</b> ')+'“Can sell” is the shelf count minus bands held for orders that haven’t shipped. Shopify refreshes every 15 minutes'+(lp&&lp.at?'; last sent from here '+esc(ageStr(lp.at))+(lp.by?' by '+esc(lp.by):''):'')+'.</div>';
+    if(canPushStock()&&shopMissingScope('write_inventory'))html+='<div class="note" style="margin-top:10px;border-color:var(--amber)"><b style="color:var(--amber)">Shopify hasn’t given the Command Center permission to change stock yet.</b> Add the <b>write_inventory</b> permission to the Shopify app so Send Covington counts and automatic stock updates can reach Shopify.</div>';
     if(canPushStock())html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn'+(off.length?' primary':'')+'" id="push-stock-btn" onclick="pushStockToShopify()"'+(pushingStock?' disabled':'')+'>'+(pushingStock?'Sending…':'Send Covington counts to Shopify')+'</button></div>';
   }
   html+='<div class="note" style="margin-top:12px">Covington ships to customers and clears QC. Pace NY is upstream (2-wk transfer). China is production ('+CHINA_LEAD_MONTHS+'-mo lead). Stock moves update every place it’s counted: shipping here or in Shopify takes the band off Covington and Shopify; a restocked return or a Pace transfer received adds it to both; editing Covington’s count changes Shopify’s by the same amount.</div>';
@@ -9521,10 +9523,15 @@ async function loadRaiseOrders(){if(raiseOrdersLoading||RAISE_ORDERS)return;rais
   catch(e){RAISE_ORDERS=(typeof ordersList==='function'?ordersList():[])}
   raiseOrdersLoading=false;raiseRerender()}
 function orderMs(o){const t=o.at?Date.parse(o.at):NaN;if(!isNaN(t))return t;return (typeof recMs==='function')?recMs(o):null}
-function tractionStats(){const os=(RAISE_ORDERS||[]).filter(o=>!/^(DEMO|#TEST)/i.test(o.n||''));const now=new Date();const months=[];
+// What an order actually brought in: Shopify's total after refunds when we have
+// it (older synced orders: refunded/voided count as 0). Test, demo and
+// cancelled orders don't count.
+function orderNet(o){if(o.net!=null)return Number(o.net)||0;if(/refunded|voided/i.test(o.financial||'')&&!/partially/i.test(o.financial||''))return 0;return Number(o.total)||0}
+function shopMissingScope(h){return !!(SHOPCONN&&SHOPCONN.scopes&&SHOPCONN.scopes.indexOf(h)<0)}
+function tractionStats(){const os=(RAISE_ORDERS||[]).filter(o=>!/^(DEMO|#TEST)/i.test(o.n||'')&&!o.test&&!o.cancelled);const now=new Date();const months=[];
   for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({key:d.getFullYear()+'-'+d.getMonth(),label:d.toLocaleDateString('en-US',{month:'short'}),rev:0,n:0})}
   let ttm=0,n90=0,r90=0,cnt=0;const t90=Date.now()-90*864e5,t365=Date.now()-365*864e5;
-  os.forEach(o=>{const ms=orderMs(o);if(ms==null)return;const d=new Date(ms);const m=months.find(x=>x.key===d.getFullYear()+'-'+d.getMonth());const v=Number(o.total)||0;
+  os.forEach(o=>{const ms=orderMs(o);if(ms==null)return;const d=new Date(ms);const m=months.find(x=>x.key===d.getFullYear()+'-'+d.getMonth());const v=orderNet(o);
     if(m){m.rev+=v;m.n++}if(ms>=t365){ttm+=v;cnt++}if(ms>=t90){r90+=v;n90++}});
   const last=months[10],prev=months[9];const mom=prev&&prev.rev?Math.round((last.rev-prev.rev)/prev.rev*100):null;
   const S=salesAccts();const won=S.filter(a=>a.stage==='Won');const arr=won.reduce((s,a)=>s+(Number((a.metrics||{}).mrr)||0)*12,0);const whole=won.reduce((s,a)=>s+acctRevenue(a).wholesale,0);
@@ -9533,8 +9540,12 @@ function tractionStats(){const os=(RAISE_ORDERS||[]).filter(o=>!/^(DEMO|#TEST)/i
   return {months:months,ttm:ttm,orders:cnt,r90:r90,n90:n90,aov:cnt?ttm/cnt:0,mom:mom,customers:won.length,arr:arr,wholesale:whole,pipe:pipeStats(),shipped:shipped,returns:rets}}
 function tractionHTML(){if(!RAISE_ORDERS){loadRaiseOrders();return '<div class="card"><div class="d">Loading Shopify history…</div></div>'}
   const t=tractionStats();const bars=t.months.map(m=>({label:m.label,v:Math.round(m.rev),title:m.label+': '+fmtMoney(m.rev)+' · '+m.n+' orders'}));
-  let h='<div class="tiles" style="margin-bottom:12px">'
-    +'<div class="tile"><div class="n">'+fmtMoney(t.ttm)+'</div><div class="l">Shopify revenue · 12 mo</div></div>'
+  const oldest=(RAISE_ORDERS||[]).reduce((mn,o)=>{const ms=orderMs(o);return ms!=null&&(mn==null||ms<mn)?ms:mn},null);
+  const partial=shopMissingScope('read_all_orders')||(oldest!=null&&oldest>Date.now()-330*864e5&&!(SHOPCONN&&SHOPCONN.backfillAt&&SHOPCONN.scopes&&!shopMissingScope('read_all_orders')));
+  let h=partial?'<div class="card" style="border-color:var(--amber);margin-bottom:12px"><span class="pill amber"><span class="dot"></span>PARTIAL HISTORY</span><div class="t" style="margin-top:7px">These numbers only cover orders since '+(oldest?esc(new Date(oldest).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})):'the store was connected')+'</div><div class="d">'
+      +(shopMissingScope('read_all_orders')?'Shopify only shares the last 60 days of orders with the Command Center’s app. Add the <b>read_all_orders</b> permission to the Shopify app, then tap <b>Backfill</b> on Operations → Orders to pull the full history.':'Tap <b>Backfill</b> on Operations → Orders to pull the full order history from Shopify.')+'</div></div>':'';
+  h+='<div class="tiles" style="margin-bottom:12px">'
+    +'<div class="tile"><div class="n">'+fmtMoney(t.ttm)+'</div><div class="l">Shopify revenue · 12 mo (after refunds)</div></div>'
     +'<div class="tile"><div class="n">'+t.orders+'</div><div class="l">Orders · 12 mo</div></div>'
     +'<div class="tile"><div class="n">'+fmtMoney(t.aov)+'</div><div class="l">Avg order</div></div>'
     +'<div class="tile"><div class="n" style="color:'+(t.mom==null?'var(--text)':t.mom>=0?'var(--good)':'var(--amber)')+'">'+(t.mom==null?'—':(t.mom>=0?'+':'')+t.mom+'%')+'</div><div class="l">Last month vs prior</div></div></div>';
