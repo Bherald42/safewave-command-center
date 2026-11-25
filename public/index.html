@@ -483,9 +483,14 @@ input[type=date]{color-scheme:dark}
 /* "COMMAND CENTER" beside the logo: the team tool, not the customer app. */
 .brand-logo,.brand-logo:hover{text-decoration:none}
 .size-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.velo-wrap{margin-top:10px}.velo{display:block;width:100%;height:52px}
-.velo rect.on{fill:var(--wave);opacity:.45}.velo rect.on.recent{opacity:1}.velo rect.off{fill:var(--line)}
-.velo .lbl{font:600 9px var(--font-b);fill:var(--faint)}
+.velo-wrap{margin-top:12px}
+.velo{max-width:440px;margin-bottom:4px}
+.velo-cols{display:flex;align-items:flex-end;gap:5px;height:56px}
+.vc{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.vc i{display:block;width:100%;max-width:26px;border-radius:4px 4px 1px 1px;background:var(--wave);opacity:.4}
+.vc.recent i{opacity:1}.vc.zero i{background:var(--line);opacity:1}
+.vn{font:600 10px/1 var(--font-b);color:var(--faint);margin-bottom:3px;min-height:10px}.vc.recent .vn{color:var(--text)}
+.velo-axis{display:flex;justify-content:space-between;font:600 10.5px var(--font-b);color:var(--faint);margin-top:4px;border-top:1px solid var(--line);padding-top:4px}
 .prox{display:flex;align-items:center;gap:14px}
 .prox-bars{display:flex;align-items:flex-end;gap:4px;height:28px}
 .prox-bars i{display:block;width:7px;border-radius:2px;transition:background .3s}
@@ -2774,11 +2779,12 @@ function saveInvEdit(){const k=invEditLoc;if(!k)return;const prev=Object.assign(
 function veloTrend(z){const r=VELO&&VELO.per&&VELO.per[z];if(!r)return null;if(!r.prev4&&!r.r4)return null;
   if(!r.prev4)return {txt:'new demand',tone:'--wave',arrow:'↑'};const ch=(r.r4-r.prev4)/r.prev4;
   if(Math.abs(ch)<0.15)return {txt:'steady',tone:'--muted',arrow:'→'};return {txt:(ch>0?'up ':'down ')+Math.round(Math.abs(ch)*100)+'% vs prior 4 wks',tone:ch>0?'--wave':'--muted',arrow:ch>0?'↑':'↓'}}
-// 12 weekly bars (oldest → this week) with the week's count on hover.
-function veloBars(z){const w=VELO&&VELO.weekly&&VELO.weekly[z];if(!w)return '';const max=Math.max(1,...w);const W=240,H=40,g=3,bw=(W-g*(w.length-1))/w.length;
-  return '<svg class="velo" viewBox="0 0 '+W+' '+(H+12)+'" preserveAspectRatio="none" role="img" aria-label="'+SIZELABEL[z]+' sold per week, last '+w.length+' weeks">'
-    +w.map((n,i)=>{const h=n?Math.max(3,n/max*H):1.5;const x=i*(bw+g);const ago=w.length-1-i;return '<rect x="'+x.toFixed(1)+'" y="'+(H-h).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2" class="'+(n?'on':'off')+(i>=w.length-4?' recent':'')+'"><title>'+(ago?ago+' wk'+(ago>1?'s':'')+' ago':'This week')+': '+n+' sold</title></rect>'}).join('')
-    +'<text x="0" y="'+(H+11)+'" class="lbl">12 wks ago</text><text x="'+W+'" y="'+(H+11)+'" text-anchor="end" class="lbl">this week</text></svg>'}
+// 12 weekly bars (oldest → this week): plain HTML so they keep their shape at any
+// width; each bar carries its week's count, the last 4 weeks are emphasised.
+function veloBars(z){const w=VELO&&VELO.weekly&&VELO.weekly[z];if(!w)return '';const max=Math.max(1,...w);
+  return '<div class="velo" role="img" aria-label="'+SIZELABEL[z]+' sold per week, last '+w.length+' weeks: '+w.join(', ')+'"><div class="velo-cols">'
+    +w.map((n,i)=>{const ago=w.length-1-i;return '<div class="vc'+(i>=w.length-4?' recent':'')+(n?'':' zero')+'" title="'+(ago?ago+' wk'+(ago>1?'s':'')+' ago':'This week')+': '+n+' sold"><span class="vn">'+(n||'')+'</span><i style="height:'+(n?Math.max(4,Math.round(n/max*40)):2)+'px"></i></div>'}).join('')
+    +'</div><div class="velo-axis"><span>12 wks ago</span><span>this week</span></div></div>'}
 function renderForecastTab(body){
   let html='';
   if(VELO&&VELO.per){const tot=k=>SIZES.reduce((a,z)=>a+((VELO.per[z]||{})[k]||0),0);const t4=tot('r4'),t12=tot('r12'),p4=tot('prev4');
