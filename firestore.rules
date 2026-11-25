@@ -73,6 +73,12 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if canOperate();
     }
+    // Account meetings: one record, many attendees (Enterprise → account →
+    // Next meeting; each attendee's Home). Team-shared like the CRM; Jared reads.
+    match /meetings/{id} {
+      allow read: if signedIn();
+      allow write: if canOperate();
+    }
 
     // Support tickets — shared queue (email-ingested + manually added).
     match /tickets/{id} {
@@ -121,8 +127,12 @@ service cloud.firestore {
     match /build_tasks/{id} {
       allow read: if signedIn();
       allow create, delete: if signedIn() && !isOversightEmail();
+      // Oversight can post updates; Trevon (oversight but not an observer) can
+      // also move a task's status. Jared stays read-only.
       allow update: if signedIn() && (!isOversightEmail()
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updates']));
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updates'])
+        || (request.auth.token.email == 'trevon@safewavetech.com'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'statusAt', 'statusBy', 'doneAt', 'updates'])));
     }
     match /build_projects/{id} {
       allow read: if signedIn();
