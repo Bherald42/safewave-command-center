@@ -58,6 +58,11 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   are (`orders.ship`: carrier status, ETA, delivered date — `refreshShipments` on
   every sync); Orders → To ship shows the sizes, shipped ones split into On the
   way / Delivered.
+  The fulfill sheet connects the actual band over Web Bluetooth (`ffConnectBand`):
+  reads firmware (OTA READ_VER), battery and System ID (`hw.hwId`), offers an
+  update to the newest Production firmware via the Release Checks flasher
+  (`qcOtaFlashStart(relId,{device})`), buzz-tests it, ticks the checklist, and
+  saves the band's identity on `bands/{serial}.hw` + `fulfillments.band`.
 - **Invoices & customer POs** (Enterprise → Invoices & POs). Invoices are
   numbered from `counters/invoices`, carry line items, terms, payments and a
   history; sent invoices are voided, never deleted. The PDF is drawn server-side
