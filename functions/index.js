@@ -480,6 +480,13 @@ function mapShopifyOrder(o) {
     source: "shopify",
     at: o.created_at ? new Date(o.created_at).toISOString() : new Date().toISOString(),
   };
+  rec.items = (o.line_items || []).map((li) => ({
+    size: bandSizeOf(li.variant_title) || bandSizeOf(li.title) || "",
+    qty: Number(li.quantity) || 0,
+    title: String(li.title || "").slice(0, 80),
+  })).filter((x) => x.qty > 0);
+  const fl = (o.fulfillments || []).filter((f) => f.status !== "cancelled").pop();
+  if (fl && fl.shipment_status) rec.shipStatus = String(fl.shipment_status).toUpperCase();
   if (f0) {
     rec.tracking = f0.tracking_number || (f0.tracking_numbers && f0.tracking_numbers[0]) || "";
     rec.trackingUrl = f0.tracking_url || (f0.tracking_urls && f0.tracking_urls[0]) || "";
@@ -664,6 +671,33 @@ async function pullShopifyOrders(opts) {
     lastSyncAt: new Date().toISOString(), lastSyncCount: items.length, lastSyncBy: opts.by || "system",
   }, { merge: true });
   return items.length;
+}
+
+// Where shipped orders are now: Shopify follows the carrier (in transit, out
+// for delivery, delivered, a failed attempt) and estimates the delivery day.
+// Refreshes every shipped order from the last 60 days that hasn't been
+// delivered yet, so the Orders screen can tell "on the way" from "delivered".
+async function refreshShipments() {
+  const since = new Date(Date.now() - 60 * 864e5).toISOString();
+  const qs = await db.collection("orders").where("ful", "==", "FULFILLED").get();
+  const todo = qs.docs.filter((d) => { const o = d.data(); return /^\d+$/.test(d.id) && (o.at || "") >= since && !(o.ship && o.ship.status === "DELIVERED"); });
+  let n = 0;
+  for (let i = 0; i < todo.length; i += 50) {
+    const chunk = todo.slice(i, i + 50);
+    const d = await shopifyGql("query($ids: [ID!]!) { nodes(ids: $ids) { ... on Order { id fulfillments(first: 5) { status displayStatus deliveredAt inTransitAt estimatedDeliveryAt } } } }",
+      { ids: chunk.map((x) => "gid://shopify/Order/" + x.id) });
+    const batch = db.batch();
+    (d.nodes || []).forEach((nd) => {
+      if (!nd || !nd.id) return;
+      const f = (nd.fulfillments || []).filter((x) => x.status !== "CANCELLED").pop();
+      if (!f) return;
+      const ship = { status: f.displayStatus || "", deliveredAt: f.deliveredAt || null, inTransitAt: f.inTransitAt || null, eta: f.estimatedDeliveryAt || null, at: new Date().toISOString() };
+      batch.set(db.collection("orders").doc(String(nd.id).split("/").pop()), { ship }, { merge: true });
+      n++;
+    });
+    await batch.commit();
+  }
+  return n;
 }
 
 // Callable: "Sync now" / "Backfill history" from the Stock screen.
@@ -870,6 +904,7 @@ exports.syncShopifyOrders = onCall({ region: REGION, timeoutSeconds: 120 }, asyn
   try {
     const by = (request.auth.token && request.auth.token.email) || request.auth.uid;
     const synced = await pullShopifyOrders({ backfill: !!(request.data && request.data.backfill), by: by });
+    await refreshShipments().catch((e) => logger.warn("shipment refresh skipped", e && e.message));
     try { await pullShopifyStock(); } catch (e) { logger.warn("Shopify stock mirror skipped", e && e.message); }
     const s = await db.collection("settings").doc("shopify").get();
     return { synced: synced, lastSyncAt: (s.exists && s.data().lastSyncAt) || null };
@@ -889,6 +924,7 @@ exports.scheduledShopifySync = onSchedule({ schedule: "every 15 minutes", region
   try {
     const n = await pullShopifyOrders({ backfill: false, by: "schedule" });
     logger.info("scheduledShopifySync upserted " + n + " orders");
+    await refreshShipments().catch((e) => logger.warn("shipment refresh skipped", e && e.message));
   } catch (e) {
     logger.error("scheduledShopifySync failed", e && e.message);
   }
