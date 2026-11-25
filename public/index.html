@@ -2049,6 +2049,8 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
     <div class="rolepick" id="ff-size">
       <button data-v="S" onclick="setTimeout(ffBandHint,0)">Small</button><button data-v="M" onclick="setTimeout(ffBandHint,0)">Medium</button><button data-v="L" class="on" onclick="setTimeout(ffBandHint,0)">Large</button>
     </div>
+    <p class="d" style="font-weight:600;color:var(--text);margin:14px 0 6px">The band going in the box</p>
+    <div id="ff-ble" class="card" style="margin:0"></div>
     <div class="row" style="gap:8px;margin-top:12px">
       <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Assigned to</p><select class="field" id="ff-assignee" style="margin:0"></select></div>
       <div style="flex:1"><p class="d" style="font-weight:600;color:var(--text);margin:0 0 6px">Firmware flashed</p><input class="field" id="ff-firmware" placeholder="e.g. v2.1.4" style="margin:0"></div>
@@ -2506,7 +2508,7 @@ function fulfilledCard(o){const f=FULF[o.n]||{};const track=f.tracking||o.tracki
   // Compact row: order · customer · shipment status. Reprint / return sit inside the row's details.
   const ss=shipState(o);const sz=SIZELABEL[f.size]||orderBands(o).map(x=>SIZELABEL[x.size]+(x.qty>1?' × '+x.qty:'')).join(', ')||'—';
   return '<details class="order-row'+(ss.delivered?' delivered':'')+'"'+(failed?' open':'')+'><summary><div class="grow" style="min-width:0"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(sz)+(ss.note?' · <b style="color:var('+(ss.problem?'--amber':'--text')+')">'+esc(ss.note)+'</b>':'')+(track?' · tracking '+esc(track):' · no tracking yet')+'</div></div><span class="pill '+ss.pill+'">'+ss.label+'</span></summary>'
-    +'<div class="or-body"><div class="d">'+(SIZELABEL[f.size]||'—')+' · '+esc(f.serial||'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+tr+'</div>'+shopifyLine(f)
+    +'<div class="or-body"><div class="d">'+(SIZELABEL[f.size]||'—')+' · '+esc(f.serial||'')+(f.band&&f.band.hwId?' · band ID '+esc(f.band.hwId):'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+tr+'</div>'+shopifyLine(f)
     +'<div class="row" style="gap:8px;margin-top:9px;flex-wrap:wrap">'+(failed?'<button class="btn" style="flex:1" onclick="pushShopifyFulfill(\''+esc(o.n)+'\')">Retry Shopify</button>':'')+'<button class="btn ghost sm" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Reprint label</button><button class="btn ghost sm" style="flex:1" onclick="startReturn(\''+esc(o.n)+'\')">Start return</button></div></div></details>'}
 function openFulfill(n){const o=ordersList().find(x=>x.n===n);if(!o)return;ffOrder=n;
   document.getElementById('ff-order').textContent=o.n+' · '+o.name;
@@ -2517,11 +2519,93 @@ function openFulfill(n){const o=ordersList().find(x=>x.n===n);if(!o)return;ffOrd
   document.querySelectorAll('#ff-qc input').forEach(c=>c.checked=false);
   const ordSz=(orderBands(o)[0]||{}).size||'L';document.querySelectorAll('#ff-size button').forEach(b=>b.classList.toggle('on',b.dataset.v===ordSz));
   document.getElementById('ff-signer').textContent=(CURRENT_USER&&CURRENT_USER.name)||'you';
+  if(ffBandDev&&ffBandDev.gatt&&ffBandDev.gatt.connected){try{ffBandDev.gatt.disconnect()}catch(e){}}
+  ffBand=null;ffBandDev=null;ffBleBusy='';if(typeof qcLoadedR!=='undefined'&&!qcLoadedR&&typeof subscribeQC==='function')subscribeQC();ffBleRender();
   ffBandHint();
   closeSheets();openSheet('sh-fulfill');
 }
+/* ---- Fulfill: connect the actual band ----
+   Connect over Bluetooth, read what the band is (firmware, battery, its IDs),
+   bring it to the current firmware, buzz it, and tie it to this customer and
+   order. Uses the same band services as the Safewave app and the Release
+   Checks flasher. Web Bluetooth runs in Chrome/Edge on a computer or Android
+   (and the Bluefy browser on iPhone); Safari can't. */
+const FF_VIB_CHAR='12d9cf1a-751b-11ed-a1eb-0242ac120002',FF_BAT_CHAR='47cd799a-8233-11ed-a1eb-0242ac120002',FF_BAND_SVC='0000fffe-0000-1000-8000-00805f9b34fb';
+let ffBand=null,ffBandDev=null,ffBleBusy='',ffFlashTimer=null;
+function ffBleOK(){return typeof navigator!=='undefined'&&!!navigator.bluetooth}
+function verNums(v){const m=String(v||'').match(/(\d+)\.(\d+)\.(\d+)/);return m?[+m[1],+m[2],+m[3]]:null}
+function verCmp(a,b){const x=verNums(a),y=verNums(b);if(!x||!y)return 0;for(let i=0;i<3;i++){if(x[i]!==y[i])return x[i]<y[i]?-1:1}return 0}
+// The firmware customers should get: the newest Production firmware release that
+// has an image uploaded (else the newest with an image).
+function ffLatestFw(){const fw=Object.values(RELEASES||{}).filter(r=>r.product==='firmware'&&r.image&&r.image.url&&verNums(r.version));
+  const prod=fw.filter(r=>r.channel==='prod');const pool=prod.length?prod:fw;return pool.sort((a,b)=>verCmp(b.version,a.version))[0]||null}
+function ffBleRender(){const el=document.getElementById('ff-ble');if(!el)return;const b=ffBand,latest=ffLatestFw();
+  if(!ffBleOK()&&!b){el.innerHTML='<div class="d">Connecting a band needs Bluetooth in the browser: <b>Chrome or Edge on a computer</b>, Chrome on Android, or the <b>Bluefy</b> browser on iPhone (Safari can’t). You can still fill in the firmware below by hand.</div>';return}
+  if(!b){el.innerHTML='<div class="d" style="margin-bottom:10px">Turn the band on and hold it near this device. Connecting reads its firmware, battery and ID, and links that exact band to this order.</div><button class="btn" '+(ffBleBusy?'disabled':'')+' onclick="ffConnectBand()">'+(ffBleBusy==='connect'?'Connecting…':'🔗 Connect band')+'</button>';return}
+  const behind=latest&&b.fwVer&&verCmp(b.fwVer,latest.version)<0;const current=latest&&b.fwVer&&verCmp(b.fwVer,latest.version)>=0;
+  let h='<div class="row" style="align-items:flex-start;gap:10px"><div class="grow" style="min-width:0"><div class="t">'+esc(b.name||'Safewave Band')+' <span class="pill '+(ffBandDev&&ffBandDev.gatt&&ffBandDev.gatt.connected?'good':'dim')+'" style="font-size:9.5px">'+(ffBandDev&&ffBandDev.gatt&&ffBandDev.gatt.connected?'CONNECTED':'READ')+'</span></div>'
+    +'<div class="d">Band ID <b style="font-family:var(--font-m,monospace)">'+esc(b.hwId)+'</b>'+(b.model?' · '+esc(b.model):'')+'</div>'
+    +'<div class="d">Firmware <b>'+esc(b.fwVer||'unknown')+'</b>'+(current?' <span style="color:var(--good)">· current</span>':behind?' <span style="color:var(--amber)">· '+esc(latest.version)+' available</span>':'')+(b.battery!=null?' · Battery <b>'+b.battery+'%</b>'+(b.charging?' (charging)':''):'')+'</div></div></div>';
+  if(ffBleBusy==='flash'){h+='<div style="margin-top:10px"><div class="progress" style="height:8px"><i id="ff-ota-bar" style="width:'+(qcOta.pct||0)+'%"></i></div><div class="d" id="ff-ota-note" style="margin-top:6px">'+esc(qcOta.note||'Starting…')+'</div></div>'}
+  else{h+='<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
+    +(behind?'<button class="btn" style="flex:1 1 160px" '+(ffBleBusy?'disabled':'')+' onclick="ffUpdateFirmware()">⤓ Update to '+esc(latest.version)+'</button>':'')
+    +'<button class="btn ghost" style="flex:1 1 110px" '+(ffBleBusy?'disabled':'')+' onclick="ffBuzzBand()">'+(ffBleBusy==='buzz'?'Buzzing…':'📳 Buzz test')+'</button>'
+    +'<button class="btn ghost" style="flex:1 1 110px" '+(ffBleBusy?'disabled':'')+' onclick="ffConnectBand()">↻ '+(ffBleBusy==='connect'?'Reading…':'Re-read')+'</button></div>'}
+  if(b.knownSerial)h+='<div class="d" style="margin-top:8px">This band is already on file as <b>'+esc(b.knownSerial)+'</b>; it will be reissued to this customer, keeping its history.</div>';
+  el.innerHTML=h}
+async function ffReadBand(dev){
+  const server=dev.gatt.connected?dev.gatt:await dev.gatt.connect();await new Promise(r=>setTimeout(r,600));
+  const info={name:dev.name||'Safewave Band',browserId:dev.id,readAt:new Date().toISOString()};
+  // Firmware: the OTA service answers without a bond.
+  try{const svc=await server.getPrimaryService(OTA_SVC);const w=await svc.getCharacteristic(OTA_WRITE),n=await svc.getCharacteristic(OTA_NOTIFY);await n.startNotifications();
+    const v=await new Promise((res,rej)=>{const t=setTimeout(()=>rej(new Error('timeout')),6000);const on=e=>{clearTimeout(t);n.removeEventListener('characteristicvaluechanged',on);res(new Uint8Array(e.target.value.buffer.slice(0)))};n.addEventListener('characteristicvaluechanged',on);w.writeValueWithResponse(otaCmd(OTA_CMD.READ_VER)).catch(er=>{clearTimeout(t);rej(er)})});
+    const raw=(v[4]|(v[5]<<8)|(v[6]<<16)|(v[7]<<24))>>>0;info.fwRaw=raw;info.fwVer=(otaFmtVer(raw)||'').replace(/\s*\(.*$/,'')||null;try{await n.stopNotifications()}catch(_){}}catch(e){info.fwErr=(e&&e.message)||String(e)}
+  try{const ms=await server.getPrimaryService(FF_BAND_SVC);const bc=await ms.getCharacteristic(FF_BAT_CHAR);const bv=new Uint8Array((await bc.readValue()).buffer);if(bv.length){info.battery=Math.min(100,bv[0]);info.charging=!!bv[1]}}catch(e){}
+  try{const ds=await server.getPrimaryService('device_information');
+    const rd=async(id)=>{try{const c=await ds.getCharacteristic(id);return new Uint8Array((await c.readValue()).buffer)}catch(e){return null}};
+    const txt=b=>b?new TextDecoder().decode(b).replace(/\0+$/,'').trim():'';
+    const sys=await rd('system_id');if(sys&&sys.some(x=>x))info.systemId=Array.from(sys).map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();
+    info.model=txt(await rd('model_number_string'))||undefined;info.hwRev=txt(await rd('hardware_revision_string'))||undefined;
+    if(!info.fwVer){const fr=txt(await rd('firmware_revision_string'));if(fr)info.fwVer=fr}}catch(e){}
+  // The band's lasting ID: its System ID (set at the factory). If a band doesn't
+  // expose one, fall back to this browser's ID for it.
+  info.hwId=info.systemId||('BLE-'+String(dev.id||'').replace(/[^A-Za-z0-9]/g,'').slice(0,12).toUpperCase());
+  const known=Object.values(BANDS||{}).find(x=>x&&x.hw&&x.hw.hwId===info.hwId);if(known)info.knownSerial=known.serial;
+  Object.keys(info).forEach(k=>info[k]===undefined&&delete info[k]);
+  return info}
+async function ffConnectBand(){if(ffBleBusy)return;if(!ffBleOK()){toast('This browser can’t use Bluetooth — use Chrome on a computer or Android, or Bluefy on iPhone');return}
+  ffBleBusy='connect';ffBleRender();
+  try{let dev=ffBandDev;
+    if(!dev){dev=await navigator.bluetooth.requestDevice({filters:[{services:[FF_BAND_SVC]},{namePrefix:'Safewave'}],optionalServices:[OTA_SVC,FF_BAND_SVC,'battery_service','device_information']});
+      ffBandDev=dev;dev.addEventListener('gattserverdisconnected',()=>{if(!ffBleBusy)ffBleRender()})}
+    ffBand=await ffReadBand(dev);
+    // Fill what the band just told us into the checklist.
+    const fwEl=document.getElementById('ff-firmware');if(fwEl&&ffBand.fwVer)fwEl.value=ffBand.fwVer;
+    const tick=(k,on)=>{const c=document.querySelector('#ff-qc input[data-k="'+k+'"]');if(c&&on)c.checked=true};
+    tick('ble',true);tick('charge',ffBand.battery!=null&&ffBand.battery>=50);
+    const latest=ffLatestFw();tick('firmware',!!(latest&&ffBand.fwVer&&verCmp(ffBand.fwVer,latest.version)>=0));
+    toast('✓ Band connected'+(ffBand.fwVer?' · firmware '+ffBand.fwVer:'')+(ffBand.battery!=null?' · '+ffBand.battery+'%':''));
+  }catch(e){const m=(e&&e.message)||'';if(!/cancel|chooser|User cancelled/i.test(m))toast('Couldn’t connect — '+(m||'try again'))}
+  ffBleBusy='';ffBleRender();ffBandHint()}
+async function ffBuzzBand(){if(ffBleBusy||!ffBandDev)return;ffBleBusy='buzz';ffBleRender();
+  try{const server=ffBandDev.gatt.connected?ffBandDev.gatt:await ffBandDev.gatt.connect();const ms=await server.getPrimaryService(FF_BAND_SVC);const c=await ms.getCharacteristic(FF_VIB_CHAR);
+    await c.writeValueWithResponse(new Uint8Array([60,3,50,50]));
+    ffBleBusy='';ffBleRender();
+    if(confirm('Did the band buzz 3 times?')){const c2=document.querySelector('#ff-qc input[data-k="vibration"]');if(c2)c2.checked=true;toast('✓ Vibration test passed')}
+  }catch(e){ffBleBusy='';ffBleRender();toast('Buzz didn’t send — '+((e&&e.message)||'try again'))}}
+async function ffUpdateFirmware(){const latest=ffLatestFw();if(ffBleBusy||!ffBandDev||!latest)return;
+  ffBleBusy='flash';ffBleRender();
+  ffFlashTimer=setInterval(()=>{const bar=document.getElementById('ff-ota-bar'),nt=document.getElementById('ff-ota-note');if(bar)bar.style.width=(qcOta.pct||0)+'%';if(nt)nt.textContent=qcOta.note||''},400);
+  try{await qcOtaFlashStart(latest.id,{device:ffBandDev,confirmText:'Update this band to firmware '+latest.version+' over Bluetooth?\n\nKeep the band next to this device until it finishes (a few minutes). The browser updater is still being proven on hardware: if it fails, the band keeps its current firmware, but an interrupted update can occasionally need a cable to recover. The Safewave app’s Firmware Update is the other way to do this.'})}
+  catch(e){}
+  clearInterval(ffFlashTimer);ffFlashTimer=null;ffBleBusy='';
+  if(qcOta.phase==='done'){try{ffBand=await ffReadBand(ffBandDev)}catch(e){}const fwEl=document.getElementById('ff-firmware');if(fwEl&&ffBand&&ffBand.fwVer)fwEl.value=ffBand.fwVer;
+    if(ffBand&&ffBand.fwVer&&verCmp(ffBand.fwVer,latest.version)>=0){const c=document.querySelector('#ff-qc input[data-k="firmware"]');if(c)c.checked=true;toast('✓ Band updated to '+latest.version)}
+    else toast(qcOta.note||'Update sent — re-read the band to confirm')}
+  else if(qcOta.phase==='fail')toast(qcOta.note||'Update didn’t finish — the band keeps its current firmware');
+  ffBleRender()}
 function ffBandHint(){const sz=document.querySelector('#ff-size button.on');const size=sz?sz.dataset.v:'L';const rf=availableRefurb(size);const el=document.getElementById('ff-band');if(!el)return;
-  if(rf.length){el.style.display='';el.innerHTML='♻︎ A refurbished '+SIZELABEL[size]+' band is available ('+esc(rf[0].serial)+') — it will be reissued to this customer, keeping its serial and history.'}else{el.style.display='none'}}
+  if(rf.length&&!ffBand){el.style.display='';el.innerHTML='♻︎ A refurbished '+SIZELABEL[size]+' band is available ('+esc(rf[0].serial)+') — it will be reissued to this customer, keeping its serial and history.'}else{el.style.display='none'}}
 function completeFulfillment(){const o=ordersList().find(x=>x.n===ffOrder);if(!o)return;
   const sz=document.querySelector('#ff-size button.on');const size=sz?sz.dataset.v:'L';
   if(cov(size)<=0){toast(SIZELABEL[size]+' is 0 in Covington — transfer from Pace first');return}
@@ -2531,13 +2615,16 @@ function completeFulfillment(){const o=ordersList().find(x=>x.n===ffOrder);if(!o
   const tracking=document.getElementById('ff-tracking').value.trim();
   const by=(CURRENT_USER&&CURRENT_USER.name)||'';const now=new Date().toISOString();
   // reuse a refurbished band of this size if one exists, else mint a new serial
-  const rf=availableRefurb(size);const reuse=rf[0];
+  const knownBand=ffBand&&ffBand.knownSerial?BANDS[ffBand.knownSerial]:null;
+  if(knownBand&&knownBand.status==='shipped'&&knownBand.order&&knownBand.order!==ffOrder&&!confirm('This band is on file as shipped to '+(knownBand.customer||'another customer')+' ('+knownBand.order+'). Reissue it to this order anyway?'))return;
+  const rf=availableRefurb(size);const reuse=knownBand||(ffBand?null:rf[0]);
   const serial=reuse?reuse.serial:('SW-'+size+'-'+Date.now().toString(36).toUpperCase().slice(-5));
   const band=Object.assign(reuse||{serial:serial,size:size,firstShippedAt:now,history:[]},{status:'shipped',order:ffOrder,customer:o.name,firmware:firmware,tracking:tracking,shippedAt:now,shippedBy:by});
+  if(ffBand){band.hw=Object.assign({},ffBand);delete band.hw.knownSerial;band.size=size}
   band.history=(band.history||[]).concat([{at:now,event:reuse?'reissued':'shipped',order:ffOrder,customer:o.name,by:by}]);
   const demo=isDemoOrder(ffOrder);
   BANDS[serial]=band;if(!demo)persistBand(band);
-  const rec={order:ffOrder,name:o.name,size:size,assignee:document.getElementById('ff-assignee').value,qc:qc,firmware:firmware,tracking:tracking,serial:serial,reissued:!!reuse,signoffBy:by,signoffAt:now,status:'fulfilled'};
+  const rec={band:ffBand?{hwId:ffBand.hwId,name:ffBand.name||'',fw:ffBand.fwVer||'',battery:ffBand.battery==null?null:ffBand.battery,systemId:ffBand.systemId||''}:null,order:ffOrder,name:o.name,size:size,assignee:document.getElementById('ff-assignee').value,qc:qc,firmware:firmware,tracking:tracking,serial:serial,reissued:!!reuse,signoffBy:by,signoffAt:now,status:'fulfilled'};
   FULF[ffOrder]=rec;o.ful='FULFILLED';
   if(hasFirestore()&&!demo)firebase.firestore().collection('fulfillments').doc(ffOrder).set(rec).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
   if(!demo)invMove({covington:{[size]:-1}});else INV.covington[size]=Math.max(0,cov(size)-1);
@@ -4993,12 +5080,13 @@ async function qcBandDiag(){
     qcOta.running=false;renderQC();
   }
 }
-async function qcOtaFlashStart(){
+async function qcOtaFlashStart(relIdArg,opts){
+  opts=opts||{};
   if(qcOta.running)return;
-  const relId=(document.getElementById('qc-ota-rel')||{}).value;const rel=RELEASES[relId];const im=rel&&rel.image;
+  const relId=(typeof relIdArg==='string'&&relIdArg)||(document.getElementById('qc-ota-rel')||{}).value;const rel=RELEASES[relId];const im=rel&&rel.image;
   if(!im||!im.url){toast('Pick a firmware image');return}
   if(!(typeof navigator!=='undefined'&&navigator.bluetooth)){toast('Web Bluetooth needs desktop Chrome/Edge');return}
-  if(!confirm('Flash Firmware '+rel.version+' onto a band over Bluetooth?\n\nOnly do this on a spare band you can recover over JLink. The band keeps its current firmware if the flash fails, but this path is not yet hardware-verified.'))return;
+  if(opts.confirmText?!confirm(opts.confirmText):!confirm('Flash Firmware '+rel.version+' onto a band over Bluetooth?\n\nOnly do this on a spare band you can recover over JLink. The band keeps its current firmware if the flash fails, but this path is not yet hardware-verified.'))return;
   qcOta={running:true,phase:'fetch',pct:0,note:'Downloading image…',relId:relId,dev:null,log:[],curVer:null};renderQC();
   let dev,server,wch,nch;
   // Notify queue (mirrors the app's NotifyQueue): every band notification lands
@@ -5070,7 +5158,7 @@ async function qcOtaFlashStart(){
     // 0xFFFE service and 0x1812 (HID) in the main packet, so filter on those.
     // 02F0… (OTA) isn't advertised, so it stays in optionalServices for post-connect.
     const BAND_SVC='0000fffe-0000-1000-8000-00805f9b34fb';
-    dev=await navigator.bluetooth.requestDevice({filters:[{services:[BAND_SVC]},{namePrefix:'Safewave'}],optionalServices:[OTA_SVC,BAND_SVC]});
+    dev=opts.device||await navigator.bluetooth.requestDevice({filters:[{services:[BAND_SVC]},{namePrefix:'Safewave'}],optionalServices:[OTA_SVC,BAND_SVC]});
     qcOta.dev=dev;dev.addEventListener('gattserverdisconnected',()=>qcOtaLog('band disconnected','amber'));
     const sleep=ms=>new Promise(r=>setTimeout(r,ms));
     // (Re)connect, discover the OTA service + characteristics, and subscribe to
