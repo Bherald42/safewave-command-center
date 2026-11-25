@@ -58,6 +58,9 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   are (`orders.ship`: carrier status, ETA, delivered date — `refreshShipments` on
   every sync); Orders → To ship shows the sizes, shipped ones split into On the
   way / Delivered.
+  Stock Forecast plans from real Shopify sales: `computeSalesVelocity` (every
+  sync) writes `settings/shopify.velocity` — 12 weekly counts per size, 4/12-wk
+  averages, and `burn` = 60% last-4-wk + 40% last-12-wk, which feeds `BURN`.
   The fulfill sheet connects the actual band over Web Bluetooth (`ffConnectBand`):
   reads firmware (OTA READ_VER), battery and System ID (`hw.hwId`), offers an
   update to the newest Production firmware via the Release Checks flasher

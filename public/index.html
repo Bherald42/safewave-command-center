@@ -483,6 +483,9 @@ input[type=date]{color-scheme:dark}
 /* "COMMAND CENTER" beside the logo: the team tool, not the customer app. */
 .brand-logo,.brand-logo:hover{text-decoration:none}
 .size-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.velo-wrap{margin-top:10px}.velo{display:block;width:100%;height:52px}
+.velo rect.on{fill:var(--wave);opacity:.45}.velo rect.on.recent{opacity:1}.velo rect.off{fill:var(--line)}
+.velo .lbl{font:600 9px var(--font-b);fill:var(--faint)}
 .prox{display:flex;align-items:center;gap:14px}
 .prox-bars{display:flex;align-items:flex-end;gap:4px;height:28px}
 .prox-bars i{display:block;width:7px;border-radius:2px;transition:background .3s}
@@ -2236,7 +2239,10 @@ const NAV_ITEMS = [
 /* ================= STOCK · INVENTORY & FULFILLMENT ================= */
 const CHINA_LEAD_MONTHS=2, CHINA_LEAD_WEEKS=Math.round(CHINA_LEAD_MONTHS*4.345), TRANSFER_WEEKS=2, SAFETY_WEEKS=2;
 const SIZES=['S','M','L'], SIZELABEL={S:'Small',M:'Medium',L:'Large'};
-const BURN={S:1.5,M:2.0,L:1.5}; /* per-week velocity from Shopify 6-wk order rate; live when Shopify backend connects */
+// Bands sold per week, per size. Real numbers come from Shopify orders: the
+// backend recomputes settings/shopify.velocity on every sync (60% last 4 wks +
+// 40% last 12 wks). These starting values are only used before the first sync.
+const BURN={S:1.5,M:2.0,L:1.5};let VELO=null;
 const LOCS=[['covington','Covington, KY','Ships from here · QC pool'],['pace','Pace NY','Upstream · 2-wk transfer'],['china','China','Production · '+CHINA_LEAD_MONTHS+'-mo lead']];
 let INV={covington:{S:20,M:0,L:9},pace:{S:80,M:380,L:80},china:{S:0,M:0,L:0}};
 let FULF={}, stockTab='fulfill', invEditLoc=null, ffOrder=null;
@@ -2280,6 +2286,7 @@ function subscribeShopStock(){if(!hasFirestore())return;
   if(shopStockUnsub){try{shopStockUnsub()}catch(e){}}
   try{shopStockUnsub=firebase.firestore().collection('settings').doc('shopify').onSnapshot(d=>{
     const v=d.exists?d.data():{};SHOPCONN={connected:!!v.connected,shopName:v.shopName||'',domain:v.domain||'',lastSyncAt:v.lastSyncAt||''};SHOPSTOCK=v.stock?shopStockFrom(v):null;
+    if(v.velocity&&v.velocity.per){VELO=v.velocity;SIZES.forEach(z=>{const r=v.velocity.per[z];if(r&&typeof r.burn==='number')BURN[z]=r.burn})}
     const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
   },e=>{})}catch(e){}}
 // Shopify keeps three counts per size: on hand (the shelf), committed (held for
@@ -2764,16 +2771,33 @@ function openInvEdit(k){invEditLoc=k;const l=LOCS.find(x=>x[0]===k);document.get
 function saveInvEdit(){const k=invEditLoc;if(!k)return;const prev=Object.assign({},INV[k]);INV[k]={S:Math.max(0,Math.round(Number(document.getElementById('ie-S').value)||0)),M:Math.max(0,Math.round(Number(document.getElementById('ie-M').value)||0)),L:Math.max(0,Math.round(Number(document.getElementById('ie-L').value)||0))};
   if(hasFirestore())firebase.firestore().collection('inventory').doc('main').set({locations:{[k]:INV[k]},updatedAt:new Date().toISOString()},{merge:true}).catch(e=>toast('Save failed — '+((e&&e.code)||'')));
   if(k==='covington'){const d={};SIZES.forEach(z=>{const q=INV[k][z]-(Number(prev[z])||0);if(q)d[z]=q});shopAdjust(d,'edit','count')}closeSheets();renderStock();refreshPulse();toast('✓ Inventory updated')}
+function veloTrend(z){const r=VELO&&VELO.per&&VELO.per[z];if(!r)return null;if(!r.prev4&&!r.r4)return null;
+  if(!r.prev4)return {txt:'new demand',tone:'--wave',arrow:'↑'};const ch=(r.r4-r.prev4)/r.prev4;
+  if(Math.abs(ch)<0.15)return {txt:'steady',tone:'--muted',arrow:'→'};return {txt:(ch>0?'up ':'down ')+Math.round(Math.abs(ch)*100)+'% vs prior 4 wks',tone:ch>0?'--wave':'--muted',arrow:ch>0?'↑':'↓'}}
+// 12 weekly bars (oldest → this week) with the week's count on hover.
+function veloBars(z){const w=VELO&&VELO.weekly&&VELO.weekly[z];if(!w)return '';const max=Math.max(1,...w);const W=240,H=40,g=3,bw=(W-g*(w.length-1))/w.length;
+  return '<svg class="velo" viewBox="0 0 '+W+' '+(H+12)+'" preserveAspectRatio="none" role="img" aria-label="'+SIZELABEL[z]+' sold per week, last '+w.length+' weeks">'
+    +w.map((n,i)=>{const h=n?Math.max(3,n/max*H):1.5;const x=i*(bw+g);const ago=w.length-1-i;return '<rect x="'+x.toFixed(1)+'" y="'+(H-h).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2" class="'+(n?'on':'off')+(i>=w.length-4?' recent':'')+'"><title>'+(ago?ago+' wk'+(ago>1?'s':'')+' ago':'This week')+': '+n+' sold</title></rect>'}).join('')
+    +'<text x="0" y="'+(H+11)+'" class="lbl">12 wks ago</text><text x="'+W+'" y="'+(H+11)+'" text-anchor="end" class="lbl">this week</text></svg>'}
 function renderForecastTab(body){
-  let html='<div class="sec-head"><h2>When to start the China order</h2><span class="pill dim">'+CHINA_LEAD_MONTHS+'-mo lead</span></div>';
-  html+='<div class="note" style="margin-bottom:12px">Projected from ~'+totalBurn().toFixed(1)+' bands/wk of Shopify sales. The bar is weeks of network cover; the amber marker is the '+CHINA_LEAD_WEEKS+'-wk China lead + '+SAFETY_WEEKS+'-wk safety. A bar shorter than the marker means order now.</div>';
+  let html='';
+  if(VELO&&VELO.per){const tot=k=>SIZES.reduce((a,z)=>a+((VELO.per[z]||{})[k]||0),0);const t4=tot('r4'),t12=tot('r12'),p4=tot('prev4');
+    const ch=p4?Math.round((t4-p4)/p4*100):null;
+    html+='<div class="sec-head"><h2>Sales trend from Shopify</h2><span class="pill dim">'+esc(ageStr(VELO.at))+'</span></div>';
+    html+='<div class="crm-strip" style="margin-bottom:12px">'+crmStat(t4.toFixed(1),'Bands/wk · last 4 wks','wave')+crmStat(t12.toFixed(1),'Bands/wk · last 12 wks')+crmStat(ch==null?'—':(ch>0?'+':'')+ch+'%','vs the 4 wks before',ch!=null&&ch<=-15?'amber':'')+'</div>';
+  }else html+='<div class="note" style="margin-bottom:12px">Using starting estimates until Shopify’s order history syncs. Tap <b>Sync</b> on Orders to pull it in.</div>';
+  html+='<div class="sec-head"><h2>When to start the China order</h2><span class="pill dim">'+CHINA_LEAD_MONTHS+'-mo lead</span></div>';
+  html+='<div class="note" style="margin-bottom:12px">'+(VELO?'Planned at ~'+totalBurn().toFixed(1)+' bands/wk, from real Shopify sales (60% the last 4 weeks, 40% the last 12).':'Projected from ~'+totalBurn().toFixed(1)+' bands/wk (estimate).')+' The bar is weeks of network cover; the amber marker is the '+CHINA_LEAD_WEEKS+'-wk China lead + '+SAFETY_WEEKS+'-wk safety. A bar shorter than the marker means order now.</div>';
   const finite=SIZES.map(netWeeks).filter(isFinite);const HOR=Math.max(60,Math.ceil((finite.length?Math.max.apply(null,finite):60)));
-  SIZES.forEach(z=>{const nw=netWeeks(z);const cb=chinaByWeeks(z);const st=sizeStatus(z);
+  SIZES.forEach(z=>{const nw=netWeeks(z);const cb=chinaByWeeks(z);const st=sizeStatus(z);const r=VELO&&VELO.per&&VELO.per[z];const tr=veloTrend(z);
     const pct=Math.min(100,(isFinite(nw)?nw:HOR)/HOR*100);const markPct=Math.min(100,(CHINA_LEAD_WEEKS+SAFETY_WEEKS)/HOR*100);
-    html+='<div class="card"><div class="row"><div class="grow"><div class="t">'+SIZELABEL[z]+' · '+net(z)+' network ('+cov(z)+' Covington)</div><div class="d">'+(isFinite(nw)?nw.toFixed(0)+' wk network cover · burn '+BURN[z].toFixed(1)+'/wk':'no sales')+'</div></div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
+    html+='<div class="card"><div class="row"><div class="grow"><div class="t">'+SIZELABEL[z]+' · '+net(z)+' network ('+cov(z)+' Covington)</div><div class="d">'+(isFinite(nw)?nw.toFixed(0)+' wk network cover · planning '+BURN[z].toFixed(1)+'/wk':'no sales in the last 12 weeks')
+      +(tr?' · <span style="color:var('+tr.tone+')">'+tr.arrow+' '+esc(tr.txt)+'</span>':'')+'</div></div><span class="pill '+st.pill+'">'+st.label+'</span></div>'
+      +(r?'<div class="velo-wrap">'+veloBars(z)+'<div class="d" style="font-size:11.5px">Last 4 wks <b>'+r.r4.toFixed(1)+'/wk</b> · last 12 wks <b>'+r.r12.toFixed(1)+'/wk</b></div></div>':'')
       +'<div class="fc-track"><div class="fc-fill" style="width:'+pct+'%"></div><div class="fc-mark" style="left:'+markPct+'%" title="China order-by threshold"></div></div>'
-      +'<div class="d" style="margin-top:9px">'+(cb<=0?'<b style="color:var(--amber)">Order from China now.</b>':'Start China order by <b style="color:var(--text)">'+fmtDate(weeksToDate(cb))+'</b> (~'+Math.round(cb)+' wk).')+(cov(z)<=0?' <b style="color:var(--amber)">Covington is 0 — transfer from Pace to keep shipping.</b>':'')+'</div></div>';
+      +'<div class="d" style="margin-top:9px">'+(cb<=0?'<b style="color:var(--amber)">Order from China now.</b>':isFinite(cb)?'Start China order by <b style="color:var(--text)">'+fmtDate(weeksToDate(cb))+'</b> (~'+Math.round(cb)+' wk).':'No China order needed at the current sales rate.')+(cov(z)<=0?' <b style="color:var(--amber)">Covington is 0 — transfer from Pace to keep shipping.</b>':'')+'</div></div>';
   });
+  if(VELO&&VELO.noItems)html+='<div class="d" style="margin:-4px 0 12px">'+VELO.noItems+' older order'+(VELO.noItems>1?'s':'')+' in this window didn’t carry sizes yet and aren’t counted; <b>Backfill</b> on Orders fills them in.</div>';
   html+=renderPOs();
   body.innerHTML=html;
 }
