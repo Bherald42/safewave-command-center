@@ -54,6 +54,10 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   Covington (`deductShopifyShipment`, guarded by the `fulfillments` doc); restocked
   returns, Pace transfers received and Covington hand edits are sent to Shopify
   as deltas (`adjustShopifyStock`). The app moves stock with `invMove()` increments.
+  Orders keep what was ordered (`orders.items`: size × qty) and where shipped ones
+  are (`orders.ship`: carrier status, ETA, delivered date — `refreshShipments` on
+  every sync); Orders → To ship shows the sizes, shipped ones split into On the
+  way / Delivered.
 - **Invoices & customer POs** (Enterprise → Invoices & POs). Invoices are
   numbered from `counters/invoices`, carry line items, terms, payments and a
   history; sent invoices are voided, never deleted. The PDF is drawn server-side

@@ -482,6 +482,10 @@ input[type=date]{color-scheme:dark}
 .brand-logo img{height:34px;width:auto;display:block}
 /* "COMMAND CENTER" beside the logo: the team tool, not the customer app. */
 .brand-logo,.brand-logo:hover{text-decoration:none}
+.size-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.size-chip{display:inline-flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:6px 12px 6px 6px;font:700 14px var(--font-b);color:var(--text)}
+.size-chip b{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:var(--wave);color:var(--wave-ink);font-weight:800;font-size:13px}
+.order-row.delivered summary .t{color:var(--muted)}
 .brand-tag{display:inline-block;text-decoration:none;margin-left:10px;padding-left:10px;border-left:1.5px solid var(--line);font:800 9.5px/1.25 var(--font-b);letter-spacing:.16em;color:var(--muted);text-align:left;white-space:nowrap}
 .brand-tag b{font-weight:800;color:var(--wave)}
 @media(min-width:860px){.appbar .brand-tag{font-size:10.5px}}
@@ -2257,7 +2261,7 @@ function ordersList(){
 function subscribeOrders(){if(!hasFirestore()){return}
   if(ordersUnsub){try{ordersUnsub()}catch(e){}}
   try{ordersUnsub=firebase.firestore().collection('orders').orderBy('at','desc').limit(150).onSnapshot(qs=>{
-    LIVEORDERS=qs.docs.map(d=>{const o=d.data();return {id:d.id,n:o.n,name:o.name||'',total:o.total||0,date:o.date||'',at:o.at||'',ful:o.ful||'UNFULFILLED',email:o.email||'',tracking:o.tracking||'',trackingUrl:o.trackingUrl||'',carrier:o.carrier||''}});
+    LIVEORDERS=qs.docs.map(d=>{const o=d.data();return {id:d.id,n:o.n,name:o.name||'',total:o.total||0,date:o.date||'',at:o.at||'',ful:o.ful||'UNFULFILLED',email:o.email||'',tracking:o.tracking||'',trackingUrl:o.trackingUrl||'',carrier:o.carrier||'',items:o.items||[],ship:o.ship||null,shipStatus:o.shipStatus||''}});
     const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
   },e=>{})}catch(e){}
   subscribeShopStock();}
@@ -2461,7 +2465,8 @@ function renderStock(){
 }
 function renderFulfillTab(body){
   const unf=unfulfilledOrders();
-  const done=ordersList().filter(o=>FULF[o.n]&&FULF[o.n].status==='fulfilled');
+  // Shipped here or in Shopify; recent ones only (older history is in All orders).
+  const cut=Date.now()-45*864e5;const done=ordersList().filter(o=>isFulfilled(o)&&(o.at?Date.parse(o.at)>=cut:!!FULF[o.n]));
   let html='';
   html+='<div class="row btnrow-sm" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">'
     +'<button class="btn ghost" style="flex:1;min-width:132px"'+(syncing?' disabled':'')+' onclick="syncShopify(false)">'+(syncing?'Syncing…':'<span>⟳ Sync<span class="hide-sm"> now</span></span>')+'</button>'
@@ -2476,14 +2481,31 @@ function renderFulfillTab(body){
   if(blocks.length)html+='<div class="card" style="border-color:var(--amber)"><span class="pill amber"><span class="dot"></span>CAN’T SHIP</span><div class="t" style="margin-top:7px">'+blocks.map(z=>SIZELABEL[z]).join(', ')+' — 0 in Covington</div><div class="d">Transfer from Pace before these ship. Pace has '+blocks.map(z=>SIZELABEL[z]+' '+(INV.pace[z]||0)).join(', ')+'.</div></div>';
   html+='<div class="sec-head"><h2>To ship</h2><span class="pill '+(unf.length?'amber':'good')+'">'+unf.length+'</span></div>';
   html+=unf.length?unf.map(fulfillCard).join(''):(shopLive()||DEMO.length?'<div class="empty"><div class="ico">✓</div><div class="t">All caught up</div><div class="d">No orders waiting. New paid orders appear here automatically.</div></div>':'<div class="empty"><div class="t">No orders to show</div><div class="d">Shopify isn’t connected, so orders waiting in Shopify won’t appear here.</div></div>');
-  if(done.length)html+='<div class="sec-head" style="margin-top:18px"><h2>Fulfilled</h2><span class="pill good">'+done.length+'</span></div>'+done.map(fulfilledCard).join('');
+  const onWay=done.filter(o=>!shipState(o).delivered).sort((a,b)=>(shipState(b).problem?1:0)-(shipState(a).problem?1:0)),arrived=done.filter(o=>shipState(o).delivered);
+  if(onWay.length)html+='<div class="sec-head" style="margin-top:18px"><h2>On the way</h2><span class="pill wave">'+onWay.length+'</span></div>'+onWay.map(fulfilledCard).join('');
+  if(arrived.length)html+='<div class="sec-head" style="margin-top:18px"><h2>Delivered</h2><span class="pill good">'+arrived.length+'</span></div>'+arrived.slice(0,15).map(fulfilledCard).join('')+(arrived.length>15?'<div class="d" style="margin-top:8px">Older deliveries are in <a onclick="stockGoTab(\'orders\')" style="color:var(--wave);cursor:pointer">All orders</a>.</div>':'');
   body.innerHTML=html;
 }
-function fulfillCard(o){return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · paid</div></div><span class="pill amber">TO SHIP</span></div><button class="btn" style="margin-top:10px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill this order</button></div>'}
+// What the customer ordered, by band size ("Medium × 1"), from the Shopify order.
+function orderBands(o){const by={};(o.items||[]).forEach(it=>{if(SIZES.indexOf(it.size)>=0)by[it.size]=(by[it.size]||0)+(Number(it.qty)||0)});return SIZES.filter(z=>by[z]).map(z=>({size:z,qty:by[z]}))}
+function orderSizeHTML(o){const b=orderBands(o);if(!b.length)return '';
+  return '<div class="size-chips">'+b.map(x=>'<span class="size-chip"><b>'+x.size+'</b>'+SIZELABEL[x.size]+(x.qty>1?' × '+x.qty:'')+'</span>').join('')+'</div>'}
+// Where a shipped order is, from the carrier via Shopify. Amber for anything
+// that needs a look (never red: that's for life-safety only).
+const SHIP_META={DELIVERED:['good','DELIVERED'],PICKED_UP:['good','DELIVERED'],OUT_FOR_DELIVERY:['wave','OUT FOR DELIVERY'],IN_TRANSIT:['wave','IN TRANSIT'],
+  ATTEMPTED_DELIVERY:['amber','DELIVERY ATTEMPTED'],FAILURE:['amber','DELIVERY PROBLEM'],NOT_DELIVERED:['amber','DELIVERY PROBLEM'],READY_FOR_PICKUP:['amber','AT PICKUP POINT'],
+  LABEL_PRINTED:['dim','LABEL CREATED'],LABEL_PURCHASED:['dim','LABEL CREATED'],CONFIRMED:['dim','LABEL CREATED'],SUBMITTED:['dim','LABEL CREATED']};
+function shipState(o){const st=String((o.ship&&o.ship.status)||o.shipStatus||'').toUpperCase();const m=SHIP_META[st]||['dim','SHIPPED'];
+  const day=iso=>{try{return new Date(iso).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}catch(e){return ''}};
+  let note='';if(o.ship&&o.ship.deliveredAt&&m[1]==='DELIVERED')note='Delivered '+day(o.ship.deliveredAt);
+  else if(o.ship&&o.ship.eta&&m[0]!=='good')note='Arrives ~'+day(o.ship.eta);
+  return {key:st,pill:m[0],label:m[1],note:note,delivered:m[1]==='DELIVERED',problem:m[0]==='amber'}}
+function fulfillCard(o){return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · paid</div></div><span class="pill amber">TO SHIP</span></div>'+orderSizeHTML(o)+'<button class="btn" style="margin-top:10px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill this order</button></div>'}
 function fulfilledCard(o){const f=FULF[o.n]||{};const track=f.tracking||o.tracking||'';const tr=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)" onclick="event.stopPropagation()">'+esc(track)+'</a>':esc(track)):'';
   const failed=f.shopify&&f.shopify.status==='failed';
   // Compact row: order · customer · shipment status. Reprint / return sit inside the row's details.
-  return '<details class="order-row"'+(failed?' open':'')+'><summary><div class="grow" style="min-width:0"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+(SIZELABEL[f.size]||'—')+(track?' · tracking '+esc(track):' · no tracking yet')+'</div></div><span class="pill good">SHIPPED</span></summary>'
+  const ss=shipState(o);const sz=SIZELABEL[f.size]||orderBands(o).map(x=>SIZELABEL[x.size]+(x.qty>1?' × '+x.qty:'')).join(', ')||'—';
+  return '<details class="order-row'+(ss.delivered?' delivered':'')+'"'+(failed?' open':'')+'><summary><div class="grow" style="min-width:0"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(sz)+(ss.note?' · <b style="color:var('+(ss.problem?'--amber':'--text')+')">'+esc(ss.note)+'</b>':'')+(track?' · tracking '+esc(track):' · no tracking yet')+'</div></div><span class="pill '+ss.pill+'">'+ss.label+'</span></summary>'
     +'<div class="or-body"><div class="d">'+(SIZELABEL[f.size]||'—')+' · '+esc(f.serial||'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+tr+'</div>'+shopifyLine(f)
     +'<div class="row" style="gap:8px;margin-top:9px;flex-wrap:wrap">'+(failed?'<button class="btn" style="flex:1" onclick="pushShopifyFulfill(\''+esc(o.n)+'\')">Retry Shopify</button>':'')+'<button class="btn ghost sm" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Reprint label</button><button class="btn ghost sm" style="flex:1" onclick="startReturn(\''+esc(o.n)+'\')">Start return</button></div></div></details>'}
 function openFulfill(n){const o=ordersList().find(x=>x.n===n);if(!o)return;ffOrder=n;
@@ -2493,7 +2515,7 @@ function openFulfill(n){const o=ordersList().find(x=>x.n===n);if(!o)return;ffOrd
   document.getElementById('ff-assignee').innerHTML=assigneeOptions(jared||(CURRENT_USER&&CURRENT_USER.name)||'');
   document.getElementById('ff-firmware').value='';document.getElementById('ff-tracking').value='';
   document.querySelectorAll('#ff-qc input').forEach(c=>c.checked=false);
-  document.querySelectorAll('#ff-size button').forEach(b=>b.classList.toggle('on',b.dataset.v==='L'));
+  const ordSz=(orderBands(o)[0]||{}).size||'L';document.querySelectorAll('#ff-size button').forEach(b=>b.classList.toggle('on',b.dataset.v===ordSz));
   document.getElementById('ff-signer').textContent=(CURRENT_USER&&CURRENT_USER.name)||'you';
   ffBandHint();
   closeSheets();openSheet('sh-fulfill');
@@ -2642,7 +2664,7 @@ function renderOrdersTab(body){
 }
 function renderOrderList(q){q=(q||'').trim().toLowerCase();const wrap=document.getElementById('order-list');if(!wrap)return;
   const hits=ordersList().filter(o=>!q||o.n.toLowerCase().includes(q)||o.name.toLowerCase().includes(q));
-  wrap.innerHTML=hits.length?hits.map(o=>{const done=isFulfilled(o);const f=FULF[o.n];const track=(f&&f.tracking)||o.tracking||'';const trk=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(track)+'</a>':esc(track)):'';return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · '+(done?'fulfilled'+(f&&f.serial?' · '+esc(f.serial):'')+trk:'awaiting fulfilment')+'</div></div><span class="pill '+(done?'good':'amber')+'">'+(done?'FULFILLED':'OPEN')+'</span></div>'+'<div class="row" style="gap:8px;margin-top:9px">'+(!done?'<button class="btn ghost" style="flex:1" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill</button>':'')+'<button class="btn ghost" style="flex:1" onclick="viewCustomerFromOrder(\''+esc(o.n)+'\')">👤 Customer</button></div></div>'}).join(''):'<div class="empty"><div class="d">No order matches that search.</div></div>';
+  wrap.innerHTML=hits.length?hits.map(o=>{const done=isFulfilled(o);const f=FULF[o.n];const track=(f&&f.tracking)||o.tracking||'';const trk=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(track)+'</a>':esc(track)):'';const ss=done?shipState(o):null;const szs=orderBands(o).map(x=>SIZELABEL[x.size]+(x.qty>1?' × '+x.qty:'')).join(', ');return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+(szs?' · '+esc(szs):'')+' · $'+o.total+' · '+(done?(ss.note?esc(ss.note):'shipped')+(f&&f.serial?' · '+esc(f.serial):'')+trk:'waiting to ship')+'</div></div><span class="pill '+(done?ss.pill:'amber')+'">'+(done?ss.label:'TO SHIP')+'</span></div>'+'<div class="row" style="gap:8px;margin-top:9px">'+(!done?'<button class="btn ghost" style="flex:1" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill</button>':'')+'<button class="btn ghost" style="flex:1" onclick="viewCustomerFromOrder(\''+esc(o.n)+'\')">👤 Customer</button></div></div>'}).join(''):'<div class="empty"><div class="d">No order matches that search.</div></div>';
 }
 function kv(k,v){return '<div class="kv"><span>'+k+'</span><b>'+v+'</b></div>'}
 
