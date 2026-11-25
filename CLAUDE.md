@@ -84,6 +84,15 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   Release Checks · Field Testing · Feedback) · Fundraising · Finance · Resources ·
   Settings. A group's `pills` can point at views inside a page (`navPill`); screens
   that switch their own view call `refreshSubnav()`.
+  Home / My Work cards carry an exact `link` (`deepOpen`): Build task, ticket,
+  CRM account, investor, data-room row (`s-raise:dataroom:<id>`).
+- **Accounts** (Enterprise): header (stage ▾ with criteria, owner, description) →
+  Next meeting → Next step (`nextStep`/`dueAt`/`nextOwner`, lands in that person's
+  My Work) → Activity → collapsible Deal details / Contacts / Invoices & POs /
+  Company dashboard / How this segment buys. **Meetings** (`meetings`, one record
+  many attendees) show on the account and each attendee's Home (Upcoming meetings);
+  Save recap logs to Activity and sets the next step. `.rolepick[data-multi]`
+  groups are multi-select.
 - **Data is Firestore.** Collections include: `users`, `crm_accounts`, `tickets`,
   `campaigns`, `build_tasks`, `build_projects`, `inventory`, `fulfillments`,
   `bands`, `returns`, `orders` (server-write only), `purchase_orders` (supplier POs),
