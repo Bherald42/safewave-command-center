@@ -51,6 +51,14 @@ service firebase.storage {
       allow create: if request.auth != null && request.auth.uid == uid
         && request.resource.size < 25 * 1024 * 1024;
     }
+    // Account activity attachments (email screenshots, PDFs) on Enterprise
+    // accounts. Any signed-in teammate reads; Jared (view-only) can't upload.
+    match /crm/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.auth.token.email != 'jared@safewavetech.com'
+        && request.resource.size < 25 * 1024 * 1024;
+    }
     match /{allPaths=**} {
       allow read, write: if false;
     }
