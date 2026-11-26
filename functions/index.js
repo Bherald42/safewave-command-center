@@ -485,6 +485,13 @@ function mapShopifyOrder(o) {
   // Revenue after refunds (Shopify's current total), so refunded orders don't
   // count at full price in traction.
   rec.net = Number(o.current_total_price != null ? o.current_total_price : o.total_price) || 0;
+  // Reporting breakdown (Finance → Sales): what made up the order total.
+  const money = (x) => Math.round((Number(x) || 0) * 100) / 100;
+  rec.subtotal = money(o.subtotal_price);
+  rec.discounts = money(o.total_discounts);
+  rec.shipping = money(o.total_shipping_price_set && o.total_shipping_price_set.shop_money && o.total_shipping_price_set.shop_money.amount);
+  rec.tax = money(o.total_tax);
+  rec.refunded = Math.max(0, money(Number(o.total_price || 0) - rec.net));
   if (o.financial_status) rec.financial = String(o.financial_status);
   rec.items = (o.line_items || []).map((li) => ({
     size: bandSizeOf(li.variant_title) || bandSizeOf(li.title) || "",
