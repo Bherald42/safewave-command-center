@@ -483,6 +483,12 @@ input[type=date]{color-scheme:dark}
 /* "COMMAND CENTER" beside the logo: the team tool, not the customer app. */
 .brand-logo,.brand-logo:hover{text-decoration:none}
 .size-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.upd-replies{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.upd-reply{margin-left:12px;padding:6px 10px;border-left:2px solid var(--wave);background:var(--surface-2);border-radius:0 8px 8px 0;font-size:13.5px}
+.upd-reply .meta{font-size:11px;color:var(--faint)}
+.upd-reply-link{font-size:12.5px;font-weight:600;color:var(--wave);cursor:pointer;align-self:flex-start}
+.note-files{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.note-files img{width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.note-files a.nf{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;color:var(--text);text-decoration:none;background:var(--surface)}
 .acct-top .acct-title{font-size:22px}
 .acct-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
 .stage-btn{border:0;background:var(--wave-soft,rgba(29,170,225,.14));color:var(--wave);font:700 13px var(--font-b);padding:6px 12px;border-radius:99px;cursor:pointer}
@@ -7080,8 +7086,9 @@ function deepOpen(link){const p=link.split(':'),scr=p[0],a=p[1]||'',b=p.slice(2)
   const later=f=>setTimeout(()=>{try{f()}catch(e){}},60);
   if(scr==='s-chat'){if(a&&CHANNELS[a])chatChannel=a;goto('s-chat');return}
   if(scr==='s-build'){buildProj=null;goto('s-build');
-    if(a==='task'&&BUILDT.some(x=>x.id===b))later(()=>openBuildTask(b));
-    else if(a==='proj'&&BUILDP.some(x=>x.id===b))openProjectDetail(b);return}
+    const bid=b.split(':')[0],ui=b.split(':')[1];
+    if(a==='task'&&BUILDT.some(x=>x.id===bid))later(()=>{openBuildTask(bid);if(ui!=null)flashUpdate('t',bid,ui)});
+    else if(a==='proj'&&BUILDP.some(x=>x.id===bid)){openProjectDetail(bid);const pp=BUILDP.find(x=>x.id===bid);const li=ui!=null?ui:((pp.updates||[]).length?pp.updates.length-1:null);if(li!=null)flashUpdate('p',bid,li)}return}
   if(scr==='s-crm'){goto('s-crm');if(a&&findAcct(a))openAcct(a);return}
   if(scr==='s-raise'){meetOpenId=null;
     if(a==='investor'&&b&&findAcct(b)){openInvestor(b);return}
@@ -8557,6 +8564,25 @@ function projAttachSection(p){
   }
   return h+'</div>';
 }
+/* Replies under each update — projects and tasks alike — so a comment can be
+   answered where it was posted. The alert for an update or reply opens the page
+   scrolled to that update. */
+function updRepliesHTML(kind,id,idx,u){const rs=u.replies||[];const ro=typeof isObserver==='function'&&isObserver();
+  return '<div class="upd-replies">'+rs.map(r=>'<div class="upd-reply"><div class="meta">'+esc([r.by,r.at].filter(Boolean).join(' · '))+'</div>'+esc(r.text||'')+'</div>').join('')
+    +(ro?'':'<div class="upd-reply-box" id="urb-'+kind+'-'+id+'-'+idx+'" style="display:none"><textarea class="field" placeholder="Write a reply…" style="min-height:48px;resize:vertical;font-family:var(--font-b);margin:6px 0"></textarea><div class="row" style="gap:8px;justify-content:flex-end"><button class="btn ghost" style="width:auto;padding:6px 12px" onclick="toggleUpdReply(\''+kind+'\',\''+id+'\','+idx+')">Cancel</button><button class="btn" style="width:auto;padding:6px 14px" onclick="postUpdReply(\''+kind+'\',\''+id+'\','+idx+')">Reply</button></div></div>'
+    +'<a class="upd-reply-link" onclick="toggleUpdReply(\''+kind+'\',\''+id+'\','+idx+')">↩ Reply'+(rs.length?' · '+rs.length:'')+'</a>')+'</div>'}
+function toggleUpdReply(kind,id,idx){const el=document.getElementById('urb-'+kind+'-'+id+'-'+idx);if(!el)return;const on=el.style.display==='none';el.style.display=on?'':'none';if(on){const t=el.querySelector('textarea');if(t)t.focus()}}
+function postUpdReply(kind,id,idx){const box=document.getElementById('urb-'+kind+'-'+id+'-'+idx);const ta=box&&box.querySelector('textarea');const text=(ta&&ta.value||'').trim();if(!text){toast('Write a reply first');return}
+  const rec=kind==='p'?BUILDP.find(x=>x.id===id):BUILDT.find(x=>x.id===id);if(!rec||!rec.updates||!rec.updates[idx])return;const u=rec.updates[idx];
+  u.replies=(u.replies||[]).concat([Object.assign({text:text},pjAttStamp())]);
+  if(kind==='p'){persistProject(rec);renderBuild()}else{persistBuild(rec);renderUpdates(rec)}
+  // Tell the person who posted the update, everyone else in the thread, and
+  // the project owner / task assignee — never yourself.
+  const me=(CURRENT_USER&&CURRENT_USER.name)||'';const who={};who[u.by]=1;(u.replies||[]).forEach(r=>who[r.by]=1);if(kind==='p'&&rec.owner)who[rec.owner]=1;if(kind==='t'&&rec.assignee)who[rec.assignee]=1;
+  const title=kind==='p'?rec.name:rec.title;const link=(kind==='p'?'s-build:proj:':'s-build:task:')+id+':'+idx;
+  Object.keys(who).filter(w=>w&&w!=='you'&&w!==me).forEach(w=>notifyAssignee(w,me+' replied · '+title,text.slice(0,90),link));
+  toast('✓ Reply posted')}
+function flashUpdate(kind,id,idx){setTimeout(()=>{const el=document.getElementById('upd-'+kind+'-'+id+'-'+idx);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.classList.add('deep-hit');setTimeout(()=>el.classList.remove('deep-hit'),2400)}},250)}
 function pjAttStamp(){return {by:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}}
 function pjAddLink(pid){
   const p=BUILDP.find(x=>x.id===pid);if(!p)return;
@@ -8591,7 +8617,7 @@ let pjUpdFile=null;
 function projUpdatesSection(p){
   const us=p.updates||[];
   let h='<div class="sec-head" style="margin-top:16px"><h2>Updates &amp; feedback</h2><span class="pill '+(us.length?'wave':'dim')+'">'+us.length+'</span></div><div class="card">';
-  h+=us.length?us.slice().reverse().map(u=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([u.by,u.at].filter(Boolean).join(' · '))+'</div>'+(u.text?esc(u.text):'')+((u.files||[]).length?'<div class="upd-files">'+u.files.map(f=>/^image\//.test(f.type)?'<a href="'+esc(f.url)+'" target="_blank" rel="noopener"><img src="'+esc(f.url)+'" alt="'+esc(f.name)+'"></a>':'<a href="'+esc(f.url)+'" target="_blank" rel="noopener" class="upd-file">📎 '+esc(f.name)+'</a>').join('')+'</div>':'')+'</div>').join('')
+  h+=us.length?us.map((u,i)=>[u,i]).reverse().map(([u,i])=>'<div class="note" id="upd-p-'+p.id+'-'+i+'" style="margin-top:8px"><div class="meta">'+esc([u.by,u.at].filter(Boolean).join(' · '))+'</div>'+(u.text?esc(u.text):'')+((u.files||[]).length?'<div class="upd-files">'+u.files.map(f=>/^image\//.test(f.type)?'<a href="'+esc(f.url)+'" target="_blank" rel="noopener"><img src="'+esc(f.url)+'" alt="'+esc(f.name)+'"></a>':'<a href="'+esc(f.url)+'" target="_blank" rel="noopener" class="upd-file">📎 '+esc(f.name)+'</a>').join('')+'</div>':'')+updRepliesHTML('p',p.id,i,u)+'</div>').join('')
     :'<div class="d" style="color:var(--faint)">No updates yet — post feedback, test results, screenshots, anything the team should see.</div>';
   h+='<textarea class="field" id="pj-upd-text" placeholder="Post feedback or an update for this project…" style="min-height:56px;resize:vertical;font-family:var(--font-b);margin-top:10px"></textarea>'
     +'<div class="row" style="gap:8px;margin-top:6px">'
@@ -8620,7 +8646,7 @@ async function pjPostUpdate(pid){
   const me=(CURRENT_USER&&CURRENT_USER.name)||'';
   const who={};if(p.owner)who[p.owner]=1;
   BUILDT.filter(t=>t.projectId===pid).forEach(t=>(t.watchers||[]).forEach(w=>who[w]=1));
-  Object.keys(who).filter(w=>w&&w!==me).forEach(w=>notifyAssignee(w,'Update on '+p.name,(text||'New file attached').slice(0,80),'s-build:proj:'+p.id));
+  const ui=p.updates.length-1;Object.keys(who).filter(w=>w&&w!==me).forEach(w=>notifyAssignee(w,'Update on '+p.name,(text||'New file attached').slice(0,80),'s-build:proj:'+p.id+':'+ui));
   toast('✓ Update posted');
 }
 /* ---- task create/edit with status, watchers, updates, files ---- */
@@ -8667,7 +8693,7 @@ function buildApplySheetRO(sheetId,saveId,delId){
   if(note){note.style.display=ro?'':'none';if(ro)note.innerHTML=st?'👁 Oversight access — you can <b>change this task’s status</b> and post updates; the rest of the task is read-only.':'👁 <b>Read-only</b> — oversight access. You can view the board and post updates, but not change its structure.'}
 }
 function renderUpdates(t){const el=document.getElementById('bt-updates');if(!el)return;const us=(t.updates||[]);
-  el.innerHTML=us.length?us.slice().reverse().map(u=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([u.by,u.at].filter(Boolean).join(' · '))+'</div>'+(u.text?esc(u.text):'')+((u.files||[]).length?'<div class="upd-files">'+u.files.map(f=>/^image\//.test(f.type)?'<a href="'+esc(f.url)+'" target="_blank" rel="noopener"><img src="'+esc(f.url)+'" alt="'+esc(f.name)+'"></a>':'<a href="'+esc(f.url)+'" target="_blank" rel="noopener" class="upd-file">📎 '+esc(f.name)+'</a>').join('')+'</div>':'')+'</div>').join(''):'<div class="d" style="color:var(--faint)">No updates yet.</div>';
+  el.innerHTML=us.length?us.map((u,i)=>[u,i]).reverse().map(([u,i])=>'<div class="note" id="upd-t-'+t.id+'-'+i+'" style="margin-top:8px"><div class="meta">'+esc([u.by,u.at].filter(Boolean).join(' · '))+'</div>'+(u.text?esc(u.text):'')+((u.files||[]).length?'<div class="upd-files">'+u.files.map(f=>/^image\//.test(f.type)?'<a href="'+esc(f.url)+'" target="_blank" rel="noopener"><img src="'+esc(f.url)+'" alt="'+esc(f.name)+'"></a>':'<a href="'+esc(f.url)+'" target="_blank" rel="noopener" class="upd-file">📎 '+esc(f.name)+'</a>').join('')+'</div>':'')+updRepliesHTML('t',t.id,i,u)+'</div>').join(''):'<div class="d" style="color:var(--faint)">No updates yet.</div>';
 }
 function btFilePicked(){const f=document.getElementById('bt-update-file').files[0];btFile=f||null;document.getElementById('bt-file-name').textContent=f?f.name:''}
 async function addUpdate(){if(!btEditId){toast('Save the task first');return}const t=BUILDT.find(x=>x.id===btEditId);if(!t)return;
@@ -8678,7 +8704,7 @@ async function addUpdate(){if(!btEditId){toast('Save the task first');return}con
   t.updates=(t.updates||[]).concat([u]);persistBuild(t);
   document.getElementById('bt-update-text').value='';btFile=null;document.getElementById('bt-update-file').value='';document.getElementById('bt-file-name').textContent='';
   renderUpdates(t);
-  (t.watchers||[]).forEach(w=>notifyAssignee(w,'Update on '+t.title,text.slice(0,80),'s-build:task:'+t.id));
+  (t.watchers||[]).forEach(w=>notifyAssignee(w,'Update on '+t.title,text.slice(0,80),'s-build:task:'+t.id+':'+((t.updates||[]).length-1)));
   toast('✓ Update posted');
 }
 async function uploadBuildFile(taskId,file){
@@ -10037,9 +10063,11 @@ function renderAccountView(host,ctx){const inRaise=ctx==='raise';
     +'<div class="card" id="ac-next"></div>'
     +'<div class="card"><div class="sec-head"><h2>Activity</h2><span id="ac-campaign-badge"></span></div><div class="d" style="margin:-6px 0 8px">Past meetings, notes and decisions</div><div id="ac-meetlog"></div><div id="ac-notes"></div>'
       +'<details class="acct-compose"><summary>＋ Log a note or call</summary>'
-        +'<textarea class="field" id="note-input" placeholder="Add a call note…" style="min-height:76px;resize:vertical;font-family:var(--font-b);margin-top:10px"></textarea>'
+        +'<textarea class="field" id="note-input" placeholder="Add a note, call or email summary…" onpaste="notePaste(event)" style="min-height:76px;resize:vertical;font-family:var(--font-b);margin-top:10px"></textarea>'
         +'<div class="row" style="gap:8px;align-items:center;margin-bottom:8px"><label class="flabel" for="note-spend" style="margin:0;white-space:nowrap">Money spent ($)</label><input class="field" id="note-spend" type="number" inputmode="decimal" min="0" placeholder="optional — travel, samples, demo kits" style="margin:0;flex:1"></div>'
-        +'<div class="row" style="gap:8px"><button class="btn" style="flex:1" onclick="addNote(acctId)">Save note</button><button class="btn ghost" id="rec-btn" style="flex:1" onclick="toggleRecord(acctId)">● Record call</button></div>'
+        +'<div id="note-files" class="note-files" style="margin:0 0 8px"></div>'
+        +'<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" style="flex:1 1 120px" onclick="addNote(acctId)">Save note</button><label class="btn ghost" style="flex:1 1 120px;cursor:pointer;display:flex;justify-content:center">📎 Screenshot / file<input type="file" id="note-file" accept="image/*,.pdf,.eml,.msg,.doc,.docx,.xls,.xlsx,.csv,.txt" multiple hidden onchange="notePickFiles(this.files);this.value=\'\'"></label><button class="btn ghost" id="rec-btn" style="flex:1 1 120px" onclick="toggleRecord(acctId)">● Record call</button></div>'
+        +'<div class="d" style="margin-top:6px;font-size:12px">Attach a screenshot of an email you sent or got, or paste one straight into the note.</div>'
         +'<div class="note" style="margin-top:10px">Recording transcribes the call live in your browser into the note above — review, then Save.</div>'
       +'</details></div>'
     +'<details class="acct-sec"><summary>Deal details</summary><div class="acct-sec-b">'
@@ -10081,7 +10109,7 @@ function populateAccount(a){const id=a.id;
   const sg=document.getElementById('ac-stage-guide');if(sg)sg.innerHTML=inv?'':'<div class="stage-guide">'+STAGES.map(st=>{const i=STAGE_INFO[st]||{};return '<div class="'+(st===curStg?'on':'')+'"><b>'+esc(st)+'</b>'+(i.exit?' — '+esc(i.exit):'')+'</div>'}).join('')+'</div>';
   renderNextStepCard(a);renderAcctMeeting(a);
   const cn=document.getElementById('ac-c-name');if(cn)cn.value='';const ce=document.getElementById('ac-c-email');if(ce)ce.value='';
-  renderNotes(a);const ni=document.getElementById('note-input');if(ni)ni.value='';
+  renderNotes(a);const ni=document.getElementById('note-input');if(ni)ni.value='';noteFiles=[];renderNoteDraftFiles();
   populateCommit(a);
 }
 function renderArchiveState(a){const b=document.getElementById('ac-archive'),bn=document.getElementById('ac-archived-banner');if(!b)return;
@@ -10254,8 +10282,20 @@ function doneNextStep(){const a=findAcct(acctId);if(!a||!a.nextStep)return;const
 function renderTags(a){document.getElementById('ac-tags').innerHTML=(a.tags||[]).length?(a.tags||[]).map(t=>'<span class="pill wave" style="cursor:pointer" onclick="rmTag(\''+a.id+'\',decodeURIComponent(\''+encodeURIComponent(t)+'\'))">'+esc(t)+' ✕</span>').join(' '):'<span class="d" style="color:var(--faint)">No tags yet</span>'}
 function addTag(id){const inp=document.getElementById('ac-tag-input');const t=inp.value.trim();if(!t)return;const a=findAcct(id);const tags=(a.tags||[]).slice();if(!tags.includes(t))tags.push(t);updateAccount(id,{tags:tags});inp.value='';renderTags(a);renderCrmMain()}
 function rmTag(id,t){const a=findAcct(id);const tags=(a.tags||[]).filter(x=>x!==t);updateAccount(id,{tags:tags});renderTags(a);renderCrmMain()}
-function renderNotes(a){const notes=(a.notes||[]);document.getElementById('ac-notes').innerHTML=notes.length?notes.map(n=>'<div class="note" style="margin-top:8px"><div class="meta">'+esc([n.user,n.at].filter(Boolean).join(' · '))+(Number(n.spend)?' · <b style="color:var(--amber)">'+money0(n.spend)+' spent</b>':'')+'</div>'+esc(n.text||'')+'</div>').join(''):'<div class="d" style="color:var(--faint)">No activity yet — add a note or record a call.</div>'}
-function addNote(id){const inp=document.getElementById('note-input');const sEl=document.getElementById('note-spend');const spend=Math.max(0,Number(sEl&&sEl.value)||0);let t=inp.value.trim();if(!t&&!spend)return;if(!t)t='Spend logged';const a=findAcct(id);const notes=(a.notes||[]).slice();const n={user:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'}),text:t};if(spend)n.spend=spend;notes.unshift(n);updateAccount(id,{notes:notes});inp.value='';if(sEl)sEl.value='';renderNotes(a);renderMetrics(a);renderCrmMain();toast(spend?'✓ Note + '+money0(spend)+' spend logged':'✓ Note logged')}
+function renderNotes(a){const notes=(a.notes||[]);document.getElementById('ac-notes').innerHTML=notes.length?notes.map(n=>'<div class="note" style="margin-top:8px;white-space:pre-wrap"><div class="meta">'+esc([n.user,n.at].filter(Boolean).join(' · '))+(Number(n.spend)?' · <b style="color:var(--amber)">'+money0(n.spend)+' spent</b>':'')+'</div>'+esc(n.text||'')+noteFilesHTML(n.files)+'</div>').join(''):'<div class="d" style="color:var(--faint)">No activity yet — add a note or record a call.</div>'}
+async function addNote(id){const inp=document.getElementById('note-input');const sEl=document.getElementById('note-spend');const spend=Math.max(0,Number(sEl&&sEl.value)||0);let t=inp.value.trim();if(!t&&!spend&&!noteFiles.length)return;if(!t)t=noteFiles.length?'📎 Attachment':'Spend logged';const a=findAcct(id);const notes=(a.notes||[]).slice();const n={user:(CURRENT_USER&&CURRENT_USER.name)||'you',at:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric'}),text:t};if(spend)n.spend=spend;if(noteFiles.length){const up=await noteUpload(id);if(up===null)return;n.files=up}notes.unshift(n);updateAccount(id,{notes:notes});inp.value='';if(sEl)sEl.value='';renderNotes(a);renderMetrics(a);renderCrmMain();toast(spend?'✓ Note + '+money0(spend)+' spend logged':'✓ Note logged')}
+/* Note attachments (email screenshots, PDFs): uploaded to Storage under
+   crm/<account>/…; the note keeps the links. */
+let noteFiles=[];
+function noteFilesHTML(fs){fs=fs||[];if(!fs.length)return '';return '<div class="note-files">'+fs.map(f=>/^image\//.test(f.type||'')?'<a href="'+esc(f.url)+'" target="_blank" rel="noopener"><img src="'+esc(f.url)+'" alt="'+esc(f.name)+'"></a>':'<a class="nf" href="'+esc(f.url)+'" target="_blank" rel="noopener">📎 '+esc(f.name)+'</a>').join('')+'</div>'}
+function renderNoteDraftFiles(){const el=document.getElementById('note-files');if(!el)return;el.innerHTML=noteFiles.map((f,i)=>'<span class="nf" style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:12.5px">'+(/^image\//.test(f.type)?'🖼':'📎')+' '+esc(f.name.length>28?f.name.slice(0,26)+'…':f.name)+' <a style="cursor:pointer;color:var(--faint)" onclick="noteFiles.splice('+i+',1);renderNoteDraftFiles()">✕</a></span>').join('')}
+function notePickFiles(list){Array.prototype.slice.call(list||[]).forEach(f=>{if(f.size>25*1024*1024){toast(f.name+' is over 25 MB');return}if(noteFiles.length<6)noteFiles.push(f)});renderNoteDraftFiles()}
+function notePaste(e){const it=Array.prototype.slice.call((e.clipboardData&&e.clipboardData.items)||[]).filter(x=>x.kind==='file');if(!it.length)return;e.preventDefault();notePickFiles(it.map((x,i)=>{const f=x.getAsFile();return f&&!f.name?new File([f],'pasted-'+Date.now()+'-'+i+'.png',{type:f.type}):f}).filter(Boolean));toast('Screenshot added — Save note to keep it')}
+async function noteUpload(acct){if(!(hasFirestore()&&firebase.storage)){toast('Attachments need the live app with Firebase Storage on');return null}const out=[];
+  for(const f of noteFiles){try{toast('Uploading '+f.name+'…');const path='crm/'+String(acct).replace(/[^\w-]/g,'')+'/'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)+'_'+(f.name||'file').replace(/[^\w.\-]/g,'_').slice(-80);
+      const ref=firebase.storage().ref(path);await ref.put(f,{contentType:f.type||'application/octet-stream'});out.push({name:f.name,url:await ref.getDownloadURL(),type:f.type||'',size:f.size||0})}
+    catch(e){toast('Couldn’t upload '+f.name+' — '+((e&&e.code)||'try again'));return null}}
+  noteFiles=[];renderNoteDraftFiles();return out}
 let crmRec=null;
 function toggleRecord(id){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;const btn=document.getElementById('rec-btn');
   if(!SR){toast('Voice capture isn\'t supported in this browser — type your note instead');return}
