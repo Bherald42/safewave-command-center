@@ -483,6 +483,18 @@ input[type=date]{color-scheme:dark}
 /* "COMMAND CENTER" beside the logo: the team tool, not the customer app. */
 .brand-logo,.brand-logo:hover{text-decoration:none}
 .size-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.sbars{display:flex;align-items:flex-end;gap:6px;max-width:760px;height:132px}
+.sbars .sb{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.sbars .sb i{display:block;width:100%;max-width:38px;border-radius:4px 4px 0 0;background:var(--wave);opacity:.55}
+.sbars .sb.recent i{opacity:1}.sbars .sb.zero i{background:var(--line);opacity:1}
+.sbars .sbn{font:700 10px var(--font-b);color:var(--muted);margin-bottom:3px;white-space:nowrap}
+.sbars .sbl{font:600 10.5px var(--font-b);color:var(--faint);margin-top:4px;border-top:1px solid var(--line);width:100%;text-align:center;padding-top:4px;min-height:17px}
+.sales-tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.sales-tbl{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
+.sales-tbl th,.sales-tbl td{padding:9px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+.sales-tbl th:first-child,.sales-tbl td:first-child{text-align:left}
+.sales-tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:700;background:var(--surface-2)}
+.sales-tbl tfoot td{font-weight:700;border-bottom:0;background:var(--surface-2)}
 .upd-replies{margin-top:8px;display:flex;flex-direction:column;gap:6px}
 .upd-reply{margin-left:12px;padding:6px 10px;border-left:2px solid var(--wave);background:var(--surface-2);border-radius:0 8px 8px 0;font-size:13.5px}
 .upd-reply .meta{font-size:11px;color:var(--faint)}
@@ -2353,7 +2365,7 @@ let SHOPSTOCK=null, shopStockUnsub=null;
 function subscribeShopStock(){if(!hasFirestore())return;
   if(shopStockUnsub){try{shopStockUnsub()}catch(e){}}
   try{shopStockUnsub=firebase.firestore().collection('settings').doc('shopify').onSnapshot(d=>{
-    const v=d.exists?d.data():{};if(SHOPCONN&&v.backfillAt&&SHOPCONN.backfillAt!==v.backfillAt&&typeof RAISE_ORDERS!=='undefined'){RAISE_ORDERS=null}
+    const v=d.exists?d.data():{};if(SHOPCONN&&v.backfillAt&&SHOPCONN.backfillAt!==v.backfillAt&&typeof RAISE_ORDERS!=='undefined'){RAISE_ORDERS=null;setTimeout(salesRerender,0)}
     SHOPCONN={connected:!!v.connected,shopName:v.shopName||'',domain:v.domain||'',lastSyncAt:v.lastSyncAt||'',scopes:Array.isArray(v.scopes)?v.scopes:null,backfillAt:v.backfillAt||''};SHOPSTOCK=v.stock?shopStockFrom(v):null;
     if(v.velocity&&v.velocity.per){VELO=v.velocity;SIZES.forEach(z=>{const r=v.velocity.per[z];if(r&&typeof r.burn==='number')BURN[z]=r.burn})}
     const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
@@ -7155,6 +7167,7 @@ let invRefreshT=null;
 function invRefresh(){clearTimeout(invRefreshT);invRefreshT=setTimeout(()=>{
   const scr=document.getElementById('s-invoices');
   // Never repaint an open editor (it would wipe what someone is typing); lists repaint live.
+  const fin=document.getElementById('s-finance');if(fin&&fin.classList.contains('on')&&finTab==='sales')renderFinance();
   if(scr&&scr.classList.contains('on')&&((!invOpenId&&!poOpenId&&!invSettingsOpen)||(invOpenId&&!invDraft)||(poOpenId&&!poDraft)))renderInvoices();
   if(typeof acctId!=='undefined'&&acctId&&document.getElementById('ac-billing'))renderBillingCard(findAcct(acctId));
   if(typeof refreshPulse==='function')refreshPulse()},120)}
@@ -9547,17 +9560,17 @@ async function loadRaiseOrders(){if(raiseOrdersLoading||RAISE_ORDERS)return;rais
   try{if(hasFirestore()){const qs=await firebase.firestore().collection('orders').orderBy('at','desc').limit(2500).get();RAISE_ORDERS=qs.docs.map(d=>d.data())}
     else RAISE_ORDERS=(typeof ordersList==='function'?ordersList():[]).filter(o=>!isDemoOrder(o.n))}
   catch(e){RAISE_ORDERS=(typeof ordersList==='function'?ordersList():[])}
-  raiseOrdersLoading=false;raiseRerender()}
+  raiseOrdersLoading=false;salesRerender()}
 function orderMs(o){const t=o.at?Date.parse(o.at):NaN;if(!isNaN(t))return t;return (typeof recMs==='function')?recMs(o):null}
 // What an order actually brought in: Shopify's total after refunds when we have
 // it (older synced orders: refunded/voided count as 0). Test, demo and
 // cancelled orders don't count.
 function orderNet(o){if(o.net!=null)return Number(o.net)||0;if(/refunded|voided/i.test(o.financial||'')&&!/partially/i.test(o.financial||''))return 0;return Number(o.total)||0}
 function shopMissingScope(h){return !!(SHOPCONN&&SHOPCONN.scopes&&SHOPCONN.scopes.indexOf(h)<0)}
-function tractionStats(){const os=(RAISE_ORDERS||[]).filter(o=>!/^(DEMO|#TEST)/i.test(o.n||'')&&!o.test&&!o.cancelled);const now=new Date();const months=[];
+function tractionStats(){const os=salesOrders().filter(o=>!o.cancelled);const now=new Date();const months=[];
   for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({key:d.getFullYear()+'-'+d.getMonth(),label:d.toLocaleDateString('en-US',{month:'short'}),rev:0,n:0})}
   let ttm=0,n90=0,r90=0,cnt=0;const t90=Date.now()-90*864e5,t365=Date.now()-365*864e5;
-  os.forEach(o=>{const ms=orderMs(o);if(ms==null)return;const d=new Date(ms);const m=months.find(x=>x.key===d.getFullYear()+'-'+d.getMonth());const v=orderNet(o);
+  os.forEach(o=>{const ms=o.ms;if(ms==null)return;const d=new Date(ms);const m=months.find(x=>x.key===d.getFullYear()+'-'+d.getMonth());const v=o.net;
     if(m){m.rev+=v;m.n++}if(ms>=t365){ttm+=v;cnt++}if(ms>=t90){r90+=v;n90++}});
   const last=months[10],prev=months[9];const mom=prev&&prev.rev?Math.round((last.rev-prev.rev)/prev.rev*100):null;
   const S=salesAccts();const won=S.filter(a=>a.stage==='Won');const arr=won.reduce((s,a)=>s+(Number((a.metrics||{}).mrr)||0)*12,0);const whole=won.reduce((s,a)=>s+acctRevenue(a).wholesale,0);
@@ -9565,9 +9578,10 @@ function tractionStats(){const os=(RAISE_ORDERS||[]).filter(o=>!/^(DEMO|#TEST)/i
   const rets=Object.keys(typeof RETURNS!=='undefined'?RETURNS:{}).filter(k=>!/TEST/i.test(k)).length;
   return {months:months,ttm:ttm,orders:cnt,r90:r90,n90:n90,aov:cnt?ttm/cnt:0,mom:mom,customers:won.length,arr:arr,wholesale:whole,pipe:pipeStats(),shipped:shipped,returns:rets}}
 function tractionHTML(){if(!RAISE_ORDERS){loadRaiseOrders();return '<div class="card"><div class="d">Loading Shopify history…</div></div>'}
+  if(SALES_HIST==null&&financeView()){loadSalesHistory();return '<div class="card"><div class="d">Loading Shopify history…</div></div>'}
   const t=tractionStats();const bars=t.months.map(m=>({label:m.label,v:Math.round(m.rev),title:m.label+': '+fmtMoney(m.rev)+' · '+m.n+' orders'}));
-  const oldest=(RAISE_ORDERS||[]).reduce((mn,o)=>{const ms=orderMs(o);return ms!=null&&(mn==null||ms<mn)?ms:mn},null);
-  const partial=shopMissingScope('read_all_orders')||(oldest!=null&&oldest>Date.now()-330*864e5&&!(SHOPCONN&&SHOPCONN.backfillAt&&SHOPCONN.scopes&&!shopMissingScope('read_all_orders')));
+  const oldest=salesOrders().reduce((mn,o)=>o.ms!=null&&(mn==null||o.ms<mn)?o.ms:mn,null);const hasImport=(SALES_HIST||[]).length>0;
+  const partial=!hasImport&&(shopMissingScope('read_all_orders')||(oldest!=null&&oldest>Date.now()-330*864e5&&!(SHOPCONN&&SHOPCONN.backfillAt&&SHOPCONN.scopes&&!shopMissingScope('read_all_orders'))));
   let h=partial?'<div class="card" style="border-color:var(--amber);margin-bottom:12px"><span class="pill amber"><span class="dot"></span>PARTIAL HISTORY</span><div class="t" style="margin-top:7px">These numbers only cover orders since '+(oldest?esc(new Date(oldest).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})):'the store was connected')+'</div><div class="d">'
       +(shopMissingScope('read_all_orders')?'Shopify only shares the last 60 days of orders with the Command Center’s app. Add the <b>read_all_orders</b> permission to the Shopify app, then tap <b>Backfill</b> on Operations → Orders to pull the full history.':'Tap <b>Backfill</b> on Operations → Orders to pull the full order history from Shopify.')+'</div></div>':'';
   h+='<div class="tiles" style="margin-bottom:12px">'
@@ -10773,6 +10787,118 @@ function c13OverviewCard(){const f=cashForecast();
     +'<tr><th>In 13 weeks</th><td>'+fmtMoney(f.last.end)+'</td></tr>'
     +'<tr><th>Weeks below buffer</th><td'+(f.below?' style="color:var(--amber)"':'')+'>'+f.below+'</td></tr></tbody></table>'
     +(f.stale==null||f.stale>7?'<div class="note" style="margin-top:10px">'+(f.stale==null?'No bank balance check-in yet.':'Bank balance is '+f.stale+' days old.')+' Update it on the 13-week tab.</div>':'')+'</div>'}
+
+/* ================= FINANCE → SALES =================
+   Sales reporting from every Shopify order we hold: the ones the sync pulls
+   (orders/) plus history imported from Shopify's own order export
+   (sales_history/, for the stretch older than the API shares — totals and
+   sizes only, never customer details). Synced orders win over imported ones.
+   Net = what the order brought in after refunds; cancelled orders count as 0. */
+let SALES_HIST=null,salesHistLoading=false,salesPeriod='12m';
+async function loadSalesHistory(){if(salesHistLoading||SALES_HIST)return;salesHistLoading=true;
+  try{if(hasFirestore()&&financeView()){const qs=await firebase.firestore().collection('sales_history').get();SALES_HIST=qs.docs.map(d=>d.data())}else SALES_HIST=[]}catch(e){SALES_HIST=[]}
+  salesHistLoading=false;salesRerender()}
+function salesRerender(){if(typeof raiseRerender==='function')raiseRerender();const f=document.getElementById('s-finance');if(f&&f.classList.contains('on'))renderFinance()}
+function salesOrders(){const by={};
+  (SALES_HIST||[]).forEach(o=>{if(o.n)by[o.n]=Object.assign({},o,{src:'import'})});
+  (RAISE_ORDERS||[]).forEach(o=>{if(o.n)by[o.n]=Object.assign({},o,{src:'shopify'})});
+  return Object.values(by).filter(o=>!/^(DEMO|#TEST)/i.test(o.n||'')&&!o.test).map(o=>{const ms=orderMs(o);const gross=Number(o.total)||0;const net=o.cancelled?0:orderNet(o);
+    return {n:o.n,ms:ms,gross:gross,net:net,refunded:o.refunded!=null?Number(o.refunded)||0:Math.max(0,gross-net),discounts:Number(o.discounts)||0,shipping:Number(o.shipping)||0,tax:Number(o.tax)||0,items:o.items||[],cancelled:!!o.cancelled,src:o.src}}).filter(o=>o.ms!=null&&!isNaN(o.ms))}
+const SALES_PERIODS=[['mtd','This month'],['lastm','Last month'],['90','Last 90 days'],['ytd','Year to date'],['12m','Last 12 months'],['all','All time']];
+function salesRange(k,os){const now=new Date();let a,b=Date.now();
+  if(k==='mtd')a=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+  else if(k==='lastm'){a=new Date(now.getFullYear(),now.getMonth()-1,1).getTime();b=new Date(now.getFullYear(),now.getMonth(),1).getTime()-1}
+  else if(k==='90')a=b-90*864e5;else if(k==='ytd')a=new Date(now.getFullYear(),0,1).getTime();
+  else if(k==='12m')a=new Date(now.getFullYear(),now.getMonth()-11,1).getTime();
+  else a=(os&&os.length)?Math.min.apply(null,os.map(o=>o.ms)):b;
+  return [a,b]}
+function salesAgg(os,a,b){const r={orders:0,gross:0,net:0,refunded:0,discounts:0,shipping:0,tax:0,units:{S:0,M:0,L:0},cancelled:0};
+  os.forEach(o=>{if(o.ms<a||o.ms>b)return;if(o.cancelled){r.cancelled++;return}r.orders++;r.gross+=o.gross;r.net+=o.net;r.refunded+=o.refunded;r.discounts+=o.discounts;r.shipping+=o.shipping;r.tax+=o.tax;
+    (o.items||[]).forEach(i=>{if(r.units[i.size]!=null)r.units[i.size]+=Number(i.qty)||0})});
+  r.aov=r.orders?r.net/r.orders:0;r.bands=r.units.S+r.units.M+r.units.L;return r}
+// Business (B2B) money in: invoice payments received in the window.
+function b2bPaid(a,b){let t=0;(typeof INVOICES!=='undefined'?INVOICES:[]).forEach(inv=>{if(inv.status==='void')return;(inv.payments||[]).forEach(p=>{const ms=Date.parse((p.date||'')+'T12:00:00');if(ms>=a&&ms<=b)t+=Number(p.amount)||0})});return t}
+function salesMonths(os,a,b){const out=[];const d=new Date(a);d.setDate(1);d.setHours(0,0,0,0);const end=new Date(b);
+  while(d<=end){const s=d.getTime(),nx=new Date(d.getFullYear(),d.getMonth()+1,1).getTime();const g=salesAgg(os,Math.max(s,a),Math.min(nx-1,b));g.label=d.toLocaleDateString('en-US',{month:'short',year:'numeric'});g.short=d.toLocaleDateString('en-US',{month:'short'});g.b2b=b2bPaid(Math.max(s,a),Math.min(nx-1,b));out.push(g);d.setMonth(d.getMonth()+1)}
+  return out}
+function fmtK(v){v=Math.round(v);return v>=1000?'$'+(v/1000).toFixed(v>=10000?0:1).replace(/\.0$/,'')+'k':'$'+v}
+function pctChange(cur,prev){if(!prev)return null;return Math.round((cur-prev)/prev*100)}
+function deltaHTML(ch){if(ch==null)return '';return ' <span style="font-size:11px;font-weight:700;color:var('+(ch>=0?'--good':'--amber')+')">'+(ch>=0?'▲':'▼')+Math.abs(ch)+'%</span>'}
+function salesHTML(){
+  if(!RAISE_ORDERS){loadRaiseOrders();return '<div class="card"><div class="d">Loading Shopify orders…</div></div>'}
+  if(SALES_HIST==null){loadSalesHistory();return '<div class="card"><div class="d">Loading sales history…</div></div>'}
+  if(!invLoaded&&!invUnsubs.length)subscribeInvoices();
+  const os=salesOrders();const [a,b]=salesRange(salesPeriod,os);const cur=salesAgg(os,a,b);
+  const len=b-a,prev=salesPeriod==='all'?null:salesAgg(os,a-len-1,a-1);
+  const b2b=b2bPaid(a,b),b2bPrev=salesPeriod==='all'?null:b2bPaid(a-len-1,a-1);
+  const oldest=os.length?Math.min.apply(null,os.map(o=>o.ms)):null;const imported=os.filter(o=>o.src==='import').length;
+  const canImport=financeAllowed()&&!isObserver();const fmtD=ms=>new Date(ms).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  let h='';
+  const gap=shopMissingScope('read_all_orders')&&!imported;
+  h+='<div class="card" style="margin-bottom:12px'+(gap?';border-color:var(--amber)':'')+'">'
+    +(gap?'<span class="pill amber"><span class="dot"></span>HISTORY STARTS '+(oldest?esc(fmtD(oldest)).toUpperCase():'—')+'</span><div class="t" style="margin-top:7px">Older Shopify orders aren’t in here yet</div><div class="d">Shopify only shares the last 60 days with the Command Center’s app. Two ways to bring the rest in: add the <b>read_all_orders</b> permission to the Shopify app and tap <b>Backfill</b> on Operations → Orders, or import Shopify’s order export below (Shopify admin → Orders → Export → All orders → CSV).</div>'
+        :'<div class="d">Covers <b style="color:var(--text)">'+os.length+'</b> Shopify orders'+(oldest?' from <b style="color:var(--text)">'+esc(fmtD(oldest))+'</b> to today':'')+(imported?' ('+imported+' from an imported export)':'')+'. Totals are after refunds; cancelled and test orders don’t count.</div>')
+    +(canImport?'<div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><label class="btn ghost" style="flex:1 1 220px;cursor:pointer;display:flex;justify-content:center">⤒ Import Shopify order export (CSV)<input type="file" accept=".csv,text/csv" hidden onchange="importShopifyOrdersCsv(this)"></label></div>':'')
+    +'</div>';
+  h+='<div class="chips" style="margin-bottom:12px">'+SALES_PERIODS.map(p=>'<button class="chip'+(salesPeriod===p[0]?' on':'')+'" onclick="salesPeriod=\''+p[0]+'\';renderFinance()">'+p[1]+'</button>').join('')+'</div>';
+  const refPct=cur.gross?Math.round(cur.refunded/cur.gross*100):0;
+  h+='<div class="tiles" style="margin-bottom:12px">'
+    +'<div class="tile"><div class="n">'+fmtMoney(cur.net)+deltaHTML(prev?pctChange(cur.net,prev.net):null)+'</div><div class="l">Net sales (Shopify)</div></div>'
+    +'<div class="tile"><div class="n">'+cur.orders+deltaHTML(prev?pctChange(cur.orders,prev.orders):null)+'</div><div class="l">Orders</div></div>'
+    +'<div class="tile"><div class="n">'+cur.bands+'</div><div class="l">Bands sold · S '+cur.units.S+' · M '+cur.units.M+' · L '+cur.units.L+'</div></div>'
+    +'<div class="tile"><div class="n">'+fmtMoney(cur.aov)+'</div><div class="l">Avg order</div></div>'
+    +'<div class="tile"><div class="n">'+fmtMoney(cur.refunded)+'</div><div class="l">Refunds · '+refPct+'% of gross</div></div>'
+    +'</div>';
+  h+='<div class="tiles" style="margin-bottom:12px">'
+    +'<div class="tile"><div class="n">'+fmtMoney(b2b)+deltaHTML(b2bPrev?pctChange(b2b,b2bPrev):null)+'</div><div class="l">B2B invoice payments received</div></div>'
+    +'<div class="tile"><div class="n">'+fmtMoney(cur.net+b2b)+'</div><div class="l">All revenue in · Shopify + B2B</div></div>'
+    +'</div>';
+  if(prev)h+='<div class="d" style="margin:-4px 0 12px">▲▼ compared with the '+Math.round(len/864e5)+' days before.</div>';
+  const months=salesMonths(os,a,b);
+  if(months.length>1){const mx=Math.max(1,...months.map(m=>m.net)),last=months.length-1;
+    h+='<div class="card" style="margin-bottom:12px"><div class="sec-head" style="margin:0 0 10px"><h2>Net sales by month</h2><span class="pill dim">'+esc(SALES_PERIODS.find(p=>p[0]===salesPeriod)[1])+'</span></div>'
+      +'<div class="sbars" role="img" aria-label="Net sales by month: '+esc(months.map(m=>m.label+' '+fmtMoney(m.net)).join(', '))+'">'
+      +months.map((m,i)=>'<div class="sb'+(i===last?' recent':'')+(m.net?'':' zero')+'" title="'+esc(m.label+': '+fmtMoney(m.net)+' · '+m.orders+' orders')+'"><span class="sbn">'+(m.net?esc(fmtK(m.net)):'')+'</span><i style="height:'+(m.net?Math.max(4,Math.round(m.net/mx*96)):2)+'px"></i><span class="sbl">'+esc(months.length>13&&i%2!==last%2?'':m.short)+'</span></div>').join('')
+      +'</div><div class="d" style="margin-top:6px">After refunds. Cancelled and test orders excluded.</div></div>'}
+  const tot=salesAgg(os,a,b);
+  h+='<div class="sec-head" style="margin-top:14px"><h2>By month</h2><a onclick="exportSalesCsv()">⬇︎ CSV</a></div>'
+    +'<div class="sales-tbl-wrap"><table class="sales-tbl"><thead><tr><th>Month</th><th>Orders</th><th>Bands</th><th>S / M / L</th><th>Gross</th><th>Discounts</th><th>Refunds</th><th>Net sales</th><th>Avg order</th><th>B2B paid</th></tr></thead><tbody>'
+    +months.slice().reverse().map(m=>'<tr><td>'+esc(m.label)+'</td><td>'+m.orders+'</td><td>'+m.bands+'</td><td>'+m.units.S+' / '+m.units.M+' / '+m.units.L+'</td><td>'+fmtMoney(m.gross)+'</td><td>'+fmtMoney(m.discounts)+'</td><td>'+fmtMoney(m.refunded)+'</td><td><b>'+fmtMoney(m.net)+'</b></td><td>'+fmtMoney(m.aov)+'</td><td>'+fmtMoney(m.b2b)+'</td></tr>').join('')
+    +'</tbody><tfoot><tr><td>Total</td><td>'+tot.orders+'</td><td>'+tot.bands+'</td><td>'+tot.units.S+' / '+tot.units.M+' / '+tot.units.L+'</td><td>'+fmtMoney(tot.gross)+'</td><td>'+fmtMoney(tot.discounts)+'</td><td>'+fmtMoney(tot.refunded)+'</td><td><b>'+fmtMoney(tot.net)+'</b></td><td>'+fmtMoney(tot.aov)+'</td><td>'+fmtMoney(b2b)+'</td></tr></tfoot></table></div>'
+    +'<div class="d" style="margin-top:8px">Gross is the order total (products, shipping and tax, after discounts). Net sales is that total after refunds. Bands count Safewave Band line items by size.</div>';
+  return h}
+function exportSalesCsv(){const os=salesOrders();const [a,b]=salesRange(salesPeriod,os);
+  exportCSV('safewave-sales-'+salesPeriod+'.csv',['Month','Orders','Bands','Small','Medium','Large','Gross','Discounts','Refunds','Shipping','Tax','Net sales','Avg order','B2B invoices paid'],
+    salesMonths(os,a,b).map(m=>[m.label,m.orders,m.bands,m.units.S,m.units.M,m.units.L,m.gross.toFixed(2),m.discounts.toFixed(2),m.refunded.toFixed(2),m.shipping.toFixed(2),m.tax.toFixed(2),m.net.toFixed(2),m.aov.toFixed(2),m.b2b.toFixed(2)]))}
+/* Shopify order export (Orders → Export → CSV) → sales_history. One order can
+   span several rows (one per line item); the first row carries the totals.
+   Only totals, dates, status and band sizes are kept — no names or emails. */
+function parseCsvText(t){const rows=[];let row=[],f='',q=false;for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;else if(c===','){row.push(f);f=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(f);f='';if(row.length>1||row[0]!=='')rows.push(row);row=[]}else f+=c}
+  if(f!==''||row.length){row.push(f);rows.push(row)}return rows}
+function parseShopDate(v){v=String(v||'').trim();if(!v)return null;const m=v.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)\s*([+-]\d{2}):?(\d{2})?$/);
+  const iso=m?(m[1]+'T'+m[2]+(m[2].length===5?':00':'')+m[3]+':'+(m[4]||'00')):v;const ms=Date.parse(iso);return isNaN(ms)?null:new Date(ms).toISOString()}
+async function importShopifyOrdersCsv(input){const f=input.files&&input.files[0];input.value='';if(!f)return;
+  if(!(financeAllowed()&&!isObserver())){toast('Only the finance group can import sales');return}
+  let rows;try{rows=parseCsvText(await f.text())}catch(e){toast('Couldn’t read that file');return}
+  if(rows.length<2){toast('That file has no orders');return}
+  const H=rows[0].map(x=>x.trim().toLowerCase());const col=n=>H.indexOf(n);
+  const ci={name:col('name'),created:col('created at'),fin:col('financial status'),sub:col('subtotal'),ship:col('shipping'),tax:col('taxes'),total:col('total'),disc:col('discount amount'),ref:col('refunded amount'),canc:col('cancelled at'),qty:col('lineitem quantity'),li:col('lineitem name')};
+  if(ci.name<0||ci.created<0||ci.total<0){toast('This doesn’t look like Shopify’s order export — export Orders as CSV from the Shopify admin');return}
+  const num=v=>Math.round((Number(String(v||'').replace(/[^0-9.\-]/g,''))||0)*100)/100;const orders={};
+  rows.slice(1).forEach(r=>{const n=(r[ci.name]||'').trim();if(!n)return;let o=orders[n];
+    if(!o){const at=parseShopDate(r[ci.created]);if(!at)return;const total=num(r[ci.total]),refunded=ci.ref>=0?num(r[ci.ref]):0,cancelled=ci.canc>=0&&!!String(r[ci.canc]||'').trim();
+      o=orders[n]={n:n,at:at,total:total,refunded:refunded,net:cancelled?0:Math.max(0,Math.round((total-refunded)*100)/100),subtotal:ci.sub>=0?num(r[ci.sub]):0,shipping:ci.ship>=0?num(r[ci.ship]):0,tax:ci.tax>=0?num(r[ci.tax]):0,discounts:ci.disc>=0?num(r[ci.disc]):0,financial:ci.fin>=0?String(r[ci.fin]||'').toLowerCase():'',cancelled:cancelled,items:[],source:'shopify-csv'}}
+    if(ci.li>=0){const name=r[ci.li]||'';const m=String(name).match(/\b(small|medium|large)\b/i);const q=ci.qty>=0?Number(r[ci.qty])||0:0;if(m&&q>0&&/band/i.test(name))o.items.push({size:m[1][0].toUpperCase(),qty:q})}});
+  const list=Object.values(orders);if(!list.length){toast('No orders found in that file');return}
+  const span=list.map(o=>Date.parse(o.at));if(!confirm('Import '+list.length+' Shopify orders ('+new Date(Math.min.apply(null,span)).toLocaleDateString()+' – '+new Date(Math.max.apply(null,span)).toLocaleDateString()+')?\n\nOnly totals, dates, status and band sizes are saved — no customer names or emails. Orders already synced from Shopify keep their synced numbers.'))return;
+  if(!hasFirestore()){toast('Importing needs the live app');return}
+  toast('Importing '+list.length+' orders…');const by=(CURRENT_USER&&CURRENT_USER.name)||'',at=new Date().toISOString();
+  try{const fs=firebase.firestore();for(let i=0;i<list.length;i+=400){const bt=fs.batch();list.slice(i,i+400).forEach(o=>bt.set(fs.collection('sales_history').doc(String(o.n).replace(/[^\w-]/g,'')||('o'+i)),Object.assign({},o,{importedAt:at,importedBy:by})));await bt.commit()}
+    SALES_HIST=null;loadSalesHistory();toast('✓ Imported '+list.length+' orders')}
+  catch(e){toast('Import failed — '+((e&&e.code)||'try again'))}}
+
 let finTab='overview';
 function finGoTab(t){finTab=t;renderFinance()}
 function renderFinance(){
@@ -10789,7 +10915,7 @@ function renderFinance(){
   const SEC={};
   SEC.overview=
     // Compact KPI strip (Shopify, live) → runway table → 13 weeks → raise → charts.
-    '<div class="kpi-head"><span>Sales</span>'+(shopLive()?'<span class="pill wave">Shopify · live</span>':'<span class="pill amber">Shopify · Aug 4 snapshot</span>')+'</div>'
+    '<div class="kpi-head"><span>Sales</span><span style="display:flex;gap:8px;align-items:center">'+(shopLive()?'<span class="pill wave">Shopify · live</span>':'<span class="pill amber">Shopify · Aug 4 snapshot</span>')+'<a onclick="finGoTab(\'sales\')" style="cursor:pointer;color:var(--wave);font-weight:700;font-size:12.5px">Full sales report →</a></span></div>'
     +'<div class="kpi-strip">'
       +kpiCell(SHOP.grosse90||SHOP.gross90,'Gross · 90 days')
       +kpiCell(SHOP.lastWeekRev,'Revenue · last wk')
@@ -10853,8 +10979,9 @@ function renderFinance(){
       +'<div class="note" style="margin-top:10px">Manual entry today — feeds the burn model. Live Gusto / ADP payroll sync connects here next.</div>'
     +'</div>';
   SEC.access=financeAccessHTML();
+  SEC.sales=salesHTML();
   SEC.cash13=cash13HTML();
-  const tabs=[['overview','Overview'],['cash13','13-week cash'],['pnl','P&L'],['projections','Projections'],['budget','Budget'],['payroll','Payroll'],['build','Build spend'],['access','Access']];
+  const tabs=[['overview','Overview'],['sales','Sales'],['cash13','13-week cash'],['pnl','P&L'],['projections','Projections'],['budget','Budget'],['payroll','Payroll'],['build','Build spend'],['access','Access']];
   if(!SEC[finTab])finTab='overview';
   const strip='<div class="chips" style="margin-bottom:16px">'+tabs.map(t=>'<button class="chip'+(finTab===t[0]?' on':'')+'" onclick="finGoTab(\''+t[0]+'\')">'+t[1]+'</button>').join('')+'</div>';
   body.innerHTML=strip+SEC[finTab];

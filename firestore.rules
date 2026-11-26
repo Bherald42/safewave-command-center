@@ -340,6 +340,12 @@ service cloud.firestore {
       allow write: if canRaise();
     }
     // Data room checklist items and their uploaded files' metadata.
+    // Order history imported from Shopify's order export (Finance → Sales) for
+    // the stretch the API can't reach. Totals and sizes only — no customer details.
+    match /sales_history/{id} {
+      allow read: if canSeeRaise();
+      allow write: if canRaise();
+    }
     // Raise tasks Brad assigns to Trey: finance group only (titles can name investors).
     match /raise_tasks/{id} {
       allow read: if canSeeRaise();

@@ -66,6 +66,13 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   update to the newest Production firmware via the Release Checks flasher
   (`qcOtaFlashStart(relId,{device})`), buzz-tests it, ticks the checklist, and
   saves the band's identity on `bands/{serial}.hw` + `fulfillments.band`.
+- **Finance → Sales** reports every Shopify order: synced `orders` merged with
+  `sales_history` (imported from Shopify's order-export CSV for the stretch the API
+  can't reach without `read_all_orders`; totals/dates/status/band sizes only, never
+  customer details; synced orders win on the same order number). Period chips,
+  KPIs vs the prior period, net-by-month bars, a monthly table with CSV export,
+  and B2B invoice payments. Fundraising → Traction uses the same merged set
+  (`salesOrders()`).
 - **Invoices & customer POs** (Enterprise → Invoices & POs). Invoices are
   numbered from `counters/invoices`, carry line items, terms, payments and a
   history; sent invoices are voided, never deleted. The PDF is drawn server-side
@@ -99,7 +106,7 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   `invoices` + `customer_pos` + `invoice_products` (Enterprise → Invoices & POs; `counters/invoices`,
   `settings/invoicing` letterhead),
   `notifications`, `nudges`, `mail_credentials`, `chat_channels/{ch}/messages`,
-  `feedback` (super-admin read), and `settings/{finance,chat,raise}`.
+  `sales_history` (finance group), `feedback` (super-admin read), and `settings/{finance,chat,raise}`.
 - **Access rules live in `firestore.rules`** and `storage.rules`. Financials are
   gated to a super-admin-managed allow-list; feedback is readable only by super
   admins; `orders` are server-write only.
