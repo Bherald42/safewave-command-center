@@ -48,6 +48,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Tab activity: each person writes only their own live status and daily
+    // per-tab totals; only Brad (the super-admin email) can read them.
+    match /user_activity/{uid} {
+      allow read: if isSuperEmail();
+      allow write: if signedIn() && request.auth.uid == uid;
+      match /days/{day} {
+        allow read: if isSuperEmail();
+        allow write: if signedIn() && request.auth.uid == uid;
+      }
+    }
     match /users/{uid} {
       // Any signed-in teammate can read the roster (needed for the manage-team screen).
       allow read: if signedIn();

@@ -489,6 +489,10 @@ input[type=date]{color-scheme:dark}
 .sbars .sb.recent i{opacity:1}.sbars .sb.zero i{background:var(--line);opacity:1}
 .sbars .sbn{font:700 10px var(--font-b);color:var(--muted);margin-bottom:3px;white-space:nowrap}
 .sbars .sbl{font:600 10.5px var(--font-b);color:var(--faint);margin-top:4px;border-top:1px solid var(--line);width:100%;text-align:center;padding-top:4px;min-height:17px}
+.tact-bar{height:10px;background:var(--surface-2);border-radius:5px;overflow:hidden;min-width:120px}
+.tact-bar i{display:block;height:100%;background:var(--wave-dim);border-radius:5px}
+.tact-bar i b{display:block;height:100%;background:var(--wave);border-radius:5px}
+.tact-detail{padding:4px 0 6px}.tact-tabs{min-width:520px}
 .sales-tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .sales-tbl{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
 .sales-tbl th,.sales-tbl td{padding:9px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
@@ -6103,6 +6107,8 @@ let fbxFilter='open';
 function currentScreenId(){const el=document.querySelector('.screen.on');return el?el.id:'s-pulse'}
 function currentScreenLabel(){return SCREEN_LABELS[currentScreenId()]||'App'}
 function isSuperAdmin(){return !!(CURRENT_USER&&CURRENT_USER.role==='superadmin')}
+// The Users tab (roster, sign-ins, tab activity) is Brad's alone.
+function isBrad(){return !!(CURRENT_USER&&(''+(CURRENT_USER.email||'')).toLowerCase()===SUPER_EMAIL)}
 /* Oversight accounts (Jared & Trevon): see every tab, but read-only on the
    Build board and the Users board. Identified by their sign-in email so the
    grant applies the moment they log in. Real enforcement is in firestore.rules
@@ -7022,7 +7028,7 @@ function buildNav(role){
   if(financeView())items.push(RAISE_NAV,FINANCE_NAV);
   items.push(FEEDBACK_NAV);
   if(isSuperAdmin())items.push(FIELD_NAV);
-  if(isSuperAdmin()||isOversight())items.push(USERS_NAV);
+  if(isBrad())items.push(USERS_NAV);
   NAV_ALLOWED=new Set(items.map(n=>n.id));NAV_ALLOWED.add('s-pulse');
   const groups=NAV_GROUPS.filter(g=>navPages(g).length);
   const main=groups.filter(g=>g.id!=='settings'),settings=groups.find(g=>g.id==='settings');
@@ -7638,7 +7644,7 @@ function enterApp(user){
   if(canVault())subscribeVault();
   if(canComply())subscribeCompliance();
   if(canQC())subscribeQC();
-  recordActivity();startSessionTracking();
+  recordActivity();startSessionTracking();startTabActivity();
   loadFinanceAccess().then(()=>{buildNav(CURRENT_USER.role);if(financeView()){loadFinance();if(!CRMA.some(a=>a.board==='Fundraise'))loadCRM();loadDataroom();}});
   subscribeGuides();
   goto('s-pulse');
@@ -8028,7 +8034,7 @@ function setUserRole(uid,role,btn){
 /* ---- Users & Access screen (super admin): role + department + financials,
    with a live preview of the tabs each teammate will see. ---- */
 let USERS_ADMIN=[];
-function manageUsers(){if(isSuperAdmin()){closeSheets();goto('s-users')}else{openUsers()}}
+function manageUsers(){if(isBrad()){closeSheets();goto('s-users')}else{openUsers()}}
 /* Pure computation of the nav labels a given user would see — mirrors buildNav
    so the preview is honest (role hierarchy + department + finance/feedback). */
 function navItemsForUser(u){
@@ -8041,27 +8047,27 @@ function navItemsForUser(u){
   const fineOK=isSuperU||isOversight(u)||FINANCE_EMAILS.map(e=>(e||'').toLowerCase()).includes((u.email||'').toLowerCase());
   const labels=items.map(n=>n.label);
   if(fineOK)labels.splice(1,0,'Financials');
-  if(isSuperU){labels.push('Feedback');labels.push('Users');}
-  else if(isOversight(u))labels.push('Users');
+  if(isSuperU)labels.push('Feedback');
+  if((''+(u.email||'')).toLowerCase()===SUPER_EMAIL)labels.push('Users');
   return labels;
 }
 function renderUsers(){
   const body=document.getElementById('users-screen-body');if(!body)return;
-  if(!isSuperAdmin()&&!isOversight()){body.innerHTML='<div class="empty"><div class="d">Super admin only.</div></div>';return}
+  if(!isBrad()){body.innerHTML='<div class="empty"><div class="d">Only Brad can open Users.</div></div>';return}
   if(!hasFirestore()){body.innerHTML=fsSetupNote();return}
   body.innerHTML='<div class="d">Loading…</div>';
   firebase.firestore().collection('users').get().then(qs=>{
     USERS_ADMIN=qs.docs.map(d=>Object.assign({uid:d.id},d.data()));
-    renderUsersList();loadSignIns();loadVideoViews();
+    renderUsersList();loadSignIns();loadVideoViews();subscribeTabActivity();
   }).catch(e=>{body.innerHTML=fsSetupNote((e&&e.code)||'permission-denied')});
 }
 function renderUsersList(){
   const body=document.getElementById('users-screen-body');if(!body)return;
-  const sub=document.getElementById('users-sub');if(sub)sub.textContent=USERS_ADMIN.length+' teammate'+(USERS_ADMIN.length===1?'':'s')+(isSuperAdmin()?' · super admin only':' · read-only (oversight)');
+  const sub=document.getElementById('users-sub');if(sub)sub.textContent=USERS_ADMIN.length+' teammate'+(USERS_ADMIN.length===1?'':'s')+' · only you can see this';
   const q=((document.getElementById('users-q')||{}).value||'').trim().toLowerCase();
   let list=USERS_ADMIN.slice().sort((a,b)=>((a.name||a.email||'')+'').localeCompare((b.name||b.email||'')));
   if(q)list=list.filter(u=>[u.name,u.email].some(v=>(v||'').toLowerCase().includes(q)));
-  body.innerHTML=signInTable(list)+videoViewsCard(list)+(list.length?list.map(userAdminCard).join(''):'<div class="empty"><div class="d">No teammate matches.</div></div>');
+  body.innerHTML=tabActivityCard(list)+signInTable(list)+videoViewsCard(list)+(list.length?list.map(userAdminCard).join(''):'<div class="empty"><div class="d">No teammate matches.</div></div>');
 }
 let SIGNINS=null,signInErr='',signInOpen={};
 function loadSignIns(){
@@ -8117,6 +8123,62 @@ function userAdminCard(u){
   h+='</div>';
   return h;
 }
+
+/* ---- Users → Tab activity (Brad only) ---- */
+let TACT=null,tactUnsub=null,TACT_DAYS={},tactRange='today',tactOpen={},tactErr='';
+function subscribeTabActivity(){if(!isBrad()||!hasFirestore()||tactUnsub)return;
+  tactUnsub=firebase.firestore().collection('user_activity').onSnapshot(qs=>{TACT={};qs.docs.forEach(d=>{TACT[d.id]=d.data()});loadTabDays();tactRefresh()},e=>{tactErr=(e&&e.code)||'unavailable';TACT={};tactRefresh()});
+  setInterval(tactRefresh,30000)}
+function tactRefresh(){const s=document.getElementById('s-users');if(s&&s.classList.contains('on'))renderUsersList()}
+function tactRangeStart(){const d=new Date();if(tactRange==='7d')d.setDate(d.getDate()-6);return actDay(d)}
+let tactDaysAt=0;
+function loadTabDays(force){if(!TACT||!hasFirestore())return;if(!force&&Date.now()-tactDaysAt<60000)return;tactDaysAt=Date.now();
+  const from=tactRangeStart(),fs=firebase.firestore();
+  Promise.all(Object.keys(TACT).map(uid=>fs.collection('user_activity').doc(uid).collection('days').where('date','>=',from).get().then(qs=>[uid,qs.docs.map(d=>d.data())]).catch(()=>[uid,[]])))
+    .then(rows=>{TACT_DAYS={};rows.forEach(r=>{TACT_DAYS[r[0]]=r[1]});tactRefresh()})}
+function tactSetRange(r){tactRange=r;TACT_DAYS={};loadTabDays(true);renderUsersList()}
+function tactMs(v){if(!v)return 0;if(v.toDate)return v.toDate().getTime();const t=Date.parse(v);return isNaN(t)?0:t}
+function tactStatus(a){const at=tactMs(a&&a.at),inp=tactMs(a&&a.lastInputAt),now=Date.now();
+  if(!at||now-at>3*60*1000)return {k:'off',t:'Offline',c:'dim'};
+  if(!a.visible)return {k:'away',t:'App in background',c:'dim'};
+  if(inp&&now-inp<ACT_IDLE_MS*1.5)return {k:'active',t:'Using it now',c:'good'};
+  return {k:'idle',t:'Open, idle '+Math.max(1,Math.round((now-(inp||at))/60000))+' min',c:'amber'}}
+function tactDur(s){s=Math.round(s||0);if(s<60)return s?s+'s':'—';const h=Math.floor(s/3600),m=Math.round(s%3600/60);return h?h+'h '+m+'m':m+'m'}
+function tactSum(uid){const tabs={},visits=[];let open=0,active=0,actions=0;
+  (TACT_DAYS[uid]||[]).forEach(d=>{Object.keys(d.tabs||{}).forEach(k=>{const t=d.tabs[k]||{};const x=tabs[k]||(tabs[k]={label:t.label||k,open:0,active:0,actions:0});
+      x.open+=t.open||0;x.active+=t.active||0;x.actions+=t.actions||0;open+=t.open||0;active+=t.active||0;actions+=t.actions||0});
+    (d.visits||[]).forEach(v=>visits.push(v))});
+  visits.sort((a,b)=>(b.start||'').localeCompare(a.start||''));
+  return {tabs:Object.values(tabs).sort((a,b)=>b.active-a.active||b.open-a.open),visits:visits,open:open,active:active,actions:actions}}
+function tactBar(t,max){const w=max?Math.round(t.open/max*100):0,a=t.open?Math.round(t.active/t.open*100):0;
+  return '<div class="tact-bar" title="'+esc(tactDur(t.active)+' active of '+tactDur(t.open)+' open')+'"><i style="width:'+w+'%"><b style="width:'+a+'%"></b></i></div>'}
+function tabActivityCard(list){
+  let h='<div class="card"><div class="row" style="align-items:baseline;gap:10px;flex-wrap:wrap"><div class="grow" style="flex:1 1 300px;min-width:0"><div class="t" style="font-size:16px">Tab activity</div>'
+    +'<div class="d" style="margin:2px 0 8px">Which tab each teammate is on right now, and how they spent their time. <b>Active</b> means they clicked, tapped, typed or scrolled within the last minute; <b>open</b> is time the tab was on screen. Actions are clicks, taps and typing (at most one a second). Only you can see this.</div></div>'
+    +'<div class="chips" style="margin:0">'+[['today','Today'],['7d','Last 7 days']].map(r=>'<button class="chip'+(tactRange===r[0]?' on':'')+'" onclick="tactSetRange(\''+r[0]+'\')">'+r[1]+'</button>').join('')+'</div></div>';
+  if(!TACT)return h+'<div class="d qs-sub">'+(tactErr?'Activity unavailable ('+esc(tactErr)+').':'Loading activity…')+'</div></div>';
+  const rows=list.map(u=>{const a=TACT[u.uid]||null,st=tactStatus(a),sm=tactSum(u.uid);return {u:u,a:a,st:st,sm:sm}});
+  const order={active:0,idle:1,away:2,off:3};
+  rows.sort((x,y)=>(order[x.st.k]-order[y.st.k])||(y.sm.active-x.sm.active)||(tactMs(y.a&&y.a.at)-tactMs(x.a&&x.a.at)));
+  const live=rows.filter(r=>r.st.k==='active').length,idle=rows.filter(r=>r.st.k==='idle').length;
+  h+='<div class="d qs-sub" style="margin-bottom:6px">'+live+' using it now · '+idle+' open but idle · tracking started '+esc(TACT_START)+'</div>';
+  h+='<div style="overflow-x:auto"><table class="qa-tbl" style="min-width:760px"><tr><th>Teammate</th><th>Right now</th><th>Last click or keypress</th><th>Active '+(tactRange==='today'?'today':'· 7 days')+'</th><th>Open</th><th>Actions</th><th>Tabs</th></tr>';
+  rows.forEach(r=>{const u=r.u,a=r.a,sm=r.sm,open=!!tactOpen[u.uid],inp=tactMs(a&&a.lastInputAt);
+    h+='<tr><td><b>'+esc(u.name||u.email||u.uid)+'</b><div class="d qs-sub">'+esc(u.email||'')+'</div></td>'
+      +'<td><span class="pill '+r.st.c+'"><span class="dot"></span>'+esc(r.st.t)+'</span>'+(a&&a.tab&&r.st.k!=='off'?'<div class="d qs-sub" style="margin-top:4px"><b style="color:var(--text)">'+esc(a.tab)+'</b></div>':a&&a.tab?'<div class="d qs-sub" style="margin-top:4px">last on '+esc(a.tab)+'</div>':'')+'</td>'
+      +'<td>'+(inp?siCell(new Date(inp)):siCell(null))+'</td>'
+      +'<td><b style="font-weight:700;font-size:15px">'+tactDur(sm.active)+'</b>'+(sm.open?'<div class="d qs-sub">'+Math.round(sm.active/sm.open*100)+'% of open time</div>':'')+'</td>'
+      +'<td>'+tactDur(sm.open)+'</td><td>'+(sm.actions||'—')+'</td>'
+      +'<td>'+(sm.tabs.length?'<button class="rg-link" style="padding:0" onclick="tactOpen['+ocjson(u.uid)+']=!tactOpen['+ocjson(u.uid)+'];renderUsersList()">'+sm.tabs.length+' · '+(open?'hide':'show')+'</button>':'—')+'</td></tr>';
+    if(open&&sm.tabs.length){const max=Math.max(...sm.tabs.map(t=>t.open));
+      h+='<tr><td colspan="7"><div class="tact-detail"><table class="qa-tbl tact-tabs"><tr><th>Tab</th><th style="min-width:160px">Open <span style="font-weight:400">(dark = active)</span></th><th>Active</th><th>Open</th><th>Actions</th></tr>'
+        +sm.tabs.map(t=>'<tr><td>'+esc(t.label)+'</td><td>'+tactBar(t,max)+'</td><td><b style="font-weight:600">'+tactDur(t.active)+'</b></td><td>'+tactDur(t.open)+'</td><td>'+(t.actions||'—')+'</td></tr>').join('')+'</table>'
+        +(sm.visits.length?'<div class="d" style="font-weight:600;color:var(--text);margin:10px 0 4px">Visits, newest first</div><div class="d" style="line-height:1.75">'
+          +sm.visits.slice(0,60).map(v=>esc(siWhen(new Date(v.start)))+' · <b style="color:var(--text);font-weight:600">'+esc(v.tab)+'</b> · '+tactDur(v.secs)+' ('+(v.active?tactDur(v.active)+' active':'no interaction')+(v.actions?', '+v.actions+' action'+(v.actions===1?'':'s'):'')+')').join('<br>')
+          +(sm.visits.length>60?'<br>…and '+(sm.visits.length-60)+' earlier':'')+'</div>':'')+'</div></td></tr>'}
+  });
+  return h+'</table></div></div>'}
+const TACT_START='Nov 27, 2026';
 /* ---- Training video views: who opened /training/, how long, which chapters.
    Written by the videoView function (the page is public, so guests are recorded by the name they type). ---- */
 const TRAINING_CH=[['overview','Overview',174],['setup','Getting set up',248],['people','People and bands',177],['alerts','Sending an alert',170],['phone','Alerts on the phone',71],['aware','Safewave Aware',220],['messaging','Messaging and support',113],['health','Keeping things healthy',146],['wrap-up','Wrap-up',31]];
@@ -8833,6 +8895,53 @@ function sessHeartbeat(){
   sessLastSeen=Date.now();
   firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({lastSeenAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}).catch(()=>{});
 }
+
+/* ===== Tab activity — who is on which tab, and whether they're actually using it =====
+   Every 5 s while the app is on screen, the current tab gets 5 s of "open" time,
+   and 5 s of "active" time if the person clicked, tapped, typed or scrolled in
+   the last minute. Clicks/taps and typing (at most one per second) count as
+   actions. Each person writes only their own user_activity/{uid} (live status)
+   and user_activity/{uid}/days/{date} (per-tab totals + the tabs they visited);
+   only Brad can read them (Users tab). Days are New York dates. */
+const ACT_TICK=5000,ACT_IDLE_MS=60*1000,ACT_FLUSH_MS=60*1000;
+let ACT={key:'',label:'',visit:null,lastInput:0,lastAction:0,pend:{},visits:[],lastFlush:0,timer:null,on:false};
+function actDay(d){return (d||new Date()).toLocaleDateString('en-CA',{timeZone:'America/New_York'})}
+function actWhere(){const scr=document.querySelector('.screen.on');const id=scr?scr.id:'';if(!id)return null;
+  const g=typeof navGroupOf==='function'?navGroupOf(id):null;const pillEl=document.querySelector('#subnav .subtab.on');const pill=pillEl?pillEl.textContent.trim():'';
+  const group=id==='s-pulse'?'Home':(g?g.label:(PAGE_LABEL[id]||id.replace(/^s-/,'')));
+  const page=pill||(id==='s-pulse'?'':(PAGE_LABEL[id]||''));
+  const label=page&&page!==group?group+' › '+page:group;
+  return {key:(id+(pill?'~'+pill:'')).replace(/[^\w~-]/g,'_').slice(0,80),label:label}}
+function actPend(k,label){return ACT.pend[k]||(ACT.pend[k]={label:label,open:0,active:0,actions:0})}
+function actCloseVisit(now){const v=ACT.visit;if(!v)return;v.end=now;if(v.end-v.start>=3000||v.actions)ACT.visits.push({tab:v.label,start:new Date(v.start).toISOString(),secs:Math.round((v.end-v.start)/1000),active:v.active,actions:v.actions});ACT.visit=null}
+function actSync(now){const w=actWhere();if(!w)return null;
+  if(w.key!==ACT.key||!ACT.visit){actCloseVisit(now);ACT.key=w.key;ACT.label=w.label;ACT.visit={label:w.label,start:now,active:0,actions:0}}
+  return w}
+function actInput(e){if(!ACT.on)return;const now=Date.now();ACT.lastInput=now;
+  if(e.type==='pointerdown'||e.type==='keydown'){if(now-ACT.lastAction<1000)return;ACT.lastAction=now;
+    const w=actSync(now);if(!w)return;actPend(w.key,w.label).actions++;if(ACT.visit)ACT.visit.actions++}}
+function actTick(){if(!ACT.on||document.visibilityState!=='visible')return;const now=Date.now();const w=actSync(now);if(!w)return;
+  const p=actPend(w.key,w.label),s=ACT_TICK/1000;p.open+=s;if(now-ACT.lastInput<ACT_IDLE_MS){p.active+=s;if(ACT.visit)ACT.visit.active+=s}
+  if(now-ACT.lastFlush>=ACT_FLUSH_MS)actFlush()}
+function actFlush(leaving){
+  if(!hasFirestore()||!CURRENT_USER||!CURRENT_USER.uid)return;const now=Date.now();ACT.lastFlush=now;
+  if(leaving)actCloseVisit(now);
+  const fs=firebase.firestore(),FV=firebase.firestore.FieldValue,ref=fs.collection('user_activity').doc(CURRENT_USER.uid);
+  const visible=!leaving&&document.visibilityState==='visible';
+  ref.set({name:CURRENT_USER.name||'',email:CURRENT_USER.email||'',tab:ACT.label||'',visible:visible,lastInputAt:ACT.lastInput?new Date(ACT.lastInput).toISOString():null,device:typeof sessDevice==='function'?sessDevice():'',at:FV.serverTimestamp()},{merge:true}).catch(()=>{});
+  const tabs={};let any=false;Object.keys(ACT.pend).forEach(k=>{const p=ACT.pend[k];if(!p.open&&!p.actions)return;any=true;
+    tabs[k]={label:p.label,open:FV.increment(p.open),active:FV.increment(p.active),actions:FV.increment(p.actions)}});
+  const visits=ACT.visits.splice(0);ACT.pend={};
+  if(!any&&!visits.length)return;
+  const upd={date:actDay(),updatedAt:FV.serverTimestamp()};if(any)upd.tabs=tabs;if(visits.length)upd.visits=FV.arrayUnion.apply(FV,visits);
+  ref.collection('days').doc(actDay()).set(upd,{merge:true}).catch(()=>{});
+}
+function startTabActivity(){if(ACT.on)return;ACT.on=true;ACT.lastInput=Date.now();ACT.lastFlush=Date.now();
+  ['pointerdown','keydown','wheel','touchstart','scroll'].forEach(t=>document.addEventListener(t,actInput,{capture:true,passive:true}));
+  ACT.timer=setInterval(actTick,ACT_TICK);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')actFlush(true);else{ACT.lastInput=Date.now();actFlush()}});
+  window.addEventListener('pagehide',()=>actFlush(true));
+  setTimeout(()=>{actSync(Date.now());actFlush()},1500)}
 function startSessionTracking(){
   recordSession();
   if(sessTimer)clearInterval(sessTimer);sessTimer=setInterval(sessHeartbeat,3*60*1000);
