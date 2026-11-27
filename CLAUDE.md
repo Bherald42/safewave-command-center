@@ -73,6 +73,13 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   KPIs vs the prior period, net-by-month bars, a monthly table with CSV export,
   and B2B invoice payments. Fundraising → Traction uses the same merged set
   (`salesOrders()`).
+- **Users tab is Brad's alone** (`isBrad()`; `user_activity` rules read = `isSuperEmail()`).
+  Tab activity: every 5 s the app credits the current tab (screen + sub-pill) with
+  open time, and active time if there was a click/tap/keypress/scroll in the last
+  minute; clicks/typing count as actions (≤1/s). Each person writes only their own
+  `user_activity/{uid}` (live tab, visible, lastInputAt) and
+  `user_activity/{uid}/days/{NY date}` (`tabs` totals + `visits`), flushed every
+  minute and when the app goes to the background.
 - **Invoices & customer POs** (Enterprise → Invoices & POs). Invoices are
   numbered from `counters/invoices`, carry line items, terms, payments and a
   history; sent invoices are voided, never deleted. The PDF is drawn server-side
@@ -106,7 +113,7 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   `invoices` + `customer_pos` + `invoice_products` (Enterprise → Invoices & POs; `counters/invoices`,
   `settings/invoicing` letterhead),
   `notifications`, `nudges`, `mail_credentials`, `chat_channels/{ch}/messages`,
-  `sales_history` (finance group), `feedback` (super-admin read), and `settings/{finance,chat,raise}`.
+  `sales_history` (finance group), `user_activity` (Brad-only read), `feedback` (super-admin read), and `settings/{finance,chat,raise}`.
 - **Access rules live in `firestore.rules`** and `storage.rules`. Financials are
   gated to a super-admin-managed allow-list; feedback is readable only by super
   admins; `orders` are server-write only.
