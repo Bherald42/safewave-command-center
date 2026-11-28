@@ -741,7 +741,7 @@ details.meet-log{border-top:1px solid var(--line);padding:8px 0}details.meet-log
 /* nav — 4-item bar on mobile (Home · My work · Messages · Menu),
    grouped left sidebar on desktop (Home · Customers · Operations · Product ·
    Finance · Resources … Settings). Pages inside a group switch on .subnav. */
-.nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--bar-bg);backdrop-filter:blur(12px);
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--bar-bg);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);will-change:transform;
   border-top:1px solid var(--line);display:flex;padding:6px 2px calc(9px + env(safe-area-inset-bottom))}
 .tab{flex:1 1 0;min-width:0;background:none;border:0;color:var(--faint);font-family:var(--font-b);font-size:10.5px;font-weight:600;
   display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;cursor:pointer;position:relative;text-decoration:none}
@@ -9216,15 +9216,32 @@ function chatKeyboardFit(){const el=document.getElementById('s-chat');if(!el)ret
 function isTextField(el){if(!el||!el.tagName)return false;if(el.isContentEditable||el.tagName==='TEXTAREA')return true;
   return el.tagName==='INPUT'&&!/^(button|submit|reset|checkbox|radio|range|file|color|image|hidden)$/i.test(el.type||'')}
 let kbWasUp=false;
-function kbReseat(){requestAnimationFrame(()=>{const x=window.scrollX,y=window.scrollY;window.scrollTo(x,y+1);window.scrollTo(x,y)})}
+function kbReseat(){requestAnimationFrame(()=>{const x=window.scrollX,y=window.scrollY;window.scrollTo(x,y+1);window.scrollTo(x,y);
+  // Force iOS to re-place the fixed bar against the current viewport.
+  const nav=document.querySelector('.nav');if(nav&&window.innerWidth<860&&!nav.classList.contains('kb-hide')){nav.style.display='none';void nav.offsetHeight;nav.style.display=''}
+  if(typeof navSeat==='function')navSeat()})}
+/* iPhone Home Screen apps: after the keyboard (or a PDF / another app) closes,
+   iOS can keep the shorter "keyboard up" layout height, so a bottom:0 tab bar
+   sits where the keyboard's top was and drifts while scrolling. Measure the
+   real visible area (VisualViewport) and pull the bar down to the true bottom
+   whenever the two disagree. No effect anywhere they agree (desktop, Android). */
+let navSeatRaf=0;
+function navSeat(){if(navSeatRaf)return;navSeatRaf=requestAnimationFrame(()=>{navSeatRaf=0;const nav=document.querySelector('.nav');if(!nav)return;
+  const vv=window.visualViewport;
+  if(!vv||window.innerWidth>=860||nav.classList.contains('kb-hide')||isTextField(document.activeElement)||vv.scale>1.01){if(nav.style.transform)nav.style.transform='';return}
+  const gap=Math.round(vv.height+vv.offsetTop-window.innerHeight);
+  const t=gap>1?'translate3d(0,'+gap+'px,0)':'';if(nav.style.transform!==t)nav.style.transform=t})}
+(function(){try{if(window.visualViewport){window.visualViewport.addEventListener('resize',navSeat);window.visualViewport.addEventListener('scroll',navSeat)}
+  window.addEventListener('scroll',navSeat,{passive:true});window.addEventListener('resize',navSeat);window.addEventListener('pageshow',()=>setTimeout(navSeat,60));
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){setTimeout(navSeat,60);setTimeout(navSeat,500)}})}catch(e){}})();
 function kbFit(){const nav=document.querySelector('.nav');if(!nav)return;const ch=document.getElementById('s-chat');if(ch&&ch.classList.contains('on'))return;
   if(window.innerWidth>=860){nav.classList.remove('kb-hide');kbWasUp=false;return}
   const vv=window.visualViewport,typing=isTextField(document.activeElement);
   const kb=vv?Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop)):0;
   const up=typing&&(!vv||kb>60);
   nav.classList.toggle('kb-hide',up);
-  if(kbWasUp&&!up)kbReseat();
-  kbWasUp=up}
+  if(kbWasUp&&!up){kbReseat();setTimeout(navSeat,120);setTimeout(navSeat,450)}
+  kbWasUp=up;navSeat()}
 (function(){try{
   document.addEventListener('focusin',e=>{if(isTextField(e.target))setTimeout(kbFit,350)});
   document.addEventListener('focusout',()=>setTimeout(()=>{const was=kbWasUp;kbFit();if(!was&&!isTextField(document.activeElement)&&window.innerWidth<860)kbReseat()},150));
