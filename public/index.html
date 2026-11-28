@@ -493,6 +493,21 @@ input[type=date]{color-scheme:dark}
 .tact-bar i{display:block;height:100%;background:var(--wave-dim);border-radius:5px}
 .tact-bar i b{display:block;height:100%;background:var(--wave);border-radius:5px}
 .tact-detail{padding:4px 0 6px}.tact-tabs{min-width:520px}
+.place-tag{font-weight:500;color:var(--muted);font-size:.86em;white-space:nowrap}
+.globe-wrap{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px;align-items:start}
+@media (max-width:860px){.globe-wrap{grid-template-columns:minmax(0,1fr)}}
+.globe-card{padding:10px;margin:0}.globe-side{margin:0}
+.globe-stage{position:relative;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.globe-stage canvas{display:block;cursor:grab;touch-action:none}.globe-stage canvas:active{cursor:grabbing}
+.globe-ctl{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px}
+.globe-ctl button{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text);font:700 18px/1 var(--font-b);cursor:pointer}
+.globe-tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:12.5px;line-height:1.4;box-shadow:0 6px 18px rgba(0,0,0,.12);max-width:240px}
+.globe-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:var(--muted);font-size:13px}
+.globe-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted);padding:8px 4px 2px}
+.globe-legend span{display:flex;align-items:center;gap:6px}
+.gl-dot{width:9px;height:9px;border-radius:50%;background:var(--wave);opacity:.62;display:inline-block}.gl-dot.new{opacity:1;width:11px;height:11px;box-shadow:0 0 0 2px var(--surface),0 0 0 3px var(--wave)}
+.gp-row{display:flex;width:100%;align-items:center;gap:8px;padding:8px 2px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.gp-row:last-child{border-bottom:0}.gp-row b{color:var(--wave)}
 .sales-tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .sales-tbl{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
 .sales-tbl th,.sales-tbl td{padding:9px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
@@ -2358,7 +2373,7 @@ function ordersList(){
 function subscribeOrders(){if(!hasFirestore()){return}
   if(ordersUnsub){try{ordersUnsub()}catch(e){}}
   try{ordersUnsub=firebase.firestore().collection('orders').orderBy('at','desc').limit(150).onSnapshot(qs=>{
-    LIVEORDERS=qs.docs.map(d=>{const o=d.data();return {id:d.id,n:o.n,name:o.name||'',total:o.total||0,date:o.date||'',at:o.at||'',ful:o.ful||'UNFULFILLED',email:o.email||'',tracking:o.tracking||'',trackingUrl:o.trackingUrl||'',carrier:o.carrier||'',items:o.items||[],ship:o.ship||null,shipStatus:o.shipStatus||''}});
+    LIVEORDERS=qs.docs.map(d=>{const o=d.data();return {id:d.id,n:o.n,name:o.name||'',total:o.total||0,date:o.date||'',at:o.at||'',ful:o.ful||'UNFULFILLED',email:o.email||'',tracking:o.tracking||'',trackingUrl:o.trackingUrl||'',carrier:o.carrier||'',items:o.items||[],ship:o.ship||null,shipStatus:o.shipStatus||'',city:o.city||'',region:o.region||'',country:o.country||'',lat:o.lat,lng:o.lng,cancelled:!!o.cancelled,test:!!o.test}});
     const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
   },e=>{})}catch(e){}
   subscribeShopStock();}
@@ -2552,13 +2567,14 @@ function renderStock(){
   const openR=openReturns().length;
   const tab=(id,l)=>'<button class="chip'+(stockTab===id?' on':'')+'" onclick="stockGoTab(\''+id+'\')">'+l+'</button>';
   const tb=document.getElementById('stock-tabs');const inOrders=STOCK_ORDER_TABS.indexOf(stockTab)>=0;
-  if(tb){tb.innerHTML=inOrders?tab('fulfill','To ship'+(unf?' · '+unf:''))+tab('orders','All orders')+tab('returns','Returns'+(openR?' · '+openR:'')):'';tb.style.display=inOrders?'':'none'}
+  if(tb){tb.innerHTML=inOrders?tab('fulfill','To ship'+(unf?' · '+unf:''))+tab('orders','All orders')+tab('map','Map')+tab('returns','Returns'+(openR?' · '+openR:'')):'';tb.style.display=inOrders?'':'none'}
   const sh=document.getElementById('stock-h1');if(sh)sh.textContent=inOrders?'Orders':stockTab==='inventory'?'Inventory':'Stock Forecast';
   refreshSubnav();
   const sub=document.getElementById('stock-sub');if(sub)sub.innerHTML=totalAvail()+' sellable in Covington · '+totalNetwork()+' across network · ~'+totalBurn().toFixed(1)+'/wk';
   if(stockTab==='inventory')renderInventoryTab(body);
   else if(stockTab==='forecast')renderForecastTab(body);
   else if(stockTab==='orders')renderOrdersTab(body);
+  else if(stockTab==='map')renderMapTab(body);
   else if(stockTab==='returns')renderReturnsTab(body);
   else renderFulfillTab(body);
 }
@@ -2585,6 +2601,12 @@ function renderFulfillTab(body){
   if(arrived.length)html+='<div class="sec-head" style="margin-top:18px"><h2>Delivered</h2><span class="pill good">'+arrived.length+'</span></div>'+arrived.slice(0,15).map(fulfilledCard).join('')+(arrived.length>15?'<div class="d" style="margin-top:8px">Older deliveries are in <a onclick="stockGoTab(\'orders\')" style="color:var(--wave);cursor:pointer">All orders</a>.</div>':'');
   body.innerHTML=html;
 }
+// Where an order ships — city plus state (US/Canada) or country — as a quick identifier.
+const US_CA=['US','CA','USA','United States','Canada'];
+function orderPlace(o){if(!o)return '';const c=(o.city||'').trim(),r=(o.region||'').trim(),k=(o.country||'').trim();
+  const tail=(!k||US_CA.indexOf(k)>=0)?r:(k.length===2&&typeof Intl!=='undefined'&&Intl.DisplayNames?(()=>{try{return new Intl.DisplayNames(['en'],{type:'region'}).of(k)}catch(e){return k}})():k);
+  return [c,tail].filter(Boolean).join(', ')}
+function placeTag(o){const p=orderPlace(o);return p?' <span class="place-tag">'+esc(p)+'</span>':''}
 // What the customer ordered, by band size ("Medium × 1"), from the Shopify order.
 function orderBands(o){const by={};(o.items||[]).forEach(it=>{if(SIZES.indexOf(it.size)>=0)by[it.size]=(by[it.size]||0)+(Number(it.qty)||0)});return SIZES.filter(z=>by[z]).map(z=>({size:z,qty:by[z]}))}
 function orderSizeHTML(o){const b=orderBands(o);if(!b.length)return '';
@@ -2599,16 +2621,16 @@ function shipState(o){const st=String((o.ship&&o.ship.status)||o.shipStatus||'')
   let note='';if(o.ship&&o.ship.deliveredAt&&m[1]==='DELIVERED')note='Delivered '+day(o.ship.deliveredAt);
   else if(o.ship&&o.ship.eta&&m[0]!=='good')note='Arrives ~'+day(o.ship.eta);
   return {key:st,pill:m[0],label:m[1],note:note,delivered:m[1]==='DELIVERED',problem:m[0]==='amber'}}
-function fulfillCard(o){return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · paid</div></div><span class="pill amber">TO SHIP</span></div>'+orderSizeHTML(o)+'<button class="btn" style="margin-top:10px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill this order</button></div>'}
+function fulfillCard(o){return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+placeTag(o)+'</div><div class="d">'+esc(o.date)+' · $'+o.total+' · paid</div></div><span class="pill amber">TO SHIP</span></div>'+orderSizeHTML(o)+'<button class="btn" style="margin-top:10px" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill this order</button></div>'}
 function fulfilledCard(o){const f=FULF[o.n]||{};const track=f.tracking||o.tracking||'';const tr=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)" onclick="event.stopPropagation()">'+esc(track)+'</a>':esc(track)):'';
   const failed=f.shopify&&f.shopify.status==='failed';
   // Compact row: order · customer · shipment status. Reprint / return sit inside the row's details.
   const ss=shipState(o);const sz=SIZELABEL[f.size]||orderBands(o).map(x=>SIZELABEL[x.size]+(x.qty>1?' × '+x.qty:'')).join(', ')||'—';
-  return '<details class="order-row'+(ss.delivered?' delivered':'')+'"'+(failed?' open':'')+'><summary><div class="grow" style="min-width:0"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(sz)+(ss.note?' · <b style="color:var('+(ss.problem?'--amber':'--text')+')">'+esc(ss.note)+'</b>':'')+(track?' · tracking '+esc(track):' · no tracking yet')+'</div></div><span class="pill '+ss.pill+'">'+ss.label+'</span></summary>'
+  return '<details class="order-row'+(ss.delivered?' delivered':'')+'"'+(failed?' open':'')+'><summary><div class="grow" style="min-width:0"><div class="t">'+esc(o.n)+' · '+esc(o.name)+placeTag(o)+'</div><div class="d">'+esc(sz)+(ss.note?' · <b style="color:var('+(ss.problem?'--amber':'--text')+')">'+esc(ss.note)+'</b>':'')+(track?' · tracking '+esc(track):' · no tracking yet')+'</div></div><span class="pill '+ss.pill+'">'+ss.label+'</span></summary>'
     +'<div class="or-body"><div class="d">'+(SIZELABEL[f.size]||'—')+' · '+esc(f.serial||'')+(f.band&&f.band.hwId?' · band ID '+esc(f.band.hwId):'')+' · fw '+esc(f.firmware||'—')+' · '+esc(f.signoffBy||'')+tr+'</div>'+shopifyLine(f)
     +'<div class="row" style="gap:8px;margin-top:9px;flex-wrap:wrap">'+(failed?'<button class="btn" style="flex:1" onclick="pushShopifyFulfill(\''+esc(o.n)+'\')">Retry Shopify</button>':'')+'<button class="btn ghost sm" style="flex:1" onclick="printLabel(\''+esc(o.n)+'\')">Reprint label</button><button class="btn ghost sm" style="flex:1" onclick="startReturn(\''+esc(o.n)+'\')">Start return</button></div></div></details>'}
 function openFulfill(n){const o=ordersList().find(x=>x.n===n);if(!o)return;ffOrder=n;
-  document.getElementById('ff-order').textContent=o.n+' · '+o.name;
+  document.getElementById('ff-order').textContent=o.n+' · '+o.name+(orderPlace(o)?' · '+orderPlace(o):'');
   document.getElementById('ff-cust').textContent=o.date+' · $'+o.total+' · paid';
   const jared=(TEAM.find(t=>/jared/i.test(t.name))||{}).name;
   document.getElementById('ff-assignee').innerHTML=assigneeOptions(jared||(CURRENT_USER&&CURRENT_USER.name)||'');
@@ -2888,13 +2910,110 @@ function renderForecastTab(body){
   html+=renderPOs();
   body.innerHTML=html;
 }
+
+/* ================= Orders → Map: a globe with a dot for every order =================
+   Dots come from synced orders (city, state/country and the spot rounded to ~1 km,
+   from Shopify's shipping address) plus order_geo (older orders, same fields).
+   d3-geo draws an orthographic globe on a canvas: drag to spin, scroll / pinch or
+   + − to zoom, tap a dot for the place. Several orders from one place sit in a
+   small cluster so each is its own dot. */
+let GEO_HIST=null,geoLoading=false,mapRange='all',GLOBE=null,globeLibs=null;
+function loadOrderGeo(){if(GEO_HIST||geoLoading)return;geoLoading=true;
+  if(!hasFirestore()){GEO_HIST=[];geoLoading=false;return}
+  firebase.firestore().collection('order_geo').get().then(qs=>{GEO_HIST=qs.docs.map(d=>d.data());geoLoading=false;mapRerender()}).catch(()=>{GEO_HIST=[];geoLoading=false;mapRerender()})}
+function mapRerender(){const s=document.getElementById('s-stock');if(s&&s.classList.contains('on')&&stockTab==='map')renderStock()}
+function loadGlobeLibs(){if(globeLibs)return globeLibs;
+  const js=src=>new Promise((res,rej)=>{const t=document.createElement('script');t.src=src;t.onload=res;t.onerror=()=>rej(new Error('load'));document.head.appendChild(t)});
+  // Shipped with the app in /vendor (no third-party CDN). The detailed 1:50m
+  // coastlines load in the background and take over once you zoom in.
+  const atlas=w=>({land:topojson.feature(w,w.objects.land),borders:topojson.mesh(w,w.objects.countries,(a,b)=>a!==b)});
+  globeLibs=(window.d3&&window.d3.geoOrthographic?Promise.resolve():js('/vendor/d3-array.min.js').then(()=>js('/vendor/d3-geo.min.js')))
+    .then(()=>window.topojson?null:js('/vendor/topojson-client.min.js'))
+    .then(()=>Promise.all([fetch('/vendor/countries-110m.json').then(r=>r.json()),fetch('/vendor/us-states-10m.json').then(r=>r.json()).catch(()=>null)]))
+    .then(([w,us])=>{const geo=atlas(w);if(us)geo.states=topojson.mesh(us,us.objects.states,(a,b)=>a!==b);
+      fetch('/vendor/countries-50m.json').then(r=>r.json()).then(w50=>{geo.fine=atlas(w50);if(GLOBE)GLOBE.draw()}).catch(()=>{});
+      return geo})
+    .catch(e=>{globeLibs=null;throw e});
+  return globeLibs}
+function geoHash(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0)/4294967296}
+function mapOrders(){const by={};
+  (GEO_HIST||[]).forEach(o=>{if(o.n)by[o.n]=o});
+  ordersList().forEach(o=>{if(o.n&&o.lat!=null&&o.lng!=null&&!o.cancelled&&!o.test&&!/^(DEMO|#TEST)/i.test(o.n))by[o.n]=o});
+  const cut=mapRange==='all'?0:Date.now()-(mapRange==='90'?90:365)*864e5;
+  return Object.values(by).filter(o=>o.lat!=null&&o.lng!=null&&!o.cancelled).map(o=>({n:o.n,lat:+o.lat,lng:+o.lng,place:orderPlace(o)||'Unknown',country:o.country||'',region:o.region||'',ms:o.at?Date.parse(o.at):0}))
+    .filter(o=>isFinite(o.lat)&&isFinite(o.lng)&&(!cut||o.ms>=cut))}
+function renderMapTab(body){
+  loadOrderGeo();
+  const pts=mapOrders();const places={},states={},countries={};
+  pts.forEach(p=>{(places[p.place]=places[p.place]||{n:0,last:0,lat:p.lat,lng:p.lng}).n++;places[p.place].last=Math.max(places[p.place].last,p.ms);countries[p.country||'?']=1;if(US_CA.indexOf(p.country)>=0&&p.region)states[p.country+p.region]=1});
+  const top=Object.entries(places).sort((a,b)=>b[1].n-a[1].n).slice(0,12);
+  const recent=pts.filter(p=>p.ms>=Date.now()-30*864e5).length;
+  let h='<div class="chips" style="margin-bottom:10px">'+[['all','All time'],['365','Last 12 months'],['90','Last 90 days']].map(r=>'<button class="chip'+(mapRange===r[0]?' on':'')+'" onclick="mapRange=\''+r[0]+'\';renderStock()">'+r[1]+'</button>').join('')+'</div>';
+  h+='<div class="crm-strip" style="margin-bottom:12px">'+crmStat(pts.length,'Orders on the map','wave')+crmStat(Object.keys(states).length,'States & provinces')+crmStat(Object.keys(countries).filter(k=>k!=='?').length,'Countries')+crmStat(recent,'In the last 30 days')+'</div>';
+  h+='<div class="globe-wrap"><div class="globe-card card"><div class="globe-stage" id="globe-stage"><canvas id="globe-cv" aria-label="Globe with a dot for every order"></canvas>'
+    +'<div class="globe-ctl"><button aria-label="Zoom in" onclick="globeZoom(1.5)">+</button><button aria-label="Zoom out" onclick="globeZoom(1/1.5)">−</button><button aria-label="Center on the US" onclick="globeHome()" title="Center on the US">⌂</button></div>'
+    +'<div class="globe-tip" id="globe-tip" hidden></div><div class="globe-msg" id="globe-msg">Loading the globe…</div></div>'
+    +'<div class="globe-legend"><span><i class="gl-dot"></i>Order</span><span><i class="gl-dot new"></i>Last 30 days</span><span class="d">Drag to spin · scroll or pinch to zoom · tap a dot</span></div></div>'
+    +'<div class="card globe-side"><div class="t" style="font-size:15px;margin-bottom:6px">Top places</div>'
+    +(top.length?top.map(([pl,v])=>'<button class="gp-row" onclick="globeFocus('+v.lat+','+v.lng+')"><span class="grow">'+esc(pl)+'</span><b>'+v.n+'</b></button>').join(''):'<div class="d">'+(GEO_HIST==null?'Loading…':'No order locations yet. Synced orders pick up their city on the next Shopify sync.')+'</div>')
+    +'</div></div>';
+  body.innerHTML=h;
+  loadGlobeLibs().then(geo=>initGlobe(geo,pts)).catch(()=>{const m=document.getElementById('globe-msg');if(m)m.textContent='The globe couldn’t load (no connection to the map library). Try again in a moment.'})}
+function globeColors(){const cs=getComputedStyle(document.documentElement),v=k=>cs.getPropertyValue(k).trim();
+  return {sea:v('--surface'),ocean:v('--wave-dim'),land:v('--faint'),border:v('--surface'),edge:v('--line'),dot:v('--wave'),ring:v('--surface'),grat:v('--line')}}
+function initGlobe(geo,pts){const cv=document.getElementById('globe-cv'),stage=document.getElementById('globe-stage');if(!cv||!stage)return;
+  const msg=document.getElementById('globe-msg');if(msg)msg.hidden=true;
+  const prev=GLOBE;const g=GLOBE={geo:geo,pts:pts,cv:cv,stage:stage,rot:prev?prev.rot:[96,-32,0],k:prev?prev.k:1,drag:null,pinch:null,hover:null,raf:0};
+  const recentCut=Date.now()-30*864e5;
+  g.dots=pts.map(p=>{const a=geoHash(p.n)*Math.PI*2,r=Math.sqrt(geoHash(p.n+'r'))*0.22;return {p:p,lon:p.lng+Math.cos(a)*r/Math.max(.3,Math.cos(p.lat*Math.PI/180)),lat:p.lat+Math.sin(a)*r,recent:p.ms>=recentCut}});
+  const size=()=>{const w=stage.clientWidth,hh=Math.min(Math.max(300,w*0.78),620);const dpr=window.devicePixelRatio||1;cv.width=Math.round(w*dpr);cv.height=Math.round(hh*dpr);cv.style.width=w+'px';cv.style.height=hh+'px';g.w=w;g.h=hh;g.dpr=dpr;draw()};
+  const proj=()=>d3.geoOrthographic().translate([g.w/2,g.h/2]).scale(Math.min(g.w,g.h)/2*0.92*g.k).rotate(g.rot).clipAngle(90);
+  function draw(){if(!g.w)return;const c=cv.getContext('2d'),C=globeColors(),pr=proj(),path=d3.geoPath(pr,c);g.proj=pr;
+    c.setTransform(g.dpr,0,0,g.dpr,0,0);c.clearRect(0,0,g.w,g.h);
+    c.beginPath();path({type:'Sphere'});c.fillStyle=C.sea;c.fill();c.fillStyle=C.ocean;c.fill();c.lineWidth=1;c.strokeStyle=C.edge;c.stroke();
+    c.beginPath();path(d3.geoGraticule10());c.strokeStyle=C.grat;c.globalAlpha=.35;c.lineWidth=.5;c.stroke();c.globalAlpha=1;
+    const A=(g.k>=3&&geo.fine)?geo.fine:geo;
+    c.beginPath();path(A.land);c.fillStyle=C.land;c.globalAlpha=.32;c.fill();c.globalAlpha=1;
+    c.beginPath();path(A.borders);c.strokeStyle=C.border;c.lineWidth=g.k>=3?1:.6;c.stroke();
+    if(geo.states&&g.k>=2.2){c.beginPath();path(geo.states);c.strokeStyle=C.border;c.lineWidth=.7;c.globalAlpha=.85;c.stroke();c.globalAlpha=1}
+    const center=[-g.rot[0],-g.rot[1]];const rad=Math.max(2.2,Math.min(4.5,2+g.k*0.35));g.vis=[];
+    [false,true].forEach(rec=>g.dots.forEach(d=>{if(d.recent!==rec)return;if(d3.geoDistance([d.lon,d.lat],center)>Math.PI/2-0.01)return;const xy=pr([d.lon,d.lat]);if(!xy)return;
+      g.vis.push({x:xy[0],y:xy[1],d:d});c.beginPath();c.arc(xy[0],xy[1],rec?rad+1:rad,0,Math.PI*2);c.fillStyle=C.dot;c.globalAlpha=rec?1:.62;c.fill();c.globalAlpha=1;c.lineWidth=rec?1.6:1;c.strokeStyle=C.ring;c.stroke()}));
+    if(g.hover){const xy=pr([g.hover.lon,g.hover.lat]);if(xy){c.beginPath();c.arc(xy[0],xy[1],rad+5,0,Math.PI*2);c.strokeStyle=C.dot;c.lineWidth=2;c.stroke()}}}
+  g.draw=()=>{if(g.raf)return;g.raf=requestAnimationFrame(()=>{g.raf=0;draw()})};
+  const pos=e=>{const r=cv.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top]};
+  const ptrs=new Map();
+  cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,pos(e));if(ptrs.size===1)g.drag={xy:pos(e),rot:g.rot.slice(),moved:false};if(ptrs.size===2){const a=[...ptrs.values()];g.pinch={d:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]),k:g.k};g.drag=null}};
+  cv.onpointermove=e=>{const p=pos(e);if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,p);
+    if(g.pinch&&ptrs.size===2){const a=[...ptrs.values()];const d=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]);g.k=Math.max(1,Math.min(40,g.pinch.k*d/g.pinch.d));g.draw();return}
+    if(g.drag){const dx=p[0]-g.drag.xy[0],dy=p[1]-g.drag.xy[1];if(Math.abs(dx)+Math.abs(dy)>3)g.drag.moved=true;const sens=0.25/g.k;g.rot=[g.drag.rot[0]+dx*sens,Math.max(-89,Math.min(89,g.drag.rot[1]-dy*sens)),0];globeTip(null);g.draw();return}
+    if(e.pointerType==='mouse')globePick(p,true)};
+  cv.onpointerup=e=>{const p=pos(e);ptrs.delete(e.pointerId);if(ptrs.size<2)g.pinch=null;if(g.drag&&!g.drag.moved)globePick(p,false);g.drag=null};
+  cv.onpointercancel=e=>{ptrs.delete(e.pointerId);g.pinch=null;g.drag=null};
+  cv.onpointerleave=e=>{if(e.pointerType==='mouse'&&!g.drag)globeTip(null)};
+  cv.onwheel=e=>{e.preventDefault();g.k=Math.max(1,Math.min(40,g.k*Math.exp(-e.deltaY*0.0015)));globeTip(null);g.draw()};
+  if(g.ro)g.ro.disconnect();g.ro=new ResizeObserver(size);g.ro.observe(stage);size()}
+function globePick(p,hover){const g=GLOBE;if(!g||!g.vis)return;let best=null,bd=hover?9:16;
+  g.vis.forEach(v=>{const d=Math.hypot(v.x-p[0],v.y-p[1]);if(d<bd){bd=d;best=v}});
+  if(!best){globeTip(null);return}
+  const same=g.pts.filter(x=>x.place===best.d.p.place),last=same.reduce((m,x)=>x.ms>m.ms?x:m,same[0]);
+  g.hover=best.d;g.draw();
+  globeTip({x:best.x,y:best.y,html:'<b>'+esc(best.d.p.place)+'</b><br>'+same.length+' order'+(same.length===1?'':'s')+(last&&last.ms?' · latest '+esc(last.n)+' '+esc(new Date(last.ms).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})):'')})}
+function globeTip(t){const el=document.getElementById('globe-tip');if(!el)return;if(!t){el.hidden=true;if(GLOBE&&GLOBE.hover){GLOBE.hover=null;GLOBE.draw()}return}
+  el.innerHTML=t.html;el.hidden=false;const g=GLOBE;const x=Math.min(Math.max(8,t.x+12),g.w-el.offsetWidth-8),y=Math.max(8,t.y-el.offsetHeight-10);el.style.left=x+'px';el.style.top=y+'px'}
+function globeZoom(f){const g=GLOBE;if(!g)return;g.k=Math.max(1,Math.min(40,g.k*f));globeTip(null);g.draw()}
+function globeHome(){const g=GLOBE;if(!g)return;globeAnim([96,-32,0],1)}
+function globeFocus(lat,lng){globeAnim([-lng,-lat,0],Math.max(GLOBE?GLOBE.k:1,6))}
+function globeAnim(rot,k){const g=GLOBE;if(!g)return;const r0=g.rot.slice(),k0=g.k,t0=performance.now(),D=650;
+  const dl=((rot[0]-r0[0]+540)%360)-180;
+  (function step(t){const u=Math.min(1,(t-t0)/D),e=u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2;g.rot=[r0[0]+dl*e,r0[1]+(rot[1]-r0[1])*e,0];g.k=k0+(k-k0)*e;globeTip(null);g.draw();if(u<1)requestAnimationFrame(step)})(t0)}
 function renderOrdersTab(body){
   body.innerHTML='<div class="searchbar"><svg viewBox="0 0 24 24" width="16" height="16" style="stroke:var(--faint);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg><input id="lookup" type="search" placeholder="Order # or customer name" oninput="renderOrderList(this.value)"></div><button class="btn ghost" style="margin-bottom:12px" onclick="exportOrders()">⬇︎ Export orders CSV</button><div id="order-list"></div><div class="note" style="margin-top:8px">Shopify order + fulfilment status. Orders sync from Shopify automatically every 15 min — or hit ⟳ Sync now / ⤓ Backfill history on the Fulfill tab.</div>';
   renderOrderList('');
 }
 function renderOrderList(q){q=(q||'').trim().toLowerCase();const wrap=document.getElementById('order-list');if(!wrap)return;
   const hits=ordersList().filter(o=>!q||o.n.toLowerCase().includes(q)||o.name.toLowerCase().includes(q));
-  wrap.innerHTML=hits.length?hits.map(o=>{const done=isFulfilled(o);const f=FULF[o.n];const track=(f&&f.tracking)||o.tracking||'';const trk=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(track)+'</a>':esc(track)):'';const ss=done?shipState(o):null;const szs=orderBands(o).map(x=>SIZELABEL[x.size]+(x.qty>1?' × '+x.qty:'')).join(', ');return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+'</div><div class="d">'+esc(o.date)+(szs?' · '+esc(szs):'')+' · $'+o.total+' · '+(done?(ss.note?esc(ss.note):'shipped')+(f&&f.serial?' · '+esc(f.serial):'')+trk:'waiting to ship')+'</div></div><span class="pill '+(done?ss.pill:'amber')+'">'+(done?ss.label:'TO SHIP')+'</span></div>'+'<div class="row" style="gap:8px;margin-top:9px">'+(!done?'<button class="btn ghost" style="flex:1" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill</button>':'')+'<button class="btn ghost" style="flex:1" onclick="viewCustomerFromOrder(\''+esc(o.n)+'\')">👤 Customer</button></div></div>'}).join(''):'<div class="empty"><div class="d">No order matches that search.</div></div>';
+  wrap.innerHTML=hits.length?hits.map(o=>{const done=isFulfilled(o);const f=FULF[o.n];const track=(f&&f.tracking)||o.tracking||'';const trk=track?' · '+(o.trackingUrl?'<a href="'+esc(o.trackingUrl)+'" target="_blank" rel="noopener" style="color:var(--wave)">'+esc(track)+'</a>':esc(track)):'';const ss=done?shipState(o):null;const szs=orderBands(o).map(x=>SIZELABEL[x.size]+(x.qty>1?' × '+x.qty:'')).join(', ');return '<div class="card"><div class="row"><div class="grow"><div class="t">'+esc(o.n)+' · '+esc(o.name)+placeTag(o)+'</div><div class="d">'+esc(o.date)+(szs?' · '+esc(szs):'')+' · $'+o.total+' · '+(done?(ss.note?esc(ss.note):'shipped')+(f&&f.serial?' · '+esc(f.serial):'')+trk:'waiting to ship')+'</div></div><span class="pill '+(done?ss.pill:'amber')+'">'+(done?ss.label:'TO SHIP')+'</span></div>'+'<div class="row" style="gap:8px;margin-top:9px">'+(!done?'<button class="btn ghost" style="flex:1" onclick="openFulfill(\''+esc(o.n)+'\')">Fulfill</button>':'')+'<button class="btn ghost" style="flex:1" onclick="viewCustomerFromOrder(\''+esc(o.n)+'\')">👤 Customer</button></div></div>'}).join(''):'<div class="empty"><div class="d">No order matches that search.</div></div>';
 }
 function kv(k,v){return '<div class="kv"><span>'+k+'</span><b>'+v+'</b></div>'}
 
@@ -6996,7 +7115,7 @@ const NAV_GROUPS=[
   {id:'resources', label:'Resources',  pages:['s-guides','s-know'], svg:'<path d="M2 5.5C4.5 4 8 4 11 5.5v14C8 18 4.5 18 2 19.5zM22 5.5C19.5 4 16 4 13 5.5v14c3-1.5 6.5-1.5 9 0z"/>'},
   {id:'settings',  label:'Settings',   pages:['s-users','s-comply','s-vault'], svg:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'},
 ];
-const STOCK_ORDER_TABS=['fulfill','orders','returns'];
+const STOCK_ORDER_TABS=['fulfill','orders','map','returns'];
 const PAGE_LABEL={'s-raise':'Fundraising','s-crm':'Pipeline','s-support':'Support','s-invoices':'Invoices & POs','s-stock':'Orders','s-build':'Priorities','s-qc':'Release Checks','s-field':'Field Testing','s-feedback':'Feedback',
   's-finance':'Finance','s-guides':'Guides','s-know':'Knowledge','s-users':'Users','s-comply':'Compliance','s-vault':'Vault'};
 let NAV_ALLOWED=new Set(['s-pulse']), NAV_LAST={};
