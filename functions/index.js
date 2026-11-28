@@ -75,6 +75,13 @@ async function deliverPush(ref) {
   const q = n.to === "all" ? db.collection("push_subs") : db.collection("push_subs").where("uid", "==", n.to);
   const subs = await q.get();
   if (subs.empty) return 0;
+  // Each person's alert setting (users/{uid}.notifPrefs.mode): "all" or "focused".
+  const uids = [...new Set(subs.docs.map((d) => d.data().uid).filter(Boolean))];
+  const modes = {};
+  await Promise.all(uids.map(async (u) => {
+    try { const s = await db.collection("users").doc(u).get(); modes[u] = (s.exists && s.data().notifPrefs && s.data().notifPrefs.mode) || "all"; }
+    catch (e) { modes[u] = "all"; }
+  }));
   const webpush = require("web-push");
   const k = await vapidKeys();
   webpush.setVapidDetails("https://safewave-command-center.web.app", k.publicKey, k.privateKey);
@@ -83,6 +90,7 @@ async function deliverPush(ref) {
   await Promise.all(subs.docs.map(async (d) => {
     const sub = d.data();
     if (n.to === "all" && n.by && sub.name && sub.name === n.by) return; // don't ping the person who caused it
+    if (sub.uid && !alertWanted(n, sub.uid, modes[sub.uid])) return;
     try {
       await webpush.sendNotification(sub.sub, payload, { TTL: 86400, urgency: "high", topic: undefined });
       sent++;
@@ -93,6 +101,23 @@ async function deliverPush(ref) {
     }
   }));
   return sent;
+}
+/* Who gets an alert. Everyone can pick (Alerts sheet):
+   - "all" (default): every chat message in their channels, new orders, tasks
+     assigned to them, overdue tasks, and everything else the team broadcasts.
+   - "focused": only when they're tagged (@mention) or given a task — alerts
+     addressed to them, except chat chatter, orders and overdue reminders.
+   Safety alerts always come through. The person who caused an alert, and
+   anyone listed in skip (e.g. already pinged by an @mention), aren't pinged. */
+const FOCUS_SKIP = ["chat", "order", "overdue"];
+function alertWanted(n, uid, mode) {
+  if (!(n.to === uid || n.to === "all")) return false;
+  if (Array.isArray(n.skip) && n.skip.indexOf(uid) >= 0) return false;
+  if (n.byUid && n.byUid === uid) return false;
+  if (/safety/i.test(n.title || "")) return true;
+  if (mode !== "focused") return true;
+  if (n.kind === "mention") return true;
+  return n.to === uid && FOCUS_SKIP.indexOf(n.kind || "") < 0;
 }
 // Add an alert and push it right away (server-side senders use this).
 async function addNotification(data) {
@@ -524,7 +549,7 @@ async function handleShopifyOrder(o) {
   rec.at = new Date().toISOString(); // real-time arrival stamp for webhook orders
   await db.collection("orders").doc(id).set(rec, { merge: true });
   await addNotification({
-    to: "all", title: "New order " + rec.n, body: rec.name + " · $" + rec.total,
+    to: "all", kind: "order", title: "New order " + rec.n, body: rec.name + " · $" + rec.total,
     link: "s-stock:order:" + String(rec.n || "").replace(/[^\w-]/g, ""), by: "Shopify", at: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
@@ -867,7 +892,7 @@ async function handleInboundEmail(p, inboxAddr) {
   const om = subject.match(/order\s*#?\s*(\d{3,7})\s+placed by\s+(.+)$/i);
   if (om) {
     await loadShopifyKeys();
-    if (!shopifyCreds().ok) await addNotification({ to: "all", title: "New Shopify order #" + om[1], body: om[2].trim().slice(0, 60) + " — check Shopify → Orders", link: "s-stock:order:" + om[1], by: "sales@ inbox", at: admin.firestore.FieldValue.serverTimestamp() });
+    if (!shopifyCreds().ok) await addNotification({ to: "all", kind: "order", title: "New Shopify order #" + om[1], body: om[2].trim().slice(0, 60) + " — check Shopify → Orders", link: "s-stock:order:" + om[1], by: "sales@ inbox", at: admin.firestore.FieldValue.serverTimestamp() });
     return "order";
   }
   // Website contact form (sent by Shopify on the customer's behalf).
@@ -1878,9 +1903,45 @@ exports.scanOverdue = onSchedule({ schedule: "every day 13:00", region: REGION }
     breachedCount: breached.length,
   });
   const overdueInv = await scanOverdueInvoices().catch((e) => { logger.warn("invoice scan failed", e && e.message); return 0; });
+  const overdueTasks = await scanOverdueTasks().catch((e) => { logger.warn("task scan failed", e && e.message); return 0; });
+  logger.info(`scanOverdue: ${overdueTasks} tasks newly overdue`);
   logger.info(`scanOverdue: ${staleAccounts.length} stale, ${breached.length} breached, ${overdueInv} invoices newly overdue`);
   return null;
 });
+
+// Tell the assignee once when a Build task or a Fundraising task passes its due
+// date (kind "overdue": people on "focused" alerts don't get these). A task is
+// flagged again only if its due date moves and it goes overdue again.
+async function scanOverdueTasks() {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const users = await db.collection("users").get();
+  const byName = {};
+  users.forEach((d) => { const u = d.data(); if (u.name) byName[String(u.name).toLowerCase()] = d.id; });
+  const FV = admin.firestore.FieldValue;
+  let n = 0;
+  const bt = await db.collection("build_tasks").get();
+  for (const d of bt.docs) {
+    const t = d.data();
+    const due = String(t.due || "").slice(0, 10);
+    if (!t.assignee || !due || due >= today || t.status === "done" || t.doneAt || t.archived || t.overdueNotified === due) continue;
+    const uid = byName[String(t.assignee).toLowerCase()];
+    if (!uid) continue;
+    await addNotification({ to: uid, kind: "overdue", title: "Overdue: " + String(t.title || "task").slice(0, 80), body: "Was due " + due, link: "s-build:task:" + d.id, by: "Command Center", at: FV.serverTimestamp() });
+    await d.ref.set({ overdueNotified: due }, { merge: true });
+    n++;
+  }
+  const rt = await db.collection("raise_tasks").where("status", "==", "open").get();
+  for (const d of rt.docs) {
+    const t = d.data();
+    const due = String(t.due || "").slice(0, 10);
+    if (!t.owner || !due || due >= today || t.overdueNotified === due) continue;
+    // Generic wording: notifications are readable team-wide, raise tasks can name investors.
+    await addNotification({ to: t.owner, kind: "overdue", title: "A Fundraising task is overdue", body: "Was due " + due, link: "s-raise", by: "Command Center", at: FV.serverTimestamp() });
+    await d.ref.set({ overdueNotified: due }, { merge: true });
+    n++;
+  }
+  return n;
+}
 
 /* ------------------------------------------------------------------ *
  * helpers
