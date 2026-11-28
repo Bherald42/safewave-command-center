@@ -2304,7 +2304,6 @@ const LEAD = {transferWeeks:2, remakeWeeks:8, safety:0.25};
 let SHOPCONN=null; // settings/shopify (non-secret): {connected, shopName, domain, lastSyncAt}
 function shopLive(){return (typeof LIVEORDERS!=='undefined'&&LIVEORDERS.length>0)||(typeof SHOPSTOCK!=='undefined'&&!!SHOPSTOCK)||!!(SHOPCONN&&SHOPCONN.connected)}
 const SHOP = {
-  grosse90:'$10.5k', aov:'$145', lastWeekRev:'$735', lastWeekOrders:5,
   sizes:[
     {size:'Small',  onHand:5, committed:1, burn:1.5},
     {size:'Medium', onHand:2, committed:0, burn:2.0},
@@ -2387,6 +2386,10 @@ function ordersList(){
 function subscribeOrders(){if(!hasFirestore()){return}
   if(ordersUnsub){try{ordersUnsub()}catch(e){}}
   try{ordersUnsub=firebase.firestore().collection('orders').orderBy('at','desc').limit(150).onSnapshot(qs=>{
+    // Finance, Sales and Traction read RAISE_ORDERS; fold the live changes in so they stay current.
+    if(typeof RAISE_ORDERS!=='undefined'&&RAISE_ORDERS){const by={};RAISE_ORDERS.forEach((o,i)=>{if(o.n)by[o.n]=i});let ch=false;
+      qs.docChanges().forEach(c=>{const o=c.doc.data();if(!o.n)return;if(by[o.n]!=null){RAISE_ORDERS[by[o.n]]=o}else{RAISE_ORDERS.unshift(o)}ch=true});
+      if(ch)setTimeout(()=>{if(typeof salesRerender==='function')salesRerender()},0)}
     LIVEORDERS=qs.docs.map(d=>{const o=d.data();return {id:d.id,n:o.n,name:o.name||'',total:o.total||0,date:o.date||'',at:o.at||'',ful:o.ful||'UNFULFILLED',email:o.email||'',tracking:o.tracking||'',trackingUrl:o.trackingUrl||'',carrier:o.carrier||'',items:o.items||[],ship:o.ship||null,shipStatus:o.shipStatus||'',city:o.city||'',region:o.region||'',country:o.country||'',lat:o.lat,lng:o.lng,cancelled:!!o.cancelled,test:!!o.test}});
     const scr=document.getElementById('s-stock');if(scr&&scr.classList.contains('on'))renderStock();refreshPulse();
   },e=>{})}catch(e){}
@@ -6217,7 +6220,7 @@ function agentSnapshot(){try{
   const snap={
     today:new Date(t).toISOString().slice(0,10),
     company:'Safewave Technology — the Safewave Band, a vibration-alert wristband for people who are Deaf or hard of hearing.',
-    shopify:{gross90d:SHOP.gross90||SHOP.grosse90,revenueLastWeek:SHOP.lastWeekRev,ordersLastWeek:SHOP.lastWeekOrders,avgOrderValue:SHOP.aov},
+    shopify:(()=>{const k=(typeof shopKpis==='function')?shopKpis():null;return k?{netSales90d:Math.round(k.net90),orders90d:k.orders90,netSalesLast7d:Math.round(k.wkNet),ordersLast7d:k.wkOrders,avgOrderValue90d:Math.round(k.aov90)}:{note:'Shopify sales still loading'}})(),
     crm:{totalAccounts:(CRMA||[]).length,byStage:sc,won:sc.Won||0,needFollowUp:needStep,inOutreach:outreach,overdueFollowups:overdue.slice(0,25)},
     support:{openTickets:tickets.length,tickets:tickets},
     stock:{inventoryByLocation:(typeof INV!=='undefined'?INV:{}),unfulfilledOrders:unfilled,reorder:reorder,recentOrders:orders},
@@ -9907,7 +9910,7 @@ function tractionHTML(){if(!RAISE_ORDERS){loadRaiseOrders();return '<div class="
   return h}
 function raiseFinancialsHTML(){if(!financeData){loadFinance().then(raiseRerender);return '<div class="card"><div class="d">Loading financials…</div></div>'}
   const burn=financeBurn(),mrr=financeMRR(),net=mrr-burn.total,cash=parseMoney(financeData.cashOnHand);const runway=net>=0?null:cash/(-net);
-  const pnl=financeData.pnl||[];const sum=t=>pnl.filter(l=>l.type===t).reduce((s,l)=>s+parseMoney(l.amount),0);
+  const pnl=pnlLive();const sum=t=>pnl.filter(l=>l.type===t).reduce((s,l)=>s+parseMoney(l.amount),0);
   const bs=(typeof buildSpend==='function')?buildSpend():{totalSpent:0};const rev=sum('rev'),cogs=sum('cogs'),opex=sum('opex')+bs.totalSpent;const gross=rev-cogs,netP=gross-opex;const gm=rev?Math.round(gross/rev*100):null;
   let h='<div class="tiles" style="margin-bottom:12px">'
     +'<div class="tile"><div class="n">'+fmtMoney(cash)+'</div><div class="l">Cash on hand</div></div>'
@@ -10851,7 +10854,12 @@ function importProspects(){
 function parseMoney(v){if(typeof v==='number')return v;if(!v)return 0;const s=(''+v).replace(/[$,\s]/g,'');const m=s.match(/^(-?\d*\.?\d+)([kKmM])?$/);if(!m)return Number(s)||0;let n=parseFloat(m[1]);if(m[2]&&m[2].toLowerCase()==='k')n*=1e3;if(m[2]&&m[2].toLowerCase()==='m')n*=1e6;return n}
 function fmtMoney(n){n=Math.round(n||0);return (n<0?'-$':'$')+Math.abs(n).toLocaleString()}
 let financeData=null;
-function financeDefaults(){return {cashOnHand:0,projections:{customers:0,avgMrr:0,growthPct:0,horizon:12},pnl:[{label:'Hardware sales (Shopify · 90d gross)',type:'rev',amount:parseMoney(SHOP.grosse90||SHOP.gross90||0)}],budget:[],payroll:[]}}
+function financeDefaults(){return {cashOnHand:0,projections:{customers:0,avgMrr:0,growthPct:0,horizon:12},pnl:[{label:'Hardware sales (Shopify · 90d gross)',type:'rev',amount:0}],budget:[],payroll:[]}}
+/* The P&L's Shopify line ("Hardware sales (Shopify …)") follows live Shopify
+   sales for the last 90 days, after refunds, instead of a typed-in figure. */
+function pnlIsShopify(l){return l&&l.type==='rev'&&/^hardware sales \(shopify/i.test(l.label||'')}
+function pnlLive(){const k=(typeof shopKpis==='function')?shopKpis():null;
+  return (financeData.pnl||[]).map(l=>pnlIsShopify(l)&&k?Object.assign({},l,{label:'Hardware sales (Shopify · last 90 days, after refunds)',amount:Math.round(k.net90),live:true}):l)}
 async function loadFinanceAccess(){
   if(!hasFirestore()){FINANCE_EMAILS=[];return}
   try{const d=await firebase.firestore().collection('settings').doc('finance').get();FINANCE_EMAILS=d.exists?(d.data().emails||[]):[]}catch(e){FINANCE_EMAILS=[]}
@@ -10920,10 +10928,10 @@ function c13AddMonths(ms,n,day){const d=new Date(ms);const y=d.getFullYear(),m=d
 /* Weekly Shopify sales: trailing 8 full weeks of real orders when they're
    loaded, otherwise last week's figure from the Shopify snapshot. */
 function c13ShopAuto(){
-  const os=(typeof RAISE_ORDERS!=='undefined'&&RAISE_ORDERS)?RAISE_ORDERS.filter(o=>!/^(DEMO|#TEST)/i.test(o.n||'')):null;
-  if(os&&os.length){const end=c13Monday(Date.now()),start=end-8*C13_WK;let sum=0,n=0;
-    os.forEach(o=>{const ms=orderMs(o);if(ms!=null&&ms>=start&&ms<end){sum+=Number(o.total)||0;n++}});
-    if(n)return {v:sum/8,src:'8-week average of Shopify orders'}}
+  if(typeof RAISE_ORDERS!=='undefined'&&RAISE_ORDERS){const os=salesOrders();const end=c13Monday(Date.now()),start=end-8*C13_WK;let sum=0,n=0;
+    os.forEach(o=>{if(o.ms>=start&&o.ms<end&&!o.cancelled){sum+=o.net;n++}});
+    if(n)return {v:sum/8,src:'8-week average of Shopify sales (after refunds)'}}
+  else if(typeof loadRaiseOrders==='function')loadRaiseOrders();
   return {v:parseMoney(SHOP.lastWeekRev),src:'last week on Shopify'}}
 function c13Buffer(){const c=c13();return (c.buffer!=null&&c.buffer!=='')?parseMoney(c.buffer):Math.round(financeBurn().total)}
 function c13Raise(){if(typeof raiseAccounts!=='function')return 0;return raiseAccounts().filter(a=>a.commitStatus==='hard').reduce((s,a)=>s+(Number(a.commit)||0),0)}
@@ -11211,7 +11219,7 @@ function renderFinance(){
   if(!financeData){body.innerHTML='<div class="d" style="padding:10px">Loading…</div>';loadFinance();return}
   const burn=financeBurn(),mrr=financeMRR(),net=mrr-burn.total,cash=parseMoney(financeData.cashOnHand);
   const runway=net>=0?null:cash/(-net);
-  const pnl=financeData.pnl||[],rev=pnl.filter(l=>l.type==='rev').reduce((s,l)=>s+parseMoney(l.amount),0),cogs=pnl.filter(l=>l.type==='cogs').reduce((s,l)=>s+parseMoney(l.amount),0),opexManual=pnl.filter(l=>l.type==='opex').reduce((s,l)=>s+parseMoney(l.amount),0);
+  const pnl=pnlLive(),rev=pnl.filter(l=>l.type==='rev').reduce((s,l)=>s+parseMoney(l.amount),0),cogs=pnl.filter(l=>l.type==='cogs').reduce((s,l)=>s+parseMoney(l.amount),0),opexManual=pnl.filter(l=>l.type==='opex').reduce((s,l)=>s+parseMoney(l.amount),0);
   const bs=buildSpend();const opex=opexManual+bs.totalSpent;
   const gross=rev-cogs,pnlNet=gross-opex;
   const ps=projSeries();
@@ -11219,13 +11227,14 @@ function renderFinance(){
   const SEC={};
   SEC.overview=
     // Compact KPI strip (Shopify, live) → runway table → 13 weeks → raise → charts.
-    '<div class="kpi-head"><span>Sales</span><span style="display:flex;gap:8px;align-items:center">'+(shopLive()?'<span class="pill wave">Shopify · live</span>':'<span class="pill amber">Shopify · Aug 4 snapshot</span>')+'<a onclick="finGoTab(\'sales\')" style="cursor:pointer;color:var(--wave);font-weight:700;font-size:12.5px">Full sales report →</a></span></div>'
-    +'<div class="kpi-strip">'
-      +kpiCell(SHOP.grosse90||SHOP.gross90,'Gross · 90 days')
-      +kpiCell(SHOP.lastWeekRev,'Revenue · last wk')
-      +kpiCell(SHOP.lastWeekOrders,'Orders · last wk')
-      +kpiCell(SHOP.aov,'Avg order')
-    +'</div>'
+    (()=>{const k=shopKpis();const ago=k&&k.last?siAgo(new Date(k.last)):'';
+      return '<div class="kpi-head"><span>Sales</span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">'+(k?'<span class="pill wave">Shopify · live'+(ago?' · last order '+esc(ago):'')+'</span>':'<span class="pill dim">Loading Shopify…</span>')+'<a onclick="finGoTab(\'sales\')" style="cursor:pointer;color:var(--wave);font-weight:700;font-size:12.5px">Full sales report →</a></span></div>'
+      +'<div class="kpi-strip">'
+        +kpiCell(k?fmtMoney(k.net90):'…','Net sales · 90 days')
+        +kpiCell(k?fmtMoney(k.wkNet):'…','Net sales · last 7 days'+(k&&k.prevWkNet&&k.wkNet!==k.prevWkNet?' ('+(k.wkNet>=k.prevWkNet?'▲':'▼')+Math.abs(Math.round((k.wkNet-k.prevWkNet)/k.prevWkNet*100))+'%)':''))
+        +kpiCell(k?k.wkOrders:'…','Orders · last 7 days')
+        +kpiCell(k?fmtMoney(k.aov90):'…','Avg order · 90 days')
+      +'</div>'})()
     +((INVOICES.length||CPOS.length)?(()=>{const k=invKpis();return '<div class="kpi-head"><span>Receivables</span><a onclick="goto(\'s-invoices\')" style="color:var(--wave);cursor:pointer">Invoices &amp; POs →</a></div>'
       +'<div class="kpi-strip">'+kpiCell(fmtMoney(k.outstanding),'Outstanding')+kpiCell(fmtMoney(k.overdue),'Overdue'+(k.overdueN?' · '+k.overdueN:''))+kpiCell(fmtMoney(k.collected),'Collected · 30 days')+kpiCell(fmtMoney(k.openPOValue),'Open customer POs')+'</div>'})():'')
     +'<div class="card"><div class="sec-head"><h2>Runway &amp; burn</h2><span class="pill dim">your projections</span></div>'
@@ -11249,7 +11258,7 @@ function renderFinance(){
       +'<div class="note" style="margin-top:10px">One click, no setup — income, COGS and expenses map into the P&amp;L for you to review and save. Automatic live QuickBooks Online sync is a larger connect (Intuit sign-in + secure link); say the word and we\'ll wire it. The CSV import keeps your P&amp;L current in the meantime.</div>'
     +'</div>'
     +'<div class="card"><div class="sec-head"><h2>P&amp;L builder</h2><a onclick="addPnl()">＋ Line</a></div>'
-      +pnl.map((l,i)=>'<div class="frow pnl-row"><input class="field fr-label" value="'+esc(l.label||'')+'" placeholder="Line item"><select class="fr-type field" style="max-width:120px">'+['rev','cogs','opex'].map(t=>'<option value="'+t+'"'+(l.type===t?' selected':'')+'>'+({rev:'Revenue',cogs:'COGS',opex:'Opex'}[t])+'</option>').join('')+'</select><input class="field fr-amt" type="number" value="'+(parseMoney(l.amount)||0)+'" style="max-width:120px"><a class="fr-x" onclick="rmPnl('+i+')">✕</a></div>').join('')
+      +pnl.map((l,i)=>'<div class="frow pnl-row"><input class="field fr-label" value="'+esc(l.label||'')+'" placeholder="Line item"><select class="fr-type field" style="max-width:120px">'+['rev','cogs','opex'].map(t=>'<option value="'+t+'"'+(l.type===t?' selected':'')+'>'+({rev:'Revenue',cogs:'COGS',opex:'Opex'}[t])+'</option>').join('')+'</select><input class="field fr-amt" type="number" value="'+(parseMoney(l.amount)||0)+'" style="max-width:120px"'+(l.live?' readonly title="Live from Shopify — updates on its own"':'')+'><a class="fr-x" onclick="rmPnl('+i+')">✕</a></div>'+(l.live?'<div class="d" style="margin:-4px 0 8px"><span class="pill wave">live</span> Updates on its own from Shopify orders.</div>':'')).join('')
       +'<button class="btn" onclick="savePnl()" style="margin:6px 0 12px">Save P&amp;L</button>'
       +'<div class="kv"><span>Revenue</span><b>'+fmtMoney(rev)+'</b></div><div class="kv"><span>COGS</span><b>'+fmtMoney(cogs)+'</b></div><div class="kv"><span>Gross profit</span><b>'+fmtMoney(gross)+'</b></div><div class="kv"><span>Operating expenses (manual)</span><b>'+fmtMoney(opexManual)+'</b></div>'+(bs.totalSpent?'<div class="kv"><span>Build &amp; R&amp;D (from projects)</span><b>'+fmtMoney(bs.totalSpent)+'</b></div>':'')+'<div class="kv"><span style="font-weight:700">Net</span><b style="color:'+(pnlNet>=0?'var(--good)':'var(--amber)')+'">'+fmtMoney(pnlNet)+'</b></div>'
     +'</div>';
@@ -11290,6 +11299,12 @@ function renderFinance(){
   const strip='<div class="chips" style="margin-bottom:16px">'+tabs.map(t=>'<button class="chip'+(finTab===t[0]?' on':'')+'" onclick="finGoTab(\''+t[0]+'\')">'+t[1]+'</button>').join('')+'</div>';
   body.innerHTML=strip+SEC[finTab];
 }
+/* Overview's Sales strip, live from every Shopify order we hold (synced +
+   imported history), after refunds. Replaces the old August snapshot. */
+function shopKpis(){if(!RAISE_ORDERS){loadRaiseOrders();return null}if(SALES_HIST==null&&financeView())loadSalesHistory();
+  const os=salesOrders(),now=Date.now(),d90=salesAgg(os,now-90*864e5,now),w=salesAgg(os,now-7*864e5,now),pw=salesAgg(os,now-14*864e5,now-7*864e5-1);
+  const last=os.reduce((m,o)=>o.ms>m?o.ms:m,0);
+  return {net90:d90.net,orders90:d90.orders,aov90:d90.aov,wkNet:w.net,wkOrders:w.orders,prevWkNet:pw.net,last:last}}
 function kpiCell(v,l){return '<div class="kc"><div class="n">'+esc(String(v==null?'—':v))+'</div><div class="l">'+esc(l)+'</div></div>'}
 function ftile(v,l,badge){return '<div class="tile"><div class="n">'+esc(String(v==null?'—':v))+'</div><div class="l">'+esc(l)+(badge?' <span class="pill wave" style="font-size:9px;padding:1px 6px">'+badge+'</span>':'')+'</div></div>'}
 function saveCash(){saveFinance({cashOnHand:Number(document.getElementById('fp-cash').value)||0,cash13:Object.assign(c13(),{asOf:ymd(new Date())})},'✓ Saved');renderFinance()}
