@@ -508,9 +508,14 @@ input[type=date]{color-scheme:dark}
 .gl-dot{width:9px;height:9px;border-radius:50%;background:var(--wave);opacity:.62;display:inline-block}.gl-dot.new{opacity:1;width:11px;height:11px;box-shadow:0 0 0 2px var(--surface),0 0 0 3px var(--wave)}
 .gp-row{display:flex;width:100%;align-items:center;gap:8px;padding:8px 2px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
 .gp-row:last-child{border-bottom:0}.gp-row b{color:var(--wave)}
-.nprefs{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
-.np-t{font-weight:700;font-size:13px;margin-bottom:8px}
-.np-pick{display:flex;flex-wrap:wrap;gap:6px}.np-pick button{flex:1 1 150px}
+.nprefs{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.np-t{font-weight:700;font-size:13px;margin-bottom:4px}
+.np-row{display:flex;align-items:center;gap:12px;width:100%;padding:10px 0;border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.np-row b{display:block;font-size:14px;font-weight:600}.np-row span span{display:block;font-size:12px;color:var(--muted);margin-top:1px}
+.nsw{flex:none;width:42px;height:24px;border-radius:12px;background:var(--line);position:relative;transition:background .15s}
+.nsw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
+.nsw.on{background:var(--wave)}.nsw.on i{left:21px}
+.np-row:focus-visible{outline:2px solid var(--wave);outline-offset:2px}
 .np-d{margin-top:8px;line-height:1.5}
 .sales-tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .sales-tbl{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
@@ -8416,29 +8421,33 @@ function nsSave(){NSTATE.hidden=NSTATE.hidden.slice(-200);NSTATE.read=NSTATE.rea
 function nsMerge(x){if(!x)return;NSTATE.readAt=Math.max(NSTATE.readAt,Number(x.readAt)||0);NSTATE.clearedAt=Math.max(NSTATE.clearedAt,Number(x.clearedAt)||0);
   NSTATE.hidden=Array.from(new Set(NSTATE.hidden.concat(x.hidden||[])));NSTATE.read=Array.from(new Set(NSTATE.read.concat(x.read||[])))}
 function notifMine(n){return !!(CURRENT_USER&&((n.byUid&&n.byUid===CURRENT_USER.uid)||(n.by&&n.by===CURRENT_USER.name)))}
-/* Alert setting (users/{uid}.notifPrefs.mode), mirrored by alertWanted() in
-   functions/index.js so the bell and the phone agree:
-   'all' — every chat message in your channels, new orders, tasks given to you,
-           overdue tasks and everything else the team broadcasts (default).
-   'focused' — only when you're tagged (@mention) or given a task.
-   Safety alerts always come through. */
-let NPREF={mode:'all'},NOTIF_RAW=[];
-const FOCUS_SKIP=['chat','order','overdue'];
+/* Alert switches (users/{uid}.notifPrefs.off = the kinds someone turned off).
+   Everything is on by default; each person can switch kinds off in the Alerts
+   sheet. alertWanted() in functions/index.js applies the same rule to phone
+   pushes, so the bell, the banners and the phone always agree.
+   Safety alerts can't be switched off. */
+const NOTIF_KINDS=[['chat','Chat messages','Every message in the chats you’re in'],['mention','@mentions','When someone tags you, or @all'],['task','Assigned to you','Tasks, follow-ups, tickets, meetings and replies on your work'],
+  ['overdue','Overdue tasks','Once, when a task of yours passes its due date'],['order','New orders','Each new Shopify order'],['team','Other team alerts','Returns, support email, stock and release checks']];
+let NPREF={off:[]},NOTIF_RAW=[];
+function notifKindOf(n){const me=CURRENT_USER&&CURRENT_USER.uid;const k=n.kind||'';
+  if(k==='chat'||k==='mention'||k==='order'||k==='overdue')return k;
+  if(k==='task'||n.to===me)return 'task';
+  return 'team'}
 function notifWanted(n){const me=CURRENT_USER&&CURRENT_USER.uid;if(!me)return false;
   if(!(n.to===me||n.to==='all'))return false;
   if(Array.isArray(n.skip)&&n.skip.indexOf(me)>=0)return false;
   if(n.byUid&&n.byUid===me)return false;
   if(/safety/i.test(n.title||''))return true;
-  if(NPREF.mode!=='focused')return true;
-  if(n.kind==='mention')return true;
-  return n.to===me&&FOCUS_SKIP.indexOf(n.kind||'')<0}
+  return NPREF.off.indexOf(notifKindOf(n))<0}
+function notifPrefsFrom(p){p=p||{};if(Array.isArray(p.off))return {off:p.off.slice()};
+  return {off:p.mode==='focused'?['chat','order','overdue','team']:[]}} // earlier two-way setting
 function notifRefilter(){NOTIF=NOTIF_RAW.filter(notifWanted);renderNotifBadge()}
-function setNotifMode(m){NPREF.mode=m==='focused'?'focused':'all';notifRefilter();renderNotifPrefs();
-  if(hasFirestore()&&CURRENT_USER)firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({notifPrefs:{mode:NPREF.mode}},{merge:true}).then(()=>toast(NPREF.mode==='focused'?'✓ Only when you’re tagged or given a task':'✓ Alerts for everything')).catch(()=>toast('Couldn’t save — try again'))}
-function renderNotifPrefs(){const el=document.getElementById('notif-prefs');if(!el)return;const f=NPREF.mode==='focused';
-  el.innerHTML='<div class="nprefs"><div class="np-t">Alert me about</div><div class="rolepick np-pick"><button class="'+(f?'':'on')+'" onclick="setNotifMode(\'all\')">Everything</button><button class="'+(f?'on':'')+'" onclick="setNotifMode(\'focused\')">Only when I’m tagged or given a task</button></div>'
-    +'<div class="d np-d">'+(f?'You’ll hear about @mentions, tasks and follow-ups assigned to you, replies on your work and meetings you’re in. Chat messages, new orders and overdue reminders stay quiet.'
-      :'Every message in your chats, every new order, tasks given to you, overdue tasks, plus @mentions and everything the team is alerted about.')+' Safety alerts always come through. Applies to the bell and your phone.</div></div>'}
+function toggleNotifKind(k){const on=NPREF.off.indexOf(k)>=0;NPREF.off=on?NPREF.off.filter(x=>x!==k):NPREF.off.concat(k);notifRefilter();renderNotifPrefs();
+  if(hasFirestore()&&CURRENT_USER)firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({notifPrefs:{off:NPREF.off,mode:firebase.firestore.FieldValue.delete()}},{merge:true}).catch(()=>toast('Couldn’t save — try again'))}
+function renderNotifPrefs(){const el=document.getElementById('notif-prefs');if(!el)return;
+  el.innerHTML='<div class="nprefs"><div class="np-t">Alert me about</div>'
+    +NOTIF_KINDS.map(([k,l,d])=>{const on=NPREF.off.indexOf(k)<0;return '<button class="np-row" role="switch" aria-checked="'+on+'" onclick="toggleNotifKind(\''+k+'\')"><span class="grow"><b>'+esc(l)+'</b><span>'+esc(d)+'</span></span><span class="nsw'+(on?' on':'')+'" aria-hidden="true"><i></i></span></button>'}).join('')
+    +'<div class="d np-d">All on unless you switch them off. Safety alerts always come through. Applies to the bell and your phone.</div></div>'}
 // What's in the list: last 7 days, not cleared, not closed.
 function notifVisible(){const weekAgo=Date.now()-7*864e5;return NOTIF.filter(n=>{const t=notifAtMs(n);return (!t||t>=weekAgo)&&!(t&&t<=NSTATE.clearedAt)&&!NSTATE.hidden.includes(n.id)})}
 function notifUnread(n){if(notifMine(n)||NSTATE.read.includes(n.id))return false;const t=notifAtMs(n);return !t||t>NSTATE.readAt}
@@ -8470,8 +8479,8 @@ function subscribeNotifications(){if(!hasFirestore()||!CURRENT_USER)return;
   NSTATE={readAt:0,clearedAt:0,hidden:[],read:[]};
   try{nsMerge(JSON.parse(localStorage.getItem(nsKey())||'null'))}catch(e){}
   NSTATE.readAt=Math.max(NSTATE.readAt,Number(localStorage.getItem('sw_notif_read_'+CURRENT_USER.uid)||0)||0); // pre-sync devices
-  NPREF={mode:'all'};
-  firebase.firestore().collection('users').doc(CURRENT_USER.uid).get().then(d=>{if(d.exists){nsMerge(d.data().notifState);const p=d.data().notifPrefs;if(p&&p.mode)NPREF.mode=p.mode;notifRefilter()}}).catch(()=>{});
+  NPREF={off:[]};
+  firebase.firestore().collection('users').doc(CURRENT_USER.uid).get().then(d=>{if(d.exists){nsMerge(d.data().notifState);NPREF=notifPrefsFrom(d.data().notifPrefs);notifRefilter()}}).catch(()=>{});
   notifPrimed=false;
   if(notifUnsub){try{notifUnsub()}catch(e){}}
   try{notifUnsub=firebase.firestore().collection('notifications').orderBy('at','desc').limit(150).onSnapshot(qs=>{
