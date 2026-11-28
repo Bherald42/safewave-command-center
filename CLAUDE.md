@@ -58,6 +58,12 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   are (`orders.ship`: carrier status, ETA, delivered date — `refreshShipments` on
   every sync); Orders → To ship shows the sizes, shipped ones split into On the
   way / Delivered.
+  Orders also keep where they ship: `city`, `region` (state/province code),
+  `country`, and `lat`/`lng` rounded to ~1 km (never the street) — shown beside
+  the customer name (`placeTag`) and on **Orders → Map**, a d3-geo orthographic
+  globe (drag/scroll/pinch, tap a dot) with a dot per order from `orders` +
+  `order_geo` (older orders; import-only). Map libraries and atlases are vendored
+  in `public/vendor/` (no CDN) and load only when the Map opens.
   Stock Forecast plans from real Shopify sales: `computeSalesVelocity` (every
   sync) writes `settings/shopify.velocity` — 12 weekly counts per size, 4/12-wk
   averages, and `burn` = 60% last-4-wk + 40% last-12-wk, which feeds `BURN`.
@@ -113,7 +119,7 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   `invoices` + `customer_pos` + `invoice_products` (Enterprise → Invoices & POs; `counters/invoices`,
   `settings/invoicing` letterhead),
   `notifications`, `nudges`, `mail_credentials`, `chat_channels/{ch}/messages`,
-  `sales_history` (finance group), `user_activity` (Brad-only read), `feedback` (super-admin read), and `settings/{finance,chat,raise}`.
+  `sales_history` (finance group), `user_activity` (Brad-only read), `order_geo` (read signed-in, import-only), `feedback` (super-admin read), and `settings/{finance,chat,raise}`.
 - **Access rules live in `firestore.rules`** and `storage.rules`. Financials are
   gated to a super-admin-managed allow-list; feedback is readable only by super
   admins; `orders` are server-write only.

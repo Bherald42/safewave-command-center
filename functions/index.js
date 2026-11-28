@@ -493,6 +493,15 @@ function mapShopifyOrder(o) {
   rec.tax = money(o.total_tax);
   rec.refunded = Math.max(0, money(Number(o.total_price || 0) - rec.net));
   if (o.financial_status) rec.financial = String(o.financial_status);
+  // Where it ships, for a quick identifier and the Orders map: city, state or
+  // country, and the spot rounded to ~1 km (never the street address).
+  if (ship.city) rec.city = String(ship.city).slice(0, 60);
+  if (ship.province_code || ship.province) rec.region = String(ship.province_code || ship.province).slice(0, 40);
+  if (ship.country_code || ship.country) rec.country = String(ship.country_code || ship.country).slice(0, 40);
+  const lat = Number(ship.latitude), lng = Number(ship.longitude);
+  if (ship.latitude != null && ship.longitude != null && isFinite(lat) && isFinite(lng) && (lat || lng)) {
+    rec.lat = Math.round(lat * 100) / 100; rec.lng = Math.round(lng * 100) / 100;
+  }
   rec.items = (o.line_items || []).map((li) => ({
     size: bandSizeOf(li.variant_title) || bandSizeOf(li.title) || "",
     qty: Number(li.quantity) || 0,

@@ -167,6 +167,12 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if false;
     }
+    // Where older Shopify orders shipped (city, state/country, spot rounded to
+    // ~1 km) for the Orders map. Written only by the history import.
+    match /order_geo/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
 
     // Purchase orders (Pace transfers / China production) — shared ops.
     match /purchase_orders/{id} {
