@@ -90,6 +90,10 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   KPIs vs the prior period, net-by-month bars, a monthly table with CSV export,
   and B2B invoice payments. Fundraising → Traction uses the same merged set
   (`salesOrders()`).
+  Finance → Overview's Sales strip (`shopKpis()`), the P&L's "Hardware sales
+  (Shopify …)" line (`pnlLive()`), 13-week cash's weekly sales and Ask Safewave all
+  read that same merged set live (no hard-coded snapshot); the orders listener
+  folds new/changed orders into `RAISE_ORDERS` so open screens update.
 - **Users tab is Brad's alone** (`isBrad()`; `user_activity` rules read = `isSuperEmail()`).
   Tab activity: every 5 s the app credits the current tab (screen + sub-pill) with
   open time, and active time if there was a click/tap/keypress/scroll in the last
