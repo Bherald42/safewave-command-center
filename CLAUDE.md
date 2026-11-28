@@ -37,6 +37,8 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   `team` = other broadcasts). `alertWanted()` (server, for pushes) and
   `notifWanted()` (app, bell/banners) apply the same rule; safety alerts always.
   Every chat message alerts the channel (`kind:'chat'`, @mentioned people get `mention` instead).
+  Chat messages can be edited in place by their author (`editedAt`, "(edited)";
+  newly @mentioned people are alerted); rules allow others to change only `reactions`.
   `scanOverdueTasks` (daily) alerts a Build/Fundraising task's assignee once
   when it passes its due date (`overdueNotified`).
 - **Support tickets carry app diagnostics.** The phone app's Help & Support

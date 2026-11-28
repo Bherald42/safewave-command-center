@@ -517,6 +517,10 @@ input[type=date]{color-scheme:dark}
 .nsw.on{background:var(--wave)}.nsw.on i{left:21px}
 .np-row:focus-visible{outline:2px solid var(--wave);outline-offset:2px}
 .np-d{margin-top:8px;line-height:1.5}
+.c-edited{font-size:11px;color:var(--faint);white-space:nowrap}
+.c-msg.editing{width:100%}.c-edit{width:100%;max-width:560px}.c-edit textarea{width:100%;min-height:44px;resize:none;font:inherit;font-size:14px;line-height:1.4}
+.c-edit-bar{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:6px}.c-edit-bar .d{margin-right:auto;font-size:11.5px}
+.c-edit-bar .btn{width:auto;padding:6px 14px}
 .sales-tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .sales-tbl{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
 .sales-tbl th,.sales-tbl td{padding:9px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
@@ -9331,10 +9335,36 @@ function renderChatMessages(){const el=document.getElementById('chat-stream');if
     if(!grouped){close();
       html+='<div class="c-group'+(mine?' me':'')+'"><div class="c-av">'+esc(initials(m.name||'',''))+'</div><div class="c-body"><div class="c-head"><span class="c-name">'+esc(mine?'You':(m.name||'—'))+'</span><span>'+(ms?chatTime(ms):'')+'</span></div><div class="c-bubbles">';
       open=true;}
-    const bubble=(m.text&&m.text.trim())?('<div class="c-line'+(!mine&&msgHitsMe(m)?' hasme':'')+'">'+chatText(m)+'</div>'):'';
-    html+='<div class="c-msg">'+bubble+chatAttHtml(m)+chatReactHtml(m)+chatActHtml(m,mine)+'</div>';
+    const editing=mine&&m.id&&m.id===chatEditId;
+    const bubble=editing?chatEditBox(m):(m.text&&m.text.trim())?('<div class="c-line'+(!mine&&msgHitsMe(m)?' hasme':'')+'">'+chatText(m)+(m.editedAt?'<span class="c-edited" title="'+esc(m.editedAt.toDate?chatTime(m.editedAt.toDate().getTime()):'')+'"> (edited)</span>':'')+'</div>'):'';
+    html+='<div class="c-msg'+(editing?' editing':'')+'">'+bubble+chatAttHtml(m)+chatReactHtml(m)+(editing?'':chatActHtml(m,mine))+'</div>';
     curUid=m.uid;curTime=ms;});
-  close();el.innerHTML=html;el.scrollTop=el.scrollHeight;}
+  close();const keepTop=el.scrollTop;el.innerHTML=html;
+  if(chatEditId){el.scrollTop=keepTop;const t=document.getElementById('c-edit-ta');if(t&&document.activeElement!==t&&chatEditFocus){chatEditFocus=false;t.focus();t.setSelectionRange(t.value.length,t.value.length)}}
+  else el.scrollTop=el.scrollHeight;}
+/* Edit your own message in place: Enter saves, Shift+Enter new line, Esc cancels.
+   Shows "(edited)"; anyone newly @mentioned by the edit gets an alert. */
+let chatEditId=null,chatEditDraft='',chatEditFocus=false;
+function chatEditBox(m){return '<div class="c-edit"><textarea id="c-edit-ta" class="field" rows="2" oninput="chatEditDraft=this.value;this.style.height=\'auto\';this.style.height=Math.min(200,this.scrollHeight)+\'px\'" onkeydown="chatEditKey(event)">'+esc(chatEditDraft)+'</textarea>'
+  +'<div class="c-edit-bar"><span class="d"><span class="hide-sm">Enter to save · Esc to cancel</span></span><button type="button" class="btn ghost sm" onclick="chatEditCancel()">Cancel</button><button type="button" class="btn sm" onclick="chatEditSave()">Save</button></div></div>'}
+function chatEditMsg(id){const m=CHATMSGS.find(x=>x.id===id);if(!m||!CURRENT_USER||m.uid!==CURRENT_USER.uid){toast('You can only edit your own messages');return}
+  chatEditId=id;chatEditDraft=m.text||'';chatEditFocus=true;renderChatMessages();
+  const row=document.getElementById('c-edit-ta');if(row)row.scrollIntoView({block:'nearest'})}
+function chatEditCancel(){chatEditId=null;chatEditDraft='';renderChatMessages()}
+function chatEditKey(e){if(e.key==='Escape'){e.preventDefault();chatEditCancel()}else if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();chatEditSave()}}
+function chatEditSave(){const m=CHATMSGS.find(x=>x.id===chatEditId);if(!m){chatEditCancel();return}
+  const text=(chatEditDraft||'').trim();
+  if(!text&&!(m.att&&m.att.length)){toast('A message can’t be empty — delete it instead');return}
+  if(text===(m.text||'').trim()){chatEditCancel();return}
+  if(!hasFirestore()){toast('Chat runs on the live site');return}
+  const men=parseMentions(text),before=m.mentions||[],FV=firebase.firestore.FieldValue;
+  const upd={text:text,editedAt:FV.serverTimestamp(),mentions:men.uids.length?men.uids:FV.delete()};
+  const ch=chatChannel,id=m.id;chatEditId=null;chatEditDraft='';
+  firebase.firestore().collection('chat_channels').doc(ch).collection('messages').doc(id).update(upd).then(()=>{
+    const who=CURRENT_USER.name||'A teammate',cch=CHANNELS[ch];
+    men.uids.filter(u=>u!==CURRENT_USER.uid&&before.indexOf(u)<0).forEach(u=>notify(u,(cch&&cch.private?'🔒 ':'#')+ch+' · '+who+' mentioned you',text.slice(0,120),'s-chat:'+ch,{kind:'mention'}));
+    toast('✓ Message edited')}).catch(e=>{toast('Edit failed — '+((e&&e.code)||''));})
+  renderChatMessages()}
 
 function sendChat(){const inp=document.getElementById('chat-input');const text=(inp.value||'').trim();
   const atts=chatAtts.map(a=>({kind:a.kind,url:a.url,name:a.name||'',type:a.type||'',size:a.size||0}));
@@ -9426,6 +9456,7 @@ function chatReactNames(uids){const me=CURRENT_USER&&CURRENT_USER.uid;
 function chatActHtml(m,mine){if(!m.id)return '';
   let h='<div class="c-act">'+REACTS.map(e=>'<button type="button" title="React '+e+'" '+jattr('chatReact',m.id,e)+'>'+e+'</button>').join('');
   if(m.text)h+='<button type="button" title="Copy" '+jattr('chatCopyMsg',m.id)+'>⧉</button>';
+  if(mine&&m.text)h+='<button type="button" title="Edit" aria-label="Edit message" '+jattr('chatEditMsg',m.id)+'>✎</button>';
   if(mine)h+='<button type="button" title="Delete" '+jattr('chatDeleteMsg',m.id)+'>🗑</button>';
   return h+'</div>';}
 function chatReact(id,emoji){if(!hasFirestore()||!CURRENT_USER)return;const m=CHATMSGS.find(x=>x.id===id);if(!m)return;
