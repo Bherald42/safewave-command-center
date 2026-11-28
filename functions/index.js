@@ -495,7 +495,8 @@ function mapShopifyOrder(o) {
   if (o.financial_status) rec.financial = String(o.financial_status);
   // Where it ships, for a quick identifier and the Orders map: city, state or
   // country, and the spot rounded to ~1 km (never the street address).
-  if (ship.city) rec.city = String(ship.city).slice(0, 60);
+  // Some shoppers type a street into the city box; never keep that.
+  if (ship.city && !/\d|street|\bst\.|road|\bave|avenue|blvd|lane|drive/i.test(ship.city)) rec.city = String(ship.city).slice(0, 60);
   if (ship.province_code || ship.province) rec.region = String(ship.province_code || ship.province).slice(0, 40);
   if (ship.country_code || ship.country) rec.country = String(ship.country_code || ship.country).slice(0, 40);
   const lat = Number(ship.latitude), lng = Number(ship.longitude);
