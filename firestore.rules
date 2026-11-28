@@ -242,7 +242,11 @@ service cloud.firestore {
       allow delete: if signedIn() && ( resource.data.createdBy == request.auth.uid || isSuper() );
 
       match /messages/{m} {
-        allow read, write: if chatCanAccess(ch);
+        allow read, create: if chatCanAccess(ch);
+        // Only the author can edit a message; anyone in the channel can react.
+        allow update: if chatCanAccess(ch) && ( resource.data.uid == request.auth.uid
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) );
+        allow delete: if chatCanAccess(ch) && ( resource.data.uid == request.auth.uid || isSuper() );
       }
     }
     match /settings/chat {
