@@ -508,6 +508,10 @@ input[type=date]{color-scheme:dark}
 .gl-dot{width:9px;height:9px;border-radius:50%;background:var(--wave);opacity:.62;display:inline-block}.gl-dot.new{opacity:1;width:11px;height:11px;box-shadow:0 0 0 2px var(--surface),0 0 0 3px var(--wave)}
 .gp-row{display:flex;width:100%;align-items:center;gap:8px;padding:8px 2px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
 .gp-row:last-child{border-bottom:0}.gp-row b{color:var(--wave)}
+.nprefs{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
+.np-t{font-weight:700;font-size:13px;margin-bottom:8px}
+.np-pick{display:flex;flex-wrap:wrap;gap:6px}.np-pick button{flex:1 1 150px}
+.np-d{margin-top:8px;line-height:1.5}
 .sales-tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .sales-tbl{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
 .sales-tbl th,.sales-tbl td{padding:9px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
@@ -2241,6 +2245,7 @@ h1{font-size:27px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
     </div>
     <div class="notif-actions" id="notif-actions"><button class="btn ghost sm" onclick="notifReadAll()">Mark all read</button><button class="btn ghost sm" onclick="notifClearAll()">Clear all</button></div>
     <div id="notif-list"></div>
+    <div id="notif-prefs"></div>
     <div id="notif-push"></div>
     <div id="notif-test"></div>
   </div>
@@ -8397,10 +8402,11 @@ function adminToggleFinance(email){
 let NOTIF=[], notifUnsub=null, notifPrimed=false;
 let NSTATE={readAt:0,clearedAt:0,hidden:[],read:[]};
 function uidForName(name){if(!name)return null;const t=(TEAM||[]).find(x=>(x.name||'').toLowerCase()===(''+name).toLowerCase());return t?t.uid:null}
-function notify(to,title,body,link){if(!hasFirestore()||!to||!CURRENT_USER)return;
-  firebase.firestore().collection('notifications').add({to:to,title:title,body:body||'',link:link||'',by:CURRENT_USER.name||CURRENT_USER.email||'',at:firebase.firestore.FieldValue.serverTimestamp()})
+function notify(to,title,body,link,extra){if(!hasFirestore()||!to||!CURRENT_USER)return;
+  const rec=Object.assign({to:to,title:title,body:body||'',link:link||'',by:CURRENT_USER.name||CURRENT_USER.email||'',byUid:CURRENT_USER.uid||'',at:firebase.firestore.FieldValue.serverTimestamp()},extra||{});
+  firebase.firestore().collection('notifications').add(rec)
     .then(ref=>{try{firebase.functions().httpsCallable('pushNow')({id:ref.id}).catch(()=>{})}catch(e){}}).catch(()=>{})}
-function notifyAssignee(name,title,body,link){if(!name)return;const uid=uidForName(name);if(!uid||uid===(CURRENT_USER&&CURRENT_USER.uid))return;notify(uid,title,body,link)}
+function notifyAssignee(name,title,body,link,kind){if(!name)return;const uid=uidForName(name);if(!uid||uid===(CURRENT_USER&&CURRENT_USER.uid))return;notify(uid,title,body,link,{kind:kind||'task'})}
 function notifyAll(title,body,link){notify('all',title,body,link)}
 function notifAtMs(n){return (n.at&&n.at.toMillis)?n.at.toMillis():0}
 function nsKey(){return 'sw_nstate_'+((CURRENT_USER&&CURRENT_USER.uid)||'')}
@@ -8409,7 +8415,30 @@ function nsSave(){NSTATE.hidden=NSTATE.hidden.slice(-200);NSTATE.read=NSTATE.rea
   if(hasFirestore()&&CURRENT_USER&&!CURRENT_USER.fsOff)firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({notifState:NSTATE},{merge:true}).catch(()=>{})}
 function nsMerge(x){if(!x)return;NSTATE.readAt=Math.max(NSTATE.readAt,Number(x.readAt)||0);NSTATE.clearedAt=Math.max(NSTATE.clearedAt,Number(x.clearedAt)||0);
   NSTATE.hidden=Array.from(new Set(NSTATE.hidden.concat(x.hidden||[])));NSTATE.read=Array.from(new Set(NSTATE.read.concat(x.read||[])))}
-function notifMine(n){return n.by&&CURRENT_USER&&n.by===CURRENT_USER.name}
+function notifMine(n){return !!(CURRENT_USER&&((n.byUid&&n.byUid===CURRENT_USER.uid)||(n.by&&n.by===CURRENT_USER.name)))}
+/* Alert setting (users/{uid}.notifPrefs.mode), mirrored by alertWanted() in
+   functions/index.js so the bell and the phone agree:
+   'all' — every chat message in your channels, new orders, tasks given to you,
+           overdue tasks and everything else the team broadcasts (default).
+   'focused' — only when you're tagged (@mention) or given a task.
+   Safety alerts always come through. */
+let NPREF={mode:'all'},NOTIF_RAW=[];
+const FOCUS_SKIP=['chat','order','overdue'];
+function notifWanted(n){const me=CURRENT_USER&&CURRENT_USER.uid;if(!me)return false;
+  if(!(n.to===me||n.to==='all'))return false;
+  if(Array.isArray(n.skip)&&n.skip.indexOf(me)>=0)return false;
+  if(n.byUid&&n.byUid===me)return false;
+  if(/safety/i.test(n.title||''))return true;
+  if(NPREF.mode!=='focused')return true;
+  if(n.kind==='mention')return true;
+  return n.to===me&&FOCUS_SKIP.indexOf(n.kind||'')<0}
+function notifRefilter(){NOTIF=NOTIF_RAW.filter(notifWanted);renderNotifBadge()}
+function setNotifMode(m){NPREF.mode=m==='focused'?'focused':'all';notifRefilter();renderNotifPrefs();
+  if(hasFirestore()&&CURRENT_USER)firebase.firestore().collection('users').doc(CURRENT_USER.uid).set({notifPrefs:{mode:NPREF.mode}},{merge:true}).then(()=>toast(NPREF.mode==='focused'?'✓ Only when you’re tagged or given a task':'✓ Alerts for everything')).catch(()=>toast('Couldn’t save — try again'))}
+function renderNotifPrefs(){const el=document.getElementById('notif-prefs');if(!el)return;const f=NPREF.mode==='focused';
+  el.innerHTML='<div class="nprefs"><div class="np-t">Alert me about</div><div class="rolepick np-pick"><button class="'+(f?'':'on')+'" onclick="setNotifMode(\'all\')">Everything</button><button class="'+(f?'on':'')+'" onclick="setNotifMode(\'focused\')">Only when I’m tagged or given a task</button></div>'
+    +'<div class="d np-d">'+(f?'You’ll hear about @mentions, tasks and follow-ups assigned to you, replies on your work and meetings you’re in. Chat messages, new orders and overdue reminders stay quiet.'
+      :'Every message in your chats, every new order, tasks given to you, overdue tasks, plus @mentions and everything the team is alerted about.')+' Safety alerts always come through. Applies to the bell and your phone.</div></div>'}
 // What's in the list: last 7 days, not cleared, not closed.
 function notifVisible(){const weekAgo=Date.now()-7*864e5;return NOTIF.filter(n=>{const t=notifAtMs(n);return (!t||t>=weekAgo)&&!(t&&t<=NSTATE.clearedAt)&&!NSTATE.hidden.includes(n.id)})}
 function notifUnread(n){if(notifMine(n)||NSTATE.read.includes(n.id))return false;const t=notifAtMs(n);return !t||t>NSTATE.readAt}
@@ -8419,6 +8448,8 @@ function renderNotifBadge(){const c=unreadCount();const b=document.getElementByI
   const bell=document.getElementById('notif-bell');if(bell)bell.classList.toggle('has-unread',c>0);
   try{if(navigator.setAppBadge){c?navigator.setAppBadge(c).catch(()=>{}):navigator.clearAppBadge().catch(()=>{})}}catch(e){}
   if(document.getElementById('sh-notif')&&document.getElementById('sh-notif').classList.contains('on'))renderNotifList()}
+// Already looking at it: a chat message in the channel you have open doesn't need a banner.
+function notifOnScreen(n){const c=document.getElementById('s-chat');return !!(n.link&&c&&c.classList.contains('on')&&document.visibilityState==='visible'&&typeof chatChannel!=='undefined'&&n.link==='s-chat:'+chatChannel)}
 /* In-app banner: stays 10s, or until tapped / closed. Up to 3 stack. */
 function popNotif(n){
   const wrap=document.getElementById('nbanners');
@@ -8439,14 +8470,15 @@ function subscribeNotifications(){if(!hasFirestore()||!CURRENT_USER)return;
   NSTATE={readAt:0,clearedAt:0,hidden:[],read:[]};
   try{nsMerge(JSON.parse(localStorage.getItem(nsKey())||'null'))}catch(e){}
   NSTATE.readAt=Math.max(NSTATE.readAt,Number(localStorage.getItem('sw_notif_read_'+CURRENT_USER.uid)||0)||0); // pre-sync devices
-  firebase.firestore().collection('users').doc(CURRENT_USER.uid).get().then(d=>{if(d.exists){nsMerge(d.data().notifState);renderNotifBadge()}}).catch(()=>{});
+  NPREF={mode:'all'};
+  firebase.firestore().collection('users').doc(CURRENT_USER.uid).get().then(d=>{if(d.exists){nsMerge(d.data().notifState);const p=d.data().notifPrefs;if(p&&p.mode)NPREF.mode=p.mode;notifRefilter()}}).catch(()=>{});
   notifPrimed=false;
   if(notifUnsub){try{notifUnsub()}catch(e){}}
-  try{notifUnsub=firebase.firestore().collection('notifications').orderBy('at','desc').limit(60).onSnapshot(qs=>{
+  try{notifUnsub=firebase.firestore().collection('notifications').orderBy('at','desc').limit(150).onSnapshot(qs=>{
     const me=CURRENT_USER.uid;
-    qs.docChanges().forEach(ch=>{if(ch.type==='added'&&notifPrimed){const n=Object.assign({id:ch.doc.id},ch.doc.data());if((n.to===me||n.to==='all')&&!notifMine(n))popNotif(n)}});
-    NOTIF=[];qs.forEach(d=>{const n=d.data();if(n.to===me||n.to==='all')NOTIF.push(Object.assign({id:d.id},n))});
-    notifPrimed=true;renderNotifBadge();
+    qs.docChanges().forEach(ch=>{if(ch.type==='added'&&notifPrimed){const n=Object.assign({id:ch.doc.id},ch.doc.data());if(notifWanted(n)&&!notifMine(n)&&!notifOnScreen(n))popNotif(n)}});
+    NOTIF_RAW=[];qs.forEach(d=>{const n=d.data();if(n.to===me||n.to==='all')NOTIF_RAW.push(Object.assign({id:d.id},n))});
+    notifPrimed=true;notifRefilter();
   },e=>{})}catch(e){}
   pushRefresh();
   try{if(navigator.serviceWorker)navigator.serviceWorker.addEventListener('message',ev=>{const m=ev.data||{};if(m.type==='sw-goto'&&m.link){if(m.id){NSTATE.read.push(m.id);nsSave();renderNotifBadge()}closeSheets();goto(m.link)}})}catch(e){}}
@@ -8462,7 +8494,7 @@ function notifTap(id){const n=NOTIF.find(x=>x.id===id);if(!n)return;if(!NSTATE.r
 function notifHide(id){NSTATE.hidden.push(id);nsSave();renderNotifBadge();renderNotifList()}
 function notifReadAll(){NSTATE.readAt=Date.now();nsSave();renderNotifBadge();renderNotifList();toast('✓ All marked read')}
 function notifClearAll(){NSTATE.clearedAt=Date.now();NSTATE.readAt=Date.now();NSTATE.hidden=[];nsSave();renderNotifBadge();renderNotifList();toast('✓ Alerts cleared')}
-function openNotifs(){renderNotifList();renderPushCard();
+function openNotifs(){renderNotifList();renderNotifPrefs();renderPushCard();
   const tt=document.getElementById('notif-test');
   if(tt)tt.innerHTML=(CURRENT_USER&&CURRENT_USER.role==='superadmin')?'<details class="notif-tools"><summary>Test tools <span class="pill dim">super admin</span></summary><div class="d" style="margin:8px 0 10px">Try the alerts + auto-return flow without Shopify. These write real (clearly-labelled) test records.</div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost" style="flex:1;min-width:120px" onclick="simTestOrder()">📦 Fake new order</button><button class="btn ghost" style="flex:1;min-width:120px" onclick="simTestReturn()">↩︎ Fake return</button></div></details>':'';
   openSheet('sh-notif');
@@ -8531,7 +8563,7 @@ function testAlert(){pushTestSend()}
 // Tapping a push opens the app at ?go=<screen>
 function pushDeepLink(){try{const u=new URL(location.href);const g=u.searchParams.get('go');if(!g)return;u.searchParams.delete('go');const nid=u.searchParams.get('nid');u.searchParams.delete('nid');history.replaceState(null,'',u.pathname+(u.search||'')+u.hash);if(nid){NSTATE.read.push(nid);nsSave()}if(/^s-[\w:-]+$/.test(g))goto(g)}catch(e){}}
 function simTestOrder(){const n='#TEST-'+Date.now().toString(36).toUpperCase().slice(-4);
-  notify('all','New order '+n,'Test Customer · $150','s-stock:order:'+n.slice(1));
+  notify('all','New order '+n,'Test Customer · $150','s-stock:order:'+n.slice(1),{kind:'order'});
   popNotif({title:'New order '+n,body:'Test Customer · $150',link:'s-stock'});
   LIVEORDERS.unshift({n:n,name:'Test Customer',total:150,date:'today',ful:'UNFULFILLED',email:'',tracking:'',trackingUrl:'',carrier:''});
   closeSheets();goto('s-stock');stockTab='fulfill';renderStock();refreshPulse();
@@ -9308,12 +9340,16 @@ function sendChat(){const inp=document.getElementById('chat-input');const text=(
   firebase.firestore().collection('chat_channels').doc(chatChannel).collection('messages').add(rec).then(()=>{
     const who=CURRENT_USER.name||'A teammate';
     const preview=text?text.slice(0,120):('📎 shared '+(atts[0]&&atts[0].kind==='image'?'a screenshot':(atts[0]?atts[0].name||'a file':'an attachment')));
-    const cch=CHANNELS[chatChannel];
-    if(men.all){
-      if(cch&&cch.private){Object.keys(cch.members||{}).forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,'🔒 '+chatChannel+' · '+who,preview,'s-chat:'+chatChannel)})}
-      else notify('all','#'+chatChannel+' · '+who,preview,'s-chat:'+chatChannel);
-    }
-    else{men.uids.forEach(uid=>{if(uid!==CURRENT_USER.uid)notify(uid,(cch&&cch.private?'🔒 ':'#')+chatChannel+' · '+who+' mentioned you',preview,'s-chat:'+chatChannel)})}
+    const cch=CHANNELS[chatChannel],me=CURRENT_USER.uid,link='s-chat:'+chatChannel;
+    // Everyone in the channel hears about every message (kind 'chat'); people
+    // who were @mentioned get a 'mention' instead, which comes through even on
+    // "only when I'm tagged". Each person's setting decides what reaches them.
+    const tagged=new Set(men.uids.filter(u=>u!==me));
+    if(cch&&cch.private){Object.keys(cch.members||{}).forEach(uid=>{if(uid===me)return;const t=men.all||tagged.has(uid);
+      notify(uid,'🔒 '+chatChannel+' · '+who+(t&&!men.all?' mentioned you':''),preview,link,{kind:t?'mention':'chat'})})}
+    else if(men.all)notify('all','#'+chatChannel+' · '+who,preview,link,{kind:'mention'});
+    else{tagged.forEach(uid=>notify(uid,'#'+chatChannel+' · '+who+' mentioned you',preview,link,{kind:'mention'}));
+      notify('all','#'+chatChannel+' · '+who,preview,link,{kind:'chat',skip:Array.from(tagged)})}
   }).catch(e=>{toast('Send failed — '+((e&&e.code)||''));inp.value=text})}
 
 /* --- attachments: screenshots (reusing the annotate tool), images & files;

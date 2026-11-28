@@ -30,6 +30,16 @@ pulse, feedback, and an in-app AI assistant ("Ask Safewave").
   secret to set). Server code adds alerts with `addNotification()`; the app calls
   `pushNow` after it writes one; `scheduledShopifySync` sweeps anything missed.
   Devices opt in from the Alerts sheet (bell). iPhone needs the Home Screen app.
+  Alerts carry a `kind` (`chat`, `mention`, `task`, `order`, `overdue`; none =
+  general) plus `byUid` and optional `skip` (uids). Each person picks
+  **Everything** or **Only when I'm tagged or given a task**
+  (`users/{uid}.notifPrefs.mode` = `all` | `focused`) in the Alerts sheet;
+  `alertWanted()` (server, for pushes) and `notifWanted()` (app, bell/banners)
+  apply the same rule: focused = mentions + alerts addressed to you except
+  chat/order/overdue; safety alerts always. Every chat message alerts the
+  channel (`kind:'chat'`, @mentioned people get `mention` instead).
+  `scanOverdueTasks` (daily) alerts a Build/Fundraising task's assignee once
+  when it passes its due date (`overdueNotified`).
 - **Support tickets carry app diagnostics.** The phone app's Help & Support
   messages are forwarded by `forwardSupportToCommandCenter` (in the
   `safewave-dashboard` repo, app project `safewave-371716`) to `ticketIntake`,
