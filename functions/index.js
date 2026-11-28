@@ -75,12 +75,12 @@ async function deliverPush(ref) {
   const q = n.to === "all" ? db.collection("push_subs") : db.collection("push_subs").where("uid", "==", n.to);
   const subs = await q.get();
   if (subs.empty) return 0;
-  // Each person's alert setting (users/{uid}.notifPrefs.mode): "all" or "focused".
+  // Each person's alert switches (users/{uid}.notifPrefs.off).
   const uids = [...new Set(subs.docs.map((d) => d.data().uid).filter(Boolean))];
   const modes = {};
   await Promise.all(uids.map(async (u) => {
-    try { const s = await db.collection("users").doc(u).get(); modes[u] = (s.exists && s.data().notifPrefs && s.data().notifPrefs.mode) || "all"; }
-    catch (e) { modes[u] = "all"; }
+    try { const s = await db.collection("users").doc(u).get(); modes[u] = prefsOff(s.exists ? s.data().notifPrefs : null); }
+    catch (e) { modes[u] = []; }
   }));
   const webpush = require("web-push");
   const k = await vapidKeys();
@@ -102,22 +102,29 @@ async function deliverPush(ref) {
   }));
   return sent;
 }
-/* Who gets an alert. Everyone can pick (Alerts sheet):
-   - "all" (default): every chat message in their channels, new orders, tasks
-     assigned to them, overdue tasks, and everything else the team broadcasts.
-   - "focused": only when they're tagged (@mention) or given a task — alerts
-     addressed to them, except chat chatter, orders and overdue reminders.
+/* Who gets an alert. Everything is on by default; each person can switch kinds
+   off in the Alerts sheet (users/{uid}.notifPrefs.off): chat, mention, task
+   (anything addressed to them), overdue, order, team (other broadcasts).
    Safety alerts always come through. The person who caused an alert, and
-   anyone listed in skip (e.g. already pinged by an @mention), aren't pinged. */
-const FOCUS_SKIP = ["chat", "order", "overdue"];
-function alertWanted(n, uid, mode) {
+   anyone in skip (e.g. already pinged by an @mention), aren't pinged.
+   Mirrors notifWanted() in the app. */
+function alertKind(n, uid) {
+  const k = n.kind || "";
+  if (k === "chat" || k === "mention" || k === "order" || k === "overdue") return k;
+  if (k === "task" || n.to === uid) return "task";
+  return "team";
+}
+function prefsOff(p) {
+  p = p || {};
+  if (Array.isArray(p.off)) return p.off;
+  return p.mode === "focused" ? ["chat", "order", "overdue", "team"] : [];
+}
+function alertWanted(n, uid, off) {
   if (!(n.to === uid || n.to === "all")) return false;
   if (Array.isArray(n.skip) && n.skip.indexOf(uid) >= 0) return false;
   if (n.byUid && n.byUid === uid) return false;
   if (/safety/i.test(n.title || "")) return true;
-  if (mode !== "focused") return true;
-  if (n.kind === "mention") return true;
-  return n.to === uid && FOCUS_SKIP.indexOf(n.kind || "") < 0;
+  return (off || []).indexOf(alertKind(n, uid)) < 0;
 }
 // Add an alert and push it right away (server-side senders use this).
 async function addNotification(data) {
